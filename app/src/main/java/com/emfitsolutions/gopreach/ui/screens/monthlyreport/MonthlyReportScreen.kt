@@ -1,5 +1,36 @@
 package com.emfitsolutions.gopreach.ui.screens.monthlyreport
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_reports_title
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_bible_studies_label
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_calculation_failed
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_calculation_retry
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_category
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_category_unknown
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_hours_confirm_dialog_cancel
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_hours_confirm_dialog_confirm
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_hours_confirm_dialog_message
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_hours_confirm_dialog_title
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_hours_label
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_minutes_label
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_posted_locked
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_preview_copy_button
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_preview_edit_button
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_preview_send_button
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_preview_title
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_remarks
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_returned_for_correction_title
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_review_button
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_select_month
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_status_corrected
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_status_draft
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_status_posted
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_status_returned
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_status_submitted
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_submission_window_message
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_success_message
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_success_title
+import com.emfitsolutions.gopreach.shared.resources.monthly_report_title
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -61,14 +92,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.ReportStatus
 import androidx.compose.ui.window.DialogProperties
 
@@ -144,7 +174,7 @@ fun MonthlyReportScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.monthly_report_title)) },
+                title = { Text(stringResource(Res.string.monthly_report_title)) },
                 navigationIcon = {
                     IconButton(onClick = { if (uiState.showingPreview) viewModel.hidePreview() else onBack() }) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -156,7 +186,7 @@ fun MonthlyReportScreen(
                     }
                     if (onViewHistory != null) {
                         IconButton(onClick = onViewHistory) {
-                            Icon(Icons.AutoMirrored.Rounded.ListAlt, contentDescription = stringResource(R.string.home_tile_my_reports_title))
+                            Icon(Icons.AutoMirrored.Rounded.ListAlt, contentDescription = stringResource(Res.string.home_tile_my_reports_title))
                         }
                     }
                 },
@@ -212,8 +242,8 @@ fun MonthlyReportScreen(
         AlertDialog(
             onDismissRequest = onBack,
             icon = { Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = SolidGreen) },
-            title = { Text(stringResource(R.string.monthly_report_success_title)) },
-            text = { Text(stringResource(R.string.monthly_report_success_message, selectedMonthLabel)) },
+            title = { Text(stringResource(Res.string.monthly_report_success_title)) },
+            text = { Text(stringResource(Res.string.monthly_report_success_message, selectedMonthLabel)) },
             confirmButton = { TextButton(onClick = onBack) { Text("Done") } },
         )
     }
@@ -238,12 +268,12 @@ private fun statusColor(status: ReportStatus?): Color = when (status) {
     ReportStatus.RETURNED -> SolidRed
 }
 
-private fun statusLabel(status: ReportStatus?): Int = when (status) {
-    null, ReportStatus.DRAFT -> R.string.monthly_report_status_draft
-    ReportStatus.SUBMITTED -> R.string.monthly_report_status_submitted
-    ReportStatus.POSTED -> R.string.monthly_report_status_posted
-    ReportStatus.RETURNED -> R.string.monthly_report_status_returned
-    ReportStatus.CORRECTED -> R.string.monthly_report_status_corrected
+private fun statusLabel(status: ReportStatus?): org.jetbrains.compose.resources.StringResource = when (status) {
+    null, ReportStatus.DRAFT -> Res.string.monthly_report_status_draft
+    ReportStatus.SUBMITTED -> Res.string.monthly_report_status_submitted
+    ReportStatus.POSTED -> Res.string.monthly_report_status_posted
+    ReportStatus.RETURNED -> Res.string.monthly_report_status_returned
+    ReportStatus.CORRECTED -> Res.string.monthly_report_status_corrected
 }
 
 /** Solid-color status chip — spec §13: "always display the status as text
@@ -286,7 +316,7 @@ private fun MonthlyReportForm(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                stringResource(R.string.monthly_report_category, uiState.category?.displayName ?: stringResource(R.string.monthly_report_category_unknown)),
+                stringResource(Res.string.monthly_report_category, uiState.category?.displayName ?: stringResource(Res.string.monthly_report_category_unknown)),
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f),
             )
@@ -311,7 +341,7 @@ private fun MonthlyReportForm(
 
         if (effectivelyLocked) {
             Text(
-                stringResource(R.string.monthly_report_posted_locked),
+                stringResource(Res.string.monthly_report_posted_locked),
                 color = SolidRed,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -325,7 +355,7 @@ private fun MonthlyReportForm(
             Card(modifier = Modifier.fillMaxWidth(), colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = SolidOrange.copy(alpha = 0.12f))) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        stringResource(R.string.monthly_report_returned_for_correction_title),
+                        stringResource(Res.string.monthly_report_returned_for_correction_title),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = SolidOrange,
@@ -341,12 +371,12 @@ private fun MonthlyReportForm(
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        stringResource(R.string.monthly_report_calculation_failed, selectedMonthLabel),
+                        stringResource(Res.string.monthly_report_calculation_failed, selectedMonthLabel),
                         color = SolidRed,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     TextButton(onClick = { viewModel.onMonthSelected(uiState.selectedPeriodMonth) }) {
-                        Text(stringResource(R.string.monthly_report_calculation_retry))
+                        Text(stringResource(Res.string.monthly_report_calculation_retry))
                     }
                 }
             }
@@ -358,7 +388,7 @@ private fun MonthlyReportForm(
                 OutlinedTextField(
                     value = uiState.hoursText,
                     onValueChange = viewModel::onHoursChange,
-                    label = { Text(stringResource(R.string.monthly_report_hours_label)) },
+                    label = { Text(stringResource(Res.string.monthly_report_hours_label)) },
                     singleLine = true,
                     isError = uiState.hoursError != null,
                     supportingText = uiState.hoursError?.let { { Text(it, color = SolidRed) } },
@@ -368,7 +398,7 @@ private fun MonthlyReportForm(
                 OutlinedTextField(
                     value = uiState.minutesText,
                     onValueChange = viewModel::onMinutesChange,
-                    label = { Text(stringResource(R.string.monthly_report_minutes_label)) },
+                    label = { Text(stringResource(Res.string.monthly_report_minutes_label)) },
                     singleLine = true,
                     isError = uiState.minutesError != null,
                     supportingText = uiState.minutesError?.let { { Text(it, color = SolidRed) } },
@@ -379,7 +409,7 @@ private fun MonthlyReportForm(
             OutlinedTextField(
                 value = uiState.bibleStudiesRendered,
                 onValueChange = viewModel::onBibleStudiesChange,
-                label = { Text(stringResource(R.string.monthly_report_bible_studies_label)) },
+                label = { Text(stringResource(Res.string.monthly_report_bible_studies_label)) },
                 singleLine = true,
                 isError = uiState.bibleStudiesError != null,
                 supportingText = uiState.bibleStudiesError?.let { { Text(it, color = SolidRed) } },
@@ -407,7 +437,7 @@ private fun MonthlyReportForm(
         OutlinedTextField(
             value = uiState.remarks,
             onValueChange = viewModel::onRemarksChange,
-            label = { Text(stringResource(R.string.monthly_report_remarks)) },
+            label = { Text(stringResource(Res.string.monthly_report_remarks)) },
             // Spec §4E — a Pioneer's Credit Hour category is only ever a
             // *suggested* starting value here; this field is a completely
             // ordinary editable text box, never disabled/read-only styling.
@@ -422,7 +452,7 @@ private fun MonthlyReportForm(
 
         if (submitBlockedByWindow) {
             Text(
-                stringResource(R.string.monthly_report_submission_window_message),
+                stringResource(Res.string.monthly_report_submission_window_message),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -440,7 +470,7 @@ private fun MonthlyReportForm(
             colors = ButtonDefaults.buttonColors(containerColor = SolidBlue),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (alreadySubmitted) "This Record is Already Submitted" else stringResource(R.string.monthly_report_review_button))
+            Text(if (alreadySubmitted) "This Record is Already Submitted" else stringResource(Res.string.monthly_report_review_button))
         }
     }
 }
@@ -466,7 +496,7 @@ private fun MonthlyReportPreview(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text(stringResource(R.string.monthly_report_preview_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(stringResource(Res.string.monthly_report_preview_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
 
         // "The Text Preview must display the exact information that will be
         // submitted" — this literal block IS the message [reportText] builds
@@ -501,14 +531,14 @@ private fun MonthlyReportPreview(
             },
             colors = ButtonDefaults.outlinedButtonColors(contentColor = SolidGray),
             modifier = Modifier.fillMaxWidth(),
-        ) { Text(stringResource(R.string.monthly_report_preview_copy_button)) }
+        ) { Text(stringResource(Res.string.monthly_report_preview_copy_button)) }
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = onEdit,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = SolidBlue),
                 modifier = Modifier.weight(1f),
-            ) { Text(stringResource(R.string.monthly_report_preview_edit_button)) }
+            ) { Text(stringResource(Res.string.monthly_report_preview_edit_button)) }
             Button(
                 onClick = {
                     // "Not a system message on the form, a separate message
@@ -524,7 +554,7 @@ private fun MonthlyReportPreview(
                 modifier = Modifier.weight(1f),
             ) {
                 if (uiState.isSaving) CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp), color = Color.White)
-                Text(stringResource(R.string.monthly_report_preview_send_button))
+                Text(stringResource(Res.string.monthly_report_preview_send_button))
             }
         }
     }
@@ -533,16 +563,16 @@ private fun MonthlyReportPreview(
         AlertDialog(
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
             onDismissRequest = { showHoursConfirmDialog = false },
-            title = { Text(stringResource(R.string.monthly_report_hours_confirm_dialog_title)) },
-            text = { Text(stringResource(R.string.monthly_report_hours_confirm_dialog_message, selectedMonthLabel)) },
+            title = { Text(stringResource(Res.string.monthly_report_hours_confirm_dialog_title)) },
+            text = { Text(stringResource(Res.string.monthly_report_hours_confirm_dialog_message, selectedMonthLabel)) },
             confirmButton = {
                 TextButton(onClick = { showHoursConfirmDialog = false; onSubmit() }) {
-                    Text(stringResource(R.string.monthly_report_hours_confirm_dialog_confirm))
+                    Text(stringResource(Res.string.monthly_report_hours_confirm_dialog_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showHoursConfirmDialog = false }) {
-                    Text(stringResource(R.string.monthly_report_hours_confirm_dialog_cancel))
+                    Text(stringResource(Res.string.monthly_report_hours_confirm_dialog_cancel))
                 }
             },
         )
@@ -581,7 +611,7 @@ private fun MonthPickerField(availableMonths: List<Long>, selectedMonth: Long, o
             value = monthFormat.format(Date(selectedMonth)),
             onValueChange = {},
             readOnly = true,
-            label = { Text(stringResource(R.string.monthly_report_select_month)) },
+            label = { Text(stringResource(Res.string.monthly_report_select_month)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth().menuAnchor(),

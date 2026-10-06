@@ -1,5 +1,14 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.chat_attachment_preview
+import com.emfitsolutions.gopreach.shared.resources.chat_empty_manage
+import com.emfitsolutions.gopreach.shared.resources.chat_empty_member
+import com.emfitsolutions.gopreach.shared.resources.chat_message_preview
+import com.emfitsolutions.gopreach.shared.resources.chat_new_group_chat
+import com.emfitsolutions.gopreach.shared.resources.chat_no_messages_yet
+import com.emfitsolutions.gopreach.shared.resources.chat_participants_count
+import com.emfitsolutions.gopreach.shared.resources.chat_setting_title
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Box
@@ -32,13 +41,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.GroupChat
 import com.emfitsolutions.gopreach.ui.components.CongregationFilterDropdown
 import com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt
@@ -82,7 +90,7 @@ fun GroupChatListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.chat_setting_title)) },
+                title = { Text(stringResource(Res.string.chat_setting_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -93,7 +101,7 @@ fun GroupChatListScreen(
         floatingActionButton = {
             if (canManage) {
                 FloatingActionButton(onClick = { showCreateDialog = true }) {
-                    Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.chat_new_group_chat))
+                    Icon(Icons.Rounded.Add, contentDescription = stringResource(Res.string.chat_new_group_chat))
                 }
             }
         },
@@ -116,7 +124,7 @@ fun GroupChatListScreen(
             ) {
                 RecordFound(0)
                 Text(
-                    if (canManage) stringResource(R.string.chat_empty_manage) else stringResource(R.string.chat_empty_member),
+                    if (canManage) stringResource(Res.string.chat_empty_manage) else stringResource(Res.string.chat_empty_member),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -165,14 +173,14 @@ private fun GroupChatRow(chat: GroupChat, congregationName: String?, unreadCount
             Column(modifier = Modifier.weight(1f)) {
                 Text(chat.groupName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text(
-                    listOfNotNull(congregationName, stringResource(R.string.chat_participants_count, chat.participantIds.size)).joinToString(" · "),
+                    listOfNotNull(congregationName, stringResource(Res.string.chat_participants_count, chat.participantIds.size)).joinToString(" · "),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 val preview = when {
-                    chat.lastMessageIsAttachment -> stringResource(R.string.chat_attachment_preview, chat.lastMessageSenderName ?: "")
-                    chat.lastMessageText != null -> stringResource(R.string.chat_message_preview, chat.lastMessageSenderName ?: "", chat.lastMessageText ?: "")
-                    else -> stringResource(R.string.chat_no_messages_yet)
+                    chat.lastMessageIsAttachment -> stringResource(Res.string.chat_attachment_preview, chat.lastMessageSenderName ?: "")
+                    chat.lastMessageText != null -> stringResource(Res.string.chat_message_preview, chat.lastMessageSenderName ?: "", chat.lastMessageText ?: "")
+                    else -> stringResource(Res.string.chat_no_messages_yet)
                 }
                 Text(preview, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

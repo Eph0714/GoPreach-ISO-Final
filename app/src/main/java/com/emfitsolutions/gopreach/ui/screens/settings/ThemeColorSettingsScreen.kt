@@ -1,5 +1,13 @@
 package com.emfitsolutions.gopreach.ui.screens.settings
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.action_save
+import com.emfitsolutions.gopreach.shared.resources.dashboard_back_cd
+import com.emfitsolutions.gopreach.shared.resources.settings_theme_color_subtitle
+import com.emfitsolutions.gopreach.shared.resources.theme_color_settings_presets_label
+import com.emfitsolutions.gopreach.shared.resources.theme_color_settings_preview_label
+import com.emfitsolutions.gopreach.shared.resources.theme_color_settings_saved_message
+import com.emfitsolutions.gopreach.shared.resources.theme_color_settings_title
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,11 +44,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.ui.components.ColorWheelPicker
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
 import com.emfitsolutions.gopreach.ui.theme.ThemeColorOption
@@ -83,10 +90,10 @@ fun ThemeColorSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.theme_color_settings_title)) },
+                title = { Text(stringResource(Res.string.theme_color_settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.dashboard_back_cd))
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(Res.string.dashboard_back_cd))
                     }
                 },
             )
@@ -101,7 +108,7 @@ fun ThemeColorSettingsScreen(
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Text(
-                stringResource(R.string.settings_theme_color_subtitle),
+                stringResource(Res.string.settings_theme_color_subtitle),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -116,7 +123,7 @@ fun ThemeColorSettingsScreen(
                         .border(2.dp, MaterialTheme.colorScheme.outline, CircleShape),
                 )
                 Text(
-                    stringResource(R.string.theme_color_settings_preview_label),
+                    stringResource(Res.string.theme_color_settings_preview_label),
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
@@ -144,7 +151,7 @@ fun ThemeColorSettingsScreen(
             // Existing preset swatches (spec §6: don't remove existing
             // theme-color functionality) — an optional shortcut alongside
             // the wheel, not a required extra step.
-            Text(stringResource(R.string.theme_color_settings_presets_label), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(Res.string.theme_color_settings_presets_label), style = MaterialTheme.typography.titleSmall)
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ThemeColorOption.entries.filter { it != ThemeColorOption.CUSTOM }.chunked(3).forEach { rowOptions ->
                     Row(
@@ -169,7 +176,7 @@ fun ThemeColorSettingsScreen(
             // the existing persistence mechanism, and the live theme applies
             // itself the moment ThemePreferenceRepository's StateFlow changes
             // (see ui/theme/Theme.kt) — nothing else to wire up here.
-            val savedMessage = stringResource(R.string.theme_color_settings_saved_message)
+            val savedMessage = stringResource(Res.string.theme_color_settings_saved_message)
             Button(
                 onClick = {
                     // Save-only-once (spec §18: "do not write repeated
@@ -185,7 +192,7 @@ fun ThemeColorSettingsScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(stringResource(R.string.action_save))
+                Text(stringResource(Res.string.action_save))
             }
         }
     }

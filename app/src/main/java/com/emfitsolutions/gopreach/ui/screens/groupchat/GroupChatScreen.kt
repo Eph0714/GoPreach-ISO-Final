@@ -1,5 +1,30 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.action_cancel
+import com.emfitsolutions.gopreach.shared.resources.action_save
+import com.emfitsolutions.gopreach.shared.resources.chat_attach_file_cd
+import com.emfitsolutions.gopreach.shared.resources.chat_attachment_fallback
+import com.emfitsolutions.gopreach.shared.resources.chat_cancel_attachment_cd
+import com.emfitsolutions.gopreach.shared.resources.chat_delete_for_everyone_confirm
+import com.emfitsolutions.gopreach.shared.resources.chat_delete_for_everyone_message
+import com.emfitsolutions.gopreach.shared.resources.chat_delete_for_everyone_title
+import com.emfitsolutions.gopreach.shared.resources.chat_delete_for_me
+import com.emfitsolutions.gopreach.shared.resources.chat_edit
+import com.emfitsolutions.gopreach.shared.resources.chat_edit_message_title
+import com.emfitsolutions.gopreach.shared.resources.chat_edited_suffix
+import com.emfitsolutions.gopreach.shared.resources.chat_group_settings_cd
+import com.emfitsolutions.gopreach.shared.resources.chat_message_deleted
+import com.emfitsolutions.gopreach.shared.resources.chat_message_options_cd
+import com.emfitsolutions.gopreach.shared.resources.chat_not_available_message
+import com.emfitsolutions.gopreach.shared.resources.chat_participants_header
+import com.emfitsolutions.gopreach.shared.resources.chat_send_cd
+import com.emfitsolutions.gopreach.shared.resources.chat_shared_documents_cd
+import com.emfitsolutions.gopreach.shared.resources.chat_title_fallback
+import com.emfitsolutions.gopreach.shared.resources.chat_type_message_placeholder
+import com.emfitsolutions.gopreach.shared.resources.chat_unauthorized_message
+import com.emfitsolutions.gopreach.shared.resources.chat_unsupported_file_type
+import com.emfitsolutions.gopreach.shared.resources.chat_upload_failed
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -59,7 +84,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
@@ -67,7 +92,6 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.GroupChatAttachmentType
 import com.emfitsolutions.gopreach.data.model.GroupChatMessage
 import com.emfitsolutions.gopreach.ui.components.formatRecordTimestamp
@@ -157,8 +181,8 @@ fun GroupChatScreen(
         viewModel.markRead(groupChatId, currentPersonId)
     }
 
-    val unsupportedFileTypeMessage = stringResource(R.string.chat_unsupported_file_type)
-    val uploadFailedMessage = stringResource(R.string.chat_upload_failed)
+    val unsupportedFileTypeMessage = stringResource(Res.string.chat_unsupported_file_type)
+    val uploadFailedMessage = stringResource(Res.string.chat_upload_failed)
     val pickAttachment = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val name = queryFileName(context, uri) ?: uri.lastPathSegment ?: "file"
@@ -204,7 +228,7 @@ fun GroupChatScreen(
     }
     if (showNotAvailable) {
         UnauthorizedGroupChatScreen(
-            message = stringResource(R.string.chat_not_available_message),
+            message = stringResource(Res.string.chat_not_available_message),
             onBack = onBack,
         )
         return
@@ -215,10 +239,10 @@ fun GroupChatScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text(chat?.groupName ?: stringResource(R.string.chat_title_fallback), style = MaterialTheme.typography.titleMedium)
+                        Text(chat?.groupName ?: stringResource(Res.string.chat_title_fallback), style = MaterialTheme.typography.titleMedium)
                         val congregationName = congregations.firstOrNull { it.id == chat?.congregationId }?.name
                         Text(
-                            listOfNotNull(congregationName, chat?.let { stringResource(R.string.chat_participants_header, it.participantIds.size) }).joinToString(" · "),
+                            listOfNotNull(congregationName, chat?.let { stringResource(Res.string.chat_participants_header, it.participantIds.size) }).joinToString(" · "),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }
@@ -228,11 +252,11 @@ fun GroupChatScreen(
                 },
                 actions = {
                     IconButton(onClick = { showDocuments = true }) {
-                        Icon(Icons.Rounded.Folder, contentDescription = stringResource(R.string.chat_shared_documents_cd))
+                        Icon(Icons.Rounded.Folder, contentDescription = stringResource(Res.string.chat_shared_documents_cd))
                     }
                     if (canManageSettings) {
                         IconButton(onClick = { showSettings = true }) {
-                            Icon(Icons.Rounded.Settings, contentDescription = stringResource(R.string.chat_group_settings_cd))
+                            Icon(Icons.Rounded.Settings, contentDescription = stringResource(Res.string.chat_group_settings_cd))
                         }
                     }
                 },
@@ -271,7 +295,7 @@ fun GroupChatScreen(
                         CircularProgressIndicator(modifier = Modifier.height(20.dp).widthIn(max = 20.dp))
                     } else {
                         IconButton(onClick = { pendingAttachment = null }) {
-                            Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.chat_cancel_attachment_cd))
+                            Icon(Icons.Rounded.Close, contentDescription = stringResource(Res.string.chat_cancel_attachment_cd))
                         }
                     }
                 }
@@ -282,17 +306,17 @@ fun GroupChatScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { pickAttachment.launch(GROUP_CHAT_ATTACHMENT_MIME_TYPES) }) {
-                    Icon(Icons.Rounded.AttachFile, contentDescription = stringResource(R.string.chat_attach_file_cd))
+                    Icon(Icons.Rounded.AttachFile, contentDescription = stringResource(Res.string.chat_attach_file_cd))
                 }
                 OutlinedTextField(
                     value = messageText,
                     onValueChange = { messageText = it },
-                    placeholder = { Text(stringResource(R.string.chat_type_message_placeholder)) },
+                    placeholder = { Text(stringResource(Res.string.chat_type_message_placeholder)) },
                     visualTransformation = VisualTransformation.None,
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = ::send, enabled = !isUploading) {
-                    Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = stringResource(R.string.chat_send_cd), tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = stringResource(Res.string.chat_send_cd), tint = MaterialTheme.colorScheme.primary)
                 }
             }
         }
@@ -325,15 +349,15 @@ fun GroupChatScreen(
         AlertDialog(
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
             onDismissRequest = { pendingDeleteForEveryone = null },
-            title = { Text(stringResource(R.string.chat_delete_for_everyone_title)) },
-            text = { Text(stringResource(R.string.chat_delete_for_everyone_message)) },
+            title = { Text(stringResource(Res.string.chat_delete_for_everyone_title)) },
+            text = { Text(stringResource(Res.string.chat_delete_for_everyone_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteForEveryone(groupChatId, toDeleteForEveryone)
                     pendingDeleteForEveryone = null
-                }) { Text(stringResource(R.string.chat_delete_for_everyone_confirm)) }
+                }) { Text(stringResource(Res.string.chat_delete_for_everyone_confirm)) }
             },
-            dismissButton = { TextButton(onClick = { pendingDeleteForEveryone = null }) { Text(stringResource(R.string.action_cancel)) } },
+            dismissButton = { TextButton(onClick = { pendingDeleteForEveryone = null }) { Text(stringResource(Res.string.action_cancel)) } },
         )
     }
 }
@@ -346,13 +370,13 @@ fun GroupChatScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun UnauthorizedGroupChatScreen(
-    message: String = stringResource(R.string.chat_unauthorized_message),
+    message: String = stringResource(Res.string.chat_unauthorized_message),
     onBack: () -> Unit,
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.chat_title_fallback)) },
+                title = { Text(stringResource(Res.string.chat_title_fallback)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
                 },
@@ -378,7 +402,7 @@ private fun EditMessageDialog(message: GroupChatMessage, onDismiss: () -> Unit, 
     AlertDialog(
         properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.chat_edit_message_title)) },
+        title = { Text(stringResource(Res.string.chat_edit_message_title)) },
         text = {
             OutlinedTextField(
                 value = text,
@@ -388,9 +412,9 @@ private fun EditMessageDialog(message: GroupChatMessage, onDismiss: () -> Unit, 
             )
         },
         confirmButton = {
-            TextButton(onClick = { if (text.isNotBlank()) onSave(text) }, enabled = text.isNotBlank()) { Text(stringResource(R.string.action_save)) }
+            TextButton(onClick = { if (text.isNotBlank()) onSave(text) }, enabled = text.isNotBlank()) { Text(stringResource(Res.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_cancel)) } },
     )
 }
 
@@ -441,7 +465,7 @@ private fun MessageBubble(
                 if (message.attachmentUrl != null) {
                     val context = LocalContext.current
                     val actions = rememberPlatformActions()
-                    val attachmentFallback = stringResource(R.string.chat_attachment_fallback)
+                    val attachmentFallback = stringResource(Res.string.chat_attachment_fallback)
                     if (message.attachmentType == GroupChatAttachmentType.IMAGE) {
                         AsyncImage(
                             model = message.attachmentUrl,
@@ -475,7 +499,7 @@ private fun MessageBubble(
                     Text(message.text, style = MaterialTheme.typography.bodyMedium, color = contentColor)
                 }
                 Text(
-                    formatRecordTimestamp(message.createdAt) + if (message.isEdited) stringResource(R.string.chat_edited_suffix) else "",
+                    formatRecordTimestamp(message.createdAt) + if (message.isEdited) stringResource(Res.string.chat_edited_suffix) else "",
                     style = MaterialTheme.typography.labelSmall,
                     color = mutedContentColor,
                     modifier = Modifier.padding(top = 2.dp),
@@ -494,12 +518,12 @@ private fun MessageMenuButton(contentColor: Color, onEdit: () -> Unit, onDeleteF
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }, modifier = Modifier.size(28.dp)) {
-            Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(R.string.chat_message_options_cd), tint = contentColor, modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(Res.string.chat_message_options_cd), tint = contentColor, modifier = Modifier.size(18.dp))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(text = { Text(stringResource(R.string.chat_edit)) }, onClick = { expanded = false; onEdit() })
-            DropdownMenuItem(text = { Text(stringResource(R.string.chat_delete_for_everyone_confirm)) }, onClick = { expanded = false; onDeleteForEveryone() })
-            DropdownMenuItem(text = { Text(stringResource(R.string.chat_delete_for_me)) }, onClick = { expanded = false; onDeleteForMe() })
+            DropdownMenuItem(text = { Text(stringResource(Res.string.chat_edit)) }, onClick = { expanded = false; onEdit() })
+            DropdownMenuItem(text = { Text(stringResource(Res.string.chat_delete_for_everyone_confirm)) }, onClick = { expanded = false; onDeleteForEveryone() })
+            DropdownMenuItem(text = { Text(stringResource(Res.string.chat_delete_for_me)) }, onClick = { expanded = false; onDeleteForMe() })
         }
     }
 }
@@ -512,7 +536,7 @@ private fun MessageMenuButton(contentColor: Color, onEdit: () -> Unit, onDeleteF
 private fun DeletedMessagePlaceholder(isOwnMessage: Boolean) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start) {
         Text(
-            stringResource(R.string.chat_message_deleted),
+            stringResource(Res.string.chat_message_deleted),
             style = MaterialTheme.typography.bodySmall.copy(fontStyle = FontStyle.Italic),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier

@@ -1,5 +1,20 @@
 package com.emfitsolutions.gopreach.ui.screens.login
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.app_name
+import com.emfitsolutions.gopreach.shared.resources.login_biometric_prompt_subtitle
+import com.emfitsolutions.gopreach.shared.resources.login_biometric_prompt_title
+import com.emfitsolutions.gopreach.shared.resources.login_biometric_prompt_use_password
+import com.emfitsolutions.gopreach.shared.resources.login_forgot_password
+import com.emfitsolutions.gopreach.shared.resources.login_hide_password
+import com.emfitsolutions.gopreach.shared.resources.login_log_in
+import com.emfitsolutions.gopreach.shared.resources.login_password
+import com.emfitsolutions.gopreach.shared.resources.login_powered_by
+import com.emfitsolutions.gopreach.shared.resources.login_remember_me
+import com.emfitsolutions.gopreach.shared.resources.login_show_password
+import com.emfitsolutions.gopreach.shared.resources.login_tagline
+import com.emfitsolutions.gopreach.shared.resources.login_username
+import com.emfitsolutions.gopreach.shared.resources.login_welcome_back
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -47,14 +62,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.BuildConfig
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.repository.QuickLoginMethod
 import com.emfitsolutions.gopreach.ui.components.GradientHero
 import com.emfitsolutions.gopreach.ui.components.update.UpdateViewModel
@@ -115,9 +129,9 @@ fun LoginScreen(
                         .padding(bottom = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(stringResource(R.string.app_name), style = MaterialTheme.typography.headlineLarge, color = Color.White)
+                    Text(stringResource(Res.string.app_name), style = MaterialTheme.typography.headlineLarge, color = Color.White)
                     Text(
-                        stringResource(R.string.login_tagline),
+                        stringResource(Res.string.login_tagline),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.White,
@@ -132,7 +146,7 @@ fun LoginScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    stringResource(R.string.login_welcome_back),
+                    stringResource(Res.string.login_welcome_back),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -141,7 +155,7 @@ fun LoginScreen(
                 OutlinedTextField(
                     value = uiState.username,
                     onValueChange = viewModel::onUsernameChange,
-                    label = { Text(stringResource(R.string.login_username)) },
+                    label = { Text(stringResource(Res.string.login_username)) },
                     singleLine = true,
                     shape = FieldShape,
                     // "Disable: Login Button, Username Field, Password Field"
@@ -173,7 +187,7 @@ fun LoginScreen(
                 OutlinedTextField(
                     value = uiState.password,
                     onValueChange = viewModel::onPasswordChange,
-                    label = { Text(stringResource(R.string.login_password)) },
+                    label = { Text(stringResource(Res.string.login_password)) },
                     singleLine = true,
                     shape = FieldShape,
                     enabled = !uiState.isLoading,
@@ -184,7 +198,7 @@ fun LoginScreen(
                         IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !uiState.isLoading) {
                             Icon(
                                 imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                contentDescription = if (passwordVisible) stringResource(R.string.login_hide_password) else stringResource(R.string.login_show_password),
+                                contentDescription = if (passwordVisible) stringResource(Res.string.login_hide_password) else stringResource(Res.string.login_show_password),
                             )
                         }
                     },
@@ -198,10 +212,10 @@ fun LoginScreen(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = uiState.rememberMe, onCheckedChange = viewModel::onRememberMeChange)
-                        Text(stringResource(R.string.login_remember_me), style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(Res.string.login_remember_me), style = MaterialTheme.typography.bodyMedium)
                     }
                     TextButton(onClick = onForgotPasswordClick) {
-                        Text(stringResource(R.string.login_forgot_password))
+                        Text(stringResource(Res.string.login_forgot_password))
                     }
                 }
 
@@ -220,15 +234,15 @@ fun LoginScreen(
                     if (uiState.isLoading) {
                         CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
                     }
-                    Text(stringResource(R.string.login_log_in), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(stringResource(Res.string.login_log_in), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
 
                 // Always shown — even right after a logout or an expired session. Whether it signs
                 // anyone in depends on biometric login having been explicitly set up for GoPreach
                 // on this device (see LoginViewModel.onBiometricButtonClick), not on the button's visibility.
-                val biometricTitle = stringResource(R.string.login_biometric_prompt_title)
-                val biometricSubtitle = stringResource(R.string.login_biometric_prompt_subtitle)
-                val biometricUsePassword = stringResource(R.string.login_biometric_prompt_use_password)
+                val biometricTitle = stringResource(Res.string.login_biometric_prompt_title)
+                val biometricSubtitle = stringResource(Res.string.login_biometric_prompt_subtitle)
+                val biometricUsePassword = stringResource(Res.string.login_biometric_prompt_use_password)
                 OutlinedButton(
                     onClick = {
                         if (viewModel.onBiometricButtonClick(deviceHasBiometrics(activity))) {
@@ -286,7 +300,7 @@ fun LoginScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(
-                        stringResource(R.string.login_powered_by),
+                        stringResource(Res.string.login_powered_by),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

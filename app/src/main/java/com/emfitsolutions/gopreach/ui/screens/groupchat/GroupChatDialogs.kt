@@ -1,5 +1,22 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.action_cancel
+import com.emfitsolutions.gopreach.shared.resources.action_save
+import com.emfitsolutions.gopreach.shared.resources.chat_create
+import com.emfitsolutions.gopreach.shared.resources.chat_delete
+import com.emfitsolutions.gopreach.shared.resources.chat_delete_group_chat
+import com.emfitsolutions.gopreach.shared.resources.chat_delete_group_chat_message
+import com.emfitsolutions.gopreach.shared.resources.chat_delete_group_chat_title
+import com.emfitsolutions.gopreach.shared.resources.chat_description_optional
+import com.emfitsolutions.gopreach.shared.resources.chat_group_chat_name
+import com.emfitsolutions.gopreach.shared.resources.chat_new_group_chat
+import com.emfitsolutions.gopreach.shared.resources.chat_no_participants_found
+import com.emfitsolutions.gopreach.shared.resources.chat_participants_label
+import com.emfitsolutions.gopreach.shared.resources.chat_search_participants
+import com.emfitsolutions.gopreach.shared.resources.chat_select_congregation
+import com.emfitsolutions.gopreach.shared.resources.chat_selected_count
+import com.emfitsolutions.gopreach.shared.resources.chat_settings_title
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,12 +45,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.GroupChat
 import com.emfitsolutions.gopreach.ui.components.FormDialog
@@ -57,7 +73,7 @@ private fun GroupChatCongregationPicker(congregations: List<Congregation>, selec
             value = selectedName,
             onValueChange = {},
             readOnly = true,
-            label = { Text(stringResource(R.string.chat_select_congregation)) },
+            label = { Text(stringResource(Res.string.chat_select_congregation)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth().menuAnchor(),
@@ -95,16 +111,16 @@ private fun ParticipantPicker(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text(stringResource(R.string.chat_search_participants)) },
+            label = { Text(stringResource(Res.string.chat_search_participants)) },
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
             singleLine = true,
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth(),
         )
-        Text(stringResource(R.string.chat_selected_count, selectedIds.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(Res.string.chat_selected_count, selectedIds.size), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (filtered.isEmpty()) {
             Text(
-                stringResource(R.string.chat_no_participants_found),
+                stringResource(Res.string.chat_no_participants_found),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 8.dp),
@@ -190,9 +206,9 @@ fun CreateGroupChatDialog(
 
     FormDialog(
         onDismissRequest = onDismiss,
-        title = stringResource(R.string.chat_new_group_chat),
+        title = stringResource(Res.string.chat_new_group_chat),
         onConfirm = ::submit,
-        confirmLabel = stringResource(R.string.chat_create),
+        confirmLabel = stringResource(Res.string.chat_create),
         errorMessage = errorMessage,
         maxContentHeight = 560.dp,
         hasUnsavedChanges = groupName.isNotBlank() || description.isNotBlank() ||
@@ -204,7 +220,7 @@ fun CreateGroupChatDialog(
         OutlinedTextField(
             value = groupName,
             onValueChange = { groupName = it },
-            label = { Text(stringResource(R.string.chat_group_chat_name)) },
+            label = { Text(stringResource(Res.string.chat_group_chat_name)) },
             singleLine = true,
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth(),
@@ -212,12 +228,12 @@ fun CreateGroupChatDialog(
         OutlinedTextField(
             value = description,
             onValueChange = { description = it },
-            label = { Text(stringResource(R.string.chat_description_optional)) },
+            label = { Text(stringResource(Res.string.chat_description_optional)) },
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth(),
         )
         if (congregationId != null) {
-            Text(stringResource(R.string.chat_participants_label), style = MaterialTheme.typography.labelLarge)
+            Text(stringResource(Res.string.chat_participants_label), style = MaterialTheme.typography.labelLarge)
             ParticipantPicker(
                 candidates = candidates,
                 selectedIds = selectedIds,
@@ -270,9 +286,9 @@ fun ManageParticipantsDialog(
 
     FormDialog(
         onDismissRequest = onDismiss,
-        title = stringResource(R.string.chat_settings_title),
+        title = stringResource(Res.string.chat_settings_title),
         onConfirm = ::submit,
-        confirmLabel = stringResource(R.string.action_save),
+        confirmLabel = stringResource(Res.string.action_save),
         errorMessage = errorMessage,
         hasUnsavedChanges = groupName != chat.groupName || description != chat.description ||
             selectedIds != chat.participantIds.toSet(),
@@ -281,7 +297,7 @@ fun ManageParticipantsDialog(
         OutlinedTextField(
             value = groupName,
             onValueChange = { groupName = it },
-            label = { Text(stringResource(R.string.chat_group_chat_name)) },
+            label = { Text(stringResource(Res.string.chat_group_chat_name)) },
             singleLine = true,
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth(),
@@ -289,11 +305,11 @@ fun ManageParticipantsDialog(
         OutlinedTextField(
             value = description,
             onValueChange = { description = it },
-            label = { Text(stringResource(R.string.chat_description_optional)) },
+            label = { Text(stringResource(Res.string.chat_description_optional)) },
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth(),
         )
-        Text(stringResource(R.string.chat_participants_label), style = MaterialTheme.typography.labelLarge)
+        Text(stringResource(Res.string.chat_participants_label), style = MaterialTheme.typography.labelLarge)
         ParticipantPicker(
             candidates = candidates,
             selectedIds = selectedIds,
@@ -303,7 +319,7 @@ fun ManageParticipantsDialog(
             TextButton(
                 onClick = { showDeleteConfirm = true },
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) { Text(stringResource(R.string.chat_delete_group_chat)) }
+            ) { Text(stringResource(Res.string.chat_delete_group_chat)) }
         }
     }
 
@@ -311,8 +327,8 @@ fun ManageParticipantsDialog(
         AlertDialog(
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text(stringResource(R.string.chat_delete_group_chat_title)) },
-            text = { Text(stringResource(R.string.chat_delete_group_chat_message, chat.groupName)) },
+            title = { Text(stringResource(Res.string.chat_delete_group_chat_title)) },
+            text = { Text(stringResource(Res.string.chat_delete_group_chat_message, chat.groupName)) },
             confirmButton = {
                 TextButton(onClick = {
                     showDeleteConfirm = false
@@ -320,9 +336,9 @@ fun ManageParticipantsDialog(
                         onDismiss()
                         onDeleted()
                     }
-                }) { Text(stringResource(R.string.chat_delete), color = MaterialTheme.colorScheme.error) }
+                }) { Text(stringResource(Res.string.chat_delete), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(R.string.action_cancel)) } },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(Res.string.action_cancel)) } },
         )
     }
 }

@@ -1,5 +1,48 @@
 package com.emfitsolutions.gopreach.ui.screens.settings
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.action_ok
+import com.emfitsolutions.gopreach.shared.resources.dashboard_back_cd
+import com.emfitsolutions.gopreach.shared.resources.settings_announcements_subtitle
+import com.emfitsolutions.gopreach.shared.resources.settings_announcements_title
+import com.emfitsolutions.gopreach.shared.resources.settings_app_version_title
+import com.emfitsolutions.gopreach.shared.resources.settings_appearance_title
+import com.emfitsolutions.gopreach.shared.resources.settings_check_updates
+import com.emfitsolutions.gopreach.shared.resources.settings_exact_alarms_subtitle
+import com.emfitsolutions.gopreach.shared.resources.settings_exact_alarms_title
+import com.emfitsolutions.gopreach.shared.resources.settings_group_chat_messages_subtitle
+import com.emfitsolutions.gopreach.shared.resources.settings_group_chat_messages_title
+import com.emfitsolutions.gopreach.shared.resources.settings_notification_sound_custom
+import com.emfitsolutions.gopreach.shared.resources.settings_notification_sound_default
+import com.emfitsolutions.gopreach.shared.resources.settings_notification_sound_footnote
+import com.emfitsolutions.gopreach.shared.resources.settings_notification_sound_title
+import com.emfitsolutions.gopreach.shared.resources.settings_notifications_subtitle
+import com.emfitsolutions.gopreach.shared.resources.settings_notifications_title
+import com.emfitsolutions.gopreach.shared.resources.settings_popups_subtitle
+import com.emfitsolutions.gopreach.shared.resources.settings_popups_title
+import com.emfitsolutions.gopreach.shared.resources.settings_share_app
+import com.emfitsolutions.gopreach.shared.resources.settings_share_chooser_title
+import com.emfitsolutions.gopreach.shared.resources.settings_share_fetch_error
+import com.emfitsolutions.gopreach.shared.resources.settings_silent_mode_hint
+import com.emfitsolutions.gopreach.shared.resources.settings_sounds_subtitle
+import com.emfitsolutions.gopreach.shared.resources.settings_sounds_title
+import com.emfitsolutions.gopreach.shared.resources.settings_system_notifications_subtitle
+import com.emfitsolutions.gopreach.shared.resources.settings_system_notifications_title
+import com.emfitsolutions.gopreach.shared.resources.settings_test_notification_failed_title
+import com.emfitsolutions.gopreach.shared.resources.settings_test_notification_sent_title
+import com.emfitsolutions.gopreach.shared.resources.settings_test_notification_subtitle
+import com.emfitsolutions.gopreach.shared.resources.settings_test_notification_title
+import com.emfitsolutions.gopreach.shared.resources.settings_theme_color_subtitle
+import com.emfitsolutions.gopreach.shared.resources.settings_theme_color_title
+import com.emfitsolutions.gopreach.shared.resources.settings_theme_dark
+import com.emfitsolutions.gopreach.shared.resources.settings_theme_light
+import com.emfitsolutions.gopreach.shared.resources.settings_theme_system
+import com.emfitsolutions.gopreach.shared.resources.settings_title
+import com.emfitsolutions.gopreach.shared.resources.settings_transfer_requests_subtitle
+import com.emfitsolutions.gopreach.shared.resources.settings_transfer_requests_title
+import com.emfitsolutions.gopreach.shared.resources.settings_version_label
+import com.emfitsolutions.gopreach.shared.resources.settings_whats_new_title
+import com.emfitsolutions.gopreach.shared.resources.theme_color_settings_title
 import android.app.Activity
 import android.media.RingtoneManager
 import android.net.Uri
@@ -59,12 +102,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.BuildConfig
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.repository.ThemePreference
 import com.emfitsolutions.gopreach.notifications.AlarmScheduler
 import kotlinx.coroutines.launch
@@ -102,10 +144,10 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) },
+                title = { Text(stringResource(Res.string.settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.dashboard_back_cd))
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(Res.string.dashboard_back_cd))
                     }
                 },
             )
@@ -119,20 +161,20 @@ fun SettingsScreen(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(stringResource(R.string.settings_appearance_title), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(Res.string.settings_appearance_title), style = MaterialTheme.typography.titleMedium)
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                    ThemeOptionRow(stringResource(R.string.settings_theme_system), ThemePreference.SYSTEM, theme, viewModel::setTheme)
-                    ThemeOptionRow(stringResource(R.string.settings_theme_light), ThemePreference.LIGHT, theme, viewModel::setTheme)
-                    ThemeOptionRow(stringResource(R.string.settings_theme_dark), ThemePreference.DARK, theme, viewModel::setTheme)
+                    ThemeOptionRow(stringResource(Res.string.settings_theme_system), ThemePreference.SYSTEM, theme, viewModel::setTheme)
+                    ThemeOptionRow(stringResource(Res.string.settings_theme_light), ThemePreference.LIGHT, theme, viewModel::setTheme)
+                    ThemeOptionRow(stringResource(Res.string.settings_theme_dark), ThemePreference.DARK, theme, viewModel::setTheme)
                 }
             }
 
-            Text(stringResource(R.string.settings_theme_color_title), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(Res.string.settings_theme_color_title), style = MaterialTheme.typography.titleMedium)
             Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onNavigateToThemeColorSettings)) {
                 ListItem(
-                    headlineContent = { Text(stringResource(R.string.theme_color_settings_title)) },
-                    supportingContent = { Text(stringResource(R.string.settings_theme_color_subtitle)) },
+                    headlineContent = { Text(stringResource(Res.string.theme_color_settings_title)) },
+                    supportingContent = { Text(stringResource(Res.string.settings_theme_color_subtitle)) },
                     leadingContent = {
                         Box(
                             modifier = Modifier
@@ -200,12 +242,12 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
         }
     }
 
-    Text(stringResource(R.string.settings_notifications_title), style = MaterialTheme.typography.titleMedium)
+    Text(stringResource(Res.string.settings_notifications_title), style = MaterialTheme.typography.titleMedium)
     Card(modifier = Modifier.fillMaxWidth()) {
         Column {
             ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_notifications_title)) },
-                supportingContent = { Text(stringResource(R.string.settings_notifications_subtitle)) },
+                headlineContent = { Text(stringResource(Res.string.settings_notifications_title)) },
+                supportingContent = { Text(stringResource(Res.string.settings_notifications_subtitle)) },
                 leadingContent = { Icon(Icons.Rounded.Notifications, contentDescription = null) },
                 trailingContent = {
                     Switch(checked = notificationsEnabled, onCheckedChange = viewModel::setNotificationsEnabled)
@@ -220,8 +262,8 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
             // already used before this section existed.
             androidx.compose.material3.HorizontalDivider()
             ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_sounds_title)) },
-                supportingContent = { Text(stringResource(R.string.settings_sounds_subtitle)) },
+                headlineContent = { Text(stringResource(Res.string.settings_sounds_title)) },
+                supportingContent = { Text(stringResource(Res.string.settings_sounds_subtitle)) },
                 leadingContent = { Icon(Icons.Rounded.MusicNote, contentDescription = null) },
                 modifier = Modifier.alpha(if (notificationsEnabled) 1f else 0.5f),
                 trailingContent = {
@@ -230,8 +272,8 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
             )
             androidx.compose.material3.HorizontalDivider()
             ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_popups_title)) },
-                supportingContent = { Text(stringResource(R.string.settings_popups_subtitle)) },
+                headlineContent = { Text(stringResource(Res.string.settings_popups_title)) },
+                supportingContent = { Text(stringResource(Res.string.settings_popups_subtitle)) },
                 leadingContent = { Icon(Icons.Rounded.Notifications, contentDescription = null) },
                 modifier = Modifier.alpha(if (notificationsEnabled) 1f else 0.5f),
                 trailingContent = {
@@ -240,8 +282,8 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
             )
             androidx.compose.material3.HorizontalDivider()
             ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_transfer_requests_title)) },
-                supportingContent = { Text(stringResource(R.string.settings_transfer_requests_subtitle)) },
+                headlineContent = { Text(stringResource(Res.string.settings_transfer_requests_title)) },
+                supportingContent = { Text(stringResource(Res.string.settings_transfer_requests_subtitle)) },
                 leadingContent = { Icon(Icons.Rounded.SwapHoriz, contentDescription = null) },
                 modifier = Modifier.alpha(if (notificationsEnabled) 1f else 0.5f),
                 trailingContent = {
@@ -250,8 +292,8 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
             )
             androidx.compose.material3.HorizontalDivider()
             ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_announcements_title)) },
-                supportingContent = { Text(stringResource(R.string.settings_announcements_subtitle)) },
+                headlineContent = { Text(stringResource(Res.string.settings_announcements_title)) },
+                supportingContent = { Text(stringResource(Res.string.settings_announcements_subtitle)) },
                 leadingContent = { Icon(Icons.Rounded.Campaign, contentDescription = null) },
                 modifier = Modifier.alpha(if (notificationsEnabled) 1f else 0.5f),
                 trailingContent = {
@@ -260,8 +302,8 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
             )
             androidx.compose.material3.HorizontalDivider()
             ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_group_chat_messages_title)) },
-                supportingContent = { Text(stringResource(R.string.settings_group_chat_messages_subtitle)) },
+                headlineContent = { Text(stringResource(Res.string.settings_group_chat_messages_title)) },
+                supportingContent = { Text(stringResource(Res.string.settings_group_chat_messages_subtitle)) },
                 leadingContent = { Icon(Icons.Rounded.ChatBubble, contentDescription = null) },
                 modifier = Modifier.alpha(if (notificationsEnabled) 1f else 0.5f),
                 trailingContent = {
@@ -270,8 +312,8 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
             )
             androidx.compose.material3.HorizontalDivider()
             ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_system_notifications_title)) },
-                supportingContent = { Text(stringResource(R.string.settings_system_notifications_subtitle)) },
+                headlineContent = { Text(stringResource(Res.string.settings_system_notifications_title)) },
+                supportingContent = { Text(stringResource(Res.string.settings_system_notifications_subtitle)) },
                 leadingContent = { Icon(Icons.Rounded.PriorityHigh, contentDescription = null) },
                 modifier = Modifier.alpha(if (notificationsEnabled) 1f else 0.5f),
                 trailingContent = {
@@ -279,10 +321,10 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
                 },
             )
             androidx.compose.material3.HorizontalDivider()
-            val notificationSoundTitle = stringResource(R.string.settings_notification_sound_title)
+            val notificationSoundTitle = stringResource(Res.string.settings_notification_sound_title)
             ListItem(
                 headlineContent = { Text(notificationSoundTitle) },
-                supportingContent = { Text(ringtoneTitle(context, soundUri, stringResource(R.string.settings_notification_sound_default), stringResource(R.string.settings_notification_sound_custom))) },
+                supportingContent = { Text(ringtoneTitle(context, soundUri, stringResource(Res.string.settings_notification_sound_default), stringResource(Res.string.settings_notification_sound_custom))) },
                 leadingContent = { Icon(Icons.Rounded.MusicNote, contentDescription = null) },
                 modifier = Modifier
                     .alpha(if (notificationsEnabled) 1f else 0.5f)
@@ -302,7 +344,7 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
                     },
             )
             Text(
-                stringResource(R.string.settings_notification_sound_footnote),
+                stringResource(Res.string.settings_notification_sound_footnote),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
@@ -310,8 +352,8 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !exactAlarmsAllowed) {
                 androidx.compose.material3.HorizontalDivider()
                 ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_exact_alarms_title)) },
-                    supportingContent = { Text(stringResource(R.string.settings_exact_alarms_subtitle)) },
+                    headlineContent = { Text(stringResource(Res.string.settings_exact_alarms_title)) },
+                    supportingContent = { Text(stringResource(Res.string.settings_exact_alarms_subtitle)) },
                     leadingContent = { Icon(Icons.Rounded.Alarm, contentDescription = null) },
                     modifier = Modifier.clickable {
                         context.startActivity(
@@ -325,8 +367,8 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
             }
             androidx.compose.material3.HorizontalDivider()
             ListItem(
-                headlineContent = { Text(stringResource(R.string.settings_test_notification_title)) },
-                supportingContent = { Text(stringResource(R.string.settings_test_notification_subtitle)) },
+                headlineContent = { Text(stringResource(Res.string.settings_test_notification_title)) },
+                supportingContent = { Text(stringResource(Res.string.settings_test_notification_subtitle)) },
                 leadingContent = { Icon(Icons.Rounded.NotificationsActive, contentDescription = null) },
                 modifier = Modifier.clickable {
                     diagnosticsResult = viewModel.runNotificationDiagnostics()
@@ -343,7 +385,7 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
         AlertDialog(
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
             onDismissRequest = { diagnosticsResult = null },
-            title = { Text(stringResource(if (allPassed) R.string.settings_test_notification_sent_title else R.string.settings_test_notification_failed_title)) },
+            title = { Text(stringResource(if (allPassed) Res.string.settings_test_notification_sent_title else Res.string.settings_test_notification_failed_title)) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     results.forEach { diagnostic ->
@@ -363,7 +405,7 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
                     }
                     if (allPassed) {
                         Text(
-                            stringResource(R.string.settings_silent_mode_hint),
+                            stringResource(Res.string.settings_silent_mode_hint),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp),
@@ -372,7 +414,7 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { diagnosticsResult = null }) { Text(stringResource(R.string.action_ok)) }
+                TextButton(onClick = { diagnosticsResult = null }) { Text(stringResource(Res.string.action_ok)) }
             },
         )
     }
@@ -407,14 +449,14 @@ private fun AppVersionSection(updateViewModel: UpdateViewModel) {
     var shareError by remember { mutableStateOf<String?>(null) }
     val installedUpdateInfo = remember { updateViewModel.installedUpdateInfo }
 
-    Text(stringResource(R.string.settings_app_version_title), style = MaterialTheme.typography.titleMedium)
+    Text(stringResource(Res.string.settings_app_version_title), style = MaterialTheme.typography.titleMedium)
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.settings_version_label, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(Res.string.settings_version_label, BuildConfig.VERSION_NAME), style = MaterialTheme.typography.bodyMedium)
 
             if (installedUpdateInfo != null && installedUpdateInfo.releaseNotes.isNotBlank()) {
                 Text(
-                    stringResource(R.string.settings_whats_new_title),
+                    stringResource(Res.string.settings_whats_new_title),
                     style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.padding(top = 4.dp),
                 )
@@ -428,10 +470,10 @@ private fun AppVersionSection(updateViewModel: UpdateViewModel) {
             Button(
                 onClick = updateViewModel::checkManually,
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            ) { Text(stringResource(R.string.settings_check_updates)) }
+            ) { Text(stringResource(Res.string.settings_check_updates)) }
 
-            val shareFetchError = stringResource(R.string.settings_share_fetch_error)
-            val shareChooserTitle = stringResource(R.string.settings_share_chooser_title)
+            val shareFetchError = stringResource(Res.string.settings_share_fetch_error)
+            val shareChooserTitle = stringResource(Res.string.settings_share_chooser_title)
             OutlinedButton(
                 onClick = {
                     isSharing = true
@@ -459,7 +501,7 @@ private fun AppVersionSection(updateViewModel: UpdateViewModel) {
                 } else {
                     Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
                 }
-                Text(stringResource(R.string.settings_share_app))
+                Text(stringResource(Res.string.settings_share_app))
             }
         }
     }

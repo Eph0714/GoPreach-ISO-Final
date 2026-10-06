@@ -1,5 +1,12 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.chat_attachment_preview
+import com.emfitsolutions.gopreach.shared.resources.chat_empty_member
+import com.emfitsolutions.gopreach.shared.resources.chat_message_preview
+import com.emfitsolutions.gopreach.shared.resources.chat_no_messages_yet
+import com.emfitsolutions.gopreach.shared.resources.chat_title_fallback
+import com.emfitsolutions.gopreach.shared.resources.chat_view_all_group_chats
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,11 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.GroupChat
 
 /** One row of the Chat Box dropdown — a [GroupChat] plus whatever's already
@@ -68,7 +74,7 @@ fun ChatBoxIcon(
             BadgedBox(badge = {
                 if (totalUnread > 0) Badge { Text(if (totalUnread > 99) "99+" else totalUnread.toString()) }
             }) {
-                Icon(Icons.Rounded.ChatBubble, contentDescription = stringResource(R.string.chat_title_fallback), tint = iconTint)
+                Icon(Icons.Rounded.ChatBubble, contentDescription = stringResource(Res.string.chat_title_fallback), tint = iconTint)
             }
         }
         DropdownMenu(
@@ -78,7 +84,7 @@ fun ChatBoxIcon(
         ) {
             if (entries.isEmpty()) {
                 Text(
-                    stringResource(R.string.chat_empty_member),
+                    stringResource(Res.string.chat_empty_member),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(16.dp),
@@ -107,9 +113,9 @@ fun ChatBoxIcon(
                                             Text(entry.congregationName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         val preview = when {
-                                            entry.chat.lastMessageIsAttachment -> stringResource(R.string.chat_attachment_preview, entry.chat.lastMessageSenderName ?: "")
-                                            entry.chat.lastMessageText != null -> stringResource(R.string.chat_message_preview, entry.chat.lastMessageSenderName ?: "", entry.chat.lastMessageText ?: "")
-                                            else -> stringResource(R.string.chat_no_messages_yet)
+                                            entry.chat.lastMessageIsAttachment -> stringResource(Res.string.chat_attachment_preview, entry.chat.lastMessageSenderName ?: "")
+                                            entry.chat.lastMessageText != null -> stringResource(Res.string.chat_message_preview, entry.chat.lastMessageSenderName ?: "", entry.chat.lastMessageText ?: "")
+                                            else -> stringResource(Res.string.chat_no_messages_yet)
                                         }
                                         Text(preview, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                     }
@@ -125,7 +131,7 @@ fun ChatBoxIcon(
                     TextButton(
                         onClick = { expanded = false; onViewAll() },
                         modifier = Modifier.padding(8.dp),
-                    ) { Text(stringResource(R.string.chat_view_all_group_chats)) }
+                    ) { Text(stringResource(Res.string.chat_view_all_group_chats)) }
                 }
             }
         }

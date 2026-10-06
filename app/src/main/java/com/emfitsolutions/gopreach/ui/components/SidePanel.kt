@@ -1,5 +1,40 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.app_name
+import com.emfitsolutions.gopreach.shared.resources.home_dashboard_header
+import com.emfitsolutions.gopreach.shared.resources.home_nav_calendar
+import com.emfitsolutions.gopreach.shared.resources.home_tile_find_location_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_meeting_cart_assignment_title
+import com.emfitsolutions.gopreach.shared.resources.side_account_management
+import com.emfitsolutions.gopreach.shared.resources.side_account_settings
+import com.emfitsolutions.gopreach.shared.resources.side_admins
+import com.emfitsolutions.gopreach.shared.resources.side_announcements
+import com.emfitsolutions.gopreach.shared.resources.side_appearance_app_logo
+import com.emfitsolutions.gopreach.shared.resources.side_backup_restore
+import com.emfitsolutions.gopreach.shared.resources.side_congregations_groups
+import com.emfitsolutions.gopreach.shared.resources.side_contact_record
+import com.emfitsolutions.gopreach.shared.resources.side_credit_hour_categories
+import com.emfitsolutions.gopreach.shared.resources.side_elders
+import com.emfitsolutions.gopreach.shared.resources.side_forward_requests
+import com.emfitsolutions.gopreach.shared.resources.side_group_chat_setting
+import com.emfitsolutions.gopreach.shared.resources.side_groups
+import com.emfitsolutions.gopreach.shared.resources.side_householder_visit_history
+import com.emfitsolutions.gopreach.shared.resources.side_interested_records_scoped
+import com.emfitsolutions.gopreach.shared.resources.side_ministerial_servant
+import com.emfitsolutions.gopreach.shared.resources.side_ministry_report_app
+import com.emfitsolutions.gopreach.shared.resources.side_publisher
+import com.emfitsolutions.gopreach.shared.resources.side_publisher_assignment
+import com.emfitsolutions.gopreach.shared.resources.side_section_control_panel
+import com.emfitsolutions.gopreach.shared.resources.side_section_enrollment
+import com.emfitsolutions.gopreach.shared.resources.side_section_reports
+import com.emfitsolutions.gopreach.shared.resources.side_share_location_settings
+import com.emfitsolutions.gopreach.shared.resources.side_sign_out
+import com.emfitsolutions.gopreach.shared.resources.side_territory_assignments
+import com.emfitsolutions.gopreach.shared.resources.side_territory_map
+import com.emfitsolutions.gopreach.shared.resources.side_theme_color_settings
+import com.emfitsolutions.gopreach.shared.resources.side_user_logs
+import com.emfitsolutions.gopreach.shared.resources.side_user_management
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,10 +89,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.emfitsolutions.gopreach.R
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -166,8 +200,8 @@ fun GoPreachSidePanelContent(
         // PANEL below — spec §4/§9/§36 explicitly list all three there, not
         // here.
         val enrollmentItems = buildList {
-            if (canManageCongregationsAndAdmins) add(SideItem(stringResource(R.string.side_congregations_groups), Icons.Rounded.AccountBalance, Destinations.MANAGE_CONGREGATIONS))
-            if (canManageCongregationsAndAdmins) add(SideItem(stringResource(R.string.side_admins), Icons.Rounded.AdminPanelSettings, Destinations.MANAGE_ADMINS))
+            if (canManageCongregationsAndAdmins) add(SideItem(stringResource(Res.string.side_congregations_groups), Icons.Rounded.AccountBalance, Destinations.MANAGE_CONGREGATIONS))
+            if (canManageCongregationsAndAdmins) add(SideItem(stringResource(Res.string.side_admins), Icons.Rounded.AdminPanelSettings, Destinations.MANAGE_ADMINS))
             // "Consolidate Elder, Coordinator Elder, Service Overseer and
             // Secretary Enrollment" — one "Elders" item (spec §1/§43)
             // replaces the separate Coordinator Elder/Service Overseer/
@@ -176,10 +210,10 @@ fun GoPreachSidePanelContent(
             // ([canEnrollRegularElderOrPublisher] already implies
             // [canEnrollCoordinatorElder]/[canEnrollServiceOverseer] — see
             // AdminHomeScreen's own derivation of all three).
-            if (canEnrollRegularElderOrPublisher) add(SideItem(stringResource(R.string.side_elders), Icons.Rounded.PersonAdd, Destinations.MANAGE_ELDERS))
-            if (canEnrollMinisterialServant) add(SideItem(stringResource(R.string.side_ministerial_servant), Icons.Rounded.PersonAdd, Destinations.MANAGE_MINISTERIAL_SERVANTS))
-            if (canManageGroups) add(SideItem(stringResource(R.string.side_groups), Icons.Rounded.Groups, Destinations.MANAGE_GROUPS))
-            if (canManageTerritoryAssignments) add(SideItem(stringResource(R.string.side_territory_assignments), Icons.Rounded.Assignment, Destinations.MANAGE_TERRITORY_ASSIGNMENTS))
+            if (canEnrollRegularElderOrPublisher) add(SideItem(stringResource(Res.string.side_elders), Icons.Rounded.PersonAdd, Destinations.MANAGE_ELDERS))
+            if (canEnrollMinisterialServant) add(SideItem(stringResource(Res.string.side_ministerial_servant), Icons.Rounded.PersonAdd, Destinations.MANAGE_MINISTERIAL_SERVANTS))
+            if (canManageGroups) add(SideItem(stringResource(Res.string.side_groups), Icons.Rounded.Groups, Destinations.MANAGE_GROUPS))
+            if (canManageTerritoryAssignments) add(SideItem(stringResource(Res.string.side_territory_assignments), Icons.Rounded.Assignment, Destinations.MANAGE_TERRITORY_ASSIGNMENTS))
             // Routes to the Manage Publishers *list* screen (which has its own
             // onAddNew FAB into ENROLL_PUBLISHER), matching every other entry
             // in this section (Congregations/Admins/Coordinator Elder/Regular
@@ -188,9 +222,9 @@ fun GoPreachSidePanelContent(
             // Elder had no way to reach the Publisher list/edit screen at all
             // once the old tile grid (their only other route to it) was
             // hidden for them.
-            if (canEnrollPublisher) add(SideItem(stringResource(R.string.side_publisher), Icons.Rounded.People, Destinations.MANAGE_PUBLISHERS))
+            if (canEnrollPublisher) add(SideItem(stringResource(Res.string.side_publisher), Icons.Rounded.People, Destinations.MANAGE_PUBLISHERS))
         }
-        if (enrollmentItems.isNotEmpty()) add(SideSection(stringResource(R.string.side_section_enrollment), enrollmentItems))
+        if (enrollmentItems.isNotEmpty()) add(SideSection(stringResource(Res.string.side_section_enrollment), enrollmentItems))
 
         // REPORTS — "Everything related to reporting, report submission,
         // report management, report history, statistics, preaching records,
@@ -210,7 +244,7 @@ fun GoPreachSidePanelContent(
             // boolean is needed here — this restores the same reach the tile
             // grid used to give everyone, rather than stranding whoever's
             // tile grid gets hidden next.
-            add(SideItem(stringResource(R.string.home_dashboard_header), Icons.Rounded.BarChart, Destinations.DASHBOARD_REPORTS))
+            add(SideItem(stringResource(Res.string.home_dashboard_header), Icons.Rounded.BarChart, Destinations.DASHBOARD_REPORTS))
             if (canViewFieldServiceReport) add(SideItem("Field Service Report", Icons.Rounded.Assessment, Destinations.FIELD_SERVICE_REPORT))
             if (canEnterManualFieldService) add(SideItem("Manual Field Service Record", Icons.Rounded.EditNote, Destinations.MANUAL_FIELD_SERVICE))
             if (canViewDeletedRecords) add(SideItem("Deleted Records", Icons.Rounded.RestoreFromTrash, Destinations.DELETED_RECORDS))
@@ -221,16 +255,16 @@ fun GoPreachSidePanelContent(
             // (see ForwardRequestsScreen's own doc comment) instead of a
             // second, separate drawer item/screen.
             if (canViewForwardRequests) {
-                add(SideItem(stringResource(R.string.side_forward_requests), Icons.Rounded.SwapHoriz, Destinations.FORWARD_REQUESTS))
+                add(SideItem(stringResource(Res.string.side_forward_requests), Icons.Rounded.SwapHoriz, Destinations.FORWARD_REQUESTS))
             }
             // "Add a New Module: House Holder Assignment" — Super-Admin/
             // Admin/Service Overseer only (see AdminHomeScreen's own
             // derivation of this flag for the exact access set).
             if (canManageHouseholderAssignment) {
-                add(SideItem(stringResource(R.string.side_publisher_assignment), Icons.Rounded.AssignmentInd, Destinations.PUBLISHER_ASSIGNMENT))
+                add(SideItem(stringResource(Res.string.side_publisher_assignment), Icons.Rounded.AssignmentInd, Destinations.PUBLISHER_ASSIGNMENT))
                 add(SideItem("Comparative Report", Icons.Rounded.BarChart, Destinations.COMPARATIVE_REPORT))
             }
-            if (canViewInterestedPeopleScope) add(SideItem(stringResource(R.string.side_interested_records_scoped), Icons.Rounded.Groups, Destinations.SCOPED_INTERESTED_RECORDS))
+            if (canViewInterestedPeopleScope) add(SideItem(stringResource(Res.string.side_interested_records_scoped), Icons.Rounded.Groups, Destinations.SCOPED_INTERESTED_RECORDS))
             // "The super admin can see all congregation Search[ing]/Bible
             // Study/Return Visit record[s]... Add, Edit, [and permanently]
             // Delete the record" — Super-Admin only, unlike every other
@@ -239,26 +273,26 @@ fun GoPreachSidePanelContent(
             // "House Holder Visit History" — Super-Admin only in this
             // drawer; a Publisher reaches the same screen via their own Main
             // Form tile instead (see PublisherHomeScreen).
-            if (isSuperAdmin) add(SideItem(stringResource(R.string.side_householder_visit_history), Icons.AutoMirrored.Rounded.ListAlt, Destinations.HOUSEHOLDER_VISIT_HISTORY))
+            if (isSuperAdmin) add(SideItem(stringResource(Res.string.side_householder_visit_history), Icons.AutoMirrored.Rounded.ListAlt, Destinations.HOUSEHOLDER_VISIT_HISTORY))
         }
-        if (reportsItems.isNotEmpty()) add(SideSection(stringResource(R.string.side_section_reports), reportsItems))
+        if (reportsItems.isNotEmpty()) add(SideSection(stringResource(Res.string.side_section_reports), reportsItems))
 
         // CONTROL PANEL — "Everything related to system settings,
         // configuration, assignments, communication controls, logs,
         // administrative controls, and Theme Color Settings" (spec §4/final
         // requirement).
         val controlPanelItems = buildList {
-            if (isSuperAdmin) add(SideItem(stringResource(R.string.side_backup_restore), Icons.Rounded.Backup, Destinations.BACKUP_RESTORE))
-            if (canAccessControlPanel) add(SideItem(stringResource(R.string.side_appearance_app_logo), Icons.Rounded.Tune, Destinations.CONTROL_PANEL))
-            add(SideItem(stringResource(R.string.side_group_chat_setting), Icons.AutoMirrored.Rounded.Chat, Destinations.GROUP_CHAT_SETTING))
-            if (canManageAnnouncements) add(SideItem(stringResource(R.string.side_announcements), Icons.Rounded.Campaign, Destinations.MANAGE_ANNOUNCEMENTS))
-            add(SideItem(stringResource(R.string.home_nav_calendar), Icons.Rounded.CalendarMonth, Destinations.CALENDAR))
-            if (canEditMeetingAssignments) add(SideItem(stringResource(R.string.home_tile_meeting_cart_assignment_title), Icons.Rounded.Event, Destinations.MEETING_ASSIGNMENTS))
-            if (canManageTerritories) add(SideItem(stringResource(R.string.side_territory_map), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
-            add(SideItem(stringResource(R.string.side_share_location_settings), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
-            add(SideItem(stringResource(R.string.home_tile_find_location_title), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
-            if (canViewUserLogs) add(SideItem(stringResource(R.string.side_user_logs), Icons.Rounded.History, Destinations.USER_LOGS))
-            if (canViewContactRecord) add(SideItem(stringResource(R.string.side_contact_record), Icons.Rounded.Contacts, Destinations.CONTACT_RECORD))
+            if (isSuperAdmin) add(SideItem(stringResource(Res.string.side_backup_restore), Icons.Rounded.Backup, Destinations.BACKUP_RESTORE))
+            if (canAccessControlPanel) add(SideItem(stringResource(Res.string.side_appearance_app_logo), Icons.Rounded.Tune, Destinations.CONTROL_PANEL))
+            add(SideItem(stringResource(Res.string.side_group_chat_setting), Icons.AutoMirrored.Rounded.Chat, Destinations.GROUP_CHAT_SETTING))
+            if (canManageAnnouncements) add(SideItem(stringResource(Res.string.side_announcements), Icons.Rounded.Campaign, Destinations.MANAGE_ANNOUNCEMENTS))
+            add(SideItem(stringResource(Res.string.home_nav_calendar), Icons.Rounded.CalendarMonth, Destinations.CALENDAR))
+            if (canEditMeetingAssignments) add(SideItem(stringResource(Res.string.home_tile_meeting_cart_assignment_title), Icons.Rounded.Event, Destinations.MEETING_ASSIGNMENTS))
+            if (canManageTerritories) add(SideItem(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
+            add(SideItem(stringResource(Res.string.side_share_location_settings), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
+            add(SideItem(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
+            if (canViewUserLogs) add(SideItem(stringResource(Res.string.side_user_logs), Icons.Rounded.History, Destinations.USER_LOGS))
+            if (canViewContactRecord) add(SideItem(stringResource(Res.string.side_contact_record), Icons.Rounded.Contacts, Destinations.CONTACT_RECORD))
             // "Theme Color Settings — Simplified User Experience" (spec §16/
             // §24) — a per-device preference every signed-in role already
             // had (via the profile menu's Settings screen); shown here
@@ -266,13 +300,13 @@ fun GoPreachSidePanelContent(
             // this drawer, not gated by [canAccessControlPanel] — being
             // listed under Control Panel doesn't narrow who could already
             // reach it (spec §34).
-            add(SideItem(stringResource(R.string.side_theme_color_settings), Icons.Rounded.Palette, Destinations.THEME_COLOR_SETTINGS))
+            add(SideItem(stringResource(Res.string.side_theme_color_settings), Icons.Rounded.Palette, Destinations.THEME_COLOR_SETTINGS))
             if (canManageSessionTimeout) add(SideItem("Session Timeout Setting", Icons.Rounded.Timer, Destinations.SESSION_TIMEOUT_SETTING))
-            if (canManageUsers) add(SideItem(stringResource(R.string.side_user_management), Icons.Rounded.ManageAccounts, Destinations.MANAGE_USERS))
-            if (canManageAccountCredentials) add(SideItem(stringResource(R.string.side_account_management), Icons.Rounded.ManageAccounts, Destinations.ACCOUNT_MANAGEMENT))
-            if (canAccessControlPanel) add(SideItem(stringResource(R.string.side_credit_hour_categories), Icons.Rounded.Timer, Destinations.CREDIT_HOUR_CATEGORIES))
+            if (canManageUsers) add(SideItem(stringResource(Res.string.side_user_management), Icons.Rounded.ManageAccounts, Destinations.MANAGE_USERS))
+            if (canManageAccountCredentials) add(SideItem(stringResource(Res.string.side_account_management), Icons.Rounded.ManageAccounts, Destinations.ACCOUNT_MANAGEMENT))
+            if (canAccessControlPanel) add(SideItem(stringResource(Res.string.side_credit_hour_categories), Icons.Rounded.Timer, Destinations.CREDIT_HOUR_CATEGORIES))
         }
-        if (controlPanelItems.isNotEmpty()) add(SideSection(stringResource(R.string.side_section_control_panel), controlPanelItems))
+        if (controlPanelItems.isNotEmpty()) add(SideSection(stringResource(Res.string.side_section_control_panel), controlPanelItems))
     }
 
     val availableItems = sections.flatMap { it.items }
@@ -280,7 +314,7 @@ fun GoPreachSidePanelContent(
 
     ModalDrawerSheet {
         Text(
-            stringResource(R.string.app_name),
+            stringResource(Res.string.app_name),
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(16.dp),
         )
@@ -290,7 +324,7 @@ fun GoPreachSidePanelContent(
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 NavigationDrawerItem(
-                    label = { SideItemLabel(stringResource(R.string.side_account_settings)) },
+                    label = { SideItemLabel(stringResource(Res.string.side_account_settings)) },
                     icon = { Icon(Icons.Rounded.Password, contentDescription = null) },
                     selected = activeRoute == Destinations.ACCOUNT_SETTINGS,
                     onClick = { onNavigate(Destinations.ACCOUNT_SETTINGS) },
@@ -298,7 +332,7 @@ fun GoPreachSidePanelContent(
                 )
                 if (onSwitchToPublisher != null) {
                     NavigationDrawerItem(
-                        label = { SideItemLabel(stringResource(R.string.side_ministry_report_app)) },
+                        label = { SideItemLabel(stringResource(Res.string.side_ministry_report_app)) },
                         icon = { Icon(Icons.Rounded.SwapHoriz, contentDescription = null) },
                         selected = false,
                         onClick = onSwitchToPublisher,
@@ -306,7 +340,7 @@ fun GoPreachSidePanelContent(
                     )
                 }
                 NavigationDrawerItem(
-                    label = { SideItemLabel(stringResource(R.string.side_sign_out)) },
+                    label = { SideItemLabel(stringResource(Res.string.side_sign_out)) },
                     icon = { Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null) },
                     selected = false,
                     onClick = onSignOut,

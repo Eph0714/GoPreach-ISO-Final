@@ -1,5 +1,23 @@
 package com.emfitsolutions.gopreach.ui.screens.dashboard
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.action_close
+import com.emfitsolutions.gopreach.shared.resources.dashboard_all_congregations
+import com.emfitsolutions.gopreach.shared.resources.dashboard_back_cd
+import com.emfitsolutions.gopreach.shared.resources.dashboard_description
+import com.emfitsolutions.gopreach.shared.resources.dashboard_no_congregation_data
+import com.emfitsolutions.gopreach.shared.resources.dashboard_overview
+import com.emfitsolutions.gopreach.shared.resources.dashboard_refresh_cd
+import com.emfitsolutions.gopreach.shared.resources.dashboard_stats_unavailable_detail
+import com.emfitsolutions.gopreach.shared.resources.dashboard_stats_unavailable_title
+import com.emfitsolutions.gopreach.shared.resources.dashboard_title
+import com.emfitsolutions.gopreach.shared.resources.reports_congregation_group_label
+import com.emfitsolutions.gopreach.shared.resources.reports_export_csv_success
+import com.emfitsolutions.gopreach.shared.resources.reports_export_excel_cd
+import com.emfitsolutions.gopreach.shared.resources.reports_export_failed_generic
+import com.emfitsolutions.gopreach.shared.resources.reports_export_failed_unknown
+import com.emfitsolutions.gopreach.shared.resources.reports_export_failed_write
+import com.emfitsolutions.gopreach.shared.resources.reports_export_pdf_cd
 import com.emfitsolutions.gopreach.platform.rememberFileCreator
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
@@ -48,12 +66,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.print.ReportTable
 import com.emfitsolutions.gopreach.ui.components.DateRange
 import com.emfitsolutions.gopreach.ui.components.DateRangeFilterBar
@@ -196,10 +213,10 @@ fun DashboardStatsContent(
     val actions = rememberPlatformActions()
     val showToast = rememberActionToast()
     var pendingExportTable by remember { mutableStateOf<ReportTable?>(null) }
-    val exportCsvSuccess = stringResource(R.string.reports_export_csv_success)
-    val exportFailedWrite = stringResource(R.string.reports_export_failed_write)
-    val exportFailedUnknown = stringResource(R.string.reports_export_failed_unknown)
-    val exportFailedGenericTemplate = stringResource(R.string.reports_export_failed_generic)
+    val exportCsvSuccess = stringResource(Res.string.reports_export_csv_success)
+    val exportFailedWrite = stringResource(Res.string.reports_export_failed_write)
+    val exportFailedUnknown = stringResource(Res.string.reports_export_failed_unknown)
+    val exportFailedGenericTemplate = stringResource(Res.string.reports_export_failed_generic)
     val statExportLauncher = rememberFileCreator("text/csv") { uri ->
         val table = pendingExportTable
         if (uri != null && table != null) {
@@ -226,9 +243,9 @@ fun DashboardStatsContent(
 
     if (uiState.error != null) {
         Column(modifier = modifier.fillMaxWidth().padding(24.dp)) {
-            Text(stringResource(R.string.dashboard_stats_unavailable_title), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(Res.string.dashboard_stats_unavailable_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                stringResource(R.string.dashboard_stats_unavailable_detail, uiState.error ?: ""),
+                stringResource(Res.string.dashboard_stats_unavailable_detail, uiState.error ?: ""),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -244,9 +261,9 @@ fun DashboardStatsContent(
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         if (isMultiCongregation) {
-            Text(stringResource(R.string.reports_congregation_group_label), style = MaterialTheme.typography.titleSmall)
+            Text(stringResource(Res.string.reports_congregation_group_label), style = MaterialTheme.typography.titleSmall)
             var expanded by remember { mutableStateOf(false) }
-            val allCongregationsLabel = stringResource(R.string.dashboard_all_congregations)
+            val allCongregationsLabel = stringResource(Res.string.dashboard_all_congregations)
             val selectedLabel = uiState.selectedCongregationId
                 ?.let { id -> uiState.all.firstOrNull { it.congregationId == id }?.congregationName }
                 ?: allCongregationsLabel
@@ -279,13 +296,13 @@ fun DashboardStatsContent(
             onRangeChange = viewModel::setDateRange,
         )
         Text(
-            stringResource(R.string.dashboard_description),
+            stringResource(Res.string.dashboard_description),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         if (displayed == null) {
-            Text(stringResource(R.string.dashboard_no_congregation_data), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(Res.string.dashboard_no_congregation_data), style = MaterialTheme.typography.bodyMedium)
             return@Column
         }
 
@@ -299,7 +316,7 @@ fun DashboardStatsContent(
             )
         }
 
-        Text(if (quickAccess != null) "Quick Access" else stringResource(R.string.dashboard_overview), style = MaterialTheme.typography.titleMedium)
+        Text(if (quickAccess != null) "Quick Access" else stringResource(Res.string.dashboard_overview), style = MaterialTheme.typography.titleMedium)
         // Per explicit request: no icons, no per-item color coding on these
         // cards — Total Publishers and Total Elders are also their own
         // separate cards here now, not one combined "Publishers vs Elders"
@@ -422,7 +439,7 @@ fun DashboardStatsContent(
                             onClick = { actions.print(memberReportTable) },
                             enabled = matchingMembers.isNotEmpty(),
                         ) {
-                            Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(R.string.reports_export_pdf_cd))
+                            Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(Res.string.reports_export_pdf_cd))
                         }
                         IconButton(
                             onClick = {
@@ -431,9 +448,9 @@ fun DashboardStatsContent(
                             },
                             enabled = matchingMembers.isNotEmpty(),
                         ) {
-                            Icon(Icons.Rounded.TableChart, contentDescription = stringResource(R.string.reports_export_excel_cd))
+                            Icon(Icons.Rounded.TableChart, contentDescription = stringResource(Res.string.reports_export_excel_cd))
                         }
-                        TextButton(onClick = { selectedDetail = null }) { Text(stringResource(R.string.action_close)) }
+                        TextButton(onClick = { selectedDetail = null }) { Text(stringResource(Res.string.action_close)) }
                     }
                 },
             )
@@ -477,10 +494,10 @@ fun DashboardReportsScreen(
     // Bug fix ("I cannot see any PDF or Excel"): see ReportsScreen's matching
     // fix — the Storage Access Framework picker just saves and closes with
     // no feedback of its own; now it confirms and opens the file immediately.
-    val exportCsvSuccess = stringResource(R.string.reports_export_csv_success)
-    val exportFailedWrite = stringResource(R.string.reports_export_failed_write)
-    val exportFailedUnknown = stringResource(R.string.reports_export_failed_unknown)
-    val exportFailedGenericTemplate = stringResource(R.string.reports_export_failed_generic)
+    val exportCsvSuccess = stringResource(Res.string.reports_export_csv_success)
+    val exportFailedWrite = stringResource(Res.string.reports_export_failed_write)
+    val exportFailedUnknown = stringResource(Res.string.reports_export_failed_unknown)
+    val exportFailedGenericTemplate = stringResource(Res.string.reports_export_failed_generic)
     val exportLauncher = rememberFileCreator("text/csv") { uri ->
         val table = reportTable
         if (uri != null && table != null) {
@@ -502,9 +519,9 @@ fun DashboardReportsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.dashboard_title)) },
+                title = { Text(stringResource(Res.string.dashboard_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.dashboard_back_cd)) }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(Res.string.dashboard_back_cd)) }
                 },
                 actions = {
                     // Data is already live (every source Flow updates this screen
@@ -512,7 +529,7 @@ fun DashboardReportsScreen(
                     // more than a functional necessity; kept per spec §3's explicit
                     // "refresh" requirement.
                     IconButton(onClick = { viewModel.selectCongregation(uiState.selectedCongregationId) }) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = stringResource(R.string.dashboard_refresh_cd))
+                        Icon(Icons.Rounded.Refresh, contentDescription = stringResource(Res.string.dashboard_refresh_cd))
                     }
                     if (canExport) {
                         // Same "print preview always offers Save as PDF" +
@@ -522,13 +539,13 @@ fun DashboardReportsScreen(
                             onClick = { reportTable?.let { actions.print(it) } },
                             enabled = reportTable != null,
                         ) {
-                            Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(R.string.reports_export_pdf_cd))
+                            Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(Res.string.reports_export_pdf_cd))
                         }
                         IconButton(
                             onClick = { exportLauncher.launch(exportFileName) },
                             enabled = reportTable != null,
                         ) {
-                            Icon(Icons.Rounded.TableChart, contentDescription = stringResource(R.string.reports_export_excel_cd))
+                            Icon(Icons.Rounded.TableChart, contentDescription = stringResource(Res.string.reports_export_excel_cd))
                         }
                     }
                 },

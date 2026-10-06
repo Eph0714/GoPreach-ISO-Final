@@ -30,6 +30,7 @@ kotlin {
             api(compose.foundation)
             api(compose.material3)
             api(compose.ui)
+            api(compose.components.resources)
             api(compose.materialIconsExtended)
             api("androidx.room:room-runtime:2.7.2")
             implementation("androidx.sqlite:sqlite-bundled:2.5.2")
@@ -72,4 +73,10 @@ dependencies {
     add("kspIosX64", "androidx.room:room-compiler:2.7.2")
     add("kspIosArm64", "androidx.room:room-compiler:2.7.2")
     add("kspIosSimulatorArm64", "androidx.room:room-compiler:2.7.2")
+}
+
+compose.resources {
+    packageOfResClass = "com.emfitsolutions.gopreach.shared.resources"
+    publicResClass = true
+    generateResClass = always
 }

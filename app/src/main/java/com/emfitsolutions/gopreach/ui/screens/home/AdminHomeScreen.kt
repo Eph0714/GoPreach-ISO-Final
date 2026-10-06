@@ -1,5 +1,42 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.dashboard_quick_action_publishers
+import com.emfitsolutions.gopreach.shared.resources.dashboard_section_account
+import com.emfitsolutions.gopreach.shared.resources.dashboard_section_graphical_reports
+import com.emfitsolutions.gopreach.shared.resources.dashboard_section_management
+import com.emfitsolutions.gopreach.shared.resources.dashboard_section_ministry
+import com.emfitsolutions.gopreach.shared.resources.dashboard_section_system
+import com.emfitsolutions.gopreach.shared.resources.dashboard_section_territory
+import com.emfitsolutions.gopreach.shared.resources.dashboard_tile_control_panel
+import com.emfitsolutions.gopreach.shared.resources.dashboard_tile_reports_dashboard
+import com.emfitsolutions.gopreach.shared.resources.dashboard_tile_share_location
+import com.emfitsolutions.gopreach.shared.resources.greeting_fallback_name
+import com.emfitsolutions.gopreach.shared.resources.home_dashboard_header
+import com.emfitsolutions.gopreach.shared.resources.home_exit_cancel
+import com.emfitsolutions.gopreach.shared.resources.home_exit_confirm
+import com.emfitsolutions.gopreach.shared.resources.home_exit_message
+import com.emfitsolutions.gopreach.shared.resources.home_exit_title
+import com.emfitsolutions.gopreach.shared.resources.home_nav_calendar
+import com.emfitsolutions.gopreach.shared.resources.home_tile_find_location_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_meeting_cart_assignment_title
+import com.emfitsolutions.gopreach.shared.resources.role_label_admin_fallback
+import com.emfitsolutions.gopreach.shared.resources.side_account_management
+import com.emfitsolutions.gopreach.shared.resources.side_account_settings
+import com.emfitsolutions.gopreach.shared.resources.side_admins
+import com.emfitsolutions.gopreach.shared.resources.side_backup_restore
+import com.emfitsolutions.gopreach.shared.resources.side_congregations_groups
+import com.emfitsolutions.gopreach.shared.resources.side_credit_hour_categories
+import com.emfitsolutions.gopreach.shared.resources.side_elders
+import com.emfitsolutions.gopreach.shared.resources.side_group_chat_setting
+import com.emfitsolutions.gopreach.shared.resources.side_groups
+import com.emfitsolutions.gopreach.shared.resources.side_ministry_report_app
+import com.emfitsolutions.gopreach.shared.resources.side_publisher
+import com.emfitsolutions.gopreach.shared.resources.side_section_enrollment
+import com.emfitsolutions.gopreach.shared.resources.side_sign_out
+import com.emfitsolutions.gopreach.shared.resources.side_territory_map
+import com.emfitsolutions.gopreach.shared.resources.side_user_logs
+import com.emfitsolutions.gopreach.shared.resources.side_user_management
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
 import com.emfitsolutions.gopreach.platform.AppPermission
 import android.os.Build
@@ -55,7 +92,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
@@ -66,7 +103,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.AdminRole
 import com.emfitsolutions.gopreach.data.model.Permission
 import com.emfitsolutions.gopreach.data.model.RoleType
@@ -437,10 +473,10 @@ fun AdminHomeScreen(
         AlertDialog(
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
             onDismissRequest = { showExitConfirm = false },
-            title = { Text(stringResource(R.string.home_exit_title)) },
-            text = { Text(stringResource(R.string.home_exit_message)) },
-            confirmButton = { TextButton(onClick = { activity?.finish() }) { Text(stringResource(R.string.home_exit_confirm)) } },
-            dismissButton = { TextButton(onClick = { showExitConfirm = false }) { Text(stringResource(R.string.home_exit_cancel)) } },
+            title = { Text(stringResource(Res.string.home_exit_title)) },
+            text = { Text(stringResource(Res.string.home_exit_message)) },
+            confirmButton = { TextButton(onClick = { activity?.finish() }) { Text(stringResource(Res.string.home_exit_confirm)) } },
+            dismissButton = { TextButton(onClick = { showExitConfirm = false }) { Text(stringResource(Res.string.home_exit_cancel)) } },
         )
     }
 
@@ -530,8 +566,8 @@ fun AdminHomeScreen(
                 com.emfitsolutions.gopreach.ui.components.AlarmRingingBanner()
                 com.emfitsolutions.gopreach.ui.components.OfflineSessionBanner()
                 DashboardHero(
-                    greetingName = session.person?.firstName?.takeIf { it.isNotBlank() } ?: stringResource(R.string.greeting_fallback_name),
-                    roleLabel = role?.name?.replace('_', ' ') ?: stringResource(R.string.role_label_admin_fallback),
+                    greetingName = session.person?.firstName?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.greeting_fallback_name),
+                    roleLabel = role?.name?.replace('_', ' ') ?: stringResource(Res.string.role_label_admin_fallback),
                     isOnline = isOnline,
                     pendingSyncCount = pendingSyncCount,
                     leadingAction = {
@@ -567,7 +603,7 @@ fun AdminHomeScreen(
                         com.emfitsolutions.gopreach.ui.components.RefreshButton()
                         ProfileMenuButton(
                             fullName = session.person?.fullName ?: "—",
-                            roleLabel = role?.name?.replace('_', ' ') ?: stringResource(R.string.role_label_admin_fallback),
+                            roleLabel = role?.name?.replace('_', ' ') ?: stringResource(Res.string.role_label_admin_fallback),
                             profileImageUrl = session.person?.profileImageUrl,
                             onImagePicked = { uri ->
                                 viewModel.updateProfileImage(uri, onImageUploadFailed = {
@@ -582,10 +618,10 @@ fun AdminHomeScreen(
                         emptyList()
                     } else {
                         buildList {
-                            if (role != null) add(QuickAction(stringResource(R.string.home_dashboard_header), Icons.Rounded.BarChart) { onNavigate(Destinations.DASHBOARD_REPORTS) })
-                            if (canManagePublishersAndGroups) add(QuickAction(stringResource(R.string.dashboard_quick_action_publishers), Icons.Rounded.People) { onNavigate(Destinations.MANAGE_PUBLISHERS) })
-                            if (canManagePublishersAndGroups) add(QuickAction(stringResource(R.string.side_groups), Icons.Rounded.Groups) { onNavigate(Destinations.MANAGE_GROUPS) })
-                            if (role != null) add(QuickAction(stringResource(R.string.home_nav_calendar), Icons.Rounded.CalendarMonth) { onNavigate(Destinations.CALENDAR) })
+                            if (role != null) add(QuickAction(stringResource(Res.string.home_dashboard_header), Icons.Rounded.BarChart) { onNavigate(Destinations.DASHBOARD_REPORTS) })
+                            if (canManagePublishersAndGroups) add(QuickAction(stringResource(Res.string.dashboard_quick_action_publishers), Icons.Rounded.People) { onNavigate(Destinations.MANAGE_PUBLISHERS) })
+                            if (canManagePublishersAndGroups) add(QuickAction(stringResource(Res.string.side_groups), Icons.Rounded.Groups) { onNavigate(Destinations.MANAGE_GROUPS) })
+                            if (role != null) add(QuickAction(stringResource(Res.string.home_nav_calendar), Icons.Rounded.CalendarMonth) { onNavigate(Destinations.CALENDAR) })
                         }
                     },
                 )
@@ -658,15 +694,15 @@ fun AdminHomeScreen(
 
                     if (!hideMainFormButtons) {
                         if (role != null) {
-                            DashboardSection(stringResource(R.string.dashboard_section_graphical_reports)) {
-                                DashboardTile(stringResource(R.string.dashboard_tile_reports_dashboard), Icons.Rounded.BarChart, { onNavigate(Destinations.DASHBOARD_REPORTS) })
+                            DashboardSection(stringResource(Res.string.dashboard_section_graphical_reports)) {
+                                DashboardTile(stringResource(Res.string.dashboard_tile_reports_dashboard), Icons.Rounded.BarChart, { onNavigate(Destinations.DASHBOARD_REPORTS) })
                             }
                         }
 
                         if (canManagePublishersAndGroups) {
-                            DashboardSection(stringResource(R.string.dashboard_section_management)) {
-                                DashboardTile(stringResource(R.string.dashboard_quick_action_publishers), Icons.Rounded.People, { onNavigate(Destinations.MANAGE_PUBLISHERS) })
-                                DashboardTile(stringResource(R.string.side_groups), Icons.Rounded.Groups, { onNavigate(Destinations.MANAGE_GROUPS) })
+                            DashboardSection(stringResource(Res.string.dashboard_section_management)) {
+                                DashboardTile(stringResource(Res.string.dashboard_quick_action_publishers), Icons.Rounded.People, { onNavigate(Destinations.MANAGE_PUBLISHERS) })
+                                DashboardTile(stringResource(Res.string.side_groups), Icons.Rounded.Groups, { onNavigate(Destinations.MANAGE_GROUPS) })
                             }
                         }
 
@@ -674,30 +710,30 @@ fun AdminHomeScreen(
                         // reaches Service Overseer/Regular Elder, own
                         // congregation only (see canViewTerritoryMap).
                         if (canViewTerritoryMap || canEditMeetingAssignments) {
-                            DashboardSection(stringResource(R.string.dashboard_section_territory)) {
+                            DashboardSection(stringResource(Res.string.dashboard_section_territory)) {
                                 if (canViewTerritoryMap) {
-                                    DashboardTile(stringResource(R.string.side_territory_map), Icons.Rounded.Map, { onNavigate(Destinations.MANAGE_TERRITORIES_BASE) })
+                                    DashboardTile(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, { onNavigate(Destinations.MANAGE_TERRITORIES_BASE) })
                                 }
                                 if (canEditMeetingAssignments) {
-                                    DashboardTile(stringResource(R.string.home_tile_meeting_cart_assignment_title), Icons.Rounded.Event, { onNavigate(Destinations.MEETING_ASSIGNMENTS) })
+                                    DashboardTile(stringResource(Res.string.home_tile_meeting_cart_assignment_title), Icons.Rounded.Event, { onNavigate(Destinations.MEETING_ASSIGNMENTS) })
                                 }
                             }
                         }
 
                         if (role != null) {
-                            DashboardSection(stringResource(R.string.dashboard_section_ministry)) {
-                                DashboardTile(stringResource(R.string.side_group_chat_setting), Icons.Rounded.Chat, { onNavigate(Destinations.GROUP_CHAT_SETTING) })
-                                DashboardTile(stringResource(R.string.dashboard_tile_share_location), Icons.Rounded.LocationOn, { onNavigate(Destinations.SHARE_LOCATION) })
-                                DashboardTile(stringResource(R.string.home_tile_find_location_title), Icons.Rounded.Navigation, { onNavigate(Destinations.FIND_LOCATION) })
-                                DashboardTile(stringResource(R.string.home_nav_calendar), Icons.Rounded.CalendarMonth, { onNavigate(Destinations.CALENDAR) })
+                            DashboardSection(stringResource(Res.string.dashboard_section_ministry)) {
+                                DashboardTile(stringResource(Res.string.side_group_chat_setting), Icons.Rounded.Chat, { onNavigate(Destinations.GROUP_CHAT_SETTING) })
+                                DashboardTile(stringResource(Res.string.dashboard_tile_share_location), Icons.Rounded.LocationOn, { onNavigate(Destinations.SHARE_LOCATION) })
+                                DashboardTile(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, { onNavigate(Destinations.FIND_LOCATION) })
+                                DashboardTile(stringResource(Res.string.home_nav_calendar), Icons.Rounded.CalendarMonth, { onNavigate(Destinations.CALENDAR) })
                             }
                         }
 
                         if (isSuperAdmin || canEnrollCoordinatorElder || canEnrollRegularElderOrPublisher) {
-                            DashboardSection(stringResource(R.string.side_section_enrollment)) {
+                            DashboardSection(stringResource(Res.string.side_section_enrollment)) {
                                 if (isSuperAdmin) {
-                                    DashboardTile(stringResource(R.string.side_congregations_groups), Icons.Rounded.AccountBalance, { onNavigate(Destinations.MANAGE_CONGREGATIONS) })
-                                    DashboardTile(stringResource(R.string.side_admins), Icons.Rounded.AdminPanelSettings, { onNavigate(Destinations.MANAGE_ADMINS) })
+                                    DashboardTile(stringResource(Res.string.side_congregations_groups), Icons.Rounded.AccountBalance, { onNavigate(Destinations.MANAGE_CONGREGATIONS) })
+                                    DashboardTile(stringResource(Res.string.side_admins), Icons.Rounded.AdminPanelSettings, { onNavigate(Destinations.MANAGE_ADMINS) })
                                 }
                                 if (canEnrollRegularElderOrPublisher) {
                                     // "Consolidate Elder, Coordinator Elder,
@@ -709,41 +745,41 @@ fun AdminHomeScreen(
                                     // SidePanel's own identical
                                     // consolidation for the drawer this
                                     // grid is otherwise superseded by).
-                                    DashboardTile(stringResource(R.string.side_elders), Icons.Rounded.PersonAdd, { onNavigate(Destinations.MANAGE_ELDERS) })
-                                    DashboardTile(stringResource(R.string.side_publisher), Icons.Rounded.PersonAdd, { onNavigate(Destinations.ENROLL_PUBLISHER) })
+                                    DashboardTile(stringResource(Res.string.side_elders), Icons.Rounded.PersonAdd, { onNavigate(Destinations.MANAGE_ELDERS) })
+                                    DashboardTile(stringResource(Res.string.side_publisher), Icons.Rounded.PersonAdd, { onNavigate(Destinations.ENROLL_PUBLISHER) })
                                 }
                             }
                         }
 
                         if (canAccessControlPanel || isSuperAdmin || canViewUserLogs || canManageUsers || canManageAccountCredentials) {
-                            DashboardSection(stringResource(R.string.dashboard_section_system)) {
+                            DashboardSection(stringResource(Res.string.dashboard_section_system)) {
                                 if (canAccessControlPanel) {
-                                    DashboardTile(stringResource(R.string.dashboard_tile_control_panel), Icons.Rounded.Tune, { onNavigate(Destinations.CONTROL_PANEL) })
+                                    DashboardTile(stringResource(Res.string.dashboard_tile_control_panel), Icons.Rounded.Tune, { onNavigate(Destinations.CONTROL_PANEL) })
                                 }
                                 if (isSuperAdmin) {
-                                    DashboardTile(stringResource(R.string.side_backup_restore), Icons.Rounded.Backup, { onNavigate(Destinations.BACKUP_RESTORE) })
+                                    DashboardTile(stringResource(Res.string.side_backup_restore), Icons.Rounded.Backup, { onNavigate(Destinations.BACKUP_RESTORE) })
                                 }
                                 if (canViewUserLogs) {
-                                    DashboardTile(stringResource(R.string.side_user_logs), Icons.Rounded.History, { onNavigate(Destinations.USER_LOGS) })
+                                    DashboardTile(stringResource(Res.string.side_user_logs), Icons.Rounded.History, { onNavigate(Destinations.USER_LOGS) })
                                 }
                                 if (canManageUsers) {
-                                    DashboardTile(stringResource(R.string.side_user_management), Icons.Rounded.ManageAccounts, { onNavigate(Destinations.MANAGE_USERS) })
+                                    DashboardTile(stringResource(Res.string.side_user_management), Icons.Rounded.ManageAccounts, { onNavigate(Destinations.MANAGE_USERS) })
                                 }
                                 if (canManageAccountCredentials) {
-                                    DashboardTile(stringResource(R.string.side_account_management), Icons.Rounded.ManageAccounts, { onNavigate(Destinations.ACCOUNT_MANAGEMENT) })
+                                    DashboardTile(stringResource(Res.string.side_account_management), Icons.Rounded.ManageAccounts, { onNavigate(Destinations.ACCOUNT_MANAGEMENT) })
                                 }
                                 if (canAccessControlPanel) {
-                                    DashboardTile(stringResource(R.string.side_credit_hour_categories), Icons.Rounded.Timer, { onNavigate(Destinations.CREDIT_HOUR_CATEGORIES) })
+                                    DashboardTile(stringResource(Res.string.side_credit_hour_categories), Icons.Rounded.Timer, { onNavigate(Destinations.CREDIT_HOUR_CATEGORIES) })
                                 }
                             }
                         }
 
-                        DashboardSection(stringResource(R.string.dashboard_section_account)) {
-                            DashboardTile(stringResource(R.string.side_account_settings), Icons.Rounded.Password, { onNavigate(Destinations.ACCOUNT_SETTINGS) })
+                        DashboardSection(stringResource(Res.string.dashboard_section_account)) {
+                            DashboardTile(stringResource(Res.string.side_account_settings), Icons.Rounded.Password, { onNavigate(Destinations.ACCOUNT_SETTINGS) })
                             if (onSwitchToPublisher != null) {
-                                DashboardTile(stringResource(R.string.side_ministry_report_app), Icons.Rounded.SwapHoriz, onSwitchToPublisher)
+                                DashboardTile(stringResource(Res.string.side_ministry_report_app), Icons.Rounded.SwapHoriz, onSwitchToPublisher)
                             }
-                            DashboardTile(stringResource(R.string.side_sign_out), Icons.AutoMirrored.Rounded.Logout, viewModel::signOut)
+                            DashboardTile(stringResource(Res.string.side_sign_out), Icons.AutoMirrored.Rounded.Logout, viewModel::signOut)
                         }
                     }
                 }

@@ -1,5 +1,70 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.action_cancel
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_confirm_to_main_form
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_confirm_to_side_panel
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_move_module
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_move_to_main_form
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_move_to_side_panel
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_moved_success
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_reset_confirm
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_reset_confirm_button
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_reset_success
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_reset_title
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_side_panel_empty
+import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_side_panel_title
+import com.emfitsolutions.gopreach.shared.resources.home_exit_cancel
+import com.emfitsolutions.gopreach.shared.resources.home_exit_confirm
+import com.emfitsolutions.gopreach.shared.resources.home_exit_message
+import com.emfitsolutions.gopreach.shared.resources.home_exit_title
+import com.emfitsolutions.gopreach.shared.resources.home_no
+import com.emfitsolutions.gopreach.shared.resources.home_status_all_synced_suffix
+import com.emfitsolutions.gopreach.shared.resources.home_status_offline
+import com.emfitsolutions.gopreach.shared.resources.home_status_online
+import com.emfitsolutions.gopreach.shared.resources.home_status_pending_sync_suffix
+import com.emfitsolutions.gopreach.shared.resources.home_switch_to_admin
+import com.emfitsolutions.gopreach.shared.resources.home_tile_announcement_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_announcement_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_bible_study_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_bible_study_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_find_location_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_find_location_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_forwarded_to_me_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_forwarded_to_me_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_group_chat_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_group_chat_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_householder_visit_history_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_householder_visit_history_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_incoming_assignments_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_incoming_assignments_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_meeting_cart_assignment_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_meeting_cart_assignment_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_monthly_report_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_monthly_report_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_assignments_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_assignments_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_bible_text_record_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_bible_text_record_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_calendar_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_calendar_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_reports_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_reports_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_total_hours_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_total_hours_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_publisher_schedules_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_publisher_schedules_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_return_visit_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_return_visit_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_searching_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_searching_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_share_my_location_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_share_my_location_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_territory_map_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_territory_map_title
+import com.emfitsolutions.gopreach.shared.resources.home_welcome
+import com.emfitsolutions.gopreach.shared.resources.home_yes
+import com.emfitsolutions.gopreach.shared.resources.role_label_publisher
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
 import com.emfitsolutions.gopreach.platform.AppPermission
 import android.os.Build
@@ -99,7 +164,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -107,7 +172,6 @@ import org.koin.compose.viewmodel.koinViewModel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.DashboardModuleId
 import com.emfitsolutions.gopreach.data.model.DashboardModuleLocation
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
@@ -263,10 +327,10 @@ fun PublisherHomeScreen(
         AlertDialog(
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
             onDismissRequest = { showExitConfirm = false },
-            title = { Text(stringResource(R.string.home_exit_title)) },
-            text = { Text(stringResource(R.string.home_exit_message)) },
-            confirmButton = { TextButton(onClick = { activity?.finish() }) { Text(stringResource(R.string.home_exit_confirm)) } },
-            dismissButton = { TextButton(onClick = { showExitConfirm = false }) { Text(stringResource(R.string.home_exit_cancel)) } },
+            title = { Text(stringResource(Res.string.home_exit_title)) },
+            text = { Text(stringResource(Res.string.home_exit_message)) },
+            confirmButton = { TextButton(onClick = { activity?.finish() }) { Text(stringResource(Res.string.home_exit_confirm)) } },
+            dismissButton = { TextButton(onClick = { showExitConfirm = false }) { Text(stringResource(Res.string.home_exit_cancel)) } },
         )
     }
 
@@ -311,8 +375,8 @@ fun PublisherHomeScreen(
     var pendingModuleId by remember { mutableStateOf<DashboardModuleId?>(null) }
     var pendingTarget by remember { mutableStateOf<DashboardModuleLocation?>(null) }
     var showResetConfirm by remember { mutableStateOf(false) }
-    val movedSuccessMessage = stringResource(R.string.dashboard_layout_moved_success)
-    val resetSuccessMessage = stringResource(R.string.dashboard_layout_reset_success)
+    val movedSuccessMessage = stringResource(Res.string.dashboard_layout_moved_success)
+    val resetSuccessMessage = stringResource(Res.string.dashboard_layout_reset_success)
 
     val onLongPressModule: (DashboardModuleId) -> Unit = { id ->
         pendingModuleId = id
@@ -585,7 +649,7 @@ fun PublisherHomeScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                         ) {
                             Icon(Icons.Rounded.SwapHoriz, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text(stringResource(R.string.home_switch_to_admin), style = MaterialTheme.typography.titleSmall)
+                            Text(stringResource(Res.string.home_switch_to_admin), style = MaterialTheme.typography.titleSmall)
                         }
                     }
                 }
@@ -607,19 +671,19 @@ fun PublisherHomeScreen(
             // Step 1 — "Move Module" action menu.
             val moveTarget = if (currentLocation == DashboardModuleLocation.MAIN_FORM) DashboardModuleLocation.SIDE_PANEL else DashboardModuleLocation.MAIN_FORM
             val moveLabel = stringResource(
-                if (moveTarget == DashboardModuleLocation.SIDE_PANEL) R.string.dashboard_layout_move_to_side_panel else R.string.dashboard_layout_move_to_main_form,
+                if (moveTarget == DashboardModuleLocation.SIDE_PANEL) Res.string.dashboard_layout_move_to_side_panel else Res.string.dashboard_layout_move_to_main_form,
             )
             AlertDialog(
                 properties = DialogProperties(dismissOnClickOutside = true, dismissOnBackPress = true),
                 onDismissRequest = { pendingModuleId = null },
-                title = { Text(tile?.title ?: stringResource(R.string.dashboard_layout_move_module)) },
+                title = { Text(tile?.title ?: stringResource(Res.string.dashboard_layout_move_module)) },
                 text = {
                     TextButton(onClick = { pendingTarget = moveTarget }, modifier = Modifier.fillMaxWidth()) {
                         Text(moveLabel)
                     }
                 },
                 confirmButton = {},
-                dismissButton = { TextButton(onClick = { pendingModuleId = null }) { Text(stringResource(R.string.action_cancel)) } },
+                dismissButton = { TextButton(onClick = { pendingModuleId = null }) { Text(stringResource(Res.string.action_cancel)) } },
             )
         } else {
             // Step 2 — confirmation (spec §2: "Do you want to move this
@@ -627,11 +691,11 @@ fun PublisherHomeScreen(
             AlertDialog(
                 properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
                 onDismissRequest = { pendingModuleId = null; pendingTarget = null },
-                title = { Text(stringResource(R.string.dashboard_layout_move_module)) },
+                title = { Text(stringResource(Res.string.dashboard_layout_move_module)) },
                 text = {
                     Text(
                         stringResource(
-                            if (target == DashboardModuleLocation.SIDE_PANEL) R.string.dashboard_layout_confirm_to_side_panel else R.string.dashboard_layout_confirm_to_main_form,
+                            if (target == DashboardModuleLocation.SIDE_PANEL) Res.string.dashboard_layout_confirm_to_side_panel else Res.string.dashboard_layout_confirm_to_main_form,
                         ),
                     )
                 },
@@ -641,10 +705,10 @@ fun PublisherHomeScreen(
                         pendingModuleId = null
                         pendingTarget = null
                         showToast(movedSuccessMessage)
-                    }) { Text(stringResource(R.string.home_yes)) }
+                    }) { Text(stringResource(Res.string.home_yes)) }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingModuleId = null; pendingTarget = null }) { Text(stringResource(R.string.home_no)) }
+                    TextButton(onClick = { pendingModuleId = null; pendingTarget = null }) { Text(stringResource(Res.string.home_no)) }
                 },
             )
         }
@@ -655,17 +719,17 @@ fun PublisherHomeScreen(
         AlertDialog(
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
             onDismissRequest = { showResetConfirm = false },
-            title = { Text(stringResource(R.string.dashboard_layout_reset_title)) },
-            text = { Text(stringResource(R.string.dashboard_layout_reset_confirm)) },
+            title = { Text(stringResource(Res.string.dashboard_layout_reset_title)) },
+            text = { Text(stringResource(Res.string.dashboard_layout_reset_confirm)) },
             confirmButton = {
                 TextButton(onClick = {
                     layoutViewModel.resetLayout()
                     showResetConfirm = false
                     drawerScope.launch { drawerState.close() }
                     showToast(resetSuccessMessage)
-                }) { Text(stringResource(R.string.dashboard_layout_reset_confirm_button)) }
+                }) { Text(stringResource(Res.string.dashboard_layout_reset_confirm_button)) }
             },
-            dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text(stringResource(R.string.action_cancel)) } },
+            dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text(stringResource(Res.string.action_cancel)) } },
         )
     }
 }
@@ -720,7 +784,7 @@ private fun PublisherWelcomeHeader(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = onOpenSidePanel) {
-                    Icon(Icons.Rounded.Menu, contentDescription = stringResource(R.string.dashboard_layout_side_panel_title), tint = Color.White)
+                    Icon(Icons.Rounded.Menu, contentDescription = stringResource(Res.string.dashboard_layout_side_panel_title), tint = Color.White)
                 }
                 Box(modifier = Modifier.weight(1f))
                 // Unified notification balloon — transfer requests,
@@ -756,7 +820,7 @@ private fun PublisherWelcomeHeader(
                 // role, View/Update Profile Image, Log Out) too.
                 ProfileMenuButton(
                     fullName = fullName,
-                    roleLabel = categoryLabel ?: stringResource(R.string.role_label_publisher),
+                    roleLabel = categoryLabel ?: stringResource(Res.string.role_label_publisher),
                     profileImageUrl = profileImageUrl,
                     onImagePicked = onImagePicked,
                     onSignOut = onSignOut,
@@ -767,7 +831,7 @@ private fun PublisherWelcomeHeader(
 
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp)) {
                 Text(
-                    stringResource(R.string.home_welcome, greetingName),
+                    stringResource(Res.string.home_welcome, greetingName),
                     color = Color.White,
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
@@ -780,12 +844,12 @@ private fun PublisherWelcomeHeader(
                 // ever shows for the online case, no sync suffix) — this is
                 // just the same three pieces now sourced from strings.xml.
                 val statusCaption = if (isOnline) {
-                    stringResource(R.string.home_status_online)
+                    stringResource(Res.string.home_status_online)
                 } else {
-                    stringResource(R.string.home_status_offline) + if (pendingSyncCount > 0) {
-                        stringResource(R.string.home_status_pending_sync_suffix, pendingSyncCount)
+                    stringResource(Res.string.home_status_offline) + if (pendingSyncCount > 0) {
+                        stringResource(Res.string.home_status_pending_sync_suffix, pendingSyncCount)
                     } else {
-                        stringResource(R.string.home_status_all_synced_suffix)
+                        stringResource(Res.string.home_status_all_synced_suffix)
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -842,7 +906,7 @@ private fun FeatureTile(
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     onLongClick()
                 },
-                onLongClickLabel = stringResource(R.string.dashboard_layout_move_module),
+                onLongClickLabel = stringResource(Res.string.dashboard_layout_move_module),
             ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 4.dp),
@@ -919,47 +983,47 @@ private fun publisherModuleTiles(
     pendingPublisherForwards: Int,
     pendingHouseholderAssignments: Int,
 ): List<PublisherModuleTile> = buildList {
-    add(PublisherModuleTile(DashboardModuleId.MONTHLY_REPORT, stringResource(R.string.home_tile_monthly_report_title), stringResource(R.string.home_tile_monthly_report_subtitle), Icons.Rounded.Assignment, Destinations.MONTHLY_REPORT))
+    add(PublisherModuleTile(DashboardModuleId.MONTHLY_REPORT, stringResource(Res.string.home_tile_monthly_report_title), stringResource(Res.string.home_tile_monthly_report_subtitle), Icons.Rounded.Assignment, Destinations.MONTHLY_REPORT))
     // "Allow the publisher to see all his submitted Report record" —
     // its own tile since MONTHLY_REPORT's form only ever shows the
     // current/previous month, not the full history.
-    add(PublisherModuleTile(DashboardModuleId.MY_SUBMITTED_REPORTS, stringResource(R.string.home_tile_my_reports_title), stringResource(R.string.home_tile_my_reports_subtitle), Icons.AutoMirrored.Rounded.ListAlt, Destinations.MY_SUBMITTED_REPORTS))
-    add(PublisherModuleTile(DashboardModuleId.SEARCHING, stringResource(R.string.home_tile_searching_title), stringResource(R.string.home_tile_searching_subtitle), Icons.Rounded.PersonSearch, Destinations.SEARCHING))
-    add(PublisherModuleTile(DashboardModuleId.RETURN_VISIT, stringResource(R.string.home_tile_return_visit_title), stringResource(R.string.home_tile_return_visit_subtitle), Icons.Rounded.PeopleAlt, Destinations.RETURN_VISIT))
-    add(PublisherModuleTile(DashboardModuleId.BIBLE_STUDY, stringResource(R.string.home_tile_bible_study_title), stringResource(R.string.home_tile_bible_study_subtitle), Icons.AutoMirrored.Rounded.MenuBook, Destinations.BIBLE_STUDY))
+    add(PublisherModuleTile(DashboardModuleId.MY_SUBMITTED_REPORTS, stringResource(Res.string.home_tile_my_reports_title), stringResource(Res.string.home_tile_my_reports_subtitle), Icons.AutoMirrored.Rounded.ListAlt, Destinations.MY_SUBMITTED_REPORTS))
+    add(PublisherModuleTile(DashboardModuleId.SEARCHING, stringResource(Res.string.home_tile_searching_title), stringResource(Res.string.home_tile_searching_subtitle), Icons.Rounded.PersonSearch, Destinations.SEARCHING))
+    add(PublisherModuleTile(DashboardModuleId.RETURN_VISIT, stringResource(Res.string.home_tile_return_visit_title), stringResource(Res.string.home_tile_return_visit_subtitle), Icons.Rounded.PeopleAlt, Destinations.RETURN_VISIT))
+    add(PublisherModuleTile(DashboardModuleId.BIBLE_STUDY, stringResource(Res.string.home_tile_bible_study_title), stringResource(Res.string.home_tile_bible_study_subtitle), Icons.AutoMirrored.Rounded.MenuBook, Destinations.BIBLE_STUDY))
     // "FORWARD TO OTHER PUBLISHER" — this Publisher's own incoming queue.
-    add(PublisherModuleTile(DashboardModuleId.FORWARDED_TO_ME, stringResource(R.string.home_tile_forwarded_to_me_title), stringResource(R.string.home_tile_forwarded_to_me_subtitle), Icons.AutoMirrored.Rounded.Forward, Destinations.PUBLISHER_FORWARD_REQUESTS, pendingPublisherForwards))
+    add(PublisherModuleTile(DashboardModuleId.FORWARDED_TO_ME, stringResource(Res.string.home_tile_forwarded_to_me_title), stringResource(Res.string.home_tile_forwarded_to_me_subtitle), Icons.AutoMirrored.Rounded.Forward, Destinations.PUBLISHER_FORWARD_REQUESTS, pendingPublisherForwards))
     // "House Holder Assignment" — this Publisher's own incoming queue, same
     // "actionable inbox with a live badge" shape as "Forwarded to Me" above.
-    add(PublisherModuleTile(DashboardModuleId.INCOMING_HOUSEHOLDER_ASSIGNMENTS, stringResource(R.string.home_tile_incoming_assignments_title), stringResource(R.string.home_tile_incoming_assignments_subtitle), Icons.Rounded.AssignmentInd, Destinations.INCOMING_HOUSEHOLDER_ASSIGNMENTS, pendingHouseholderAssignments))
+    add(PublisherModuleTile(DashboardModuleId.INCOMING_HOUSEHOLDER_ASSIGNMENTS, stringResource(Res.string.home_tile_incoming_assignments_title), stringResource(Res.string.home_tile_incoming_assignments_subtitle), Icons.Rounded.AssignmentInd, Destinations.INCOMING_HOUSEHOLDER_ASSIGNMENTS, pendingHouseholderAssignments))
     // "House Holder Visit History" — a read-only, consolidated view of
     // this Publisher's own congregation's Searching/Return Visit/Bible
     // Study records and their visit history (see
     // HouseholderVisitHistoryScreen's own doc comment); Super-Admin
     // reaches the same screen unscoped via the drawer instead.
-    add(PublisherModuleTile(DashboardModuleId.HOUSEHOLDER_VISIT_HISTORY, stringResource(R.string.home_tile_householder_visit_history_title), stringResource(R.string.home_tile_householder_visit_history_subtitle), Icons.Rounded.History, Destinations.HOUSEHOLDER_VISIT_HISTORY))
+    add(PublisherModuleTile(DashboardModuleId.HOUSEHOLDER_VISIT_HISTORY, stringResource(Res.string.home_tile_householder_visit_history_title), stringResource(Res.string.home_tile_householder_visit_history_subtitle), Icons.Rounded.History, Destinations.HOUSEHOLDER_VISIT_HISTORY))
     if (isPioneer) {
-        add(PublisherModuleTile(DashboardModuleId.MY_TOTAL_HOURS, stringResource(R.string.home_tile_my_total_hours_title), stringResource(R.string.home_tile_my_total_hours_subtitle), Icons.Rounded.Timer, Destinations.PREACHING_TIME_RECORD))
+        add(PublisherModuleTile(DashboardModuleId.MY_TOTAL_HOURS, stringResource(Res.string.home_tile_my_total_hours_title), stringResource(Res.string.home_tile_my_total_hours_subtitle), Icons.Rounded.Timer, Destinations.PREACHING_TIME_RECORD))
     }
     // "My Bible Text Record" module — every Publisher, not just Pioneers.
     // A distinct icon from "Bible Study" (also MenuBook) — this is a
     // personal saved-reference collection, not the ministry module.
-    add(PublisherModuleTile(DashboardModuleId.MY_BIBLE_TEXT_RECORD, stringResource(R.string.home_tile_my_bible_text_record_title), stringResource(R.string.home_tile_my_bible_text_record_subtitle), Icons.Rounded.Bookmarks, Destinations.MY_BIBLE_TEXT_RECORD))
-    add(PublisherModuleTile(DashboardModuleId.MY_CALENDAR, stringResource(R.string.home_tile_my_calendar_title), stringResource(R.string.home_tile_my_calendar_subtitle), Icons.Rounded.CalendarMonth, Destinations.CALENDAR))
-    add(PublisherModuleTile(DashboardModuleId.SHARE_MY_LOCATION, stringResource(R.string.home_tile_share_my_location_title), stringResource(R.string.home_tile_share_my_location_subtitle), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
-    add(PublisherModuleTile(DashboardModuleId.FIND_LOCATION, stringResource(R.string.home_tile_find_location_title), stringResource(R.string.home_tile_find_location_subtitle), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
+    add(PublisherModuleTile(DashboardModuleId.MY_BIBLE_TEXT_RECORD, stringResource(Res.string.home_tile_my_bible_text_record_title), stringResource(Res.string.home_tile_my_bible_text_record_subtitle), Icons.Rounded.Bookmarks, Destinations.MY_BIBLE_TEXT_RECORD))
+    add(PublisherModuleTile(DashboardModuleId.MY_CALENDAR, stringResource(Res.string.home_tile_my_calendar_title), stringResource(Res.string.home_tile_my_calendar_subtitle), Icons.Rounded.CalendarMonth, Destinations.CALENDAR))
+    add(PublisherModuleTile(DashboardModuleId.SHARE_MY_LOCATION, stringResource(Res.string.home_tile_share_my_location_title), stringResource(Res.string.home_tile_share_my_location_subtitle), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
+    add(PublisherModuleTile(DashboardModuleId.FIND_LOCATION, stringResource(Res.string.home_tile_find_location_title), stringResource(Res.string.home_tile_find_location_subtitle), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
     // "Add the Territory Module in Publisher. The publisher can see all
     // the location but cannot edit or delete, view only" — the screen
     // itself has no edit/delete actions for anyone anymore (see
     // TerritoryMapScreen), so reaching it here is already read-only by
     // construction; scoped to the Publisher's own congregation (see
     // GoPreachNavGraph's MANAGE_TERRITORIES composable).
-    add(PublisherModuleTile(DashboardModuleId.TERRITORY_MAP, stringResource(R.string.home_tile_territory_map_title), stringResource(R.string.home_tile_territory_map_subtitle), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
+    add(PublisherModuleTile(DashboardModuleId.TERRITORY_MAP, stringResource(Res.string.home_tile_territory_map_title), stringResource(Res.string.home_tile_territory_map_subtitle), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
     // "The record will be seen in the publishers module... called
     // 'Meeting Assignments.' The publisher will see only meeting
     // assignments under their congregation" — read-only, see
     // GoPreachNavGraph's PUBLISHER_MEETING_ASSIGNMENTS composable.
-    add(PublisherModuleTile(DashboardModuleId.MEETING_CART_ASSIGNMENT, stringResource(R.string.home_tile_meeting_cart_assignment_title), stringResource(R.string.home_tile_meeting_cart_assignment_subtitle), Icons.Rounded.Event, Destinations.PUBLISHER_MEETING_ASSIGNMENTS))
+    add(PublisherModuleTile(DashboardModuleId.MEETING_CART_ASSIGNMENT, stringResource(Res.string.home_tile_meeting_cart_assignment_title), stringResource(Res.string.home_tile_meeting_cart_assignment_subtitle), Icons.Rounded.Event, Destinations.PUBLISHER_MEETING_ASSIGNMENTS))
     // "Add a Button under Meeting [and Cart] Assignment[:] 'My
     // Assignments'... the publisher can see all the assignments under
     // his name" — a cross-cut of every Midweek/Public Talk/Cart
@@ -967,19 +1031,19 @@ private fun publisherModuleTiles(
     // own currently-selected week/date (see GoPreachNavGraph's
     // MY_ASSIGNMENTS composable / MeetingAssignmentsViewModel
     // .myAssignmentsFor).
-    add(PublisherModuleTile(DashboardModuleId.MY_ASSIGNMENTS, stringResource(R.string.home_tile_my_assignments_title), stringResource(R.string.home_tile_my_assignments_subtitle), Icons.Rounded.Assignment, Destinations.MY_ASSIGNMENTS))
-    add(PublisherModuleTile(DashboardModuleId.ANNOUNCEMENT, stringResource(R.string.home_tile_announcement_title), stringResource(R.string.home_tile_announcement_subtitle), Icons.Rounded.Campaign, Destinations.PUBLISHER_ANNOUNCEMENTS, unseenAnnouncements))
+    add(PublisherModuleTile(DashboardModuleId.MY_ASSIGNMENTS, stringResource(Res.string.home_tile_my_assignments_title), stringResource(Res.string.home_tile_my_assignments_subtitle), Icons.Rounded.Assignment, Destinations.MY_ASSIGNMENTS))
+    add(PublisherModuleTile(DashboardModuleId.ANNOUNCEMENT, stringResource(Res.string.home_tile_announcement_title), stringResource(Res.string.home_tile_announcement_subtitle), Icons.Rounded.Campaign, Destinations.PUBLISHER_ANNOUNCEMENTS, unseenAnnouncements))
     // "Group Chat Setting" module — also reachable from the persistent
     // Chat Box icon in the header (see PublisherWelcomeHeader), this
     // tile is just a second, more discoverable entry point to the same
     // GROUP_CHAT_SETTING list.
-    add(PublisherModuleTile(DashboardModuleId.GROUP_CHAT, stringResource(R.string.home_tile_group_chat_title), stringResource(R.string.home_tile_group_chat_subtitle), Icons.AutoMirrored.Rounded.Chat, Destinations.GROUP_CHAT_SETTING))
+    add(PublisherModuleTile(DashboardModuleId.GROUP_CHAT, stringResource(Res.string.home_tile_group_chat_title), stringResource(Res.string.home_tile_group_chat_subtitle), Icons.AutoMirrored.Rounded.Chat, Destinations.GROUP_CHAT_SETTING))
     // "Make a module for publisher to see the available schedule of the
     // other publishers" — same PublisherSchedulesScreen Account Settings'
     // own "View Other Publishers' Schedules" link already opens, now also
     // reachable as its own Main Form tile; congregation-scoped by the
     // Destinations.PUBLISHER_SCHEDULES composable itself, not this tile.
-    add(PublisherModuleTile(DashboardModuleId.PUBLISHER_SCHEDULES, stringResource(R.string.home_tile_publisher_schedules_title), stringResource(R.string.home_tile_publisher_schedules_subtitle), Icons.Rounded.Schedule, Destinations.PUBLISHER_SCHEDULES))
+    add(PublisherModuleTile(DashboardModuleId.PUBLISHER_SCHEDULES, stringResource(Res.string.home_tile_publisher_schedules_title), stringResource(Res.string.home_tile_publisher_schedules_subtitle), Icons.Rounded.Schedule, Destinations.PUBLISHER_SCHEDULES))
     // My Planner is no longer a movable module (see this function's other
     // callers) — it's a fixed card directly on the Main Form now, so it's
     // deliberately absent from this customizable catalog.
@@ -1071,7 +1135,7 @@ private fun SidePanelDrawerContent(
 ) {
     ModalDrawerSheet {
         Text(
-            stringResource(R.string.dashboard_layout_side_panel_title),
+            stringResource(Res.string.dashboard_layout_side_panel_title),
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(20.dp),
         )
@@ -1079,7 +1143,7 @@ private fun SidePanelDrawerContent(
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             if (tiles.isEmpty()) {
                 Text(
-                    stringResource(R.string.dashboard_layout_side_panel_empty),
+                    stringResource(Res.string.dashboard_layout_side_panel_empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(20.dp),
@@ -1098,7 +1162,7 @@ private fun SidePanelDrawerContent(
         ) {
             Icon(Icons.Rounded.RestartAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 20.dp))
             Text(
-                stringResource(R.string.dashboard_layout_reset_title),
+                stringResource(Res.string.dashboard_layout_reset_title),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(vertical = 16.dp),

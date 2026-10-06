@@ -1,5 +1,18 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.chat_attachment_fallback
+import com.emfitsolutions.gopreach.shared.resources.chat_close
+import com.emfitsolutions.gopreach.shared.resources.chat_download_cd
+import com.emfitsolutions.gopreach.shared.resources.chat_filter_all
+import com.emfitsolutions.gopreach.shared.resources.chat_filter_excel
+import com.emfitsolutions.gopreach.shared.resources.chat_filter_images
+import com.emfitsolutions.gopreach.shared.resources.chat_filter_pdf
+import com.emfitsolutions.gopreach.shared.resources.chat_filter_word
+import com.emfitsolutions.gopreach.shared.resources.chat_no_shared_documents
+import com.emfitsolutions.gopreach.shared.resources.chat_search_files
+import com.emfitsolutions.gopreach.shared.resources.chat_shared_documents_header
+import com.emfitsolutions.gopreach.shared.resources.chat_uploaded_by
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -25,11 +38,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.GroupChatAttachmentType
 import com.emfitsolutions.gopreach.data.model.GroupChatMessage
 import com.emfitsolutions.gopreach.ui.components.FormDialog
@@ -58,31 +70,31 @@ fun SharedDocumentsDialog(groupName: String, messages: List<GroupChatMessage>, o
 
     FormDialog(
         onDismissRequest = onDismiss,
-        title = stringResource(R.string.chat_shared_documents_header, groupName),
+        title = stringResource(Res.string.chat_shared_documents_header, groupName),
         onConfirm = onDismiss,
-        confirmLabel = stringResource(R.string.chat_close),
-        dismissLabel = stringResource(R.string.chat_close),
+        confirmLabel = stringResource(Res.string.chat_close),
+        dismissLabel = stringResource(Res.string.chat_close),
         maxContentHeight = 560.dp,
     ) {
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text(stringResource(R.string.chat_search_files)) },
+            label = { Text(stringResource(Res.string.chat_search_files)) },
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
             singleLine = true,
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth(),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 6.dp)) {
-            AssistChip(onClick = { typeFilter = null }, label = { Text(stringResource(R.string.chat_filter_all)) })
-            AssistChip(onClick = { typeFilter = GroupChatAttachmentType.IMAGE }, label = { Text(stringResource(R.string.chat_filter_images)) })
-            AssistChip(onClick = { typeFilter = GroupChatAttachmentType.PDF }, label = { Text(stringResource(R.string.chat_filter_pdf)) })
-            AssistChip(onClick = { typeFilter = GroupChatAttachmentType.WORD }, label = { Text(stringResource(R.string.chat_filter_word)) })
-            AssistChip(onClick = { typeFilter = GroupChatAttachmentType.EXCEL }, label = { Text(stringResource(R.string.chat_filter_excel)) })
+            AssistChip(onClick = { typeFilter = null }, label = { Text(stringResource(Res.string.chat_filter_all)) })
+            AssistChip(onClick = { typeFilter = GroupChatAttachmentType.IMAGE }, label = { Text(stringResource(Res.string.chat_filter_images)) })
+            AssistChip(onClick = { typeFilter = GroupChatAttachmentType.PDF }, label = { Text(stringResource(Res.string.chat_filter_pdf)) })
+            AssistChip(onClick = { typeFilter = GroupChatAttachmentType.WORD }, label = { Text(stringResource(Res.string.chat_filter_word)) })
+            AssistChip(onClick = { typeFilter = GroupChatAttachmentType.EXCEL }, label = { Text(stringResource(Res.string.chat_filter_excel)) })
         }
         if (documents.isEmpty()) {
             Text(
-                stringResource(R.string.chat_no_shared_documents),
+                stringResource(Res.string.chat_no_shared_documents),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(vertical = 16.dp),
@@ -105,9 +117,9 @@ private fun DocumentRow(message: GroupChatMessage) {
     ) {
         Icon(Icons.Rounded.InsertDriveFile, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
         Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
-            Text(message.attachmentFileName ?: stringResource(R.string.chat_attachment_fallback), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(message.attachmentFileName ?: stringResource(Res.string.chat_attachment_fallback), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             Text(
-                stringResource(R.string.chat_uploaded_by, message.senderName, formatRecordTimestamp(message.createdAt), formatFileSize(message.attachmentSize)),
+                stringResource(Res.string.chat_uploaded_by, message.senderName, formatRecordTimestamp(message.createdAt), formatFileSize(message.attachmentSize)),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -120,7 +132,7 @@ private fun DocumentRow(message: GroupChatMessage) {
             }
             actions.openFile(message.attachmentUrl!!, mime)
         }) {
-            Icon(Icons.Rounded.Download, contentDescription = stringResource(R.string.chat_download_cd))
+            Icon(Icons.Rounded.Download, contentDescription = stringResource(Res.string.chat_download_cd))
         }
     }
 }

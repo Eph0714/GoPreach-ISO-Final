@@ -1,5 +1,14 @@
 package com.emfitsolutions.gopreach.ui.screens.monthlyreport
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.home_no
+import com.emfitsolutions.gopreach.shared.resources.home_tile_my_reports_title
+import com.emfitsolutions.gopreach.shared.resources.home_yes
+import com.emfitsolutions.gopreach.shared.resources.my_reports_bible_studies_conducted
+import com.emfitsolutions.gopreach.shared.resources.my_reports_empty
+import com.emfitsolutions.gopreach.shared.resources.my_reports_hours_rendered
+import com.emfitsolutions.gopreach.shared.resources.my_reports_participated
+import com.emfitsolutions.gopreach.shared.resources.my_reports_submitted_at
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -30,12 +39,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.MonthlyReport
 import com.emfitsolutions.gopreach.data.model.ReportStatus
 import com.emfitsolutions.gopreach.domain.MonthlyReportCalculator
@@ -62,7 +70,7 @@ fun MySubmittedReportsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.home_tile_my_reports_title)) },
+                title = { Text(stringResource(Res.string.home_tile_my_reports_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -78,7 +86,7 @@ fun MySubmittedReportsScreen(
             ) {
                 RecordFound(0)
                 Text(
-                    stringResource(R.string.my_reports_empty),
+                    stringResource(Res.string.my_reports_empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -119,18 +127,18 @@ private fun SubmittedReportCard(report: MonthlyReport) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(stringResource(R.string.my_reports_bible_studies_conducted, report.bibleStudiesCount), style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(Res.string.my_reports_bible_studies_conducted, report.bibleStudiesCount), style = MaterialTheme.typography.bodyMedium)
             if (isPioneer) {
-                Text(stringResource(R.string.my_reports_hours_rendered, (report.hoursRendered ?: 0.0).toString()), style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(Res.string.my_reports_hours_rendered, (report.hoursRendered ?: 0.0).toString()), style = MaterialTheme.typography.bodyMedium)
             } else {
                 Text(
-                    stringResource(R.string.my_reports_participated, if (report.participatedInPreaching == true) stringResource(R.string.home_yes) else stringResource(R.string.home_no)),
+                    stringResource(Res.string.my_reports_participated, if (report.participatedInPreaching == true) stringResource(Res.string.home_yes) else stringResource(Res.string.home_no)),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
             if (report.submittedAt != null) {
                 Text(
-                    stringResource(R.string.my_reports_submitted_at, formatRecordTimestamp(report.submittedAt!!)),
+                    stringResource(Res.string.my_reports_submitted_at, formatRecordTimestamp(report.submittedAt!!)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

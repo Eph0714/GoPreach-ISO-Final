@@ -1,5 +1,13 @@
 package com.emfitsolutions.gopreach.ui.screens.login
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.select_role_banner
+import com.emfitsolutions.gopreach.shared.resources.select_role_continue
+import com.emfitsolutions.gopreach.shared.resources.select_role_label
+import com.emfitsolutions.gopreach.shared.resources.select_role_placeholder
+import com.emfitsolutions.gopreach.shared.resources.select_role_sign_out
+import com.emfitsolutions.gopreach.shared.resources.select_role_title
+import com.emfitsolutions.gopreach.shared.resources.select_role_welcome
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,11 +34,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.domain.RoleOption
 
 /**
@@ -65,13 +72,13 @@ fun SelectRoleScreen(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                stringResource(R.string.select_role_title),
+                stringResource(Res.string.select_role_title),
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
             )
             Text(
-                stringResource(R.string.select_role_welcome, personName),
+                stringResource(Res.string.select_role_welcome, personName),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -80,20 +87,20 @@ fun SelectRoleScreen(
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
             Text(
                 // Spec §2/§10 — the exact required wording.
-                stringResource(R.string.select_role_banner),
+                stringResource(Res.string.select_role_banner),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(16.dp),
             )
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.select_role_label), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(stringResource(Res.string.select_role_label), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
             ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
                 OutlinedTextField(
                     value = selected?.label ?: "",
                     onValueChange = {},
                     readOnly = true,
-                    placeholder = { Text(stringResource(R.string.select_role_placeholder)) },
+                    placeholder = { Text(stringResource(Res.string.select_role_placeholder)) },
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                     visualTransformation = VisualTransformation.None,
                     modifier = Modifier.fillMaxWidth().menuAnchor(),
@@ -124,11 +131,11 @@ fun SelectRoleScreen(
             enabled = selected != null,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.select_role_continue), fontWeight = FontWeight.Bold)
+            Text(stringResource(Res.string.select_role_continue), fontWeight = FontWeight.Bold)
         }
 
         TextButton(onClick = onSignOut, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-            Text(stringResource(R.string.select_role_sign_out))
+            Text(stringResource(Res.string.select_role_sign_out))
         }
     }
 }

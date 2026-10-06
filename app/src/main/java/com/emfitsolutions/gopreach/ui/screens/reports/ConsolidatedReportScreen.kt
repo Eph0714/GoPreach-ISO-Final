@@ -1,5 +1,33 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.action_close
+import com.emfitsolutions.gopreach.shared.resources.consolidated_bible_studies_return_visits
+import com.emfitsolutions.gopreach.shared.resources.consolidated_bible_study_records
+import com.emfitsolutions.gopreach.shared.resources.consolidated_hours_suffix
+import com.emfitsolutions.gopreach.shared.resources.consolidated_loading
+import com.emfitsolutions.gopreach.shared.resources.consolidated_no
+import com.emfitsolutions.gopreach.shared.resources.consolidated_no_publishers_found
+import com.emfitsolutions.gopreach.shared.resources.consolidated_no_report_yet
+import com.emfitsolutions.gopreach.shared.resources.consolidated_none_recorded
+import com.emfitsolutions.gopreach.shared.resources.consolidated_participated_ministry_value
+import com.emfitsolutions.gopreach.shared.resources.consolidated_per_publisher
+import com.emfitsolutions.gopreach.shared.resources.consolidated_preaching_hours_value
+import com.emfitsolutions.gopreach.shared.resources.consolidated_preaching_time_records
+import com.emfitsolutions.gopreach.shared.resources.consolidated_return_visit_records
+import com.emfitsolutions.gopreach.shared.resources.consolidated_stat_bible_studies
+import com.emfitsolutions.gopreach.shared.resources.consolidated_stat_participated_ministry
+import com.emfitsolutions.gopreach.shared.resources.consolidated_stat_preaching_hours
+import com.emfitsolutions.gopreach.shared.resources.consolidated_tap_publisher_hint
+import com.emfitsolutions.gopreach.shared.resources.consolidated_title
+import com.emfitsolutions.gopreach.shared.resources.consolidated_yes
+import com.emfitsolutions.gopreach.shared.resources.reports_congregation_group_label
+import com.emfitsolutions.gopreach.shared.resources.reports_export_csv_success
+import com.emfitsolutions.gopreach.shared.resources.reports_export_excel_cd
+import com.emfitsolutions.gopreach.shared.resources.reports_export_failed_generic
+import com.emfitsolutions.gopreach.shared.resources.reports_export_failed_unknown
+import com.emfitsolutions.gopreach.shared.resources.reports_export_failed_write
+import com.emfitsolutions.gopreach.shared.resources.reports_export_pdf_cd
 import com.emfitsolutions.gopreach.platform.rememberFileCreator
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import androidx.compose.foundation.layout.Arrangement
@@ -45,14 +73,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import kotlinx.coroutines.flow.collect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.print.ReportTable
 import com.emfitsolutions.gopreach.ui.components.DateRangeFilterBar
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
@@ -96,10 +123,10 @@ fun ConsolidatedReportScreen(
     // Bug fix ("I cannot see any PDF or Excel"): see ReportsScreen's matching
     // fix — the Storage Access Framework picker just saves and closes with
     // no feedback of its own; now it confirms and opens the file immediately.
-    val exportCsvSuccess = stringResource(R.string.reports_export_csv_success)
-    val exportFailedWrite = stringResource(R.string.reports_export_failed_write)
-    val exportFailedUnknown = stringResource(R.string.reports_export_failed_unknown)
-    val exportFailedGenericTemplate = stringResource(R.string.reports_export_failed_generic)
+    val exportCsvSuccess = stringResource(Res.string.reports_export_csv_success)
+    val exportFailedWrite = stringResource(Res.string.reports_export_failed_write)
+    val exportFailedUnknown = stringResource(Res.string.reports_export_failed_unknown)
+    val exportFailedGenericTemplate = stringResource(Res.string.reports_export_failed_generic)
     val exportLauncher = rememberFileCreator("text/csv") { uri ->
         if (uri != null) {
             try {
@@ -120,7 +147,7 @@ fun ConsolidatedReportScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.consolidated_title)) },
+                title = { Text(stringResource(Res.string.consolidated_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
                 },
@@ -132,10 +159,10 @@ fun ConsolidatedReportScreen(
                     // Always enabled now; printing/exporting with nothing to
                     // show just produces a heading-only result.
                     IconButton(onClick = { actions.print(reportTable) }) {
-                        Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(R.string.reports_export_pdf_cd))
+                        Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(Res.string.reports_export_pdf_cd))
                     }
                     IconButton(onClick = { exportLauncher.launch(exportFileName) }) {
-                        Icon(Icons.Rounded.TableChart, contentDescription = stringResource(R.string.reports_export_excel_cd))
+                        Icon(Icons.Rounded.TableChart, contentDescription = stringResource(Res.string.reports_export_excel_cd))
                     }
                 },
             )
@@ -164,32 +191,32 @@ fun ConsolidatedReportScreen(
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        StatCard(stringResource(R.string.consolidated_stat_bible_studies), uiState.totalBibleStudies.toString(), onClick = {}, modifier = Modifier.weight(1f))
-                        StatCard(stringResource(R.string.consolidated_stat_preaching_hours), "%.1f".format(uiState.totalPreachingHours), onClick = {}, modifier = Modifier.weight(1f))
+                        StatCard(stringResource(Res.string.consolidated_stat_bible_studies), uiState.totalBibleStudies.toString(), onClick = {}, modifier = Modifier.weight(1f))
+                        StatCard(stringResource(Res.string.consolidated_stat_preaching_hours), "%.1f".format(uiState.totalPreachingHours), onClick = {}, modifier = Modifier.weight(1f))
                     }
                     if (uiState.regularPublisherEntries.isNotEmpty()) {
                         StatCard(
-                            stringResource(R.string.consolidated_stat_participated_ministry),
+                            stringResource(Res.string.consolidated_stat_participated_ministry),
                             "${uiState.participatedYesCount} / ${uiState.regularPublisherEntries.size}",
                             onClick = {},
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
                     HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
-                    Text(stringResource(R.string.consolidated_per_publisher), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(Res.string.consolidated_per_publisher), style = MaterialTheme.typography.titleMedium)
                     Text(
-                        stringResource(R.string.consolidated_tap_publisher_hint),
+                        stringResource(Res.string.consolidated_tap_publisher_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
             if (uiState.isLoading) {
-                item { Text(stringResource(R.string.consolidated_loading), style = MaterialTheme.typography.bodyMedium) }
+                item { Text(stringResource(Res.string.consolidated_loading), style = MaterialTheme.typography.bodyMedium) }
             } else if (uiState.needsCongregation) {
                 item { com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt(Modifier.fillMaxWidth()) }
             } else if (uiState.visibleEntries.isEmpty()) {
-                item { Text(stringResource(R.string.consolidated_no_publishers_found), style = MaterialTheme.typography.bodyMedium) }
+                item { Text(stringResource(Res.string.consolidated_no_publishers_found), style = MaterialTheme.typography.bodyMedium) }
             }
             item { RecordFound(uiState.visibleEntries.size) }
             items(uiState.visibleEntries, key = { it.person.id }) { entry ->
@@ -205,20 +232,20 @@ fun ConsolidatedReportScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            stringResource(R.string.consolidated_bible_studies_return_visits, entry.bibleStudiesCount, entry.returnVisitsCount),
+                            stringResource(Res.string.consolidated_bible_studies_return_visits, entry.bibleStudiesCount, entry.returnVisitsCount),
                             style = MaterialTheme.typography.bodyMedium,
                         )
                         if (isPioneerCategory(entry.category)) {
                             Text(
-                                stringResource(R.string.consolidated_preaching_hours_value, "%.1f".format(entry.preachingHours)),
+                                stringResource(Res.string.consolidated_preaching_hours_value, "%.1f".format(entry.preachingHours)),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         } else {
                             val ministryValue = entry.participatedInMinistry?.let {
-                                if (it) stringResource(R.string.consolidated_yes) else stringResource(R.string.consolidated_no)
-                            } ?: stringResource(R.string.consolidated_no_report_yet)
+                                if (it) stringResource(Res.string.consolidated_yes) else stringResource(Res.string.consolidated_no)
+                            } ?: stringResource(Res.string.consolidated_no_report_yet)
                             Text(
-                                stringResource(R.string.consolidated_participated_ministry_value, ministryValue),
+                                stringResource(Res.string.consolidated_participated_ministry_value, ministryValue),
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                         }
@@ -278,7 +305,7 @@ private fun CongregationScopeDropdown(congregationNames: List<Pair<String, Strin
             value = selectedName,
             onValueChange = {},
             readOnly = true,
-            label = { Text(stringResource(R.string.reports_congregation_group_label)) },
+            label = { Text(stringResource(Res.string.reports_congregation_group_label)) },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth().menuAnchor(),
@@ -318,8 +345,8 @@ private fun PublisherRecordsDialog(
                 modifier = Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()).imePadding(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                val noneRecorded = stringResource(R.string.consolidated_none_recorded)
-                Text(stringResource(R.string.consolidated_bible_study_records), style = MaterialTheme.typography.titleSmall)
+                val noneRecorded = stringResource(Res.string.consolidated_none_recorded)
+                Text(stringResource(Res.string.consolidated_bible_study_records), style = MaterialTheme.typography.titleSmall)
                 if (bibleStudies.isEmpty()) {
                     Text(noneRecorded, style = MaterialTheme.typography.bodySmall)
                 } else {
@@ -328,7 +355,7 @@ private fun PublisherRecordsDialog(
                     }
                 }
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                Text(stringResource(R.string.consolidated_return_visit_records), style = MaterialTheme.typography.titleSmall)
+                Text(stringResource(Res.string.consolidated_return_visit_records), style = MaterialTheme.typography.titleSmall)
                 if (visits.isEmpty()) {
                     Text(noneRecorded, style = MaterialTheme.typography.bodySmall)
                 } else {
@@ -341,13 +368,13 @@ private fun PublisherRecordsDialog(
                 }
                 if (isPioneerCategory(entry.category)) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    Text(stringResource(R.string.consolidated_preaching_time_records), style = MaterialTheme.typography.titleSmall)
+                    Text(stringResource(Res.string.consolidated_preaching_time_records), style = MaterialTheme.typography.titleSmall)
                     if (preachingRecords.isEmpty()) {
                         Text(noneRecorded, style = MaterialTheme.typography.bodySmall)
                     } else {
                         preachingRecords.sortedByDescending { it.date }.forEach { record ->
                             Text(
-                                "• ${dateFormat.format(Date(record.date))} — ${stringResource(R.string.consolidated_hours_suffix, "%.2f".format(record.hoursConsumed))}",
+                                "• ${dateFormat.format(Date(record.date))} — ${stringResource(Res.string.consolidated_hours_suffix, "%.2f".format(record.hoursConsumed))}",
                                 style = MaterialTheme.typography.bodySmall,
                             )
                         }
@@ -355,6 +382,6 @@ private fun PublisherRecordsDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_close)) } },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_close)) } },
     )
 }

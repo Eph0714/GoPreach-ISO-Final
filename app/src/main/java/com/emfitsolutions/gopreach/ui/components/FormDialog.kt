@@ -1,5 +1,12 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.shared.resources.action_cancel
+import com.emfitsolutions.gopreach.shared.resources.action_discard
+import com.emfitsolutions.gopreach.shared.resources.action_keep_editing
+import com.emfitsolutions.gopreach.shared.resources.action_save
+import com.emfitsolutions.gopreach.shared.resources.discard_changes_message
+import com.emfitsolutions.gopreach.shared.resources.discard_changes_title
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,11 +27,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import com.emfitsolutions.gopreach.R
 
 /**
  * "Do not allow the keyboard to override the button when saving. Always
@@ -85,8 +91,8 @@ fun FormDialog(
     // Sourced from strings.xml rather than a literal, so every one of this
     // app's dozens of FormDialog call sites that don't override these stays
     // in sync with a single copy of the label text.
-    confirmLabel: String = stringResource(R.string.action_save),
-    dismissLabel: String = stringResource(R.string.action_cancel),
+    confirmLabel: String = stringResource(Res.string.action_save),
+    dismissLabel: String = stringResource(Res.string.action_cancel),
     confirmEnabled: Boolean = true,
     errorMessage: String? = null,
     maxContentHeight: Dp = 480.dp,
@@ -168,15 +174,15 @@ fun FormDialog(
             // for an explicit tap on one of those two buttons (the
             // underlying form's data is untouched either way).
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
-            title = { Text(stringResource(R.string.discard_changes_title)) },
-            text = { Text(stringResource(R.string.discard_changes_message)) },
+            title = { Text(stringResource(Res.string.discard_changes_title)) },
+            text = { Text(stringResource(Res.string.discard_changes_message)) },
             confirmButton = {
                 TextButton(onClick = { showDiscardConfirm = false; onDismissRequest() }) {
-                    Text(stringResource(R.string.action_discard))
+                    Text(stringResource(Res.string.action_discard))
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDiscardConfirm = false }) { Text(stringResource(R.string.action_keep_editing)) }
+                TextButton(onClick = { showDiscardConfirm = false }) { Text(stringResource(Res.string.action_keep_editing)) }
             },
         )
     }
