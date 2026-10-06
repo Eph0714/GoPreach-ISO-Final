@@ -32,7 +32,7 @@ kotlin {
             api(compose.ui)
             api(compose.components.resources)
             api(compose.materialIconsExtended)
-            api("androidx.room:room-runtime:2.7.2")
+            api("androidx.room:room-runtime:2.7.0")
             implementation("androidx.sqlite:sqlite-bundled:2.5.2")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
             api("io.ktor:ktor-client-core:3.0.3")
@@ -69,10 +69,10 @@ android {
 room { schemaDirectory("$projectDir/schemas") }
 
 dependencies {
-    add("kspAndroid", "androidx.room:room-compiler:2.7.2")
-    add("kspIosX64", "androidx.room:room-compiler:2.7.2")
-    add("kspIosArm64", "androidx.room:room-compiler:2.7.2")
-    add("kspIosSimulatorArm64", "androidx.room:room-compiler:2.7.2")
+    add("kspAndroid", "androidx.room:room-compiler:2.7.0")
+    add("kspIosX64", "androidx.room:room-compiler:2.7.0")
+    add("kspIosArm64", "androidx.room:room-compiler:2.7.0")
+    add("kspIosSimulatorArm64", "androidx.room:room-compiler:2.7.0")
 }
 
 compose.resources {

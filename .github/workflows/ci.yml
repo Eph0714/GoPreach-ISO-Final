@@ -63,6 +63,12 @@ jobs:
       - name: Point Gradle at the Android SDK
         run: echo "sdk.dir=$ANDROID_HOME" > local.properties
 
+      # CI has no ~/.android/debug.keystore, which app/build.gradle.kts uses to sign debug builds.
+      - name: Create the Android debug keystore
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Build the debug app and run unit tests
         run: ./gradlew :app:assembleDebug :app:testDebugUnitTest :shared:testDebugUnitTest --stacktrace
 
