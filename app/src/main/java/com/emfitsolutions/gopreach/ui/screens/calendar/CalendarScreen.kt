@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.calendar
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.compose.foundation.verticalScroll
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.rememberScrollState
@@ -51,9 +54,6 @@ import com.emfitsolutions.gopreach.ui.components.DateTimeField
 import com.emfitsolutions.gopreach.ui.components.FormDialog
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
 import com.emfitsolutions.gopreach.ui.components.requiredFieldsMessage
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import androidx.compose.ui.window.DialogProperties
 
 /**

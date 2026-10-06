@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.activity.compose.rememberLauncherForActivityResult
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import com.emfitsolutions.gopreach.data.model.displayName
@@ -60,10 +63,7 @@ import com.emfitsolutions.gopreach.ui.components.DateRange
 import com.emfitsolutions.gopreach.ui.components.DateRangeFilterBar
 import com.emfitsolutions.gopreach.ui.components.QuickDateRange
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 
 /** "For Admin, Elders and Service overseer select [All Group, Per Group]
  * filter in report" — [PER_GROUP] additionally needs one Group actually

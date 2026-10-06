@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -61,10 +64,7 @@ import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 
 /** Who is looking at the dashboard — decides which records may appear. */
 sealed interface RecentlyVisitedViewer {

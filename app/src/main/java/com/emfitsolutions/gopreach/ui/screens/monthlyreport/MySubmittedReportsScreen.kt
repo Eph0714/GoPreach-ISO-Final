@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.monthlyreport
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import com.emfitsolutions.gopreach.data.model.displayName
@@ -37,9 +40,6 @@ import com.emfitsolutions.gopreach.data.model.MonthlyReport
 import com.emfitsolutions.gopreach.data.model.ReportStatus
 import com.emfitsolutions.gopreach.domain.MonthlyReportCalculator
 import com.emfitsolutions.gopreach.ui.components.formatRecordTimestamp
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * "Allow the publisher to see all his submitted Report record" — every

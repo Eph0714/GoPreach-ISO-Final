@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.compose.foundation.background
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.border
@@ -52,10 +55,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.ui.screens.territoryassignments.SimpleDropdown
 import kotlinx.coroutines.flow.emptyFlow
-import java.text.SimpleDateFormat
 import java.util.Calendar
-import java.util.Date
-import java.util.Locale
 
 // Approximations of the sample's theme fills, shared with the print layout.
 private val FILL_REPORTS = Color(0xFFFBE3D6)

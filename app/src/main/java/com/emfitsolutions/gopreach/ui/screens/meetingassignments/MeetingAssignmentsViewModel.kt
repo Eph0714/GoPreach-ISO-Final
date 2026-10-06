@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.meetingassignments
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.CartAssignmentRow
@@ -219,7 +222,7 @@ class MeetingAssignmentsViewModel(
             recycleBinRepository.moveToTrash(
                 recordType = "Public Talk Schedule",
                 module = "Meeting Assignments",
-                label = "${row.theme.orEmpty()} ${java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date(row.date))}".trim(),
+                label = "${row.theme.orEmpty()} ${SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(row.date))}".trim(),
                 congregationId = row.congregationId,
                 deletedByPersonId = actorPersonId,
                 items = listOf(recycleBinRepository.item("publicTalkSchedules", row.id, row)),
@@ -278,7 +281,7 @@ class MeetingAssignmentsViewModel(
             recycleBinRepository.moveToTrash(
                 recordType = "Cart Assignment",
                 module = "Meeting Assignments",
-                label = "${row.location} ${java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date(row.date))}".trim(),
+                label = "${row.location} ${SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(row.date))}".trim(),
                 congregationId = row.congregationId,
                 deletedByPersonId = actorPersonId,
                 items = listOf(recycleBinRepository.item("cartAssignments", row.id, row)),

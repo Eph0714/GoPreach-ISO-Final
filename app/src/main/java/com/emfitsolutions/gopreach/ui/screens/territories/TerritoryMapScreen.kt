@@ -1,10 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.territories
 
+import com.emfitsolutions.gopreach.platform.rememberToaster
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -194,6 +194,7 @@ fun TerritoryMapScreen(
     pipelineViewModel: PipelineViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
+    val toast = rememberToaster()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val isSuperAdmin = fixedCongregationId == null
 
@@ -202,7 +203,7 @@ fun TerritoryMapScreen(
         // A plain search link, so a browser handles it if the Google Maps app is missing.
         val uri = Uri.parse("https://www.google.com/maps/search/?api=1&query=$lat,$lng")
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-            .onFailure { Toast.makeText(context, "Couldn't open Google Maps.", Toast.LENGTH_SHORT).show() }
+            .onFailure { toast("Couldn't open Google Maps.") }
     }
 
     // "View Details" opens the same full detail + Visit History screen the
@@ -449,7 +450,7 @@ fun TerritoryMapScreen(
                 val canAskAgain = activity == null || !permissionAsked ||
                     androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION)
                 if (canAskAgain) {
-                    Toast.makeText(context, "Location permission is needed to re-center the map on you.", Toast.LENGTH_SHORT).show()
+                    toast("Location permission is needed to re-center the map on you.")
                     requestLocationPermission()
                 } else {
                     // Permanently denied: the system will not ask again — offer the app's settings.
@@ -459,7 +460,7 @@ fun TerritoryMapScreen(
             !viewModel.isLocationServicesEnabled() -> locationHelp = LocationIssue.SERVICES_OFF
             myLocation == null -> {
                 // Non-blocking: the map stays usable while the location is found.
-                Toast.makeText(context, "Your location isn't available yet. Looking for it...", Toast.LENGTH_SHORT).show()
+                toast("Your location isn't available yet. Looking for it...")
                 locationRefreshKey++
             }
             else -> recenterToken++
@@ -521,13 +522,13 @@ fun TerritoryMapScreen(
     // within the current filters; wraps around after the last one.
     fun stepTo(order: SortOrder) {
         if (myLocation == null) {
-            Toast.makeText(context, "Turn on your location to find the nearest or farthest.", Toast.LENGTH_SHORT).show()
+            toast("Turn on your location to find the nearest or farthest.")
             locationRefreshKey++
             return
         }
         val ordered = if (order == SortOrder.NEAREST) nearestOrdered else farthestOrdered
         if (ordered.isEmpty()) {
-            Toast.makeText(context, "No locations to show.", Toast.LENGTH_SHORT).show()
+            toast("No locations to show.")
             return
         }
         val next = if (stepOrder == order) (stepIndex + 1) % ordered.size else 0
@@ -1019,12 +1020,12 @@ fun TerritoryMapScreen(
                             when (result) {
                                 MapPinResult.Success -> {
                                     pinDraftPoint = null
-                                    Toast.makeText(context, "Pin saved online.", Toast.LENGTH_SHORT).show()
+                                    toast("Pin saved online.")
                                 }
                                 MapPinResult.Offline ->
-                                    Toast.makeText(context, "You're offline. Connect to the internet to save a pin.", Toast.LENGTH_LONG).show()
+                                    toast("You're offline. Connect to the internet to save a pin.", long = true)
                                 is MapPinResult.Error ->
-                                    Toast.makeText(context, "Couldn't save the pin: " + result.message, Toast.LENGTH_LONG).show()
+                                    toast("Couldn't save the pin: " + result.message, long = true)
                             }
                         }
                     },
@@ -1063,11 +1064,11 @@ fun TerritoryMapScreen(
                                     when (val result = viewModel.deletePin(pin, currentPersonId)) {
                                         MapPinResult.Success -> {
                                             selectedPinId = null
-                                            Toast.makeText(context, "Pin removed.", Toast.LENGTH_SHORT).show()
+                                            toast("Pin removed.")
                                         }
                                         MapPinResult.Offline ->
-                                            Toast.makeText(context, "You're offline. Connect to the internet to remove a pin.", Toast.LENGTH_LONG).show()
-                                        is MapPinResult.Error -> Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                                            toast("You're offline. Connect to the internet to remove a pin.", long = true)
+                                        is MapPinResult.Error -> toast(result.message, long = true)
                                     }
                                 }
                             },
@@ -1138,7 +1139,7 @@ fun TerritoryMapScreen(
                 val r = sheetRecord.record
                 val uri = Uri.parse("geo:${r.lat},${r.lng}?q=${r.lat},${r.lng}(${Uri.encode(r.name)})")
                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-                    .onFailure { Toast.makeText(context, "No navigation app found.", Toast.LENGTH_SHORT).show() }
+                    .onFailure { toast("No navigation app found.") }
             },
         )
     }

@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.location.LatLng
@@ -451,7 +454,7 @@ class PipelineViewModel(
             recycleBinRepository.moveToTrash(
                 recordType = "Visit",
                 module = "Return Visit / Bible Study",
-                label = "Visit on ${java.text.SimpleDateFormat("MMM d, yyyy", java.util.Locale.getDefault()).format(java.util.Date(visit.visitDate))}" +
+                label = "Visit on ${SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(visit.visitDate))}" +
                     (person?.name?.let { " — $it" } ?: ""),
                 congregationId = person?.congregationId,
                 originalCreatedAt = visit.createdAt,

@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.YearlyPlannerGoal
@@ -101,7 +104,7 @@ class PlannerYearViewModel(
             val yearCalendar = Calendar.getInstance().apply { timeInMillis = yearStart }
             val year = yearCalendar.get(Calendar.YEAR)
 
-            val monthLabelFormat = java.text.SimpleDateFormat("MMMM", java.util.Locale.getDefault())
+            val monthLabelFormat = SimpleDateFormat("MMMM", Locale.getDefault())
             val monthRows = (1..12).map { month ->
                 val monthCalendar = Calendar.getInstance().apply {
                     set(year, month - 1, 1, 0, 0, 0)
@@ -115,7 +118,7 @@ class PlannerYearViewModel(
                 }
                 PlannerYearMonthRow(
                     monthStart = monthStartMillis,
-                    label = monthLabelFormat.format(java.util.Date(monthStartMillis)),
+                    label = monthLabelFormat.format(Date(monthStartMillis)),
                     totalMinutes = monthMinutes,
                     goalHours = goalForMonth?.goalHours ?: 0,
                     creditMinutes = creditRecords.inPeriod(monthBounds).sumOf { it.totalMinutes },

@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.components.map
 
+import com.emfitsolutions.gopreach.platform.rememberToaster
 import android.content.Context
 import android.content.ContextWrapper
 import android.graphics.Bitmap
@@ -9,7 +10,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -107,6 +107,7 @@ fun BoxScope.MapDrawingOverlay(
     viewModel: MapDrawingViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
+    val toast = rememberToaster()
     val density = context.resources.displayMetrics.density
     val scope = rememberCoroutineScope()
 
@@ -156,21 +157,21 @@ fun BoxScope.MapDrawingOverlay(
     fun save() {
         if (state.saving || !state.hasDraft) return
         state.saveBlocker?.let { why ->
-            Toast.makeText(context, why, Toast.LENGTH_SHORT).show()
+            toast(why)
             return
         }
         state.saving = true
         scope.launch {
             val outcome = runCatching { viewModel.save(access, state.items, territories, congregationId) }
             state.saving = false
-            outcome.onFailure { Toast.makeText(context, "Couldn't save the drawing: " + (it.message ?: "unknown error"), Toast.LENGTH_LONG).show() }
+            outcome.onFailure { toast("Couldn't save the drawing: " + (it.message ?: "unknown error"), long = true) }
             outcome.onSuccess {
                 when (it) {
                     is DrawingSaveOutcome.Saved -> {
-                        Toast.makeText(context, if (it.count == 1) "Drawing saved." else "${it.count} drawings saved.", Toast.LENGTH_SHORT).show()
+                        toast(if (it.count == 1) "Drawing saved." else "${it.count} drawings saved.")
                         state.exit()
                     }
-                    is DrawingSaveOutcome.Incomplete -> Toast.makeText(context, it.message, Toast.LENGTH_SHORT).show()
+                    is DrawingSaveOutcome.Incomplete -> toast(it.message)
                     is DrawingSaveOutcome.Rejected -> {
                         // The parts of the outline outside the permitted territory are drawn in red.
                         state.outsideRuns = (it.validation as? DrawingValidation.OutsideAssigned)?.outsideRuns.orEmpty()
@@ -184,18 +185,18 @@ fun BoxScope.MapDrawingOverlay(
     fun finish() {
         val poly = state.activeItem
         if (poly == null || !state.canFinish) {
-            Toast.makeText(context, "Add at least 3 corner points to create the territory.", Toast.LENGTH_SHORT).show()
+            toast("Add at least 3 corner points to create the territory.")
             return
         }
         if (!DrawingGeometry.isSimple(poly.ring)) {
-            Toast.makeText(context, "The outline crosses itself. Move or remove a corner so the lines don't cross.", Toast.LENGTH_LONG).show()
+            toast("The outline crosses itself. Move or remove a corner so the lines don't cross.", long = true)
             return
         }
         // The closing line must stay inside the authorized area too (group-level users).
         val runs = restricted?.let { DrawingGeometry.outsideRuns(poly.ring, it, DrawingValidator.EDGE_TOLERANCE_METERS) }.orEmpty()
         if (runs.isNotEmpty()) {
             state.outsideRuns = runs
-            Toast.makeText(context, "Part of the polygon is outside your authorized territory. Move a corner so it stays inside.", Toast.LENGTH_LONG).show()
+            toast("Part of the polygon is outside your authorized territory. Move a corner so it stays inside.", long = true)
             return
         }
         state.finish()
@@ -211,14 +212,14 @@ fun BoxScope.MapDrawingOverlay(
     // A map tap in Drawing Mode places the next corner (corners/midpoints are handled by polygonCornerGestures first).
     fun reject(p: GeoPoint, message: String) {
         state.flashRejected(p)
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        toast(message)
     }
     state.mapTapHandler = tap@{ latLng ->
         if (!state.active || state.tool != DrawingTool.POINTS) return@tap true
         val g = latLng.toGeo()
         val poly = state.activeItem
         if (poly != null && poly.closed) {
-            Toast.makeText(context, "Drag a corner to move it, or tap a small dot on a line to add one.", Toast.LENGTH_SHORT).show()
+            toast("Drag a corner to move it, or tap a small dot on a line to add one.")
             return@tap true
         }
         // Every corner is validated against the drawing permission as it is placed.
@@ -260,13 +261,13 @@ fun BoxScope.MapDrawingOverlay(
                     onChangeStatus = { status ->
                         scope.launch {
                             runCatching { viewModel.changeStatus(access, selected, status) }
-                                .onFailure { Toast.makeText(context, "Couldn't change the status.", Toast.LENGTH_SHORT).show() }
+                                .onFailure { toast("Couldn't change the status.") }
                         }
                     },
                     onDelete = { confirmDelete = selected },
                     onRetrySync = {
                         scope.launch { viewModel.retrySync(selected.id) }
-                        Toast.makeText(context, "Retrying sync.", Toast.LENGTH_SHORT).show()
+                        toast("Retrying sync.")
                     },
                     onClose = { state.selectedDrawingId = null },
                 ),
@@ -313,8 +314,8 @@ fun BoxScope.MapDrawingOverlay(
                     confirmDelete = null
                     scope.launch {
                         runCatching { viewModel.delete(access, d) }
-                            .onSuccess { state.selectedDrawingId = null; Toast.makeText(context, "Deleted.", Toast.LENGTH_SHORT).show() }
-                            .onFailure { Toast.makeText(context, "Couldn't delete it.", Toast.LENGTH_SHORT).show() }
+                            .onSuccess { state.selectedDrawingId = null; toast("Deleted.") }
+                            .onFailure { toast("Couldn't delete it.") }
                     }
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
@@ -407,6 +408,7 @@ fun Modifier.polygonCornerGestures(state: MapDrawingState, map: MapLibreMap?, de
 @Composable
 private fun BoxScope.VertexMagnifier(state: MapDrawingState, density: Float) {
     val context = LocalContext.current
+    val toast = rememberToaster()
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
     var boxOrigin by remember { mutableStateOf(Offset.Zero) }
     var loupe by remember { mutableStateOf<ImageBitmap?>(null) }

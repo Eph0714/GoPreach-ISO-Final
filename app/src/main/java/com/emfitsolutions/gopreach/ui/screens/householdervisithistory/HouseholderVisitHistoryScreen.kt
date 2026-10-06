@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.householdervisithistory
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.activity.compose.rememberLauncherForActivityResult
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import com.emfitsolutions.gopreach.data.print.OrientationMode
@@ -55,9 +58,6 @@ import com.emfitsolutions.gopreach.ui.components.CongregationFilterDropdown
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PipelinePersonDetailScreen
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PipelineViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 private fun PipelineStage.statusLabel(): String = when (this) {
     PipelineStage.SEARCHING -> "Found Interested"

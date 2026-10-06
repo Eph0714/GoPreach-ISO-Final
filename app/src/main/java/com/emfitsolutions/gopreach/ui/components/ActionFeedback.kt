@@ -1,6 +1,6 @@
 package com.emfitsolutions.gopreach.ui.components
 
-import android.widget.Toast
+import com.emfitsolutions.gopreach.platform.rememberToaster
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -21,7 +21,8 @@ import androidx.compose.ui.platform.LocalContext
 @Composable
 fun rememberActionToast(): (String) -> Unit {
     val context = LocalContext.current
+    val toast = rememberToaster()
     return remember(context) {
-        { message: String -> Toast.makeText(context, message, Toast.LENGTH_SHORT).show() }
+        { message: String -> toast(message) }
     }
 }

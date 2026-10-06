@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.sharelocation
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import android.Manifest
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -74,9 +77,6 @@ import com.emfitsolutions.gopreach.ui.components.FormDialog
 import com.emfitsolutions.gopreach.ui.components.openCoordinatesInMaps
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
 import com.emfitsolutions.gopreach.ui.components.requiredFieldsMessage
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import androidx.compose.ui.window.DialogProperties
 
 /** "Shared Location Module — List View and Map View... same design,

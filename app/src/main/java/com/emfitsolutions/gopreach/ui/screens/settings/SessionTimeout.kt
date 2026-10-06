@@ -1,7 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.settings
 
+import com.emfitsolutions.gopreach.platform.rememberToaster
 import android.os.SystemClock
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,7 +32,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
@@ -126,7 +125,7 @@ class SessionTimeoutViewModel(
 fun SessionTimeoutHost(viewModel: SessionTimeoutViewModel = koinViewModel()) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val signedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val toast = rememberToaster()
     val limitMillis = settings.sessionTimeoutMinutes.coerceAtLeast(AppSettings.MIN_SESSION_TIMEOUT_MINUTES) * 60_000L
     val active = signedIn && settings.sessionTimeoutEnabled
 
@@ -187,7 +186,7 @@ fun SessionTimeoutSettingScreen(
     var enabled by remember(settings.sessionTimeoutEnabled) { mutableStateOf(settings.sessionTimeoutEnabled) }
     var minutesText by remember(settings.sessionTimeoutMinutes) { mutableStateOf(settings.sessionTimeoutMinutes.toString()) }
     var message by remember { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
+    val toast = rememberToaster()
 
     val minutes = minutesText.toIntOrNull()
     val minutesValid = minutes != null &&
@@ -241,7 +240,7 @@ fun SessionTimeoutSettingScreen(
                         return@Button
                     }
                     viewModel.save(enabled, toSave, currentPersonId) { error ->
-                        if (error == null) Toast.makeText(context, "Session timeout setting saved.", Toast.LENGTH_SHORT).show()
+                        if (error == null) toast("Session timeout setting saved.")
                         else message = error
                     }
                 },

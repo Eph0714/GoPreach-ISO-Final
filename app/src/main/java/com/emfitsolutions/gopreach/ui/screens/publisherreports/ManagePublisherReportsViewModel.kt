@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.publisherreports
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.lifecycle.ViewModel
 import com.emfitsolutions.gopreach.data.model.displayName
 import androidx.lifecycle.viewModelScope
@@ -399,7 +402,7 @@ class ManagePublisherReportsViewModel(
     fun permanentlyDelete(report: MonthlyReport, actorPersonId: String) {
         viewModelScope.launch {
             val publisherName = personRepository.get(report.publisherPersonId)?.fullName.orEmpty()
-            val period = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(report.periodMonth))
+            val period = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date(report.periodMonth))
             val groupId = roleAssignmentRepository.observeForPerson(report.publisherPersonId).first().firstOrNull { it.groupId != null }?.groupId
             recycleBinRepository.moveToTrash(
                 recordType = "Monthly Report",

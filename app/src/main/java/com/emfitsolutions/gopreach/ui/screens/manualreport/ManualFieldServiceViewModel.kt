@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.manualreport
 
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Locale
+import com.emfitsolutions.gopreach.platform.Date
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.AdminRole
@@ -144,7 +147,7 @@ class ManualFieldServiceViewModel(
             targetType = "MonthlyReport",
             targetId = persisted.id,
             congregationId = scopeCongregationId,
-            details = publisher.person.fullName + " — " + java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(monthStart)),
+            details = publisher.person.fullName + " — " + SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date(monthStart)),
         )
         return null
     }
