@@ -186,7 +186,6 @@ import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.dsl.workerOf
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
@@ -195,7 +194,6 @@ import org.koin.dsl.module
 /** Koin graph (replaces Hilt). Repositories are singletons, ViewModels are created per screen. */
 val infraModule = module {
     // Platform / infrastructure
-    single<Context> { androidContext() }
     single { Gson() }
     // Long-lived scope for work that must outlive a single screen/ViewModel (e.g. mirroring a listener into the cache).
     single<CoroutineScope> { CoroutineScope(SupervisorJob() + Dispatchers.IO) }

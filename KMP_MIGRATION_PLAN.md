@@ -96,5 +96,5 @@ work to a first iOS TestFlight build, longer to match every screen.
   moved to `shared/commonMain` on Room KMP 2.7 (same tables, same schema v2, migration kept, so installed apps upgrade in place).
 * **Phase 2c (done):** every model is `@Serializable`; `DocJson` (kotlinx.serialization, Gson-compatible settings) + round-trip tests.
 * **Phase 3 (done):** Hilt replaced by Koin (`di/AppModule.kt`: 86 repositories/services, 86 ViewModels, workers via `KoinWorkerFactory`).
-  `KoinGraphTest` verifies every constructor dependency is provided. Not yet run on a phone (none connected).
+  `KoinGraphTest` verifies every constructor dependency is provided. Verified on the phone: launches, stays signed in, existing cached data intact, sync works.
 * **Next:** move `OfflineFirestoreRepository`/sync engine behind a `RemoteDocumentApi` interface (Firestore adapter on Android, Ktor/Hostinger on iOS), and swap Gson -> `DocJson` in the repositories.
