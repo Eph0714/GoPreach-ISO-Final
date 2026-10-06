@@ -88,4 +88,8 @@ work to a first iOS TestFlight build, longer to match every screen.
 * **Phase 1 started (done):** `:shared` Kotlin Multiplatform module added (Android + iosX64/iosArm64/iosSimulatorArm64; iOS
   targets compile on a Mac/CI only). `DrawingGeometry` (+14 tests) moved to `shared/commonMain`/`commonTest`, with Gson replaced
   by kotlinx.serialization. The app depends on `:shared` and still builds; all existing app tests pass.
-* **Next:** models + permissions (`DrawingPermissions`, `GroupAccessScope`, data models without the Firebase annotation).
+* **Phase 2a (done):** all 29 data models and the pure domain rules (`DrawingPermissions`, `GroupAccessScope`, `PermissionChecker`,
+  `NameOrder`, `PersonDuplicateDetection`, `CredentialGenerator`, Bible reference data) now live in `shared/commonMain`.
+  `@DocumentId` / `@PropertyName` are `expect`/`actual` (Firebase on Android, no-op on iOS); `platform/Time.kt` holds date helpers.
+  App builds; 28 shared tests + app tests pass.
+* **Next:** repository interfaces + sync engine (Room KMP), then Hilt -> Koin.
