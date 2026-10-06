@@ -48,9 +48,9 @@ private const val TAG = "ConnectivityObserver"
  * NetworkCallback registration per active collector instead of one for the
  * whole app) is a negligible cost next to actually being correct.
  */
-class ConnectivityObserver(
+class AndroidConnectivityObserver(
     private val context: Context,
-) {
+) : ConnectivityObserver {
     private fun connectivityManager() =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
@@ -63,7 +63,7 @@ class ConnectivityObserver(
      * every mandatory-connectivity-gate call site (SyncWorker, the manual
      * "Sync to Server" pre-flight check, SyncScheduler.triggerSyncIfOnline)
      * actually relies on. */
-    fun isOnline(): Boolean {
+    override fun isOnline(): Boolean {
         val cm = connectivityManager()
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
@@ -120,7 +120,7 @@ class ConnectivityObserver(
      * layer deliberately avoids (see SyncWorker); the callback path still
      * makes most real transitions feel instant, the poll is only the
      * worst-case, guaranteed catch-up. */
-    fun observe(): Flow<Boolean> = merge(
+    override fun observe(): Flow<Boolean> = merge(
         callbackUpdates(),
         flow {
             while (true) {

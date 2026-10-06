@@ -1,7 +1,7 @@
 package com.emfitsolutions.gopreach.ui.components
 
 import com.emfitsolutions.gopreach.domain.TimeBounds
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 /** Which quick-select is currently active — [CUSTOM] once the user has
  * manually changed either the Start or End date away from what a preset
@@ -77,7 +77,6 @@ data class DateRange(
         fun thisWeek(): DateRange {
             val start = Calendar.getInstance().apply {
                 startOfDay()
-                firstDayOfWeek = Calendar.MONDAY
                 val currentDow = get(Calendar.DAY_OF_WEEK)
                 // DAY_OF_WEEK is 1=Sunday..7=Saturday regardless of firstDayOfWeek;
                 // compute how many days to step back to reach this week's Monday.

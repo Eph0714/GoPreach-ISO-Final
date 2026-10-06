@@ -65,6 +65,7 @@ import com.emfitsolutions.gopreach.data.repository.UserAccessGrantRepository
 import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import com.emfitsolutions.gopreach.data.repository.WeeklyPlannerGoalRepository
 import com.emfitsolutions.gopreach.data.repository.YearlyPlannerGoalRepository
+import com.emfitsolutions.gopreach.data.sync.AndroidConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.DataRefresher
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
@@ -187,6 +188,7 @@ import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import org.koin.android.ext.koin.androidContext
 import org.koin.androidx.workmanager.dsl.workerOf
 import com.emfitsolutions.gopreach.data.remote.HttpSyncApi
 import com.emfitsolutions.gopreach.data.remote.SyncApi
@@ -311,7 +313,7 @@ val appModule = module {
     singleOf(::VisitRepository)
     singleOf(::WeeklyPlannerGoalRepository)
     singleOf(::YearlyPlannerGoalRepository)
-    singleOf(::ConnectivityObserver)
+    single<ConnectivityObserver> { AndroidConnectivityObserver(androidContext()) }
     singleOf(::DataRefresher)
     singleOf(::OfflineFirestoreRepository)
     singleOf(::PresenceHeartbeat)
