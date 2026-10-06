@@ -25,7 +25,11 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      # Cache disabled on the iOS job: a Gradle cache restored from an older Kotlin version left the Kotlin/Native
+      # compiler unresolvable (ClassNotFoundException: org.jetbrains.kotlin.cli.utilities.MainKt).
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
 
       # Gradle also configures the Android modules, so it needs to know where the Android SDK is (preinstalled on the runner).
       - name: Point Gradle at the Android SDK
