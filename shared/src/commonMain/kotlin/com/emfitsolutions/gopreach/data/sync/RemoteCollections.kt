@@ -26,6 +26,27 @@ interface RemoteCollections {
     /** Writes one document to the server right now (the rare write that cannot wait for the next sync). Throws if it fails. */
     suspend fun pushNow(collectionPath: String, documentId: String, data: Any)
 
+    /** Deletes one document on the server right now. Throws if it fails. */
+    suspend fun deleteNow(collectionPath: String, documentId: String)
+
+    /** True if [collectionPath] has at least one document on the SERVER (not the local cache). */
+    suspend fun hasAny(collectionPath: String): Boolean
+
+    /** Number of documents (capped at [limit]) in [collectionPath] whose [field] equals [value], counted on the SERVER. */
+    suspend fun countWhere(collectionPath: String, field: String, value: String, limit: Int = 1): Int
+
+    /**
+     * Like [mirror], for a *collection group* (every subcollection called [groupId], e.g. "visits" under every interested person).
+     * Each downloaded document is cached under [pathOf] its model, since the group spans many parent paths.
+     */
+    fun <T : Any> mirrorGroup(
+        groupId: String,
+        kClass: KClass<T>,
+        equalTo: Pair<String, String>? = null,
+        pathOf: (T) -> String,
+        idOf: (T) -> String,
+    ): Flow<Unit>
+
     /** One request/response pull of [collectionPath] into the cache (the fallback when a live feed cannot be sustained). */
     suspend fun <T : Any> pullOnce(
         collectionPath: String,

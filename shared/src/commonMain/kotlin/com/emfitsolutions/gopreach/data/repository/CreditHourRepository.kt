@@ -3,16 +3,12 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.model.CreditHourCategory
 import com.emfitsolutions.gopreach.data.model.CreditHourRecord
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.data.sync.pullFirestoreCollectionOnce
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Source
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.platform.nowMillis
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.tasks.await
 
 private const val CATEGORIES_COLLECTION = "creditHourCategories"
 private const val RECORDS_COLLECTION = "creditHourRecords"
@@ -23,8 +19,7 @@ private const val RECORDS_COLLECTION = "creditHourRecords"
  * every name/status is whatever an admin made it. */
 class CreditHourCategoryRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeActive(): Flow<List<CreditHourCategory>> =
         observeAll().map { list -> list.filter { it.active } }
@@ -33,8 +28,8 @@ class CreditHourCategoryRepository(
         offline.observeCollection<CreditHourCategory>(CATEGORIES_COLLECTION).map { list -> list.sortedBy { it.name.lowercase() } }
 
     suspend fun save(category: CreditHourCategory): CreditHourCategory {
-        val id = category.id.ifBlank { firestore.collection(CATEGORIES_COLLECTION).document().id }
-        val now = System.currentTimeMillis()
+        val id = category.id.ifBlank { remote.newId(CATEGORIES_COLLECTION) }
+        val now = nowMillis()
         val withId = category.copy(id = id, createdAt = category.createdAt.takeIf { it > 0L } ?: now, updatedAt = now)
         offline.save(CATEGORIES_COLLECTION, id, withId)
         return withId
@@ -47,17 +42,12 @@ class CreditHourCategoryRepository(
      * own user's entries, so it can't answer this. Throws when the server
      * can't be reached; callers must treat that as "possibly in use". */
     suspend fun countRecordsUsing(categoryId: String): Int =
-        firestore.collection(RECORDS_COLLECTION)
-            .whereEqualTo("categoryId", categoryId)
-            .limit(1)
-            .get(Source.SERVER)
-            .await()
-            .size()
+        remote.countWhere(RECORDS_COLLECTION, "categoryId", categoryId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, CATEGORIES_COLLECTION, CreditHourCategory::class.java) { it.id }
+        remote.mirror(CATEGORIES_COLLECTION, CreditHourCategory::class) { it.id }
 
-    suspend fun pullOnce() = pullFirestoreCollectionOnce(firestore, offline, CATEGORIES_COLLECTION, CreditHourCategory::class.java) { it.id }
+    suspend fun pullOnce() = remote.pullOnce(CATEGORIES_COLLECTION, CreditHourCategory::class) { it.id }
 
     private val seedLock = Mutex()
     private var seedChecked = false
@@ -69,13 +59,10 @@ class CreditHourCategoryRepository(
     suspend fun ensureDefaultCategories() = seedLock.withLock {
         if (seedChecked) return@withLock
         runCatching {
-            val existing = firestore.collection(CATEGORIES_COLLECTION).limit(1).get(Source.SERVER).await()
-            if (existing.isEmpty) {
-                val now = System.currentTimeMillis()
+            if (!remote.hasAny(CATEGORIES_COLLECTION)) {
+                val now = nowMillis()
                 DEFAULT_CATEGORIES.forEach { (id, name) ->
-                    firestore.collection(CATEGORIES_COLLECTION).document(id)
-                        .set(CreditHourCategory(name = name, active = true, createdAt = now, updatedAt = now))
-                        .await()
+                    remote.pushNow(CATEGORIES_COLLECTION, id, CreditHourCategory(name = name, active = true, createdAt = now, updatedAt = now))
                 }
             }
             seedChecked = true
@@ -103,8 +90,7 @@ class CreditHourCategoryRepository(
  * text), so renaming or deactivating a category never breaks history. */
 class CreditHourRecordRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<CreditHourRecord>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
@@ -115,7 +101,7 @@ class CreditHourRecordRepository(
     fun observeAll(): Flow<List<CreditHourRecord>> = offline.observeCollection(RECORDS_COLLECTION)
 
     suspend fun save(record: CreditHourRecord): CreditHourRecord {
-        val id = record.id.ifBlank { firestore.collection(RECORDS_COLLECTION).document().id }
+        val id = record.id.ifBlank { remote.newId(RECORDS_COLLECTION) }
         val withId = record.copy(id = id)
         offline.save(RECORDS_COLLECTION, id, withId)
         return withId
@@ -124,13 +110,7 @@ class CreditHourRecordRepository(
     suspend fun delete(recordId: String) = offline.delete(RECORDS_COLLECTION, recordId)
 
     fun startRemoteSync(publisherPersonId: String): Flow<Unit> =
-        mirrorFirestoreCollection(
-            firestore, offline, appScope, RECORDS_COLLECTION, CreditHourRecord::class.java,
-            query = firestore.collection(RECORDS_COLLECTION).whereEqualTo("publisherPersonId", publisherPersonId),
-        ) { it.id }
+        remote.mirror(RECORDS_COLLECTION, CreditHourRecord::class, equalTo = "publisherPersonId" to publisherPersonId) { it.id }
 
-    suspend fun pullOnce(publisherPersonId: String) = pullFirestoreCollectionOnce(
-        firestore, offline, RECORDS_COLLECTION, CreditHourRecord::class.java,
-        query = firestore.collection(RECORDS_COLLECTION).whereEqualTo("publisherPersonId", publisherPersonId),
-    ) { it.id }
+    suspend fun pullOnce(publisherPersonId: String) = remote.pullOnce(RECORDS_COLLECTION, CreditHourRecord::class, equalTo = "publisherPersonId" to publisherPersonId) { it.id }
 }

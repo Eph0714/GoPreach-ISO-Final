@@ -4,12 +4,16 @@ import com.emfitsolutions.gopreach.data.model.AppSettings
 import com.emfitsolutions.gopreach.data.model.DeletedRecord
 import com.emfitsolutions.gopreach.data.model.TrashItem
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.gson.Gson
-import com.google.gson.JsonObject
-import com.google.gson.reflect.TypeToken
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.platform.nowMillis
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
+import com.emfitsolutions.gopreach.data.json.DocJson
+import com.emfitsolutions.gopreach.data.json.encode
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
@@ -34,23 +38,21 @@ sealed interface RestoreResult {
  */
 class RecycleBinRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val gson: Gson,
+    private val remote: RemoteCollections,
     private val personRepository: PersonRepository,
     private val auditLogRepository: AuditLogRepository,
-    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<DeletedRecord>> = offline.observeCollection(COLLECTION)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, DeletedRecord::class.java) { it.id }
+        remote.mirror(COLLECTION, DeletedRecord::class) { it.id }
 
     /** A [TrashItem] for [data] as it is stored right now at [collectionPath]/[documentId]. */
-    fun item(collectionPath: String, documentId: String, data: Any) = TrashItem(collectionPath, documentId, gson.toJson(data))
+    inline fun <reified T : Any> item(collectionPath: String, documentId: String, data: T) = TrashItem(collectionPath, documentId, DocJson.encode(data))
 
     /** A cleared relationship: put [field] back to the value it has in [data] on restore, only if it is still empty. */
-    fun relationshipItem(collectionPath: String, documentId: String, data: Any, field: String) =
-        TrashItem(collectionPath, documentId, gson.toJson(data), onlyIfFieldNull = field)
+    inline fun <reified T : Any> relationshipItem(collectionPath: String, documentId: String, data: T, field: String) =
+        TrashItem(collectionPath, documentId, DocJson.encode(data), onlyIfFieldNull = field)
 
     /**
      * Records the deletion. The caller still removes the live documents through its own repositories, exactly
@@ -70,7 +72,7 @@ class RecycleBinRepository(
         items: List<TrashItem>,
     ): String {
         val actorName = deletedByName.ifBlank { runCatching { personRepository.get(deletedByPersonId)?.fullName }.getOrNull().orEmpty() }
-        val id = firestore.collection(COLLECTION).document().id
+        val id = remote.newId(COLLECTION)
         offline.save(
             COLLECTION,
             id,
@@ -84,10 +86,10 @@ class RecycleBinRepository(
                 groupName = groupName,
                 originalCreatedAt = originalCreatedAt?.takeIf { it > 0 },
                 originalModifiedAt = originalModifiedAt?.takeIf { it > 0 },
-                deletedAt = System.currentTimeMillis(),
+                deletedAt = nowMillis(),
                 deletedByPersonId = deletedByPersonId,
                 deletedByName = actorName,
-                itemsJson = gson.toJson(items),
+                itemsJson = DocJson.encodeToString(ListSerializer(TrashItem.serializer()), items),
             ),
         )
         auditLogRepository.log(
@@ -102,7 +104,7 @@ class RecycleBinRepository(
     }
 
     private fun itemsOf(record: DeletedRecord): List<TrashItem> =
-        runCatching { gson.fromJson<List<TrashItem>>(record.itemsJson, object : TypeToken<List<TrashItem>>() {}.type) }.getOrNull().orEmpty()
+        runCatching { DocJson.decodeFromString(ListSerializer(TrashItem.serializer()), record.itemsJson) }.getOrNull().orEmpty()
 
     /**
      * Puts the whole original record back, with its original ids. Checked first, and nothing is written if
@@ -124,7 +126,7 @@ class RecycleBinRepository(
                 return RestoreResult.Conflict("An active record with the same ID already exists, so \"${record.label}\" can't be restored over it. Review or remove that record first.")
             }
             if (item.collectionPath == "people") {
-                val username = runCatching { gson.fromJson(item.json, JsonObject::class.java).get("username")?.asString }.getOrNull().orEmpty()
+                val username = runCatching { DocJson.parseToJsonElement(item.json).jsonObject["username"]?.jsonPrimitive?.contentOrNull }.getOrNull().orEmpty()
                 val clash = people.firstOrNull { it.id != item.documentId && username.isNotBlank() && it.username.equals(username, ignoreCase = true) }
                 if (clash != null) {
                     return RestoreResult.Conflict("The username \"$username\" is now used by ${clash.fullName}, so \"${record.label}\" can't be restored. Change that account's username first, then restore.")
@@ -141,11 +143,11 @@ class RecycleBinRepository(
                 }
                 // A relationship cleared by the deletion: restore it only if it hasn't been set again since.
                 val current = offline.get<JsonObject>(item.collectionPath, item.documentId) ?: continue
-                val value = gson.fromJson(item.json, JsonObject::class.java).get(field)
-                val currentValue = current.get(field)
-                if ((currentValue == null || currentValue.isJsonNull) && value != null && !value.isJsonNull) {
-                    current.add(field, value)
-                    offline.saveRawJson(item.collectionPath, item.documentId, gson.toJson(current))
+                val value = DocJson.parseToJsonElement(item.json).jsonObject[field]
+                val currentValue = current[field]
+                if ((currentValue == null || currentValue is JsonNull) && value != null && value !is JsonNull) {
+                    val merged = JsonObject(current + (field to value))
+                    offline.saveRawJson(item.collectionPath, item.documentId, DocJson.encodeToString(JsonObject.serializer(), merged))
                 }
             }
             offline.delete(COLLECTION, record.id)
@@ -179,7 +181,7 @@ class RecycleBinRepository(
      * setting is on, and never touches an entry before its calculated date (deleted time + retention days).
      * Each entry is re-checked against the current data first, so one restored or purged elsewhere is skipped.
      */
-    suspend fun purgeExpired(settings: AppSettings, candidates: List<DeletedRecord>, actorPersonId: String, now: Long = System.currentTimeMillis()): Int {
+    suspend fun purgeExpired(settings: AppSettings, candidates: List<DeletedRecord>, actorPersonId: String, now: Long = nowMillis()): Int {
         if (!settings.trashAutoDeleteEnabled) return 0
         var purged = 0
         for (record in candidates) {

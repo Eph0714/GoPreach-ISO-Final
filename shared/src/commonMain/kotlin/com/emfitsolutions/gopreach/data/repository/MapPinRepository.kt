@@ -1,13 +1,11 @@
 package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.MapPin
-import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
+import com.emfitsolutions.gopreach.data.sync.NetworkStatus
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.platform.nowMillis
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 
 private const val COLLECTION = "mapPins"
@@ -30,18 +28,17 @@ sealed class MapPinResult {
  */
 class MapPinRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val connectivityObserver: ConnectivityObserver,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
+    private val network: NetworkStatus,
 ) {
     fun observeAll(): Flow<List<MapPin>> = offline.observeCollection(COLLECTION)
 
     suspend fun create(pin: MapPin): MapPinResult {
-        if (!connectivityObserver.isOnline()) return MapPinResult.Offline
-        val id = firestore.collection(COLLECTION).document().id
-        val saved = pin.copy(id = id, createdAt = System.currentTimeMillis())
+        if (!network.isOnline()) return MapPinResult.Offline
+        val id = remote.newId(COLLECTION)
+        val saved = pin.copy(id = id, createdAt = nowMillis())
         return try {
-            withTimeout(SAVE_TIMEOUT_MS) { firestore.collection(COLLECTION).document(id).set(saved).await() }
+            withTimeout(SAVE_TIMEOUT_MS) { remote.pushNow(COLLECTION, id, saved) }
             offline.cacheFromServer(COLLECTION, id, saved)
             MapPinResult.Success
         } catch (e: Exception) {
@@ -50,9 +47,9 @@ class MapPinRepository(
     }
 
     suspend fun delete(pinId: String): MapPinResult {
-        if (!connectivityObserver.isOnline()) return MapPinResult.Offline
+        if (!network.isOnline()) return MapPinResult.Offline
         return try {
-            withTimeout(SAVE_TIMEOUT_MS) { firestore.collection(COLLECTION).document(pinId).delete().await() }
+            withTimeout(SAVE_TIMEOUT_MS) { remote.deleteNow(COLLECTION, pinId) }
             offline.deleteFromServer(COLLECTION, pinId)
             MapPinResult.Success
         } catch (e: Exception) {
@@ -61,5 +58,5 @@ class MapPinRepository(
     }
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, MapPin::class.java) { it.id }
+        remote.mirror(COLLECTION, MapPin::class) { it.id }
 }

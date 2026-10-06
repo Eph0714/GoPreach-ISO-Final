@@ -1,28 +1,18 @@
 package com.emfitsolutions.gopreach.data.repository
 
-import android.util.Log
 import com.emfitsolutions.gopreach.data.model.Visit
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.DocumentChange
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.awaitClose
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.launch
 
-private const val TAG = "VisitRepository"
 
 private fun visitsPath(interestedPersonId: String) = "interestedPeople/$interestedPersonId/visits"
 
 /** Spec §6.3 — one or more preaching visits per [com.emfitsolutions.gopreach.data.model.InterestedPerson]. */
 class VisitRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeForInterestedPerson(interestedPersonId: String): Flow<List<Visit>> =
         offline.observeCollection(visitsPath(interestedPersonId))
@@ -31,7 +21,7 @@ class VisitRepository(
      * so the live listener is started per interested person on demand (e.g. when
      * opening their detail screen) rather than once app-wide. */
     fun startRemoteSync(interestedPersonId: String): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, visitsPath(interestedPersonId), Visit::class.java) { it.id }
+        remote.mirror(visitsPath(interestedPersonId), Visit::class) { it.id }
 
     /** "Pioneer – My Return Visits" spec §8/§10 — every Visit across *every*
      * Interested Person belonging to [publisherPersonId], not just whichever
@@ -66,46 +56,21 @@ class VisitRepository(
      * project, Firestore's error will include a direct link to create that
      * index in the Console; that's a one-time setup step, not a bug. */
     fun startRemoteSyncForPublisher(publisherPersonId: String): Flow<Unit> =
-        mirrorVisitsCollectionGroup(firestore.collectionGroup("visits").whereEqualTo("publisherPersonId", publisherPersonId))
+        mirrorVisitsCollectionGroup("publisherPersonId" to publisherPersonId)
 
     /** "Consolidated Monthly Report" spec — a Service Overseer/Coordinator
      * Elder/Admin/Super-Admin needs every publisher's Visits in their scope
      * at once, not just one publisher's; unfiltered collection-group query,
      * started only while that report screen is open (see
      * ConsolidatedReportViewModel), not app-wide at every login. */
-    fun startRemoteSyncAllForCongregationView(): Flow<Unit> = mirrorVisitsCollectionGroup(firestore.collectionGroup("visits"))
+    fun startRemoteSyncAllForCongregationView(): Flow<Unit> = mirrorVisitsCollectionGroup(null)
 
-    private fun mirrorVisitsCollectionGroup(query: Query): Flow<Unit> = callbackFlow {
-        val registration = query.addSnapshotListener { snapshot, error ->
-            if (error != null || snapshot == null) {
-                if (error != null) Log.w(TAG, "Collection-group listener for visits failed: ${error.message}")
-                return@addSnapshotListener
-            }
-            appScope.launch {
-                for (change in snapshot.documentChanges) {
-                    try {
-                        val visit = change.document.toObject(Visit::class.java)
-                        val path = visitsPath(visit.interestedPersonId)
-                        when (change.type) {
-                            DocumentChange.Type.REMOVED -> offline.deleteFromServer(path, visit.id)
-                            else -> offline.cacheFromServer(path, visit.id, visit)
-                        }
-                    } catch (e: Exception) {
-                        // Same defensive containment as FirestoreMirror's —
-                        // one malformed document must never take the whole
-                        // listener (or the app) down with it.
-                        Log.e(TAG, "Skipping malformed visit document ${change.document.id}", e)
-                    }
-                }
-            }
-            trySend(Unit)
-        }
-        awaitClose { registration.remove() }
-    }
+    private fun mirrorVisitsCollectionGroup(equalTo: Pair<String, String>?): Flow<Unit> =
+        remote.mirrorGroup("visits", Visit::class, equalTo, pathOf = { visitsPath(it.interestedPersonId) }, idOf = { it.id })
 
     suspend fun save(visit: Visit): Visit {
         val path = visitsPath(visit.interestedPersonId)
-        val id = visit.id.ifBlank { firestore.collection(path).document().id }
+        val id = visit.id.ifBlank { remote.newId(path) }
         val withId = visit.copy(id = id)
         offline.save(path, id, withId)
         return withId

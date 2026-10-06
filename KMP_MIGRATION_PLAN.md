@@ -111,4 +111,6 @@ work to a first iOS TestFlight build, longer to match every screen.
 * **Phase 8 (done):** `saveNow` (`RemoteCollections.pushNow`), `NetworkStatus`, `RemoteFiles` (Storage; Uri -> String) abstractions; `TimeBounds` (Day/Week/Month/Year) rewritten on kotlinx-datetime with tests.
   Moved to shared: Person, RoleAssignment, MonthlyReport, SharedLocation, PlannerDay, TerritoryDrawing, Announcement, AppSettings (27 repositories total in `shared`).
   Still in the app: Auth, Visit, MapPin, CreditHour, GroupChat, Backup, RecycleBin, TerritoryAssignment (direct Firestore calls / transactions / Gson / logging).
-* **Next:** get the Hostinger API live, test the switch on the phone; move the last 8 repositories; then ViewModels and UI to common.
+* **Phase 9 (done):** Visit (collection-group mirror), MapPin, CreditHour (x2), Backup and RecycleBin moved to `shared` (Gson -> kotlinx). `RemoteCollections` gained `deleteNow`, `hasAny`, `countWhere`, `mirrorGroup`. 32 repositories now shared.
+  Deliberately left in the app, each needs a server-side design rather than a mechanical move: **TerritoryAssignment** (atomic barangay-claim transactions -> needs a backend "claim" endpoint), **GroupChat** (realtime chat, batched writes, atomic counters), **Auth** (Firebase Auth), plus Android-only stores/preferences.
+* **Next:** get the Hostinger API live, test the switch on the phone; then ViewModels and UI to common.
