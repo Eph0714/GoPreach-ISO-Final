@@ -6,13 +6,13 @@ import com.emfitsolutions.gopreach.data.model.PipelineStage
 
 /** "House Holder Assignment" module — spec's own exact record-type labels
  * (never the pipeline's internal "Searching"). */
-internal fun PipelineStage.assignmentLabel(): String = when (this) {
+fun PipelineStage.assignmentLabel(): String = when (this) {
     PipelineStage.SEARCHING -> "Interested Person"
     PipelineStage.RETURN_VISIT -> "Return Visit"
     PipelineStage.BIBLE_STUDY -> "Bible Study"
 }
 
-internal fun HouseholderAssignmentStatus.label(): String = when (this) {
+fun HouseholderAssignmentStatus.label(): String = when (this) {
     HouseholderAssignmentStatus.PENDING -> "Pending"
     HouseholderAssignmentStatus.ACCEPTED -> "Accepted"
     HouseholderAssignmentStatus.REJECTED -> "Rejected"
@@ -28,7 +28,7 @@ internal fun HouseholderAssignmentStatus.label(): String = when (this) {
 // "View Other Publishers' Schedules" link) so a Publisher can see this same
 // summary for fellow publishers in their congregation, not just a Service
 // Overseer/Admin picking who to assign a record to.
-internal fun availabilitySummary(publisher: Person): String {
+fun availabilitySummary(publisher: Person): String {
     val days = publisher.preachingAvailableDays
         .mapNotNull { runCatching { com.emfitsolutions.gopreach.data.model.PreachingDay.valueOf(it) }.getOrNull() }
         .sortedBy { it.ordinal }

@@ -21,6 +21,11 @@ kotlin {
         commonMain.dependencies {
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
             api("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
+            api("io.insert-koin:koin-core:4.0.4")
+            api("io.insert-koin:koin-compose:4.0.4")
+            api("io.insert-koin:koin-compose-viewmodel:4.0.4")
+            api("org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose:2.8.2")
+            api("org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose:2.8.2")
             api(compose.runtime)
             api(compose.foundation)
             api(compose.material3)

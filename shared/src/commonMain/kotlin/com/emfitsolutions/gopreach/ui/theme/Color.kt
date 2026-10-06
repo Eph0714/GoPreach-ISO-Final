@@ -79,7 +79,7 @@ fun generateSwatch(seed: Color): ThemeColorSwatch {
 }
 
 /** Hue (0..360) and saturation (0..1) of [c], the same values `android.graphics.Color.colorToHSV` reports. */
-internal fun hueAndSaturation(c: Color): Pair<Float, Float> {
+fun hueAndSaturation(c: Color): Pair<Float, Float> {
     val r = c.red
     val g = c.green
     val b = c.blue
