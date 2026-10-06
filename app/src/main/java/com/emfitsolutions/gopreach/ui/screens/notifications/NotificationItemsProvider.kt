@@ -27,8 +27,6 @@ import kotlinx.coroutines.flow.combine
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private data class AdminBundle(
     val forwards: List<ForwardRequest>,
@@ -53,8 +51,7 @@ private data class AdminBundle(
  * delegates to this class; its own public API (used by every screen already)
  * is unchanged.
  */
-@Singleton
-class NotificationItemsProvider @Inject constructor(
+class NotificationItemsProvider(
     private val forwardRequestRepository: ForwardRequestRepository,
     private val publisherForwardRequestRepository: PublisherForwardRequestRepository,
     private val monthlyReportRepository: MonthlyReportRepository,

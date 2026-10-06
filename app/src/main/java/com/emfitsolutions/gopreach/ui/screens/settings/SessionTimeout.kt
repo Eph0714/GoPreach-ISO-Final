@@ -38,7 +38,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
@@ -51,7 +51,6 @@ import com.emfitsolutions.gopreach.data.repository.AuthRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.domain.PermissionChecker
 import com.emfitsolutions.gopreach.domain.UserSession
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -59,14 +58,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** When the user last touched the app, on the monotonic clock (which keeps
  * counting while the device sleeps, unlike uptime). Fed by
  * `MainActivity.onUserInteraction()`. */
-@Singleton
-class InactivityTracker @Inject constructor() {
+class InactivityTracker() {
     @Volatile
     private var lastInteraction: Long = SystemClock.elapsedRealtime()
 
@@ -88,8 +84,7 @@ val SESSION_TIMEOUT_MANAGER_ROLES: Set<AdminRole> = setOf(
     AdminRole.SECRETARY,
 )
 
-@HiltViewModel
-class SessionTimeoutViewModel @Inject constructor(
+class SessionTimeoutViewModel(
     private val appSettingsRepository: AppSettingsRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val authRepository: AuthRepository,
@@ -128,7 +123,7 @@ class SessionTimeoutViewModel @Inject constructor(
  * handles "left the app in the background" (a coroutine delay doesn't tick
  * while the device sleeps, the monotonic clock does). */
 @Composable
-fun SessionTimeoutHost(viewModel: SessionTimeoutViewModel = hiltViewModel()) {
+fun SessionTimeoutHost(viewModel: SessionTimeoutViewModel = koinViewModel()) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val signedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -186,7 +181,7 @@ fun SessionTimeoutHost(viewModel: SessionTimeoutViewModel = hiltViewModel()) {
 fun SessionTimeoutSettingScreen(
     currentPersonId: String,
     onBack: () -> Unit,
-    viewModel: SessionTimeoutViewModel = hiltViewModel(),
+    viewModel: SessionTimeoutViewModel = koinViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var enabled by remember(settings.sessionTimeoutEnabled) { mutableStateOf(settings.sessionTimeoutEnabled) }

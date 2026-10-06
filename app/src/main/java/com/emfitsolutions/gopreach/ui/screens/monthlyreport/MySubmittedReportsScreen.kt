@@ -30,7 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.MonthlyReport
@@ -54,7 +54,7 @@ import java.util.Locale
 fun MySubmittedReportsScreen(
     publisherPersonId: String,
     onBack: () -> Unit,
-    viewModel: MySubmittedReportsViewModel = hiltViewModel(),
+    viewModel: MySubmittedReportsViewModel = koinViewModel(),
 ) {
     val reportsFlow = remember(publisherPersonId, viewModel) { viewModel.reportsFor(publisherPersonId) }
     val reports by reportsFlow.collectAsStateWithLifecycle(initialValue = emptyList())

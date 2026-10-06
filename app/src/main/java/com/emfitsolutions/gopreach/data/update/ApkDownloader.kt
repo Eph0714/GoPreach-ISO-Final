@@ -1,7 +1,6 @@
 package com.emfitsolutions.gopreach.data.update
 
 import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
@@ -10,8 +9,6 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import javax.inject.Inject
-import javax.inject.Singleton
 
 sealed class DownloadEvent {
     data class Progress(val percent: Int) : DownloadEvent()
@@ -24,9 +21,8 @@ sealed class DownloadEvent {
  * app-private-but-FileProvider-shareable on modern Android) rather than the
  * public Downloads folder, so the user never has to go find it themselves.
  */
-@Singleton
-class ApkDownloader @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ApkDownloader(
+    private val context: Context,
 ) {
     private val updatesDir: File
         get() = File(context.getExternalFilesDir(null), "updates").apply { mkdirs() }

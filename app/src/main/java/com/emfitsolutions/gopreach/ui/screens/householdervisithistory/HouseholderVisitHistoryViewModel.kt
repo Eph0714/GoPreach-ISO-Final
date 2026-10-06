@@ -11,7 +11,6 @@ import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.InterestedPersonRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.VisitRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +18,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** "Record Type" filter — spec's exact three categories plus "All", backed by
  * the existing [PipelineStage] a householder already sits at (no new field). */
@@ -115,8 +113,7 @@ data class HouseholderVisitHistoryUiState(
  * exactly that one congregation and nothing else; the UI never exposes a way
  * to escape whichever of the two the caller passed in.
  */
-@HiltViewModel
-class HouseholderVisitHistoryViewModel @Inject constructor(
+class HouseholderVisitHistoryViewModel(
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,
     private val personRepository: PersonRepository,

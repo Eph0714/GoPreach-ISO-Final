@@ -48,7 +48,7 @@ import com.emfitsolutions.gopreach.ui.components.ComparativeGraphReport
 import com.emfitsolutions.gopreach.ui.components.comparativeGraphHtml
 import com.emfitsolutions.gopreach.ui.components.MonthRange
 import kotlinx.coroutines.flow.map
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.ui.screens.territoryassignments.SimpleDropdown
 import kotlinx.coroutines.flow.emptyFlow
@@ -91,7 +91,7 @@ fun FieldServiceReportScreen(
     onBack: () -> Unit,
     /** Whether this role may Lock / Unlock publisher reports in the List View. */
     canManageLocks: Boolean = false,
-    viewModel: FieldServiceReportViewModel = hiltViewModel(),
+    viewModel: FieldServiceReportViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
     val congregations by viewModel.congregations.collectAsStateWithLifecycle(initialValue = emptyList())

@@ -39,7 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.PreachingDay
 
@@ -91,7 +91,7 @@ fun AccountSettingsScreen(
     // PublisherSchedulesScreen; null (default) hides the link entirely,
     // same pattern as isPublisher gating the section above it.
     onViewPublisherSchedules: (() -> Unit)? = null,
-    viewModel: AccountSettingsViewModel = hiltViewModel(),
+    viewModel: AccountSettingsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 

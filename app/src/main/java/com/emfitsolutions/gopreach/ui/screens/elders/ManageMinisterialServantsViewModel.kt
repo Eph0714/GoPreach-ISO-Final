@@ -14,7 +14,6 @@ import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +22,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** "MINISTERIAL ACCOUNT" spec — "CRUD Ministerial Servant," reachable by
  * Super-Admin/Admin/Coordinator Elder. Reuses [ElderRow] (from
@@ -31,8 +29,7 @@ import javax.inject.Inject
  * congregation the same way Coordinator Elders/Service Overseers already
  * are — unlike Service Overseer, multiple active rows per congregation are
  * expected, not an anomaly. */
-@HiltViewModel
-class ManageMinisterialServantsViewModel @Inject constructor(
+class ManageMinisterialServantsViewModel(
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val congregationRepository: CongregationRepository,

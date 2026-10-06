@@ -5,21 +5,17 @@ import com.emfitsolutions.gopreach.data.model.MidweekMeetingSchedule
 import com.emfitsolutions.gopreach.data.model.PublicTalkScheduleRow
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val MIDWEEK_COLLECTION = "midweekMeetingSchedules"
 
 /** "Meeting Assignments" module — Midweek Meeting Schedule half. */
-@Singleton
-class MidweekMeetingScheduleRepository @Inject constructor(
+class MidweekMeetingScheduleRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<MidweekMeetingSchedule>> = offline.observeCollection(MIDWEEK_COLLECTION)
 
@@ -38,11 +34,10 @@ private const val PUBLIC_TALK_COLLECTION = "publicTalkSchedules"
 
 /** "Meeting Assignments" module — Public Talk and Watchtower Study Schedule
  * half. */
-@Singleton
-class PublicTalkScheduleRepository @Inject constructor(
+class PublicTalkScheduleRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<PublicTalkScheduleRow>> = offline.observeCollection(PUBLIC_TALK_COLLECTION)
 
@@ -66,11 +61,10 @@ private const val CART_ASSIGNMENT_COLLECTION = "cartAssignments"
  * [CartAssignmentRow]'s own doc comment). Same shape as [PublicTalkScheduleRepository],
  * minus the duplicate-date rule, which lives in the ViewModel layer, not
  * here, for both of these row types. */
-@Singleton
-class CartAssignmentRepository @Inject constructor(
+class CartAssignmentRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<CartAssignmentRow>> = offline.observeCollection(CART_ASSIGNMENT_COLLECTION)
 

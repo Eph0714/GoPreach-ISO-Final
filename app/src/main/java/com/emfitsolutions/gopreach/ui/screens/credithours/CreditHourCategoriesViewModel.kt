@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.CreditHourCategory
 import com.emfitsolutions.gopreach.data.repository.CreditHourCategoryRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,7 +13,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** What happened when an admin asked to delete a category. */
 sealed interface CategoryDeleteCheck {
@@ -29,8 +27,7 @@ sealed interface CategoryDeleteCheck {
 /** Credit Hour Categories CRUD for Super-Admin / Admin (the route itself is
  * role-gated in the nav graph; Publishers only ever *read* this list from
  * the Credit Hours form). */
-@HiltViewModel
-class CreditHourCategoriesViewModel @Inject constructor(
+class CreditHourCategoriesViewModel(
     private val repository: CreditHourCategoryRepository,
 ) : ViewModel() {
 

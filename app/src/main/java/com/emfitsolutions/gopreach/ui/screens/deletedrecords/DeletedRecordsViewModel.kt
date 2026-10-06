@@ -9,7 +9,6 @@ import com.emfitsolutions.gopreach.data.repository.AppSettingsRepository
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.RecycleBinRepository
 import com.emfitsolutions.gopreach.data.repository.RestoreResult
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +17,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Who is looking at Deleted Records, resolved once by the nav graph from the session's own role (the app's role
@@ -38,8 +36,7 @@ data class DeletedRecordsAccess(
             (manageableCongregationId != null && record.congregationId == manageableCongregationId)
 }
 
-@HiltViewModel
-class DeletedRecordsViewModel @Inject constructor(
+class DeletedRecordsViewModel(
     private val recycleBinRepository: RecycleBinRepository,
     private val appSettingsRepository: AppSettingsRepository,
     congregationRepository: CongregationRepository,

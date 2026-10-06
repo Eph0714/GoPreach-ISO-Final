@@ -43,7 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.export.CsvExporter
 import com.emfitsolutions.gopreach.data.model.InterestedPerson
@@ -125,8 +125,8 @@ fun HouseholderVisitHistoryScreen(
     congregationId: String?,
     currentPersonId: String,
     onBack: () -> Unit,
-    viewModel: HouseholderVisitHistoryViewModel = hiltViewModel(),
-    pipelineViewModel: PipelineViewModel = hiltViewModel(),
+    viewModel: HouseholderVisitHistoryViewModel = koinViewModel(),
+    pipelineViewModel: PipelineViewModel = koinViewModel(),
 ) {
     LaunchedEffect(congregationId) { viewModel.restrictTo(congregationId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()

@@ -19,7 +19,6 @@ import com.emfitsolutions.gopreach.data.repository.HouseholderAssignmentReposito
 import com.emfitsolutions.gopreach.data.repository.InterestedPersonRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +27,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * "House Holder Assignment" module — backs both directions of the flow:
@@ -39,8 +37,7 @@ import javax.inject.Inject
  * .ForwardRequestsViewModel] already is for its own two-sided flow — the
  * two screens just call different methods on it.
  */
-@HiltViewModel
-class HouseholderAssignmentViewModel @Inject constructor(
+class HouseholderAssignmentViewModel(
     private val assignmentRepository: HouseholderAssignmentRepository,
     private val interestedPersonRepository: InterestedPersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,

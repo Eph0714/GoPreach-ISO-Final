@@ -58,7 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.CreditHourRecord
 import com.emfitsolutions.gopreach.data.model.PipelineStage
@@ -189,7 +189,7 @@ internal fun PlannerDayContent(currentPersonId: String, viewModel: PlannerDayVie
     val state by remember(currentPersonId) { viewModel.stateFor(currentPersonId) }.collectAsStateWithLifecycle()
     val dateFormat = remember { SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault()) }
 
-    val creditViewModel: CreditHourEntryViewModel = hiltViewModel()
+    val creditViewModel: CreditHourEntryViewModel = koinViewModel()
     val creditDialogs = remember { CreditHourDialogState() }
     val categoryName = rememberCategoryNamer(creditViewModel)
     val expansion = rememberPlannerExpansionState(PlannerSectionKey.REPORT, PlannerSectionKey.TIMER)
@@ -363,7 +363,7 @@ internal fun PlannerMonthContent(
     val state by remember(currentPersonId) { viewModel.stateFor(currentPersonId) }.collectAsStateWithLifecycle()
     val monthFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
 
-    val creditViewModel: CreditHourEntryViewModel = hiltViewModel()
+    val creditViewModel: CreditHourEntryViewModel = koinViewModel()
     val creditDialogs = remember { CreditHourDialogState() }
     val categoryName = rememberCategoryNamer(creditViewModel)
     val expansion = rememberPlannerExpansionState(PlannerSectionKey.CALENDAR)
@@ -440,7 +440,7 @@ internal fun PlannerMonthContent(
             // Shared by "Preview" and "Send as Text" — the dialog's own
             // Send button uses this exact same string, so what the Publisher
             // previews is guaranteed to be what actually goes out.
-            val reportViewModel: PlannerReportViewModel = hiltViewModel()
+            val reportViewModel: PlannerReportViewModel = koinViewModel()
             val reportText by remember(currentPersonId, monthStart) { reportViewModel.reportText(currentPersonId, monthStart) }
                 .collectAsStateWithLifecycle(initialValue = "")
             val alreadySubmitted by remember(currentPersonId, monthStart) { reportViewModel.isSubmitted(currentPersonId, monthStart) }
@@ -935,7 +935,7 @@ internal fun PlannerYearContent(
     val state by remember(currentPersonId) { viewModel.stateFor(currentPersonId) }.collectAsStateWithLifecycle()
     val yearFormat = remember { SimpleDateFormat("yyyy", Locale.getDefault()) }
 
-    val creditViewModel: CreditHourEntryViewModel = hiltViewModel()
+    val creditViewModel: CreditHourEntryViewModel = koinViewModel()
     val creditDialogs = remember { CreditHourDialogState() }
     val categoryName = rememberCategoryNamer(creditViewModel)
     val expansion = rememberPlannerExpansionState(PlannerSectionKey.MONTHS)

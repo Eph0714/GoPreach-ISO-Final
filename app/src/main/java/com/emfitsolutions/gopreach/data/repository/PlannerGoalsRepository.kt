@@ -6,22 +6,18 @@ import com.emfitsolutions.gopreach.data.model.YearlyPlannerGoal
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
 import com.emfitsolutions.gopreach.data.sync.pullFirestoreCollectionOnce
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val MONTHLY_COLLECTION = "monthlyPlannerGoals"
 
 /** My Planner → Month spec §24-§25. */
-@Singleton
-class MonthlyPlannerGoalRepository @Inject constructor(
+class MonthlyPlannerGoalRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<MonthlyPlannerGoal>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
@@ -50,11 +46,10 @@ class MonthlyPlannerGoalRepository @Inject constructor(
 private const val WEEKLY_COLLECTION = "weeklyPlannerGoals"
 
 /** My Planner → Week (Dashboard/My Planner integration). */
-@Singleton
-class WeeklyPlannerGoalRepository @Inject constructor(
+class WeeklyPlannerGoalRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<WeeklyPlannerGoal>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
@@ -83,11 +78,10 @@ class WeeklyPlannerGoalRepository @Inject constructor(
 private const val YEARLY_COLLECTION = "yearlyPlannerGoals"
 
 /** My Planner → Year spec §26. */
-@Singleton
-class YearlyPlannerGoalRepository @Inject constructor(
+class YearlyPlannerGoalRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<YearlyPlannerGoal>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }

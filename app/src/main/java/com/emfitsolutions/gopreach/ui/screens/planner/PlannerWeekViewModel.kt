@@ -16,7 +16,6 @@ import com.emfitsolutions.gopreach.data.repository.WeeklyPlannerGoalRepository
 import com.emfitsolutions.gopreach.domain.DayBounds
 import com.emfitsolutions.gopreach.domain.MinistryStatisticsService
 import com.emfitsolutions.gopreach.domain.WeekBounds
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +23,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import javax.inject.Inject
 
 /** One day's row in the Weekly Planner's 7-day-wide table (spec §5) — the
  * per-day figures shown side by side, Monday..Sunday. */
@@ -66,8 +64,7 @@ data class PlannerWeekUiState(
     val surplusMinutes: Int get() = ((totalMinutes + creditHoursMinutes) - goalMinutes).coerceAtLeast(0)
 }
 
-@HiltViewModel
-class PlannerWeekViewModel @Inject constructor(
+class PlannerWeekViewModel(
     private val plannerDayRepository: PlannerDayRepository,
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,

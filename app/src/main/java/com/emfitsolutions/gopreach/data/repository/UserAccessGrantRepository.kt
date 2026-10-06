@@ -3,13 +3,10 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.model.UserAccessGrant
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "userAccessGrants"
 
@@ -20,11 +17,10 @@ private const val COLLECTION = "userAccessGrants"
  * server-side. **Always save with `grant.personId` as the document id** — both
  * the app and the rules depend on that 1:1 mapping to avoid a query.
  */
-@Singleton
-class UserAccessGrantRepository @Inject constructor(
+class UserAccessGrantRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<UserAccessGrant>> = offline.observeCollection(COLLECTION)
 

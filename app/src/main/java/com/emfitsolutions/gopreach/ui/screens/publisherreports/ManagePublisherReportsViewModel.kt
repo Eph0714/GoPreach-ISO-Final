@@ -17,7 +17,6 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.domain.MonthlyReportCalculator
 import com.emfitsolutions.gopreach.ui.components.DateRange
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +26,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** "Show" mode — spec: "Show (All, By Publisher)". Congregation filtering
  * used to be a third mutually-exclusive mode here (`BY_CONGREGATION`); it's
@@ -85,8 +83,7 @@ data class ManagePublisherReportsUiState(
  * delete is Super-Admin only (see [canPermanentlyDelete] usages at the call
  * site, same convention as every other Manage screen).
  */
-@HiltViewModel
-class ManagePublisherReportsViewModel @Inject constructor(
+class ManagePublisherReportsViewModel(
     private val monthlyReportRepository: MonthlyReportRepository,
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,

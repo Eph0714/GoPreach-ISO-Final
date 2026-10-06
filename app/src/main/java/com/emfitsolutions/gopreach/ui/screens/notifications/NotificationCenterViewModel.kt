@@ -5,10 +5,8 @@ import com.emfitsolutions.gopreach.data.repository.NotificationCategory
 import com.emfitsolutions.gopreach.data.repository.AnnouncementSeenStore
 import com.emfitsolutions.gopreach.data.repository.NotificationDismissedStore
 import com.emfitsolutions.gopreach.data.repository.NotificationSeenStore
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import javax.inject.Inject
 
 /** One row in the unified notification balloon. [route] is where tapping it
  * navigates — always an existing, already-scoped screen (Forward Requests,
@@ -64,8 +62,7 @@ data class NotificationItem(
  * to decide what's newly arrived and worth a sound, without a second,
  * possibly-drifting copy of "what counts as a pending Transfer Request."
  */
-@HiltViewModel
-class NotificationCenterViewModel @Inject constructor(
+class NotificationCenterViewModel(
     private val itemsProvider: NotificationItemsProvider,
     private val notificationSeenStore: NotificationSeenStore,
     private val announcementSeenStore: AnnouncementSeenStore,

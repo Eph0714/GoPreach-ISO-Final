@@ -2,9 +2,6 @@ package com.emfitsolutions.gopreach.data.update
 
 import android.content.Context
 import androidx.core.content.edit
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** What [InstalledUpdateInfoStore] remembers about the most recent update
  * this app installed through its own in-app updater — the Settings
@@ -35,9 +32,8 @@ private const val KEY_INSTALLED_AT = "installed_at"
  * [com.emfitsolutions.gopreach.data.repository.ThemePreferenceRepository] —
  * this is a record of what *this device* installed, not account data.
  */
-@Singleton
-class InstalledUpdateInfoStore @Inject constructor(
-    @ApplicationContext context: Context,
+class InstalledUpdateInfoStore(
+    context: Context,
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

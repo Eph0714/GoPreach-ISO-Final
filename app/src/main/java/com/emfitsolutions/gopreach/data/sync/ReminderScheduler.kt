@@ -4,10 +4,7 @@ import android.content.Context
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Schedules [ReminderWorker] to run roughly once a day for the lifetime of the
@@ -23,9 +20,8 @@ import javax.inject.Singleton
  * mechanism today (see NotificationHelper's doc comment on why: no push
  * backend yet).
  */
-@Singleton
-class ReminderScheduler @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ReminderScheduler(
+    private val context: Context,
 ) {
     companion object {
         const val UNIQUE_WORK_NAME = "gopreach_reminders"

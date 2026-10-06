@@ -31,7 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.InterestedPerson
 import com.emfitsolutions.gopreach.data.model.PipelineStage
@@ -48,7 +48,7 @@ import androidx.compose.ui.window.DialogProperties
 fun PublisherForwardRequestsScreen(
     currentPersonId: String,
     onBack: () -> Unit,
-    viewModel: PublisherForwardRequestsViewModel = hiltViewModel(),
+    viewModel: PublisherForwardRequestsViewModel = koinViewModel(),
 ) {
     val requestsFlow = remember(currentPersonId) { viewModel.incomingRequestsFor(currentPersonId) }
     val requests by requestsFlow.collectAsStateWithLifecycle(initialValue = emptyList())

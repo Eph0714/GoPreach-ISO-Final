@@ -2,11 +2,8 @@ package com.emfitsolutions.gopreach.data.repository
 
 import android.content.Context
 import androidx.core.content.edit
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val PREFS_NAME = "gopreach_offline_session"
 private const val KEY_PERSON_ID = "personId"
@@ -22,8 +19,7 @@ private const val KEY_PERSON_ID = "personId"
  * both exist (see [UserSession.state]). Plain (unencrypted) SharedPreferences
  * is fine here: this only ever holds a personId, never a credential.
  */
-@Singleton
-class OfflineSessionMarker @Inject constructor(@ApplicationContext context: Context) {
+class OfflineSessionMarker(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _personId = MutableStateFlow(prefs.getString(KEY_PERSON_ID, null))

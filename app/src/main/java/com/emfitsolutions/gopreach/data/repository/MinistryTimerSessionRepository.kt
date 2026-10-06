@@ -5,23 +5,19 @@ import com.emfitsolutions.gopreach.data.model.TimerSessionStatus
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
 import com.emfitsolutions.gopreach.data.sync.pullFirestoreCollectionOnce
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "ministryTimerSessions"
 
 /** Spec §20 — Ministry Timer sessions; see [MinistryTimerSession]'s own doc
  * comment for how this survives navigation without a foreground service. */
-@Singleton
-class MinistryTimerSessionRepository @Inject constructor(
+class MinistryTimerSessionRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<MinistryTimerSession>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }

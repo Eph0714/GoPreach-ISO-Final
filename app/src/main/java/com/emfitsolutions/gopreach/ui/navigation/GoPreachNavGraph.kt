@@ -3,7 +3,7 @@ package com.emfitsolutions.gopreach.ui.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -91,7 +91,7 @@ import com.emfitsolutions.gopreach.data.model.ScopeType
 @Composable
 fun GoPreachNavGraph(
     navController: NavHostController = rememberNavController(),
-    sessionViewModel: SessionViewModel = hiltViewModel(),
+    sessionViewModel: SessionViewModel = koinViewModel(),
 ) {
     val session by sessionViewModel.state.collectAsStateWithLifecycle()
     val currentPersonId = session.person?.id.orEmpty()
@@ -146,7 +146,7 @@ fun GoPreachNavGraph(
     // Deleted Records: with automatic permanent deletion switched on, sweep what has outlived its retention when
     // someone signs in and every few hours while the app stays open. Only what this user manages is touched, and
     // nothing before its calculated date; with the setting off this does nothing.
-    val trashMaintenance: com.emfitsolutions.gopreach.ui.screens.deletedrecords.DeletedRecordsViewModel = androidx.hilt.navigation.compose.hiltViewModel()
+    val trashMaintenance: com.emfitsolutions.gopreach.ui.screens.deletedrecords.DeletedRecordsViewModel = koinViewModel()
     LaunchedEffect(currentPersonId, currentRole, ownCongregationId) {
         if (currentPersonId.isBlank()) return@LaunchedEffect
         val access = com.emfitsolutions.gopreach.ui.screens.deletedrecords.DeletedRecordsAccess(

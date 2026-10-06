@@ -4,7 +4,6 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.google.dagger.hilt.android")
     id("com.google.gms.google-services")
     id("com.google.devtools.ksp")
 }
@@ -170,9 +169,11 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Hilt
-    implementation("com.google.dagger:hilt-android:2.51.1")
-    ksp("com.google.dagger:hilt-android-compiler:2.51.1")
-    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+    implementation(platform("io.insert-koin:koin-bom:4.0.4"))
+    implementation("io.insert-koin:koin-android")
+    implementation("io.insert-koin:koin-compose")
+    implementation("io.insert-koin:koin-compose-viewmodel")
+    implementation("io.insert-koin:koin-androidx-workmanager")
 
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.3.0"))
@@ -188,8 +189,6 @@ dependencies {
 
     // WorkManager (offline sync queue)
     implementation("androidx.work:work-runtime-ktx:2.9.1")
-    implementation("androidx.hilt:hilt-work:1.2.0")
-    ksp("androidx.hilt:hilt-compiler:1.2.0")
 
     // Location / Maps (Share Location, GPS capture)
     implementation("com.google.android.gms:play-services-location:21.3.0")
@@ -209,6 +208,7 @@ dependencies {
     implementation(project(":shared"))
 
     // Testing
+    testImplementation("io.insert-koin:koin-test")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.09.03"))
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

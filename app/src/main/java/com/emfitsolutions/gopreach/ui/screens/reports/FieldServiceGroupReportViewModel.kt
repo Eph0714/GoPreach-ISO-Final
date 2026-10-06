@@ -13,13 +13,11 @@ import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.GroupRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
 
 /** One publisher line under a Field Service Group's three named roles —
  * "-Ephraim Fernandez (Auxiliary Pioneer)" in the spec's own example. */
@@ -48,8 +46,7 @@ data class FieldServiceGroupReportRow(
  * this report is offered to (Admin/Coordinator Elder/Regular Elder/Service
  * Overseer) is scoped to exactly their own congregation's set.
  */
-@HiltViewModel
-class FieldServiceGroupReportViewModel @Inject constructor(
+class FieldServiceGroupReportViewModel(
     private val groupRepository: GroupRepository,
     private val congregationRepository: CongregationRepository,
     private val personRepository: PersonRepository,

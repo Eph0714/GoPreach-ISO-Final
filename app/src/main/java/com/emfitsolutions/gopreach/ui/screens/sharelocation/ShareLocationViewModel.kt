@@ -22,8 +22,6 @@ import com.emfitsolutions.gopreach.data.repository.LocationSharingSettingsReposi
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.SharedLocationRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,7 +33,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class SharedLocationRow(
     val person: Person,
@@ -66,9 +63,8 @@ data class MyLocationState(
  * in a foreground Service rather than this ViewModel: it needs to keep
  * running after the Publisher leaves this screen.
  */
-@HiltViewModel
-class ShareLocationViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ShareLocationViewModel(
+    private val context: Context,
     private val sharedLocationRepository: SharedLocationRepository,
     private val personRepository: PersonRepository,
     private val locationTracker: LocationTracker,

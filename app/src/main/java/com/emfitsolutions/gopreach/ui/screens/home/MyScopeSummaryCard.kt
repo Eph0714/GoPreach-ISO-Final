@@ -11,7 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -19,14 +19,11 @@ import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.Group
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.GroupRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
 
-@HiltViewModel
-class MyScopeSummaryViewModel @Inject constructor(
+class MyScopeSummaryViewModel(
     congregationRepository: CongregationRepository,
     groupRepository: GroupRepository,
 ) : ViewModel() {
@@ -49,7 +46,7 @@ fun MyScopeSummaryCard(
     congregationId: String?,
     groupId: String?,
     modifier: Modifier = Modifier,
-    viewModel: MyScopeSummaryViewModel = hiltViewModel(),
+    viewModel: MyScopeSummaryViewModel = koinViewModel(),
 ) {
     if (congregationId == null && groupId == null) return
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()

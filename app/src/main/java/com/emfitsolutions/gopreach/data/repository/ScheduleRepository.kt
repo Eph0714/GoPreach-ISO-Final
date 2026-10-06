@@ -3,22 +3,18 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.model.Schedule
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "schedules"
 
 /** Backs Chat Schedule (spec §5.1/§3) and Calendar (spec §6.2) — both are
  * [Schedule] rows distinguished by [com.emfitsolutions.gopreach.data.model.ScheduleKind]. */
-@Singleton
-class ScheduleRepository @Inject constructor(
+class ScheduleRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<Schedule>> = offline.observeCollection(COLLECTION)
 

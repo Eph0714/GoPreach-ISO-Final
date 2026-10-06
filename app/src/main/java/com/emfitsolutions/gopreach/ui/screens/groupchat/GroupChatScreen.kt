@@ -63,7 +63,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.emfitsolutions.gopreach.R
@@ -92,7 +92,7 @@ fun GroupChatScreen(
     currentPersonRoleLabel: String,
     canManageSettings: Boolean,
     onBack: () -> Unit,
-    viewModel: GroupChatViewModel = hiltViewModel(),
+    viewModel: GroupChatViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
     val showToast = rememberActionToast()

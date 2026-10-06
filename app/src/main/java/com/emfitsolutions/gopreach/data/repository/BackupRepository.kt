@@ -4,8 +4,6 @@ import com.emfitsolutions.gopreach.data.local.dao.CacheDao
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import javax.inject.Inject
-import javax.inject.Singleton
 
 data class BackupEntry(val collectionPath: String, val documentId: String, val payloadJson: String)
 data class BackupFile(val exportedAt: Long, val exportedByPersonId: String, val entries: List<BackupEntry>)
@@ -18,8 +16,7 @@ data class BackupFile(val exportedAt: Long, val exportedByPersonId: String, val 
  * been online), exported to a JSON file the Super-Admin can save anywhere and
  * restore from later, e.g. before a risky bulk change.
  */
-@Singleton
-class BackupRepository @Inject constructor(
+class BackupRepository(
     private val cacheDao: CacheDao,
     private val offline: OfflineFirestoreRepository,
     private val auditLogRepository: AuditLogRepository,

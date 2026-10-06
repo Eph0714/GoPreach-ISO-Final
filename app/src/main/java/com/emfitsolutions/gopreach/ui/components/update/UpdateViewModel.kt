@@ -16,8 +16,6 @@ import com.emfitsolutions.gopreach.data.update.UpdateInfo
 import com.emfitsolutions.gopreach.data.update.UpdateInstaller
 import com.emfitsolutions.gopreach.data.update.UpdateManifestRepository
 import com.emfitsolutions.gopreach.data.update.UpdateReminderStore
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,7 +24,6 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.io.File
-import javax.inject.Inject
 
 private const val TAG = "UpdateViewModel"
 
@@ -41,9 +38,8 @@ sealed class UpdateCheckState {
     data class Failed(val info: UpdateInfo?, val message: String) : UpdateCheckState()
 }
 
-@HiltViewModel
-class UpdateViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+class UpdateViewModel(
+    private val context: Context,
     private val manifestRepository: UpdateManifestRepository,
     private val downloader: ApkDownloader,
     private val installer: UpdateInstaller,

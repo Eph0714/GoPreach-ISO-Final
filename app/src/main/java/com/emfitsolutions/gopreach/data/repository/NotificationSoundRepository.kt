@@ -4,11 +4,8 @@ import android.content.Context
 import android.media.RingtoneManager
 import android.net.Uri
 import androidx.core.content.edit
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val PREFS_NAME = "gopreach_notification_settings"
 private const val KEY_SOUND_URI = "notification_sound_uri"
@@ -40,9 +37,8 @@ private const val KEY_IMPORTANT_ENABLED = "notification_important_enabled"
  * .AlarmRingService]), a different mechanism from this on/off switch for
  * *incoming* notifications from other people/the system.
  */
-@Singleton
-class NotificationSoundRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class NotificationSoundRepository(
+    private val context: Context,
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

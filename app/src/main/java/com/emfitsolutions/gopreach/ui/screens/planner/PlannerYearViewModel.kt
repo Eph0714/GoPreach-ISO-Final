@@ -11,7 +11,6 @@ import com.emfitsolutions.gopreach.data.repository.YearlyPlannerGoalRepository
 import com.emfitsolutions.gopreach.domain.MinistryStatisticsService
 import com.emfitsolutions.gopreach.domain.MonthBounds
 import com.emfitsolutions.gopreach.domain.YearBounds
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +18,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import javax.inject.Inject
 
 /** My Planner → Year (spec §26-§27). Every figure is independently computed
  * for the whole year (spec §3/§13 — never summed from the 12 monthly
@@ -51,8 +49,7 @@ data class PlannerYearUiState(
     val surplusMinutes: Int get() = (totalMinutes - goalMinutes).coerceAtLeast(0)
 }
 
-@HiltViewModel
-class PlannerYearViewModel @Inject constructor(
+class PlannerYearViewModel(
     private val plannerDayRepository: PlannerDayRepository,
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,

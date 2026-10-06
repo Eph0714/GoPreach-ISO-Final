@@ -55,7 +55,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.emfitsolutions.gopreach.data.export.CsvExporter
@@ -86,7 +86,7 @@ fun AnnouncementsScreen(
     fixedCongregationId: String?,
     readOnly: Boolean = false,
     onBack: () -> Unit,
-    viewModel: ManageAnnouncementsViewModel = hiltViewModel(),
+    viewModel: ManageAnnouncementsViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
     // "Add a filter for Congregation" (Super-Admin only).

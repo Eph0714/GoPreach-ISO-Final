@@ -6,24 +6,20 @@ import com.emfitsolutions.gopreach.data.model.Group
 import com.emfitsolutions.gopreach.data.model.Territory
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Congregation Master File (spec §4.1) — Super-Admin CRUD only. Also owns
  * uniqueness of [Congregation.code], which Firestore cannot enforce natively.
  */
-@Singleton
-class CongregationRepository @Inject constructor(
+class CongregationRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     private val collection = "congregations"
 
@@ -46,11 +42,10 @@ class CongregationRepository @Inject constructor(
 }
 
 /** Groups within a congregation (spec §3: "CRUD Groups + assign 1 Elder"). */
-@Singleton
-class GroupRepository @Inject constructor(
+class GroupRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     private val collection = "groups"
 
@@ -71,11 +66,10 @@ class GroupRepository @Inject constructor(
 }
 
 /** Regular Elder "specific title" lookup table (spec §3), full CRUD for admins. */
-@Singleton
-class ElderTitleRepository @Inject constructor(
+class ElderTitleRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     private val collection = "elderTitles"
 
@@ -98,11 +92,10 @@ class ElderTitleRepository @Inject constructor(
 }
 
 /** Territory Master File (spec §3, §5.1). */
-@Singleton
-class TerritoryRepository @Inject constructor(
+class TerritoryRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     private val collection = "territories"
 

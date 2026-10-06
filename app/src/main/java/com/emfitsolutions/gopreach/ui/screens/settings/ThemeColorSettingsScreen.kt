@@ -38,7 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.ui.components.ColorWheelPicker
@@ -67,7 +67,7 @@ import com.emfitsolutions.gopreach.ui.theme.ThemeColorOption
 @Composable
 fun ThemeColorSettingsScreen(
     onBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val savedOption by viewModel.colorOption.collectAsStateWithLifecycle()
     val savedCustomColor by viewModel.customColor.collectAsStateWithLifecycle()

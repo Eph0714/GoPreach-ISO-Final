@@ -25,7 +25,6 @@ import com.emfitsolutions.gopreach.domain.DateRangeStore
 import com.emfitsolutions.gopreach.domain.MinistryStatisticsService
 import com.emfitsolutions.gopreach.ui.components.DateRange
 import com.emfitsolutions.gopreach.ui.screens.home.isPioneerCategory
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,7 +32,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
 
 /** One publisher's row on the Consolidated Monthly Report — every figure
  * uses the exact same logic as the Publisher Dashboard (spec: "the same
@@ -91,8 +89,7 @@ data class ConsolidatedReportUiState(
  * [restrictTo], resolved once by the caller from the session's own role —
  * never a client-tamperable parameter.
  */
-@HiltViewModel
-class ConsolidatedReportViewModel @Inject constructor(
+class ConsolidatedReportViewModel(
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val congregationRepository: CongregationRepository,

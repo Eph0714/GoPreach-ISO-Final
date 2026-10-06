@@ -15,7 +15,6 @@ import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.GroupRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +22,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** Every primary admin-track role now managed from the single "Elders"
  * module ("Consolidate Elder, Coordinator Elder, Service Overseer and
@@ -78,8 +76,7 @@ data class EldersRow(
  * no data migration is actually needed: every existing Coordinator
  * Elder/Service Overseer/Regular Elder record already appears here as-is).
  */
-@HiltViewModel
-class ManageEldersViewModel @Inject constructor(
+class ManageEldersViewModel(
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val groupRepository: GroupRepository,

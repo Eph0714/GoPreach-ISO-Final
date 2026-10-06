@@ -31,7 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.emfitsolutions.gopreach.data.repository.ThemePreference
@@ -51,7 +51,7 @@ fun ControlPanelScreen(
      * to their own congregation (spec §3 permission matrix). */
     canManageLogo: Boolean,
     onBack: () -> Unit,
-    viewModel: ControlPanelViewModel = hiltViewModel(),
+    viewModel: ControlPanelViewModel = koinViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()

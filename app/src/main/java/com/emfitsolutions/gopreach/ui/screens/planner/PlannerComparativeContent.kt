@@ -39,7 +39,7 @@ import com.emfitsolutions.gopreach.ui.components.ComparativeGraphReport
 import com.emfitsolutions.gopreach.ui.components.hoursFormat
 import com.emfitsolutions.gopreach.ui.components.countFormat
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.export.ComparativeReportPdfExporter
 import com.emfitsolutions.gopreach.ui.components.charts.LineSeries
@@ -56,7 +56,7 @@ import java.util.Locale
  * other Planner view now uses), a compact bordered table, the animated
  * chart, then Export as PDF. */
 @Composable
-internal fun PlannerComparativeContent(currentPersonId: String, viewModel: PlannerComparativeViewModel = hiltViewModel()) {
+internal fun PlannerComparativeContent(currentPersonId: String, viewModel: PlannerComparativeViewModel = koinViewModel()) {
     val startMonth by viewModel.startMonth.collectAsStateWithLifecycle()
     val endMonth by viewModel.endMonth.collectAsStateWithLifecycle()
     val state by remember(currentPersonId) { viewModel.stateFor(currentPersonId) }.collectAsStateWithLifecycle()

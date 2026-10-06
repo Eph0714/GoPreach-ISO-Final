@@ -24,7 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.AppSettings
 import com.emfitsolutions.gopreach.ui.screens.deletedrecords.DeletedRecordsViewModel
@@ -40,7 +40,7 @@ fun DataManagementSection(
     /** Super-Admin / Admin / Coordinator Elder / Service Overseer / Secretary. Everyone else only opens their own deleted records. */
     canChangeRetention: Boolean,
     onOpenDeletedRecords: () -> Unit,
-    viewModel: DeletedRecordsViewModel = hiltViewModel(),
+    viewModel: DeletedRecordsViewModel = koinViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var expanded by remember { mutableStateOf(false) }

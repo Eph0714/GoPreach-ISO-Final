@@ -43,7 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.flowOf
 import com.emfitsolutions.gopreach.data.model.AccountStatus
@@ -77,7 +77,7 @@ fun AccountManagementScreen(
     actingCongregationId: String?,
     currentPersonId: String,
     onBack: () -> Unit,
-    viewModel: AccountManagementViewModel = hiltViewModel(),
+    viewModel: AccountManagementViewModel = koinViewModel(),
 ) {
     val availableTypes = remember(actingRole) { viewModel.availableAccountTypes(actingRole) }
     var selectedType by remember(availableTypes) { mutableStateOf(availableTypes.firstOrNull()) }

@@ -13,7 +13,6 @@ import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import com.emfitsolutions.gopreach.domain.DayBounds
 import com.emfitsolutions.gopreach.domain.MinistryStatisticsService
 import com.emfitsolutions.gopreach.domain.MonthBounds
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,7 +22,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import javax.inject.Inject
 
 /** My Planner → Day (spec §17-§22) — everything the Day tab shows, all
  * derived from [dayStart] plus the Publisher's own data. [totalMinutes] is
@@ -59,8 +57,7 @@ data class PlannerDayUiState(
     val monthlyRemainingMinutes: Int get() = (monthlyGoalMinutes - monthlyConsumedMinutes).coerceAtLeast(0)
 }
 
-@HiltViewModel
-class PlannerDayViewModel @Inject constructor(
+class PlannerDayViewModel(
     private val plannerDayRepository: PlannerDayRepository,
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,

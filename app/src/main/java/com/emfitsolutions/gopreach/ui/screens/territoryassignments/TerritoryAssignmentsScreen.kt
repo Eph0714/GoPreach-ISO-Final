@@ -64,7 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentResult
 import com.emfitsolutions.gopreach.ui.components.CongregationFilterDropdown
@@ -92,7 +92,7 @@ fun TerritoryAssignmentsScreen(
     onBack: () -> Unit,
     onAddNew: () -> Unit,
     onEdit: (congregationId: String, groupId: String, provinceId: Int) -> Unit,
-    viewModel: TerritoryAssignmentsViewModel = hiltViewModel(),
+    viewModel: TerritoryAssignmentsViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle(initialValue = emptyList())
     var congregationFilter by rememberCongregationContext("territory_assignments")

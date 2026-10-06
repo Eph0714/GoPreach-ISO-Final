@@ -33,7 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.ui.components.CongregationFilterDropdown
 import com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt
@@ -64,7 +64,7 @@ fun UserLogsScreen(
     visibleCongregationId: String?,
     canDelete: Boolean,
     onBack: () -> Unit,
-    viewModel: UserLogsViewModel = hiltViewModel(),
+    viewModel: UserLogsViewModel = koinViewModel(),
 ) {
     // "Add a filter for Congregation" — only meaningful when this screen has
     // no fixed scope already (Super-Admin); an Admin/Coordinator Elder is

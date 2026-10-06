@@ -5,8 +5,6 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.repository.BackupRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,7 +12,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import javax.inject.Inject
 
 data class BackupRestoreUiState(
     val isBusy: Boolean = false,
@@ -23,9 +20,8 @@ data class BackupRestoreUiState(
 )
 
 /** Spec §3/§5.1 — Backup & Restore, Super-Admin only (see [BackupRepository]). */
-@HiltViewModel
-class BackupRestoreViewModel @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+class BackupRestoreViewModel(
+    private val appContext: Context,
     private val backupRepository: BackupRepository,
 ) : ViewModel() {
 

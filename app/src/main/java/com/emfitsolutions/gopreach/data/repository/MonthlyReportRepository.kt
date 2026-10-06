@@ -3,7 +3,6 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.model.MonthlyReport
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import com.emfitsolutions.gopreach.data.model.ReportStatus
@@ -11,8 +10,6 @@ import com.emfitsolutions.gopreach.domain.MonthBounds
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "monthlyReports"
 
@@ -20,11 +17,10 @@ private val SUBMITTED_STATUSES = setOf(ReportStatus.SUBMITTED, ReportStatus.CORR
 
 /** Spec §5.2 — publisher monthly ministry reports; also the source for the
  * Admin-side Bible-study/hours report views (spec §5.1). */
-@Singleton
-class MonthlyReportRepository @Inject constructor(
+class MonthlyReportRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<MonthlyReport>> = offline.observeCollection(COLLECTION)
 

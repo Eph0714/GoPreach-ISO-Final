@@ -49,7 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.CreditHourCategory
 import com.emfitsolutions.gopreach.ui.components.FormDialog
@@ -68,7 +68,7 @@ import com.emfitsolutions.gopreach.ui.components.requiredFieldsMessage
 @Composable
 fun CreditHourCategoriesScreen(
     onBack: () -> Unit,
-    viewModel: CreditHourCategoriesViewModel = hiltViewModel(),
+    viewModel: CreditHourCategoriesViewModel = koinViewModel(),
 ) {
     val categories by viewModel.categories.collectAsStateWithLifecycle()
     val deleteCheck by viewModel.deleteCheck.collectAsStateWithLifecycle()

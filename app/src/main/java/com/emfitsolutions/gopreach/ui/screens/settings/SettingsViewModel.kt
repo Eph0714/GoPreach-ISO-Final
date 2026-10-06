@@ -9,14 +9,10 @@ import com.emfitsolutions.gopreach.data.repository.ThemePreference
 import com.emfitsolutions.gopreach.data.repository.ThemePreferenceRepository
 import com.emfitsolutions.gopreach.notifications.NotificationHelper
 import com.emfitsolutions.gopreach.ui.theme.ThemeColorOption
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
 
-@HiltViewModel
-class SettingsViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
+class SettingsViewModel(
+    private val context: Context,
     private val themePreferenceRepository: ThemePreferenceRepository,
     private val notificationSoundRepository: NotificationSoundRepository,
 ) : ViewModel() {

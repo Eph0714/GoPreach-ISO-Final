@@ -10,7 +10,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import javax.inject.Singleton
 import kotlin.math.roundToInt
 
 /**
@@ -37,8 +36,7 @@ import kotlin.math.roundToInt
  * again, say) from re-hitting the API for the same real-world spot, and
  * from ever running two Overpass requests concurrently from this app.
  */
-@Singleton
-class OverpassStreetRepository @javax.inject.Inject constructor() {
+class OverpassStreetRepository () {
     private val mutex = Mutex()
     private val cache = LinkedHashMap<String, List<Pair<Double, Double>>>()
     private val maxCacheEntries = 60

@@ -43,7 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -64,7 +64,6 @@ import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.domain.PermissionChecker
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
 import com.emfitsolutions.gopreach.ui.components.requiredFieldsMessage
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -73,7 +72,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class PublisherOption(val personId: String, val name: String)
 
@@ -83,8 +81,7 @@ data class PublisherAssignmentFormState(
     val saved: Boolean = false,
 )
 
-@HiltViewModel
-class PublisherTerritoryAssignmentViewModel @Inject constructor(
+class PublisherTerritoryAssignmentViewModel(
     private val repository: PublisherTerritoryAssignmentRepository,
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
@@ -228,7 +225,7 @@ fun PublisherTerritoryAssignmentsScreen(
     currentPersonId: String,
     onBack: () -> Unit,
     onAddNew: () -> Unit,
-    viewModel: PublisherTerritoryAssignmentViewModel = hiltViewModel(),
+    viewModel: PublisherTerritoryAssignmentViewModel = koinViewModel(),
 ) {
     val all by viewModel.assignments.collectAsStateWithLifecycle(initialValue = emptyList())
     val congregations by viewModel.congregations.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -344,7 +341,7 @@ fun PublisherTerritoryAssignmentFormScreen(
     fixedCongregationId: String?,
     currentPersonId: String,
     onDone: () -> Unit,
-    viewModel: PublisherTerritoryAssignmentViewModel = hiltViewModel(),
+    viewModel: PublisherTerritoryAssignmentViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle(initialValue = emptyList())
     var pickedCongregationId by remember { mutableStateOf<String?>(null) }

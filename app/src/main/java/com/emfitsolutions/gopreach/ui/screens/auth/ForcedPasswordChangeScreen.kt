@@ -38,7 +38,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.repository.QuickLoginMethod
 import com.emfitsolutions.gopreach.domain.formatPersonName
@@ -54,7 +54,7 @@ import com.emfitsolutions.gopreach.ui.screens.login.launchBiometricPrompt
 @Composable
 fun ForcedPasswordChangeScreen(
     onCompleted: () -> Unit,
-    viewModel: ForcedPasswordChangeViewModel = hiltViewModel(),
+    viewModel: ForcedPasswordChangeViewModel = koinViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 

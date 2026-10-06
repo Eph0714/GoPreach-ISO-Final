@@ -15,7 +15,6 @@ import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.TempCredentials
 import com.emfitsolutions.gopreach.domain.PermissionChecker
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +23,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class MinisterialServantEnrollmentUiState(
     val firstName: String = "",
@@ -56,8 +54,7 @@ data class MinisterialServantEnrollmentUiState(
  * per-congregation cap: "there can be multiple Ministerial Servant in every
  * congregation."
  */
-@HiltViewModel
-class MinisterialServantEnrollmentViewModel @Inject constructor(
+class MinisterialServantEnrollmentViewModel(
     private val authRepository: AuthRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     congregationRepository: CongregationRepository,

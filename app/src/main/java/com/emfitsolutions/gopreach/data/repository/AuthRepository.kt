@@ -16,13 +16,10 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
 import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.firestore.FirebaseFirestore
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** "Fix the Login API and Database Errors... Display user-friendly messages...
  * Do not expose database errors directly to users" — every real failure mode
@@ -58,9 +55,8 @@ data class TempCredentials(
  * (username+password login, forgot password). See [authEmailFor] for how a
  * username-based login maps onto Firebase's email-based accounts.
  */
-@Singleton
-class AuthRepository @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+class AuthRepository(
+    private val appContext: Context,
     private val firebaseAuth: FirebaseAuth,
     private val firestore: FirebaseFirestore,
     private val personRepository: PersonRepository,

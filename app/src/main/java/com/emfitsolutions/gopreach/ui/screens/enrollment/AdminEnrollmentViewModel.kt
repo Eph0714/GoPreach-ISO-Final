@@ -11,7 +11,6 @@ import com.emfitsolutions.gopreach.data.model.RoleType
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.TempCredentials
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +18,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class AdminEnrollmentUiState(
     val name: String = "",
@@ -33,8 +31,7 @@ data class AdminEnrollmentUiState(
 )
 
 /** Spec §4.2 — Admin Per Congregation enrollment, Super-Admin only. */
-@HiltViewModel
-class AdminEnrollmentViewModel @Inject constructor(
+class AdminEnrollmentViewModel(
     private val authRepository: AuthRepository,
     congregationRepository: CongregationRepository,
 ) : ViewModel() {

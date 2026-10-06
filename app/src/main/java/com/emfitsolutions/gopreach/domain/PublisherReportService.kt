@@ -23,8 +23,6 @@ import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Everything the report screens need for one Publisher and month, from one calculation. */
 data class PublisherReportSource(
@@ -59,8 +57,7 @@ data class PublisherReportSource(
  * Preview Report and Send as Text (the Planner) all read this, and it recalculates from
  * the latest records every time they open.
  */
-@Singleton
-class PublisherReportService @Inject constructor(
+class PublisherReportService(
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val monthlyReportRepository: MonthlyReportRepository,

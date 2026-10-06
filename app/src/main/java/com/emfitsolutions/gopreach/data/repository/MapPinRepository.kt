@@ -4,14 +4,11 @@ import com.emfitsolutions.gopreach.data.model.MapPin
 import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "mapPins"
 private const val SAVE_TIMEOUT_MS = 15_000L
@@ -31,12 +28,11 @@ sealed class MapPinResult {
  * listener ([startRemoteSync]) is what feeds every device's map, and the
  * saved pin is also cached right away so it appears without waiting for it.
  */
-@Singleton
-class MapPinRepository @Inject constructor(
+class MapPinRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
     private val connectivityObserver: ConnectivityObserver,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<MapPin>> = offline.observeCollection(COLLECTION)
 

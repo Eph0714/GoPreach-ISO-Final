@@ -22,7 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -31,15 +31,12 @@ import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.SyncScheduler
 import com.emfitsolutions.gopreach.data.sync.SyncStatusCenter
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@HiltViewModel
-class SyncStatusIndicatorViewModel @Inject constructor(
+class SyncStatusIndicatorViewModel(
     connectivityObserver: ConnectivityObserver,
     syncStatusCenter: SyncStatusCenter,
     private val offlineFirestoreRepository: OfflineFirestoreRepository,
@@ -96,7 +93,7 @@ class SyncStatusIndicatorViewModel @Inject constructor(
 @Composable
 fun SyncStatusIndicator(
     modifier: Modifier = Modifier,
-    viewModel: SyncStatusIndicatorViewModel = hiltViewModel(),
+    viewModel: SyncStatusIndicatorViewModel = koinViewModel(),
 ) {
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
     val permanentFailureCount by viewModel.permanentFailureCount.collectAsStateWithLifecycle()

@@ -11,8 +11,6 @@ import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Offline-first read/write path shared by every domain repository (Congregations,
@@ -37,8 +35,7 @@ import javax.inject.Singleton
  * manual-sync-only requirement, which is specifically about *this device's own*
  * pending edits.
  */
-@Singleton
-class OfflineFirestoreRepository @Inject constructor(
+class OfflineFirestoreRepository(
     // Non-private: the reified inline functions below (observeCollection, get) need
     // to reach these from call sites in other modules, which public inline functions
     // can only do via @PublishedApi-internal, not private, members.

@@ -63,7 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.location.formatCoordinatesDms
 import com.emfitsolutions.gopreach.data.model.Congregation
@@ -132,8 +132,8 @@ fun FindLocationScreen(
     enrollmentAccess: FindLocationEnrollmentAccess,
     onLookAround: (lat: Double, lng: Double) -> Unit,
     onBack: () -> Unit,
-    viewModel: FindLocationViewModel = hiltViewModel(),
-    pipelineViewModel: PipelineViewModel = hiltViewModel(),
+    viewModel: FindLocationViewModel = koinViewModel(),
+    pipelineViewModel: PipelineViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
     val showToast = rememberActionToast()

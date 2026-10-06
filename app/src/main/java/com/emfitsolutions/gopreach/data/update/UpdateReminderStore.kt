@@ -2,10 +2,7 @@ package com.emfitsolutions.gopreach.data.update
 
 import android.content.Context
 import androidx.core.content.edit
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val PREFS_NAME = "gopreach_update_reminder"
 private const val KEY_SNOOZED_VERSION = "snoozed_version"
@@ -22,9 +19,8 @@ private const val KEY_SNOOZED_UNTIL = "snoozed_until"
  * silent/automatic checks ever consult this — the Settings screen's
  * explicit "Check for Updates" always shows an available update regardless
  * of any snooze in effect. */
-@Singleton
-class UpdateReminderStore @Inject constructor(
-    @ApplicationContext context: Context,
+class UpdateReminderStore(
+    context: Context,
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

@@ -11,7 +11,6 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.ThemePreference
 import com.emfitsolutions.gopreach.data.repository.ThemePreferenceRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +18,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class ControlPanelUiState(
     val isUploading: Boolean = false,
@@ -35,8 +33,7 @@ data class ControlPanelUiState(
  * screen's copy (not Super-Admin-only — every signed-in user has their own),
  * just also surfaced here since some users look for display settings under
  * "Control Panel" rather than a separate "Settings" entry. */
-@HiltViewModel
-class ControlPanelViewModel @Inject constructor(
+class ControlPanelViewModel(
     private val appSettingsRepository: AppSettingsRepository,
     private val themePreferenceRepository: ThemePreferenceRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,

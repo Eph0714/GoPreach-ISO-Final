@@ -5,9 +5,6 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.emfitsolutions.gopreach.domain.QuickLoginPolicy
 import com.emfitsolutions.gopreach.domain.SecretHasher
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 enum class QuickLoginMethod(val label: String, val key: String) {
     PIN("PIN", "pin"),
@@ -39,8 +36,7 @@ sealed interface QuickLoginCheck {
  *  - the failed-attempt counter and lock time, so closing the app doesn't reset the throttle.
  * It is bound to this device, so it does not move to a new phone: set it up again there.
  */
-@Singleton
-class QuickLoginStore @Inject constructor(@ApplicationContext context: Context) {
+class QuickLoginStore(context: Context) {
 
     private val prefs by lazy {
         val masterKey = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()

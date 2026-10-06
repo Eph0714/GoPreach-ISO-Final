@@ -38,7 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.HouseholderAssignment
 import com.emfitsolutions.gopreach.data.model.InterestedPerson
@@ -74,7 +74,7 @@ fun IncomingHouseholderAssignmentsScreen(
     currentPersonId: String,
     currentPersonName: String,
     onBack: () -> Unit,
-    viewModel: HouseholderAssignmentViewModel = hiltViewModel(),
+    viewModel: HouseholderAssignmentViewModel = koinViewModel(),
 ) {
     val assignmentsFlow = remember(currentPersonId) { viewModel.incomingAssignmentsFor(currentPersonId) }
     val assignments by assignmentsFlow.collectAsStateWithLifecycle(initialValue = emptyList())

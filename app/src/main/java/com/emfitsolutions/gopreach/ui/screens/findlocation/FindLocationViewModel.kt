@@ -11,11 +11,9 @@ import com.emfitsolutions.gopreach.data.model.SavedLocation
 import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
 import com.emfitsolutions.gopreach.data.repository.InterestedPersonRepository
 import com.emfitsolutions.gopreach.data.repository.SavedLocationRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * "Find Location" — a Publisher manually enters a destination's GPS
@@ -32,8 +30,7 @@ import javax.inject.Inject
  * Also backs "save this coordinate with a remark for next time" (see
  * [SavedLocation]) — own-publisher-only, offline-first like everything else.
  */
-@HiltViewModel
-class FindLocationViewModel @Inject constructor(
+class FindLocationViewModel(
     private val locationTracker: LocationTracker,
     private val savedLocationRepository: SavedLocationRepository,
     private val interestedPersonRepository: InterestedPersonRepository,

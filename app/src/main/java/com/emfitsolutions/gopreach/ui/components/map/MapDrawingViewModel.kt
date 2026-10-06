@@ -15,9 +15,7 @@ import com.emfitsolutions.gopreach.domain.map.DrawingGeometry
 import com.emfitsolutions.gopreach.domain.map.DrawingValidation
 import com.emfitsolutions.gopreach.domain.map.DrawingValidator
 import com.emfitsolutions.gopreach.domain.map.TerritoryBoundary
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
-import javax.inject.Inject
 
 /** Result of trying to save a Drawing Mode session. */
 sealed interface DrawingSaveOutcome {
@@ -37,8 +35,7 @@ sealed interface DrawingSaveOutcome {
  * offline-first [TerritoryDrawingRepository]. Map modules never talk to the
  * repository themselves, which is what keeps every module behaving identically.
  */
-@HiltViewModel
-class MapDrawingViewModel @Inject constructor(
+class MapDrawingViewModel(
     private val repository: TerritoryDrawingRepository,
     private val permissionService: DrawingPermissionService,
     private val groupRepository: GroupRepository,

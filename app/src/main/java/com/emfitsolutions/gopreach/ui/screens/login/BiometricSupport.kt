@@ -9,13 +9,9 @@ import androidx.lifecycle.ViewModel
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
 import com.emfitsolutions.gopreach.data.repository.CredentialStore
 import com.emfitsolutions.gopreach.domain.UserSession
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val AUTHENTICATORS = BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.BIOMETRIC_WEAK
 
@@ -60,8 +56,7 @@ fun launchBiometricPrompt(
  * screen is gone by then, so the offer lives here (shown by [BiometricEnrollmentOfferHost] at the
  * nav graph root). The credentials are held only until the user answers, or the session ends.
  */
-@Singleton
-class BiometricEnrollmentOffer @Inject constructor(private val credentialStore: CredentialStore) {
+class BiometricEnrollmentOffer(private val credentialStore: CredentialStore) {
     private val _pending = MutableStateFlow<Pair<String, String>?>(null)
     val pending: StateFlow<Pair<String, String>?> = _pending.asStateFlow()
 
@@ -88,19 +83,17 @@ class BiometricEnrollmentOffer @Inject constructor(private val credentialStore: 
     fun clear() { _pending.value = null }
 }
 
-@HiltViewModel
-class BiometricOfferViewModel @Inject constructor(val offer: BiometricEnrollmentOffer) : ViewModel()
+class BiometricOfferViewModel(val offer: BiometricEnrollmentOffer) : ViewModel()
 
 /**
  * Biometric enrollment from Settings (Account / Security): the user explicitly turns it on,
  * proves their password, then proves the device biometric, and only then is anything saved.
  */
-@HiltViewModel
-class BiometricSetupViewModel @Inject constructor(
+class BiometricSetupViewModel(
     private val authRepository: AuthRepository,
     private val credentialStore: CredentialStore,
     private val userSession: UserSession,
-    @ApplicationContext private val context: Context,
+    private val context: Context,
 ) : ViewModel() {
 
     private val _enrolled = MutableStateFlow(runCatching { credentialStore.isBiometricEnrolled() }.getOrDefault(false))

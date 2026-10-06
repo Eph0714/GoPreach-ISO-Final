@@ -3,13 +3,9 @@ package com.emfitsolutions.gopreach.notifications
 import android.content.Context
 import com.emfitsolutions.gopreach.data.model.ScheduleKind
 import com.emfitsolutions.gopreach.data.repository.ScheduleRepository
-import com.emfitsolutions.gopreach.di.ApplicationScope
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * The single choke point that keeps every Calendar event's [AlarmScheduler]
@@ -25,11 +21,10 @@ import javax.inject.Singleton
  * the past), which per-save call sites can't reliably do on their own since
  * a delete only knows the id, not whether an alarm was ever armed for it.
  */
-@Singleton
-class CalendarAlarmRescheduler @Inject constructor(
-    @ApplicationContext private val context: Context,
+class CalendarAlarmRescheduler(
+    private val context: Context,
     private val scheduleRepository: ScheduleRepository,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     private var previouslyArmedIds: Set<String> = emptySet()
 

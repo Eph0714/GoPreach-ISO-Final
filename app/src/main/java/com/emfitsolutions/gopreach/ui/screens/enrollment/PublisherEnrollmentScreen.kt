@@ -36,7 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.LaunchedEffect
 import com.emfitsolutions.gopreach.data.model.Group
@@ -60,7 +60,7 @@ fun PublisherEnrollmentScreen(
     visibleCongregationId: String? = null,
     onBack: () -> Unit,
     onDone: () -> Unit,
-    viewModel: PublisherEnrollmentViewModel = hiltViewModel(),
+    viewModel: PublisherEnrollmentViewModel = koinViewModel(),
 ) {
     LaunchedEffect(visibleCongregationId) { viewModel.restrictTo(visibleCongregationId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()

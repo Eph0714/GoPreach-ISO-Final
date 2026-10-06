@@ -41,7 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.AccountStatus
 import com.emfitsolutions.gopreach.ui.components.DeleteChoiceDialog
@@ -61,7 +61,7 @@ fun ManageUsersScreen(
     onBack: () -> Unit,
     onAddNew: () -> Unit,
     onEdit: (String) -> Unit,
-    viewModel: ManageUsersViewModel = hiltViewModel(),
+    viewModel: ManageUsersViewModel = koinViewModel(),
 ) {
     val allUsers by viewModel.users.collectAsStateWithLifecycle()
     var showInactive by remember { mutableStateOf(false) }

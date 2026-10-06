@@ -13,7 +13,6 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.UserAccessGrantRepository
 import com.emfitsolutions.gopreach.data.repository.personIdFromAuthEmail
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
@@ -29,8 +28,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** "Multiple Role Login Detection & Role Selection" spec §2 — one selectable
  * "account" a signed-in [Person] may operate the app as, backed by exactly
@@ -156,14 +153,13 @@ data class SessionState(
  * Person's [RoleAssignment]s, which drive every permission check via
  * [PermissionChecker].
  */
-@Singleton
-class UserSession @Inject constructor(
+class UserSession(
     private val firebaseAuth: FirebaseAuth,
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val userAccessGrantRepository: UserAccessGrantRepository,
     private val offlineSessionMarker: OfflineSessionMarker,
-    @ApplicationScope appScope: CoroutineScope,
+    appScope: CoroutineScope,
 ) {
     private fun authStateFlow(): Flow<String?> = callbackFlow {
         val listener = FirebaseAuth.AuthStateListener { auth ->

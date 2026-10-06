@@ -51,7 +51,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.BuildConfig
 import com.emfitsolutions.gopreach.R
@@ -69,7 +69,7 @@ private val FieldShape = RoundedCornerShape(16.dp)
 fun LoginScreen(
     onForgotPasswordClick: () -> Unit,
     onSignedIn: (requiresPasswordChange: Boolean) -> Unit,
-    viewModel: LoginViewModel = hiltViewModel(),
+    viewModel: LoginViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var passwordVisible by remember { mutableStateOf(false) }
@@ -80,7 +80,7 @@ fun LoginScreen(
     // Activity-scoped UpdateViewModel instance MainActivity's own UpdateHost
     // renders the result of (see that screen's own comment on why), so this
     // doesn't spin up a second, unobserved one.
-    val updateViewModel: UpdateViewModel = hiltViewModel(activity)
+    val updateViewModel: UpdateViewModel = koinViewModel(viewModelStoreOwner = activity)
 
     LaunchedEffect(uiState.signedIn) {
         if (uiState.signedIn) {

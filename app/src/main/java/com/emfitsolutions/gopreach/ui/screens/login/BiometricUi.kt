@@ -26,7 +26,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
@@ -40,7 +40,7 @@ private const val PROMPT_SUBTITLE = "Confirm your fingerprint or face to turn it
  */
 @Composable
 fun BiometricEnrollmentOfferHost(signedIn: Boolean) {
-    val viewModel: BiometricOfferViewModel = hiltViewModel()
+    val viewModel: BiometricOfferViewModel = koinViewModel()
     val pending by viewModel.offer.pending.collectAsStateWithLifecycle()
     val activity = LocalContext.current as FragmentActivity
 
@@ -71,7 +71,7 @@ fun BiometricEnrollmentOfferHost(signedIn: Boolean) {
 
 /** Settings → Security: turn biometric login on (password, then biometric) or off for this device. */
 @Composable
-fun BiometricLoginSettingsSection(showTitle: Boolean = true, viewModel: BiometricSetupViewModel = hiltViewModel()) {
+fun BiometricLoginSettingsSection(showTitle: Boolean = true, viewModel: BiometricSetupViewModel = koinViewModel()) {
     val enrolled by viewModel.enrolled.collectAsStateWithLifecycle()
     val activity = LocalContext.current as FragmentActivity
     val scope = rememberCoroutineScope()

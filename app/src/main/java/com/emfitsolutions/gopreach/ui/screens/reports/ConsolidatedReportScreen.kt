@@ -49,7 +49,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import kotlinx.coroutines.flow.collect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.platform.LocalContext
@@ -79,7 +79,7 @@ import androidx.compose.ui.window.DialogProperties
 fun ConsolidatedReportScreen(
     visibleCongregationIds: Set<String>?,
     onBack: () -> Unit,
-    viewModel: ConsolidatedReportViewModel = hiltViewModel(),
+    viewModel: ConsolidatedReportViewModel = koinViewModel(),
 ) {
     LaunchedEffect(visibleCongregationIds) { viewModel.restrictTo(visibleCongregationIds) }
     // Started only while this screen is open — see VisitRepository's doc

@@ -29,7 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -46,7 +46,6 @@ import com.emfitsolutions.gopreach.domain.PermissionChecker
 import com.emfitsolutions.gopreach.domain.UserSession
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -60,7 +59,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
 
 private const val TAG = "OnlineUsersViewModel"
 
@@ -86,8 +84,7 @@ private data class PresenceRow(val personId: String, val congregationId: String?
 private fun PublisherCategory.displayLabel(): String = displayName
     .lowercase().split(' ').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
 
-@HiltViewModel
-class OnlineUsersViewModel @Inject constructor(
+class OnlineUsersViewModel(
     private val firestore: FirebaseFirestore,
     userSession: UserSession,
     personRepository: PersonRepository,
@@ -204,7 +201,7 @@ fun OnlineUsersIndicator(
     onlineTint: Color = OnlineUsersGreen,
     offlineTint: Color = MaterialTheme.colorScheme.error,
     showIcon: Boolean = true,
-    viewModel: OnlineUsersViewModel = hiltViewModel(),
+    viewModel: OnlineUsersViewModel = koinViewModel(),
 ) {
     val onlineUsers by viewModel.onlineUsers.collectAsStateWithLifecycle()
     var showList by remember { mutableStateOf(false) }

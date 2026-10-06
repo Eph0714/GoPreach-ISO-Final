@@ -4,10 +4,8 @@ import androidx.lifecycle.ViewModel
 import com.emfitsolutions.gopreach.data.model.MonthlyReport
 import com.emfitsolutions.gopreach.data.model.ReportStatus
 import com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
 
 /**
  * "Allow the publisher to see all his submitted Report record" — a read-only
@@ -18,8 +16,7 @@ import javax.inject.Inject
  * Draft included, so a Publisher can see something they started but never
  * actually submitted, same as they'd remember it.
  */
-@HiltViewModel
-class MySubmittedReportsViewModel @Inject constructor(
+class MySubmittedReportsViewModel(
     private val monthlyReportRepository: MonthlyReportRepository,
 ) : ViewModel() {
 

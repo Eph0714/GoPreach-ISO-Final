@@ -83,7 +83,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.export.BibleTextExporter
@@ -150,7 +150,7 @@ fun BibleTextRecordScreen(
     publisherPersonId: String,
     @Suppress("UNUSED_PARAMETER") currentPerson: Person?,
     onBack: () -> Unit,
-    viewModel: BibleTextRecordViewModel = hiltViewModel(),
+    viewModel: BibleTextRecordViewModel = koinViewModel(),
 ) {
     val recordsFlow = remember(publisherPersonId) { viewModel.recordsFor(publisherPersonId) }
     val records by recordsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -545,7 +545,7 @@ private fun EventDetailScreen(
 ) {
     val showToast = rememberActionToast()
     // Video download results ("downloaded for offline use" / "couldn't download").
-    val videoViewModel: VideoViewModel = hiltViewModel()
+    val videoViewModel: VideoViewModel = koinViewModel()
     LaunchedEffect(Unit) { videoViewModel.messages.collect { showToast(it) } }
     val event = eventWithTexts.event
     var showEditEvent by remember { mutableStateOf(false) }
@@ -1422,7 +1422,7 @@ private fun BibleTextRecordDialog(
     // fill, so text the publisher typed is never overwritten — the "Insert
     // verse text" button is the explicit way to replace it. A failed lookup
     // just leaves Remarks to be typed; nothing here blocks saving.
-    val verseTextViewModel: BibleVerseTextViewModel = hiltViewModel()
+    val verseTextViewModel: BibleVerseTextViewModel = koinViewModel()
     val showToast = rememberActionToast()
     val clipboardManager = LocalClipboardManager.current
     val verseScope = rememberCoroutineScope()

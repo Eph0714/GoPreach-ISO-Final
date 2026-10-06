@@ -2,11 +2,8 @@ package com.emfitsolutions.gopreach.data.repository
 
 import android.content.Context
 import androidx.core.content.edit
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val PREFS_NAME = "gopreach_notification_seen"
 
@@ -31,9 +28,8 @@ enum class NotificationCategory { TRANSFER_REQUEST, MONTHLY_REPORT, ANNOUNCEMENT
  * [AnnouncementSeenStore]'s doc comment — it never needs to sync across
  * devices or be visible to anyone else.
  */
-@Singleton
-class NotificationSeenStore @Inject constructor(
-    @ApplicationContext context: Context,
+class NotificationSeenStore(
+    context: Context,
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

@@ -13,8 +13,6 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val TAG = "GroupChatRepository"
 private const val COLLECTION = "groupChats"
@@ -30,8 +28,7 @@ private const val MESSAGES_SUBCOLLECTION = "messages"
  * straight to Firestore now" exception ([PersonRepository.saveNow]) already
  * does, just for every write, not just one.
  */
-@Singleton
-class GroupChatRepository @Inject constructor(
+class GroupChatRepository(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
 ) {

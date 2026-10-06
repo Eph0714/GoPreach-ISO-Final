@@ -21,13 +21,11 @@ import com.emfitsolutions.gopreach.domain.PermissionChecker
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.TerritoryBoundaryRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.ConcurrentHashMap
-import javax.inject.Inject
 
 /** The three kinds of record the Territory Map shows — one per
  * [PipelineStage]. [colorHex]/[emoji] give each its own marker so they can
@@ -99,8 +97,7 @@ private fun placeKey(municipality: String?, barangay: String?): String? {
  * and their records rather than every territory up front. Everything comes
  * from the existing collections (no new database).
  */
-@HiltViewModel
-class TerritoryMapViewModel @Inject constructor(
+class TerritoryMapViewModel(
     private val interestedPersonRepository: InterestedPersonRepository,
     private val congregationRepository: CongregationRepository,
     private val groupRepository: GroupRepository,

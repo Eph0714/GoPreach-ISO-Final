@@ -13,13 +13,11 @@ import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.UserAccessGrantRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class RestrictedUserRow(
     val person: Person,
@@ -33,8 +31,7 @@ data class RestrictedUserRow(
  * spec §14) only; visibility itself is gated by the nav graph/dashboard tile,
  * not this ViewModel.
  */
-@HiltViewModel
-class ManageUsersViewModel @Inject constructor(
+class ManageUsersViewModel(
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val userAccessGrantRepository: UserAccessGrantRepository,

@@ -65,7 +65,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.AdminRole
@@ -107,9 +107,9 @@ fun AdminHomeScreen(
      * GoPreachNavGraph, same as every other role-gating boolean here. */
     canManageAccountCredentials: Boolean,
     onNavigate: (String) -> Unit,
-    viewModel: HomeViewModel = hiltViewModel(),
-    notificationCenterViewModel: NotificationCenterViewModel = hiltViewModel(),
-    groupChatViewModel: com.emfitsolutions.gopreach.ui.screens.groupchat.GroupChatViewModel = hiltViewModel(),
+    viewModel: HomeViewModel = koinViewModel(),
+    notificationCenterViewModel: NotificationCenterViewModel = koinViewModel(),
+    groupChatViewModel: com.emfitsolutions.gopreach.ui.screens.groupchat.GroupChatViewModel = koinViewModel(),
 ) {
     val session by viewModel.state.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()

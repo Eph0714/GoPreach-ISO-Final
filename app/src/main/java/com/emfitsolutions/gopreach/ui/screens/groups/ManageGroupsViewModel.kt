@@ -18,13 +18,11 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.domain.GroupAccessScope
 import com.emfitsolutions.gopreach.domain.allows
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** One candidate for the Group Assistant dropdown — [isElder] distinguishes
  * a Regular Elder candidate (from [ManageGroupsViewModel.availableEldersFor])
@@ -54,8 +52,7 @@ data class MemberCandidate(
 /** Spec §3 — "CRUD Groups"; each Group needs exactly one Elder in each of three
  * roles (Overseer/Servant/Assistant) rather than the single Elder this used to
  * allow — see [Group.missingRoles]. */
-@HiltViewModel
-class ManageGroupsViewModel @Inject constructor(
+class ManageGroupsViewModel(
     private val groupRepository: GroupRepository,
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,

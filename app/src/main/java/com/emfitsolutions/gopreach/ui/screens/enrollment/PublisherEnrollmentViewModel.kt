@@ -18,7 +18,6 @@ import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.domain.PermissionChecker
 import com.emfitsolutions.gopreach.ui.components.PublisherFormState
 import com.emfitsolutions.gopreach.data.repository.TempCredentials
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +27,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class PublisherEnrollmentUiState(
     /** Every Publisher field — the same set the Edit Publisher dialog uses (see [PublisherFormState]). */
@@ -60,8 +58,7 @@ data class PublisherEnrollmentUiState(
  * into any congregation" and shows the Select Congregation field; a real id
  * means "restricted to this one congregation."
  */
-@HiltViewModel
-class PublisherEnrollmentViewModel @Inject constructor(
+class PublisherEnrollmentViewModel(
     private val authRepository: AuthRepository,
     private val groupRepository: GroupRepository,
     private val locationTracker: LocationTracker,

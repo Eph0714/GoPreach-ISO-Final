@@ -16,7 +16,6 @@ import com.emfitsolutions.gopreach.data.repository.ForwardRequestRepository
 import com.emfitsolutions.gopreach.data.repository.InterestedPersonRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -25,15 +24,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Backs the Service Overseer's (also Coordinator Elder/Admin/Super-Admin, per
  * the same "who can enroll a Service Overseer" access set) incoming "Forward
  * to Other Congregation" review queue.
  */
-@HiltViewModel
-class ForwardRequestsViewModel @Inject constructor(
+class ForwardRequestsViewModel(
     private val forwardRequestRepository: ForwardRequestRepository,
     private val interestedPersonRepository: InterestedPersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,

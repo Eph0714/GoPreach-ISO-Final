@@ -3,8 +3,6 @@ package com.emfitsolutions.gopreach.data.repository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * The congregation a Super-Admin is currently working in inside the Publisher module. The Publisher list sets it
@@ -12,8 +10,7 @@ import javax.inject.Singleton
  * congregation without choosing it again. Only a Super-Admin ever sets it; everyone else is fixed to their own
  * congregation by their role. Lives only in memory.
  */
-@Singleton
-class PublisherCongregationContext @Inject constructor() {
+class PublisherCongregationContext() {
     private val _selectedCongregationId = MutableStateFlow<String?>(null)
     val selectedCongregationId: StateFlow<String?> = _selectedCongregationId.asStateFlow()
 

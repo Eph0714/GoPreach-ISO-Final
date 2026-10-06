@@ -63,7 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.ReportStatus
@@ -108,7 +108,7 @@ fun MonthlyReportScreen(
      * where a report-history shortcut doesn't make sense). */
     onViewHistory: (() -> Unit)? = null,
     onBack: () -> Unit,
-    viewModel: MonthlyReportViewModel = hiltViewModel(),
+    viewModel: MonthlyReportViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 

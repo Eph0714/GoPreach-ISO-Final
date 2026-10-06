@@ -15,14 +15,11 @@ import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
 import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.RemoteSyncCoordinator
 import com.emfitsolutions.gopreach.data.sync.SyncScheduler
-import dagger.hilt.android.qualifiers.ApplicationContext
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 private const val TAG = "AuthDebug"
 
@@ -50,8 +47,7 @@ data class LoginUiState(
     val quickLoginLockedMs: Long = 0L,
 )
 
-@HiltViewModel
-class LoginViewModel @Inject constructor(
+class LoginViewModel(
     private val authRepository: AuthRepository,
     private val credentialStore: CredentialStore,
     private val quickLoginStore: QuickLoginStore,
@@ -60,7 +56,7 @@ class LoginViewModel @Inject constructor(
     private val remoteSyncCoordinator: RemoteSyncCoordinator,
     private val biometricEnrollmentOffer: BiometricEnrollmentOffer,
     private val pendingLoginNotice: PendingLoginNotice,
-    @ApplicationContext private val context: Context,
+    private val context: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())

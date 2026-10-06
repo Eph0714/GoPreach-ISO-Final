@@ -16,7 +16,6 @@ import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.GroupChatRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +23,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 private const val TAG = "GroupChatViewModel"
 
@@ -46,8 +44,7 @@ data class ParticipantCandidate(
  * ViewModel for all of it, same "one ViewModel per feature area" shape as
  * [com.emfitsolutions.gopreach.ui.screens.announcements.ManageAnnouncementsViewModel].
  */
-@HiltViewModel
-class GroupChatViewModel @Inject constructor(
+class GroupChatViewModel(
     private val groupChatRepository: GroupChatRepository,
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,

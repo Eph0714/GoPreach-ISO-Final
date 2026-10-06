@@ -26,7 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import com.emfitsolutions.gopreach.ui.components.map.NamedBoundary
 import com.emfitsolutions.gopreach.ui.components.map.HideSystemBarsEffect
 import com.emfitsolutions.gopreach.ui.components.map.OsmBoundaryMap
@@ -55,7 +55,7 @@ fun GroupTerritoryMapDialog(
     boundaryColorHex: String?,
     barangays: List<GroupTerritoryBarangay>,
     onDismiss: () -> Unit,
-    viewModel: TerritoryAssignmentsViewModel = hiltViewModel(),
+    viewModel: TerritoryAssignmentsViewModel = koinViewModel(),
 ) {
     var boundaries by remember(barangays) { mutableStateOf<List<NamedBoundary>?>(null) }
     // "If a boundary is clicked, show the single barangay view" — which

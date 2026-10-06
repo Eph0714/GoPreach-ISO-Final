@@ -25,7 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -34,13 +34,11 @@ import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.SyncScheduler
 import com.emfitsolutions.gopreach.data.sync.SyncWorker
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 import androidx.compose.ui.window.DialogProperties
 
 /** What the "SYNC TO SERVER" button is doing right now — separate from the passive
@@ -63,8 +61,7 @@ fun pendingChangesPhrase(count: Int): String =
     if (count == 1) "There is 1 change made that needs to sync into the server."
     else "There are $count changes made that need to sync into the server."
 
-@HiltViewModel
-class ManualSyncViewModel @Inject constructor(
+class ManualSyncViewModel(
     private val connectivityObserver: ConnectivityObserver,
     private val syncScheduler: SyncScheduler,
     private val offlineFirestoreRepository: OfflineFirestoreRepository,
@@ -158,7 +155,7 @@ class ManualSyncViewModel @Inject constructor(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SyncToServerButton(
-    viewModel: ManualSyncViewModel = hiltViewModel(),
+    viewModel: ManualSyncViewModel = koinViewModel(),
     /** False when the caller places its own [SyncStatusIndicator] elsewhere
      * (e.g. PublisherHomeScreen puts it at the very top of the "Keep Your
      * Data Safe" card, above the title, so the Online/Offline + Online

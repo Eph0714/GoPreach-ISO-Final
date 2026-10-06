@@ -7,8 +7,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val TAG = "UpdateManifest"
 
@@ -26,8 +24,7 @@ private const val TAG = "UpdateManifest"
  * etc. later is just `gh release create vX.Y.Z <apk>`; nothing here needs to
  * change to pick that up, since this always asks for "latest".
  */
-@Singleton
-class UpdateManifestRepository @Inject constructor(
+class UpdateManifestRepository(
     private val gson: Gson,
     private val cache: UpdateManifestCache,
 ) {

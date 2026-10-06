@@ -5,7 +5,6 @@ import com.emfitsolutions.gopreach.data.model.TerritoryAssignmentBarangay
 import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
@@ -13,8 +12,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val ASSIGNMENTS_COLLECTION = "territoryAssignments"
 private const val BARANGAYS_COLLECTION = "territoryAssignmentBarangays"
@@ -90,13 +87,12 @@ private data class MuncityPlan(
  * path, and "claim it" is a `transaction.set()` on that same path that the
  * transaction guarantees cannot race a concurrent claim of the same barangay.
  */
-@Singleton
-class TerritoryAssignmentRepository @Inject constructor(
+class TerritoryAssignmentRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
     private val connectivityObserver: ConnectivityObserver,
     private val auditLogRepository: AuditLogRepository,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAssignments(): Flow<List<TerritoryAssignment>> = offline.observeCollection(ASSIGNMENTS_COLLECTION)
     fun observeBarangayClaims(): Flow<List<TerritoryAssignmentBarangay>> = offline.observeCollection(BARANGAYS_COLLECTION)

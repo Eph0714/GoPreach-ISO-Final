@@ -50,7 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import com.emfitsolutions.gopreach.ui.components.GroupColorPalette
 import com.emfitsolutions.gopreach.ui.components.map.NamedBoundary
 import com.emfitsolutions.gopreach.ui.components.map.HideSystemBarsEffect
@@ -80,7 +80,7 @@ private data class AllTerritoriesEntry(
 fun AllTerritoriesDialog(
     rows: List<GroupTerritoryRow>,
     onDismiss: () -> Unit,
-    viewModel: TerritoryAssignmentsViewModel = hiltViewModel(),
+    viewModel: TerritoryAssignmentsViewModel = koinViewModel(),
 ) {
     var mode by remember { mutableStateOf(AllTerritoriesMode.MAP) }
     val context = LocalContext.current

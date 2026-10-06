@@ -60,7 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.Group
@@ -100,7 +100,7 @@ fun ManageGroupsScreen(
      * and can never add, deactivate or delete one. Null keeps the legacy behaviour (grant-based users). */
     scope: GroupAccessScope? = null,
     onBack: () -> Unit,
-    viewModel: ManageGroupsViewModel = hiltViewModel(),
+    viewModel: ManageGroupsViewModel = koinViewModel(),
 ) {
     val canAddOrRemove = !readOnly && (scope == null || scope.canAddOrRemoveGroups)
     val congregations by viewModel.congregations.collectAsStateWithLifecycle(initialValue = emptyList())

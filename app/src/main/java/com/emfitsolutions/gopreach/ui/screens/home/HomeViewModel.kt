@@ -10,17 +10,14 @@ import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.domain.SessionState
 import com.emfitsolutions.gopreach.domain.UserSession
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 private const val TAG = "HomeViewModel"
 
-@HiltViewModel
-class HomeViewModel @Inject constructor(
+class HomeViewModel(
     userSession: UserSession,
     private val authRepository: AuthRepository,
     private val personRepository: PersonRepository,

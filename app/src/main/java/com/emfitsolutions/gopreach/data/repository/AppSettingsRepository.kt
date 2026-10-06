@@ -4,7 +4,6 @@ import android.net.Uri
 import com.emfitsolutions.gopreach.data.model.AppSettings
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.CoroutineScope
@@ -12,8 +11,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "appSettings"
 
@@ -23,13 +20,12 @@ private const val COLLECTION = "appSettings"
  * modeled as a one-row "collection" so it reuses the same offline cache/sync path
  * as everything else (see [OfflineFirestoreRepository]).
  */
-@Singleton
-class AppSettingsRepository @Inject constructor(
+class AppSettingsRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
     private val auditLogRepository: AuditLogRepository,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observe(): Flow<AppSettings> =
         offline.observeCollection<AppSettings>(COLLECTION).map { list ->

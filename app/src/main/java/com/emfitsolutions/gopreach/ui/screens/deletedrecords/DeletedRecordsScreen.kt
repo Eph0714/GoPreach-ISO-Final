@@ -41,7 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.DeletedRecord
 import com.emfitsolutions.gopreach.data.repository.RecycleBinRepository
@@ -71,7 +71,7 @@ private const val WARNING_DAYS = 7L
 fun DeletedRecordsScreen(
     access: DeletedRecordsAccess,
     onBack: () -> Unit,
-    viewModel: DeletedRecordsViewModel = hiltViewModel(),
+    viewModel: DeletedRecordsViewModel = koinViewModel(),
 ) {
     val records by remember(access) { viewModel.recordsFor(access) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val settings by viewModel.settings.collectAsStateWithLifecycle()

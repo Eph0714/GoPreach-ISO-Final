@@ -61,7 +61,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.BuildConfig
 import com.emfitsolutions.gopreach.R
@@ -88,7 +88,7 @@ fun SettingsScreen(
     currentPersonId: String = "",
     showDeletedRecordsSettings: Boolean = false,
     onOpenDeletedRecords: () -> Unit = {},
-    viewModel: SettingsViewModel = hiltViewModel(),
+    viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val theme by viewModel.theme.collectAsStateWithLifecycle()
     val colorOption by viewModel.colorOption.collectAsStateWithLifecycle()
@@ -97,7 +97,7 @@ fun SettingsScreen(
     // the *same* instance MainActivity's UpdateHost renders the result of —
     // otherwise tapping "Check for Updates" here would update a ViewModel
     // nothing on screen is actually observing.
-    val updateViewModel: UpdateViewModel = hiltViewModel(LocalContext.current as ComponentActivity)
+    val updateViewModel: UpdateViewModel = koinViewModel(viewModelStoreOwner = LocalContext.current as ComponentActivity)
 
     Scaffold(
         topBar = {

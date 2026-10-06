@@ -7,19 +7,16 @@ import com.emfitsolutions.gopreach.data.model.RecordStatus
 import com.emfitsolutions.gopreach.data.repository.PreachingTimeRecordRepository
 import com.emfitsolutions.gopreach.domain.DateRangeStore
 import com.emfitsolutions.gopreach.ui.components.DateRange
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** "Preaching Time Record Module" spec §12-§15 — Pioneer-only CRUD. Territory
  * is deliberately not part of this screen's Add/Edit form or list display
  * (product decision: preaching time is reported without a territory) — the
  * model still carries `territoryId` for any pre-existing records, it's just
  * never shown or asked for here. */
-@HiltViewModel
-class PreachingTimeRecordViewModel @Inject constructor(
+class PreachingTimeRecordViewModel(
     private val preachingTimeRecordRepository: PreachingTimeRecordRepository,
     private val dateRangeStore: DateRangeStore,
 ) : ViewModel() {

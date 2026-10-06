@@ -104,7 +104,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -165,15 +165,15 @@ fun PublisherHomeScreen(
     // straight to category management; Publishers get a "contact an
     // administrator" message instead.
     canManageCreditHourCategories: Boolean = false,
-    viewModel: HomeViewModel = hiltViewModel(),
-    dashboardViewModel: PublisherDashboardViewModel = hiltViewModel(),
-    announcementsViewModel: ManageAnnouncementsViewModel = hiltViewModel(),
-    publisherForwardViewModel: com.emfitsolutions.gopreach.ui.screens.pipeline.PublisherForwardRequestsViewModel = hiltViewModel(),
-    householderAssignmentViewModel: com.emfitsolutions.gopreach.ui.screens.householderassignment.HouseholderAssignmentViewModel = hiltViewModel(),
-    notificationCenterViewModel: NotificationCenterViewModel = hiltViewModel(),
-    groupChatViewModel: com.emfitsolutions.gopreach.ui.screens.groupchat.GroupChatViewModel = hiltViewModel(),
+    viewModel: HomeViewModel = koinViewModel(),
+    dashboardViewModel: PublisherDashboardViewModel = koinViewModel(),
+    announcementsViewModel: ManageAnnouncementsViewModel = koinViewModel(),
+    publisherForwardViewModel: com.emfitsolutions.gopreach.ui.screens.pipeline.PublisherForwardRequestsViewModel = koinViewModel(),
+    householderAssignmentViewModel: com.emfitsolutions.gopreach.ui.screens.householderassignment.HouseholderAssignmentViewModel = koinViewModel(),
+    notificationCenterViewModel: NotificationCenterViewModel = koinViewModel(),
+    groupChatViewModel: com.emfitsolutions.gopreach.ui.screens.groupchat.GroupChatViewModel = koinViewModel(),
     // "Publishers App – Customizable Module Navigation Redesign".
-    layoutViewModel: PublisherDashboardLayoutViewModel = hiltViewModel(),
+    layoutViewModel: PublisherDashboardLayoutViewModel = koinViewModel(),
 ) {
     val session by viewModel.state.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
@@ -388,10 +388,10 @@ fun PublisherHomeScreen(
                     // matching planner view. The old separate Dashboard card
                     // (date-range picker + Show/Hide toggle) is gone.
                     val plannerDateRange by dashboardViewModel.dateRange.collectAsStateWithLifecycle()
-                    val plannerDayViewModel: PlannerDayViewModel = hiltViewModel()
-                    val plannerWeekViewModel: PlannerWeekViewModel = hiltViewModel()
-                    val plannerMonthViewModel: PlannerMonthViewModel = hiltViewModel()
-                    val plannerYearViewModel: PlannerYearViewModel = hiltViewModel()
+                    val plannerDayViewModel: PlannerDayViewModel = koinViewModel()
+                    val plannerWeekViewModel: PlannerWeekViewModel = koinViewModel()
+                    val plannerMonthViewModel: PlannerMonthViewModel = koinViewModel()
+                    val plannerYearViewModel: PlannerYearViewModel = koinViewModel()
 
                     // "Dashboard Date Range = My Planner Date Range" (Final
                     // Integration Rule) — every time the Dashboard's range
@@ -462,7 +462,7 @@ fun PublisherHomeScreen(
                         bibleStudies = moduleLayout.isPlannerSectionVisible(PlannerSection.BIBLE_STUDIES),
                     )
                     // Months whose report is already submitted are closed in My Planner.
-                    val plannerReportViewModel: com.emfitsolutions.gopreach.ui.screens.planner.PlannerReportViewModel = hiltViewModel()
+                    val plannerReportViewModel: com.emfitsolutions.gopreach.ui.screens.planner.PlannerReportViewModel = koinViewModel()
                     val submittedMonths by remember(currentPersonId) { plannerReportViewModel.submittedMonths(currentPersonId) }
                         .collectAsStateWithLifecycle(initialValue = emptyMap())
                     val plannerLock = remember(submittedMonths) { com.emfitsolutions.gopreach.ui.screens.planner.PlannerLock(submittedMonths) }

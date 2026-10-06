@@ -3,10 +3,8 @@ package com.emfitsolutions.gopreach.data.repository
 import android.content.Context
 import android.util.Log
 import com.emfitsolutions.gopreach.data.model.SavedVideo
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,8 +19,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** What a pasted JW Library / jw.org video link points at. [lank] is jw.org's
  * language-independent key for the video; [jwLocale] the language the link
@@ -51,10 +47,9 @@ data class PlaybackSource(val uri: String, val isLocalFile: Boolean)
  * publishes for download, saved in the app's own storage (the publisher can
  * delete it again at any time) — it isn't shared with anyone or synced.
  */
-@Singleton
-class JwVideoRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
-    @ApplicationScope private val appScope: CoroutineScope,
+class JwVideoRepository(
+    private val context: Context,
+    private val appScope: CoroutineScope,
 ) {
     private val videoDir get() = File(context.filesDir, "videos")
 

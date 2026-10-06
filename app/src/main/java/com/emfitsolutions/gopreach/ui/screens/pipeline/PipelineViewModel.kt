@@ -28,7 +28,6 @@ import com.emfitsolutions.gopreach.data.repository.PublisherForwardRequestReposi
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import android.util.Log
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -40,7 +39,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Backs [PipelineScreen] for all three of its stages (see [PipelineStage]) —
@@ -48,8 +46,7 @@ import javax.inject.Inject
  * is the exact same [InterestedPerson] entity throughout its life; only the
  * screen's own filtering and which action buttons it shows differ by stage.
  */
-@HiltViewModel
-class PipelineViewModel @Inject constructor(
+class PipelineViewModel(
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,
     private val auditLogRepository: AuditLogRepository,

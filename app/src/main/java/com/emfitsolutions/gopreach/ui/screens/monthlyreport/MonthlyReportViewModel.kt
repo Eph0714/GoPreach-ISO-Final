@@ -10,13 +10,11 @@ import com.emfitsolutions.gopreach.domain.MonthlyReportCalculator
 import com.emfitsolutions.gopreach.domain.PublisherReport
 import com.emfitsolutions.gopreach.domain.PublisherReportCalculator
 import com.emfitsolutions.gopreach.domain.PublisherReportService
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import javax.inject.Inject
 
 /** Midnight on the 1st of whichever month [monthsAgo] months before the
  * current one — 0 = this month, 1 = last month. Shared by every "which
@@ -192,8 +190,7 @@ data class MonthlyReportUiState(
  * the current month, so the dropdown itself is the enforcement — there's no
  * way to even construct a request for a future month.
  */
-@HiltViewModel
-class MonthlyReportViewModel @Inject constructor(
+class MonthlyReportViewModel(
     private val monthlyReportRepository: MonthlyReportRepository,
     private val publisherReportService: PublisherReportService,
 ) : ViewModel() {

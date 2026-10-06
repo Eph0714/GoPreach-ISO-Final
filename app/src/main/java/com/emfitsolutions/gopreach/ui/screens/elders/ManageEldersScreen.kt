@@ -47,7 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.AdminRole
 import com.emfitsolutions.gopreach.data.model.Congregation
@@ -89,7 +89,7 @@ fun ManageEldersScreen(
     readOnly: Boolean = false,
     onBack: () -> Unit,
     onAddNew: () -> Unit,
-    viewModel: ManageEldersViewModel = hiltViewModel(),
+    viewModel: ManageEldersViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
     // "For Super Admin: Congregation: [All Congregations]" — a scoped role

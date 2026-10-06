@@ -11,15 +11,12 @@ import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.SyncStatusCenter
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.emfitsolutions.gopreach.domain.map.DrawingGeometry
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val DRAWINGS = "territoryDrawings"
 private const val AUDITS = "territoryDrawingAudits"
@@ -39,14 +36,13 @@ private const val BOUNDS = "territoryBounds"
  *
  * Every change also appends a [TerritoryDrawingAudit] row.
  */
-@Singleton
-class TerritoryDrawingRepository @Inject constructor(
+class TerritoryDrawingRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
     private val cacheDao: CacheDao,
     private val syncStatusCenter: SyncStatusCenter,
     private val connectivityObserver: ConnectivityObserver,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<TerritoryDrawing>> = offline.observeCollection(DRAWINGS)
 

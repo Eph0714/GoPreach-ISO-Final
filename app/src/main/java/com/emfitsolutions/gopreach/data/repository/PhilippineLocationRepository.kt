@@ -5,8 +5,6 @@ import com.emfitsolutions.gopreach.data.local.psgc.MuncityEntity
 import com.emfitsolutions.gopreach.data.local.psgc.PsgcDao
 import com.emfitsolutions.gopreach.data.local.psgc.ProvinceEntity
 import com.emfitsolutions.gopreach.data.location.GeocodedAddress
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** One resolved level of [PhilippineAddressSelection] — [id] is the PSGC
  * row's own id (used to query the next level down), [name] what's shown. */
@@ -54,8 +52,7 @@ private fun cityKey(s: String): String {
  * from the geocoder still resolves to a real, canonical PSGC entry rather
  * than silently matching nothing.
  */
-@Singleton
-class PhilippineLocationRepository @Inject constructor(
+class PhilippineLocationRepository(
     private val dao: PsgcDao,
 ) {
     /** Province-name search, plus — because the data has no Region level — any

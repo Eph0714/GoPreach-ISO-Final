@@ -1,7 +1,6 @@
 package com.emfitsolutions.gopreach.data.sync
 
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
@@ -12,8 +11,6 @@ import com.emfitsolutions.gopreach.data.repository.PreachingTimeRecordRepository
 import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import com.emfitsolutions.gopreach.domain.UserSession
 import com.emfitsolutions.gopreach.notifications.NotificationHelper
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
 import java.util.Calendar
 
@@ -36,10 +33,9 @@ private const val NOTIFICATION_ID_SUBMIT_REPORT = 9002
  *    .MonthlyReportUiState.canSubmitWindow]), if this month's report hasn't
  *    been submitted yet — nudge to submit.
  */
-@HiltWorker
-class ReminderWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted params: WorkerParameters,
+class ReminderWorker (
+    context: Context,
+    params: WorkerParameters,
     private val userSession: UserSession,
     private val monthlyReportRepository: MonthlyReportRepository,
     private val preachingTimeRecordRepository: PreachingTimeRecordRepository,

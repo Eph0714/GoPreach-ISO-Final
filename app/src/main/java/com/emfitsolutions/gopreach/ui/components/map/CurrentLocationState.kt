@@ -5,20 +5,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.emfitsolutions.gopreach.data.location.LocationTracker
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
-import javax.inject.Inject
 import com.emfitsolutions.gopreach.data.location.LatLng as FixedLatLng
 
 /** Gives map composables the device location without each module re-implementing it. */
-@HiltViewModel
-class CurrentLocationViewModel @Inject constructor(private val tracker: LocationTracker) : ViewModel() {
+class CurrentLocationViewModel(private val tracker: LocationTracker) : ViewModel() {
     fun hasPermission(): Boolean = tracker.hasLocationPermission()
     suspend fun lastKnown(): FixedLatLng? = tracker.getLastKnownLocation()
     fun updates(): Flow<FixedLatLng> = tracker.requestLocationUpdatesFlow(intervalMillis = 4_000L, minUpdateIntervalMillis = 2_000L)
@@ -32,7 +29,7 @@ class CurrentLocationViewModel @Inject constructor(private val tracker: Location
  */
 @Composable
 fun rememberCurrentLocation(): State<Pair<Double, Double>?> {
-    val viewModel: CurrentLocationViewModel = hiltViewModel()
+    val viewModel: CurrentLocationViewModel = koinViewModel()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val location = remember { mutableStateOf<Pair<Double, Double>?>(null) }
     LaunchedEffect(lifecycle) {

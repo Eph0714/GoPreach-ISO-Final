@@ -13,8 +13,6 @@ import com.emfitsolutions.gopreach.data.repository.WeeklyPlannerGoalRepository
 import com.emfitsolutions.gopreach.data.repository.YearlyPlannerGoalRepository
 import com.emfitsolutions.gopreach.data.repository.personIdFromAuthEmail
 import com.google.firebase.auth.FirebaseAuth
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val TAG = "DataRefresher"
 
@@ -28,8 +26,7 @@ private const val TAG = "DataRefresher"
  * whatever local edits happen to be pending, which is exactly what tapping
  * "Sync to Server" would additionally do.
  */
-@Singleton
-class DataRefresher @Inject constructor(
+class DataRefresher(
     private val firebaseAuth: FirebaseAuth,
     private val plannerDayRepository: PlannerDayRepository,
     private val monthlyPlannerGoalRepository: MonthlyPlannerGoalRepository,

@@ -1,7 +1,6 @@
 package com.emfitsolutions.gopreach.data.sync
 
 import android.content.Context
-import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -14,8 +13,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -30,10 +27,9 @@ import kotlinx.coroutines.tasks.await
  * observing this unique work's [androidx.work.WorkInfo] can show a real "Sync
  * Complete — N uploaded, N failed" summary instead of a bare success/failure flag.
  */
-@HiltWorker
-class SyncWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted params: WorkerParameters,
+class SyncWorker (
+    context: Context,
+    params: WorkerParameters,
     private val syncQueueDao: SyncQueueDao,
     private val cacheDao: CacheDao,
     private val firestore: FirebaseFirestore,

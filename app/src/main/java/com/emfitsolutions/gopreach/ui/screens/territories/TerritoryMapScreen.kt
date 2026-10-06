@@ -107,7 +107,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -190,8 +190,8 @@ fun TerritoryMapScreen(
     focusLng: Double? = null,
     focusName: String? = null,
     onBack: () -> Unit,
-    viewModel: TerritoryMapViewModel = hiltViewModel(),
-    pipelineViewModel: PipelineViewModel = hiltViewModel(),
+    viewModel: TerritoryMapViewModel = koinViewModel(),
+    pipelineViewModel: PipelineViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
@@ -323,7 +323,7 @@ fun TerritoryMapScreen(
     val isLoading = datasetKey != null && (areasState == null || recordsState == null)
 
     // ---- Drawing (long-press -> Drawing Mode; shared with every map module) -------
-    val drawingViewModel: MapDrawingViewModel = hiltViewModel()
+    val drawingViewModel: MapDrawingViewModel = koinViewModel()
     val drawingAccess by remember(currentPersonId) { drawingViewModel.access(currentPersonId) }
         .collectAsStateWithLifecycle(initialValue = DrawingAccess.NONE)
     // Admin / Service Overseer / Coordinator Elder / Secretary open on "Show FS Group" (every group of the congregation) once, as the initial choice.

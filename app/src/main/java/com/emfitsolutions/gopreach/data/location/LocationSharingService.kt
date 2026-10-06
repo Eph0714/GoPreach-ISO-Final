@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.data.location
 
+import org.koin.android.ext.android.inject
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
@@ -15,7 +16,6 @@ import com.emfitsolutions.gopreach.data.repository.LocationSharingSettingsReposi
 import com.emfitsolutions.gopreach.data.repository.SharedLocationRepository
 import com.emfitsolutions.gopreach.notifications.LOCATION_SHARING_CHANNEL_ID
 import com.emfitsolutions.gopreach.notifications.NotificationHelper
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 private const val TAG = "LocationSharingService"
 private const val NOTIFICATION_ID = 9600
@@ -50,12 +49,11 @@ private const val EXTRA_GROUP_ID = "groupId"
  * tapping "Stop Sharing" on the ongoing notification (redelivers here with
  * [ACTION_STOP]) or by the configured duration elapsing on its own.
  */
-@AndroidEntryPoint
 class LocationSharingService : Service() {
 
-    @Inject lateinit var locationTracker: LocationTracker
-    @Inject lateinit var sharedLocationRepository: SharedLocationRepository
-    @Inject lateinit var locationSharingSettingsRepository: LocationSharingSettingsRepository
+    val locationTracker: LocationTracker by inject()
+    val sharedLocationRepository: SharedLocationRepository by inject()
+    val locationSharingSettingsRepository: LocationSharingSettingsRepository by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob())
     private var sharingJob: Job? = null

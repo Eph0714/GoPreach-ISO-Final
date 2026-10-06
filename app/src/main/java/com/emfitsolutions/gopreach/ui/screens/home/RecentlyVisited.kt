@@ -46,7 +46,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.InterestedPerson
@@ -59,14 +59,12 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherVisibilitySettingsRepository
 import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import javax.inject.Inject
 
 /** Who is looking at the dashboard — decides which records may appear. */
 sealed interface RecentlyVisitedViewer {
@@ -89,8 +87,7 @@ data class ActivityState(
     val followUpNeeded: List<RecentlyVisitedItem> = emptyList(),
 )
 
-@HiltViewModel
-class RecentlyVisitedViewModel @Inject constructor(
+class RecentlyVisitedViewModel(
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,
     private val visibilityRepository: PublisherVisibilitySettingsRepository,
@@ -212,7 +209,7 @@ fun DashboardActivitySections(
     viewer: RecentlyVisitedViewer?,
     onOpen: (RecentlyVisitedItem) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: RecentlyVisitedViewModel = hiltViewModel(),
+    viewModel: RecentlyVisitedViewModel = koinViewModel(),
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         if (viewer == null) {

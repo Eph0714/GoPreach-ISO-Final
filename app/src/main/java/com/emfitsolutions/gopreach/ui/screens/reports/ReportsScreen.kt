@@ -47,7 +47,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.export.CsvExporter
@@ -87,7 +87,7 @@ fun ReportsScreen(
     canEditReports: Boolean = false,
     onEditPublisher: (personId: String) -> Unit = {},
     onBack: () -> Unit,
-    viewModel: ReportsViewModel = hiltViewModel(),
+    viewModel: ReportsViewModel = koinViewModel(),
 ) {
     // "Select a congregation for Super Admin" — visibleCongregationId is
     // only ever null for Super-Admin (every other role is already fixed to

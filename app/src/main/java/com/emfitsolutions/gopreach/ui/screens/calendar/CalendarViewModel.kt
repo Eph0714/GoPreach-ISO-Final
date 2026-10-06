@@ -7,14 +7,12 @@ import com.emfitsolutions.gopreach.data.model.Schedule
 import com.emfitsolutions.gopreach.data.model.ScheduleKind
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.ScheduleRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Spec §6.2 — Calendar. [CalendarScope] captures the view/edit rules from the
@@ -37,8 +35,7 @@ sealed class CalendarScope {
     data class Publisher(val congregationId: String?, val groupId: String?) : CalendarScope()
 }
 
-@HiltViewModel
-class CalendarViewModel @Inject constructor(
+class CalendarViewModel(
     private val scheduleRepository: ScheduleRepository,
     private val recycleBinRepository: com.emfitsolutions.gopreach.data.repository.RecycleBinRepository,
     congregationRepository: CongregationRepository,

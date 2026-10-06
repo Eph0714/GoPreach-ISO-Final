@@ -5,8 +5,6 @@ import com.google.gson.JsonParser
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -96,8 +94,7 @@ data class MapDetails(
  * recognizable street or place to go by, so both are drawn here instead,
  * independent of whatever TomTom's own map data does or doesn't have.
  */
-@Singleton
-class OverpassLandmarkRepository @Inject constructor() {
+class OverpassLandmarkRepository() {
     private val mutex = Mutex()
     private val cache = LinkedHashMap<String, MapDetails>()
     private val maxCacheEntries = 40

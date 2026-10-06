@@ -43,7 +43,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import com.emfitsolutions.gopreach.data.export.BoundaryKmlExporter
 import com.emfitsolutions.gopreach.data.repository.AreaFeature
 import com.emfitsolutions.gopreach.data.repository.Landmark
@@ -72,7 +72,7 @@ fun BarangayBoundaryDialog(
     barangayName: String,
     boundaryColorHex: String? = null,
     onDismiss: () -> Unit,
-    viewModel: TerritoryAssignmentsViewModel = hiltViewModel(),
+    viewModel: TerritoryAssignmentsViewModel = koinViewModel(),
 ) {
     var geometryJson by remember(municipality, barangayName) { mutableStateOf<String?>(null) }
     var isLoading by remember(municipality, barangayName) { mutableStateOf(true) }

@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach
 
+import org.koin.android.ext.android.inject
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -14,7 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,10 +31,7 @@ import com.emfitsolutions.gopreach.ui.navigation.GoPreachNavGraph
 import com.emfitsolutions.gopreach.ui.screens.settings.InactivityTracker
 import com.emfitsolutions.gopreach.ui.screens.settings.SessionTimeoutHost
 import com.emfitsolutions.gopreach.ui.theme.GoPreachTheme
-import dagger.hilt.android.AndroidEntryPoint
-import javax.inject.Inject
 
-@AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
     // AppCompatActivity, not a bare ComponentActivity/FragmentActivity: androidx
     // .biometric.BiometricPrompt (used by the login screen's fingerprint/face
@@ -44,20 +42,15 @@ class MainActivity : AppCompatActivity() {
     // needed for biometric login.) AppCompatActivity is itself a
     // ComponentActivity, so setContent{}/enableEdgeToEdge() below are unaffected.
 
-    @Inject
-    lateinit var themePreferenceRepository: ThemePreferenceRepository
+    val themePreferenceRepository: ThemePreferenceRepository by inject()
 
-    @Inject
-    lateinit var nameOrderPreference: com.emfitsolutions.gopreach.data.repository.NameOrderPreference
+    val nameOrderPreference: com.emfitsolutions.gopreach.data.repository.NameOrderPreference by inject()
 
-    @Inject
-    lateinit var syncScheduler: SyncScheduler
+    val syncScheduler: SyncScheduler by inject()
 
-    @Inject
-    lateinit var remoteSyncCoordinator: RemoteSyncCoordinator
+    val remoteSyncCoordinator: RemoteSyncCoordinator by inject()
 
-    @Inject
-    lateinit var inactivityTracker: InactivityTracker
+    val inactivityTracker: InactivityTracker by inject()
 
     /** Any touch/key/trackball event counts as "using the app" for Session Timeout. */
     override fun onUserInteraction() {
@@ -99,7 +92,7 @@ class MainActivity : AppCompatActivity() {
 
                     // Checked once per app process, regardless of whether the user is
                     // signed in yet — "Application Starts -> Check Update Server" per spec.
-                    val updateViewModel: UpdateViewModel = hiltViewModel(this@MainActivity)
+                    val updateViewModel: UpdateViewModel = koinViewModel(viewModelStoreOwner = this@MainActivity)
                     LaunchedEffect(Unit) { updateViewModel.checkOnAppStart() }
 
                     // "Automatically start synchronization when the application

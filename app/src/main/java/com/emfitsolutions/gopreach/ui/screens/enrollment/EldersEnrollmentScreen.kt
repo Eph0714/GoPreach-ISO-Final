@@ -33,7 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.AdminRole
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
@@ -55,7 +55,7 @@ fun EldersEnrollmentScreen(
     currentPersonId: String,
     onBack: () -> Unit,
     onDone: () -> Unit,
-    viewModel: EldersEnrollmentViewModel = hiltViewModel(),
+    viewModel: EldersEnrollmentViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()

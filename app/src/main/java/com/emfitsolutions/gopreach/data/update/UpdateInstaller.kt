@@ -6,10 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Hands the downloaded APK to Android's own Package Installer — this app
@@ -19,9 +16,8 @@ import javax.inject.Singleton
  * rejected automatically, before the user even sees an "install" prompt.
  * Nothing in this class can override that; it isn't trying to.
  */
-@Singleton
-class UpdateInstaller @Inject constructor(
-    @ApplicationContext private val context: Context,
+class UpdateInstaller(
+    private val context: Context,
 ) {
     /** Android 8+ gates "install from this app" per-app rather than with a
      * single global "unknown sources" toggle. Below API 26 there's no such

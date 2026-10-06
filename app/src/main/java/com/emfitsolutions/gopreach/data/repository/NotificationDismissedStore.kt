@@ -2,11 +2,8 @@ package com.emfitsolutions.gopreach.data.repository
 
 import android.content.Context
 import androidx.core.content.edit
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val PREFS_NAME = "gopreach_notification_dismissed"
 
@@ -30,9 +27,8 @@ private const val PREFS_NAME = "gopreach_notification_dismissed"
  * separate synced collection just to carry a dismissed flag isn't worth
  * introducing a second Firestore write path here.
  */
-@Singleton
-class NotificationDismissedStore @Inject constructor(
-    @ApplicationContext context: Context,
+class NotificationDismissedStore(
+    context: Context,
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

@@ -57,7 +57,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.AdminRole
 import com.emfitsolutions.gopreach.data.model.MonthlyReport
@@ -87,7 +87,7 @@ fun ManualFieldServiceScreen(
     currentPersonId: String,
     currentRole: AdminRole?,
     onBack: () -> Unit,
-    viewModel: ManualFieldServiceViewModel = hiltViewModel(),
+    viewModel: ManualFieldServiceViewModel = koinViewModel(),
 ) {
     val showToast = rememberActionToast()
     val scope = rememberCoroutineScope()

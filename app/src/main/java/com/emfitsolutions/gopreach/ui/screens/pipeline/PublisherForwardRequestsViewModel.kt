@@ -8,12 +8,10 @@ import com.emfitsolutions.gopreach.data.model.PublisherForwardRequest
 import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
 import com.emfitsolutions.gopreach.data.repository.InterestedPersonRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherForwardRequestRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * "FORWARD TO OTHER PUBLISHER" spec flow — backs the *receiving* publisher's
@@ -22,8 +20,7 @@ import javax.inject.Inject
  * the sending and receiving publisher's Home screen watch (see
  * [com.emfitsolutions.gopreach.ui.screens.home.PublisherHomeScreen]).
  */
-@HiltViewModel
-class PublisherForwardRequestsViewModel @Inject constructor(
+class PublisherForwardRequestsViewModel(
     private val publisherForwardRequestRepository: PublisherForwardRequestRepository,
     private val interestedPersonRepository: InterestedPersonRepository,
     private val auditLogRepository: AuditLogRepository,

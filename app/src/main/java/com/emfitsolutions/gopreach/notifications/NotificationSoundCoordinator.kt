@@ -14,12 +14,10 @@ import com.emfitsolutions.gopreach.data.repository.GroupChatRepository
 import com.emfitsolutions.gopreach.data.repository.HouseholderAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.NotificationCategory
 import com.emfitsolutions.gopreach.data.repository.PublisherForwardRequestRepository
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.emfitsolutions.gopreach.domain.UserSession
 import com.emfitsolutions.gopreach.ui.components.ChatBoxEntry
 import com.emfitsolutions.gopreach.ui.screens.notifications.NotificationItem
 import com.emfitsolutions.gopreach.ui.screens.notifications.NotificationItemsProvider
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -29,8 +27,6 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Same access set [com.emfitsolutions.gopreach.ui.navigation.GoPreachNavGraph
  * .canEditPublisherReports] already grants Monthly Report visibility to —
@@ -100,8 +96,7 @@ private val SOUND_WORTHY_CATEGORIES = setOf(
  * regression, and safer than guessing at their grant scope from outside the
  * screen that already resolves it correctly.
  */
-@Singleton
-class NotificationSoundCoordinator @Inject constructor(
+class NotificationSoundCoordinator(
     private val userSession: UserSession,
     private val itemsProvider: NotificationItemsProvider,
     private val forwardRequestRepository: ForwardRequestRepository,
@@ -109,8 +104,8 @@ class NotificationSoundCoordinator @Inject constructor(
     private val householderAssignmentRepository: HouseholderAssignmentRepository,
     private val groupChatRepository: GroupChatRepository,
     private val congregationRepository: CongregationRepository,
-    @ApplicationContext private val context: Context,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val context: Context,
+    private val appScope: CoroutineScope,
 ) {
     private var started = false
 

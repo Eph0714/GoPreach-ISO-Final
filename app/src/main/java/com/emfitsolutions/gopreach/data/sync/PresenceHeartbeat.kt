@@ -1,7 +1,6 @@
 package com.emfitsolutions.gopreach.data.sync
 
 import android.util.Log
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.emfitsolutions.gopreach.domain.UserSession
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
@@ -14,8 +13,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val TAG = "PresenceHeartbeat"
 
@@ -62,12 +59,11 @@ private const val HEARTBEAT_INTERVAL_MS = 8_000L
  * what actually catches that case — every reader treats a stale `lastSeen` as
  * Offline regardless of whether this document was ever explicitly deleted.
  */
-@Singleton
-class PresenceHeartbeat @Inject constructor(
+class PresenceHeartbeat(
     private val firestore: FirebaseFirestore,
     private val userSession: UserSession,
     private val connectivityObserver: ConnectivityObserver,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     private var started = false
 

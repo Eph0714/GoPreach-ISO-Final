@@ -3,12 +3,9 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.model.AuditLogEntry
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "auditLog"
 
@@ -24,11 +21,10 @@ private const val COLLECTION = "auditLog"
  * unchanged and keep *downloading* other devices' already-synced entries —
  * this is specifically about this device never pushing its own new log
  * activity up, not about hiding what other admins have already logged. */
-@Singleton
-class AuditLogRepository @Inject constructor(
+class AuditLogRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<AuditLogEntry>> = offline.observeCollection(COLLECTION)
 

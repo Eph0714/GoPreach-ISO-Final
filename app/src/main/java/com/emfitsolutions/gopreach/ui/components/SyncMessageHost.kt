@@ -2,15 +2,12 @@ package com.emfitsolutions.gopreach.ui.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import com.emfitsolutions.gopreach.data.sync.SyncStatusCenter
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharedFlow
-import javax.inject.Inject
 
-@HiltViewModel
-class SyncMessageHostViewModel @Inject constructor(
+class SyncMessageHostViewModel(
     syncStatusCenter: SyncStatusCenter,
 ) : ViewModel() {
     val messages: SharedFlow<String> = syncStatusCenter.messages
@@ -24,7 +21,7 @@ class SyncMessageHostViewModel @Inject constructor(
  * this app has dozens of independent Scaffolds, most without a snackbarHost.
  */
 @Composable
-fun SyncMessageHost(viewModel: SyncMessageHostViewModel = hiltViewModel()) {
+fun SyncMessageHost(viewModel: SyncMessageHostViewModel = koinViewModel()) {
     val showToast = rememberActionToast()
     LaunchedEffect(Unit) {
         viewModel.messages.collect { message -> showToast(message) }

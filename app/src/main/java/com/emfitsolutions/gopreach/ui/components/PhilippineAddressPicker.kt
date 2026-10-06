@@ -23,18 +23,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.repository.PhilippineLocationRepository
 import com.emfitsolutions.gopreach.data.repository.PsgcOption
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** One dropdown level's load state (spec §7 — "Loading provinces... /
  * Complete Province List", and a distinguishable failure state instead of a
@@ -48,8 +46,7 @@ data class PsgcDropdownState(
     val isError: Boolean = false,
 )
 
-@HiltViewModel
-class PhilippineAddressPickerViewModel @Inject constructor(
+class PhilippineAddressPickerViewModel(
     private val repository: PhilippineLocationRepository,
 ) : ViewModel() {
     private val _provinceState = MutableStateFlow(PsgcDropdownState())
@@ -220,7 +217,7 @@ fun PhilippineAddressPicker(
      * the enrollment/congregation forms keep their pick-from-the-list
      * behavior. */
     allowManualEntry: Boolean = false,
-    viewModel: PhilippineAddressPickerViewModel = hiltViewModel(),
+    viewModel: PhilippineAddressPickerViewModel = koinViewModel(),
 ) {
     val scope = rememberCoroutineScope()
     var provinceId by remember { mutableStateOf<Int?>(null) }

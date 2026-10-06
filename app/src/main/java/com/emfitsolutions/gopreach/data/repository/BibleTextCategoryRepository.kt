@@ -4,13 +4,10 @@ import com.emfitsolutions.gopreach.data.model.BibleTextCategory
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
 import com.emfitsolutions.gopreach.data.sync.pullFirestoreCollectionOnce
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "bibleTextCategories"
 
@@ -21,11 +18,10 @@ private const val COLLECTION = "bibleTextCategories"
  * enforcement is server-side, in firestore.rules' own
  * `bibleTextCategories` match block (spec §20: never trust a
  * publisherPersonId supplied by the frontend). */
-@Singleton
-class BibleTextCategoryRepository @Inject constructor(
+class BibleTextCategoryRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<BibleTextCategory>> =
         offline.observeCollection<BibleTextCategory>(COLLECTION)

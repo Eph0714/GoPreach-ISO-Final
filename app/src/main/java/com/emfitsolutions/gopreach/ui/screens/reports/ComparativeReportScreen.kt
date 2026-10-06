@@ -33,7 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -50,7 +50,6 @@ import com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt
 import com.emfitsolutions.gopreach.ui.components.charts.LineSeries
 import com.emfitsolutions.gopreach.ui.components.charts.MultiSeriesLineChart
 import com.emfitsolutions.gopreach.ui.components.rememberCongregationContext
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -60,7 +59,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import javax.inject.Inject
 
 /** Searching / Return Visit / Bible Study counts for one calendar month. */
 data class StageCounts(val searching: Int, val returnVisit: Int, val bibleStudy: Int) {
@@ -77,8 +75,7 @@ data class StageCounts(val searching: Int, val returnVisit: Int, val bibleStudy:
     }
 }
 
-@HiltViewModel
-class ComparativeReportViewModel @Inject constructor(
+class ComparativeReportViewModel(
     private val interestedPersonRepository: InterestedPersonRepository,
     congregationRepository: CongregationRepository,
 ) : ViewModel() {
@@ -122,7 +119,7 @@ private val BibleStudyColor = Color(0xFF8E24AA)
 fun ComparativeReportScreen(
     fixedCongregationId: String?,
     onBack: () -> Unit,
-    viewModel: ComparativeReportViewModel = hiltViewModel(),
+    viewModel: ComparativeReportViewModel = koinViewModel(),
 ) {
     var congregationFilter by rememberCongregationContext("comparative_report")
     val congregationId = fixedCongregationId ?: congregationFilter

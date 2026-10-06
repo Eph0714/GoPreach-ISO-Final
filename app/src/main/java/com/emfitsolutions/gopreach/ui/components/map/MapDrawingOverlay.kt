@@ -55,7 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.DrawingStatus
 import com.emfitsolutions.gopreach.data.model.DrawingSyncState
@@ -104,7 +104,7 @@ fun BoxScope.MapDrawingOverlay(
     /** The congregation whose map this is (the Super Admin's selection; everyone else's own). */
     congregationId: String,
     modifier: Modifier = Modifier,
-    viewModel: MapDrawingViewModel = hiltViewModel(),
+    viewModel: MapDrawingViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
     val density = context.resources.displayMetrics.density

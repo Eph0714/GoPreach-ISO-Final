@@ -32,7 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.AccountStatus
 import com.emfitsolutions.gopreach.data.model.Permission
@@ -59,7 +59,7 @@ fun AddEditUserScreen(
     currentPersonId: String,
     onBack: () -> Unit,
     onDone: () -> Unit,
-    viewModel: AddEditUserViewModel = hiltViewModel(),
+    viewModel: AddEditUserViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()

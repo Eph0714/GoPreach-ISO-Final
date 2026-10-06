@@ -23,27 +23,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
 import com.emfitsolutions.gopreach.data.repository.QuickLoginMethod
 import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
 import com.emfitsolutions.gopreach.domain.UserSession
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Setting up, changing or removing the on-device PIN and Pattern. Every set-up or change first
  * re-checks the account's current password with the server, so a stolen unlocked phone can't quietly
  * add a PIN of its own.
  */
-@HiltViewModel
-class LoginMethodsViewModel @Inject constructor(
+class LoginMethodsViewModel(
     private val authRepository: AuthRepository,
     private val quickLoginStore: QuickLoginStore,
     private val userSession: UserSession,
@@ -127,7 +124,7 @@ fun PasswordConfirmDialog(
 
 /** Account Settings → Security: every way to sign in and whether it is set up on this device. */
 @Composable
-fun LoginMethodsSection(viewModel: LoginMethodsViewModel = hiltViewModel()) {
+fun LoginMethodsSection(viewModel: LoginMethodsViewModel = koinViewModel()) {
     val enrolled by viewModel.enrolled.collectAsStateWithLifecycle()
 
     // Which method is going through password check -> create -> confirm, and what's been verified so far.

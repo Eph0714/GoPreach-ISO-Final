@@ -30,7 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.rounded.Search
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.Person
 import com.emfitsolutions.gopreach.ui.screens.householderassignment.HouseholderAssignmentViewModel
@@ -53,7 +53,7 @@ fun PublisherSchedulesScreen(
     congregationId: String?,
     currentPersonId: String,
     onBack: () -> Unit,
-    viewModel: HouseholderAssignmentViewModel = hiltViewModel(),
+    viewModel: HouseholderAssignmentViewModel = koinViewModel(),
 ) {
     val publishers by (congregationId?.let { viewModel.assignablePublishers(it) } ?: kotlinx.coroutines.flow.flowOf(emptyList()))
         .collectAsStateWithLifecycle(initialValue = null)

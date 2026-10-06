@@ -4,26 +4,22 @@ import com.emfitsolutions.gopreach.data.model.PlannerDay
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
 import com.emfitsolutions.gopreach.data.sync.pullFirestoreCollectionOnce
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "plannerDays"
 
 /** My Planner spec §16-§27 — one [PlannerDay] per (publisher, date), plus
  * every day a Publisher has ever touched for the Month tab's calendar
  * highlighting. */
-@Singleton
-class PlannerDayRepository @Inject constructor(
+class PlannerDayRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
     private val monthlyReportRepository: MonthlyReportRepository,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<PlannerDay>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }

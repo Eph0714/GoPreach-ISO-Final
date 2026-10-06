@@ -41,7 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.PreachingTimeRecord
 import com.emfitsolutions.gopreach.data.model.RecordStatus
@@ -68,7 +68,7 @@ fun PreachingTimeRecordScreen(
     congregationId: String?,
     canPermanentlyDelete: Boolean,
     onBack: () -> Unit,
-    viewModel: PreachingTimeRecordViewModel = hiltViewModel(),
+    viewModel: PreachingTimeRecordViewModel = koinViewModel(),
 ) {
     val recordsFlow = remember(publisherPersonId) { viewModel.recordsFor(publisherPersonId) }
     val allRecords by recordsFlow.collectAsStateWithLifecycle(initialValue = emptyList())

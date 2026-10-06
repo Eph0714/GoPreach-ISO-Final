@@ -18,7 +18,6 @@ import com.emfitsolutions.gopreach.data.repository.MidweekMeetingScheduleReposit
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.PublicTalkScheduleRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +26,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import javax.inject.Inject
 
 /** Midnight, this week's Monday — spec's own example, "Week for August
  * 31-September 6," is a Monday-Sunday span, matching
@@ -92,8 +90,7 @@ private fun mentionsPerson(text: String, personName: String): Boolean {
  * Study Schedule; every Publisher sees their own congregation's copy,
  * read-only.
  */
-@HiltViewModel
-class MeetingAssignmentsViewModel @Inject constructor(
+class MeetingAssignmentsViewModel(
     private val midweekRepository: MidweekMeetingScheduleRepository,
     private val publicTalkRepository: PublicTalkScheduleRepository,
     private val cartAssignmentRepository: CartAssignmentRepository,

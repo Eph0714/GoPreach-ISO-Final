@@ -13,17 +13,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.DataRefresher
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@HiltViewModel
-class RefreshButtonViewModel @Inject constructor(
+class RefreshButtonViewModel(
     private val dataRefresher: DataRefresher,
     private val connectivityObserver: ConnectivityObserver,
 ) : ViewModel() {
@@ -49,7 +46,7 @@ class RefreshButtonViewModel @Inject constructor(
 @Composable
 fun RefreshButton(
     modifier: Modifier = Modifier,
-    viewModel: RefreshButtonViewModel = hiltViewModel(),
+    viewModel: RefreshButtonViewModel = koinViewModel(),
 ) {
     var isRefreshing by remember { mutableStateOf(false) }
     val showToast = rememberActionToast()

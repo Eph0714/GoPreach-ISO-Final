@@ -22,7 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import androidx.compose.ui.window.DialogProperties
@@ -34,7 +34,7 @@ import androidx.compose.ui.window.DialogProperties
  * Downloading/Verifying/ReadyToInstall/Failed/UpToDate state does.
  */
 @Composable
-fun UpdateHost(viewModel: UpdateViewModel = hiltViewModel()) {
+fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
 

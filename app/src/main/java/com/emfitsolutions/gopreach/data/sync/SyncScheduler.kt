@@ -11,22 +11,17 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.WorkRequest
-import com.emfitsolutions.gopreach.di.ApplicationScope
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-import javax.inject.Inject
-import javax.inject.Singleton
 
-@Singleton
-class SyncScheduler @Inject constructor(
-    @ApplicationContext private val context: Context,
+class SyncScheduler(
+    private val context: Context,
     private val connectivityObserver: ConnectivityObserver,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     companion object {
         const val UNIQUE_WORK_NAME = "gopreach_sync_queue"

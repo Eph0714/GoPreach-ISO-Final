@@ -3,12 +3,9 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.model.HouseholderAssignment
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "houseHolderAssignments"
 
@@ -17,11 +14,10 @@ private const val COLLECTION = "houseHolderAssignments"
  * Admin's own cross-congregation visibility and the receiving Publisher's
  * device both need to see the exact same assignment regardless of which
  * device created it. */
-@Singleton
-class HouseholderAssignmentRepository @Inject constructor(
+class HouseholderAssignmentRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<HouseholderAssignment>> = offline.observeCollection(COLLECTION)
 

@@ -17,7 +17,6 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -30,8 +29,6 @@ import com.google.gson.JsonParser
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlin.coroutines.resume
 
 data class LatLng(val lat: Double, val lng: Double, val accuracyMeters: Float?)
@@ -57,9 +54,8 @@ data class GeocodedAddress(
  * threshold + weak-signal fallback are left as a follow-up product decision;
  * this surfaces `accuracyMeters` so a caller can apply one).
  */
-@Singleton
-class LocationTracker @Inject constructor(
-    @ApplicationContext private val context: Context,
+class LocationTracker(
+    private val context: Context,
 ) {
     private companion object {
         const val TAG = "LocationTracker"

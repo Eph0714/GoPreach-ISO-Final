@@ -16,7 +16,6 @@ import com.emfitsolutions.gopreach.data.repository.GroupRepository
 import com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -25,7 +24,6 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import javax.inject.Inject
 
 /**
  * One publisher status as it appears in the Field Service Report's columns:
@@ -130,8 +128,7 @@ fun fieldServiceMonthStart(monthsAgo: Int = 0): Long = Calendar.getInstance().ap
     set(Calendar.MILLISECOND, 0)
 }.timeInMillis
 
-@HiltViewModel
-class FieldServiceReportViewModel @Inject constructor(
+class FieldServiceReportViewModel(
     private val groupRepository: GroupRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val personRepository: PersonRepository,

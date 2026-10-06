@@ -8,11 +8,9 @@ import com.emfitsolutions.gopreach.data.model.TimerSessionStatus
 import com.emfitsolutions.gopreach.data.repository.MinistryTimerSessionRepository
 import com.emfitsolutions.gopreach.data.repository.PlannerDayRepository
 import com.emfitsolutions.gopreach.domain.DayBounds
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** Result of [MinistryTimerViewModel.stopAndFinalize] — what the Stop
  * confirmation dialogs need: the just-finished session's elapsed minutes,
@@ -24,14 +22,13 @@ data class MinistryTimerStopResult(val elapsedMinutes: Int, val existingMinutesF
 /**
  * Ministry Timer (spec §20) — reusable from both the Publisher Main
  * Interface and My Planner → Day (same instance either way, since a
- * Hilt-scoped `hiltViewModel()` call for the same nav-graph entry resolves
+ * Hilt-scoped `koinViewModel()` call for the same nav-graph entry resolves
  * to the same ViewModel instance whenever both call sites share a scope —
  * and even where they don't, both just read/write the same Firestore-backed
  * [MinistryTimerSessionRepository.observeRunning] state, so they can never
  * disagree about whether a timer is running).
  */
-@HiltViewModel
-class MinistryTimerViewModel @Inject constructor(
+class MinistryTimerViewModel(
     private val sessionRepository: MinistryTimerSessionRepository,
     private val plannerDayRepository: PlannerDayRepository,
 ) : ViewModel() {

@@ -1,7 +1,6 @@
 package com.emfitsolutions.gopreach.data.sync
 
 import com.emfitsolutions.gopreach.data.local.dao.SyncQueueDao
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,8 +10,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Single, app-wide source of truth for "what is the sync queue doing right now" —
@@ -31,10 +28,9 @@ import javax.inject.Singleton
  * being queued; every automatic trigger (periodic floor, reconnect,
  * [SyncScheduler.triggerSyncIfOnline]) still runs silently, no toast.
  */
-@Singleton
-class SyncStatusCenter @Inject constructor(
+class SyncStatusCenter(
     private val syncQueueDao: SyncQueueDao,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     /** One-shot system notifications — collected exactly once, app-wide, by

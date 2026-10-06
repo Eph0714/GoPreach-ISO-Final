@@ -4,7 +4,6 @@ import android.util.Log
 import com.emfitsolutions.gopreach.data.model.Visit
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
@@ -14,19 +13,16 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val TAG = "VisitRepository"
 
 private fun visitsPath(interestedPersonId: String) = "interestedPeople/$interestedPersonId/visits"
 
 /** Spec §6.3 — one or more preaching visits per [com.emfitsolutions.gopreach.data.model.InterestedPerson]. */
-@Singleton
-class VisitRepository @Inject constructor(
+class VisitRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeForInterestedPerson(interestedPersonId: String): Flow<List<Visit>> =
         offline.observeCollection(visitsPath(interestedPersonId))

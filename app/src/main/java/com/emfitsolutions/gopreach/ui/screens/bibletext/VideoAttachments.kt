@@ -65,7 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -73,12 +73,10 @@ import com.emfitsolutions.gopreach.data.model.SavedVideo
 import com.emfitsolutions.gopreach.data.repository.JwVideoRepository
 import com.emfitsolutions.gopreach.data.repository.PlaybackSource
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** What looking up a pasted link found. */
 sealed interface VideoLookup {
@@ -89,8 +87,7 @@ sealed interface VideoLookup {
     data object NotFound : VideoLookup
 }
 
-@HiltViewModel
-class VideoViewModel @Inject constructor(
+class VideoViewModel(
     private val repository: JwVideoRepository,
 ) : ViewModel() {
     val downloadProgress: StateFlow<Map<String, Int>> = repository.downloadProgress
@@ -136,7 +133,7 @@ internal fun AddVideoSection(
     defaultLocale: String,
     /** Show the videos already added (each removable) above the link box. */
     showExisting: Boolean = true,
-    viewModel: VideoViewModel = hiltViewModel(),
+    viewModel: VideoViewModel = koinViewModel(),
 ) {
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
@@ -244,7 +241,7 @@ internal class GalleryVideo(val video: SavedVideo, val onRemove: () -> Unit)
  * per row on a phone, more on a wider screen.
  */
 @Composable
-internal fun VideoGallery(items: List<GalleryVideo>, viewModel: VideoViewModel = hiltViewModel()) {
+internal fun VideoGallery(items: List<GalleryVideo>, viewModel: VideoViewModel = koinViewModel()) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val columns = (maxWidth / 200.dp).toInt().coerceIn(2, 4)
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {

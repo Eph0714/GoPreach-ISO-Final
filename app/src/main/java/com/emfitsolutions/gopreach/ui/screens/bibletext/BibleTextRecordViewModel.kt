@@ -7,11 +7,9 @@ import com.emfitsolutions.gopreach.data.model.BibleTextCategory
 import com.emfitsolutions.gopreach.data.model.BibleTextRecord
 import com.emfitsolutions.gopreach.data.repository.BibleTextCategoryRepository
 import com.emfitsolutions.gopreach.data.repository.BibleTextRecordRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** Quick-pick suggestions offered on the Add/Edit Event dialog's Theme/Topic
  * field (spec §1's own examples list, plus this module's pre-upgrade default
@@ -77,8 +75,7 @@ val SUGGESTED_EVENTS: List<String> = listOf(
  * server-side by firestore.rules' matching `bibleTextRecords`/
  * `bibleTextCategories` blocks.
  */
-@HiltViewModel
-class BibleTextRecordViewModel @Inject constructor(
+class BibleTextRecordViewModel(
     private val recordRepository: BibleTextRecordRepository,
     private val eventRepository: BibleTextCategoryRepository,
     private val recycleBinRepository: com.emfitsolutions.gopreach.data.repository.RecycleBinRepository,

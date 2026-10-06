@@ -10,7 +10,6 @@ import com.emfitsolutions.gopreach.data.repository.AnnouncementRepository
 import com.emfitsolutions.gopreach.data.repository.AnnouncementSeenStore
 import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +17,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 private const val TAG = "ManageAnnouncementsVM"
 
@@ -29,8 +27,7 @@ private const val TAG = "ManageAnnouncementsVM"
  * both sides — see [com.emfitsolutions.gopreach.ui.screens.announcements
  * .AnnouncementsScreen]'s `readOnly` parameter.
  */
-@HiltViewModel
-class ManageAnnouncementsViewModel @Inject constructor(
+class ManageAnnouncementsViewModel(
     private val announcementRepository: AnnouncementRepository,
     private val auditLogRepository: AuditLogRepository,
     private val announcementSeenStore: AnnouncementSeenStore,

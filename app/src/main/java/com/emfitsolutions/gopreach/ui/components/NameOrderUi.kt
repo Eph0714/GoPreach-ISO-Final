@@ -12,24 +12,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import com.emfitsolutions.gopreach.data.repository.NameOrderPreference
 import com.emfitsolutions.gopreach.domain.NameOrder
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
 
 /** The name order currently picked (see [NameOrderPreference]); forms read it to order their name fields. */
 val LocalNameOrder = compositionLocalOf { NameOrder.LAST_FIRST }
 
-@HiltViewModel
-class NameOrderViewModel @Inject constructor(private val preference: NameOrderPreference) : ViewModel() {
+class NameOrderViewModel(private val preference: NameOrderPreference) : ViewModel() {
     fun set(order: NameOrder) = preference.set(order)
 }
 
 /** "Last name first / First name first" — one tap, applies at once, remembered on this device. */
 @Composable
-fun NameOrderToggle(modifier: Modifier = Modifier, viewModel: NameOrderViewModel = hiltViewModel()) {
+fun NameOrderToggle(modifier: Modifier = Modifier, viewModel: NameOrderViewModel = koinViewModel()) {
     val current = LocalNameOrder.current
     SingleChoiceSegmentedButtonRow(modifier = modifier.fillMaxWidth()) {
         NameOrder.entries.forEachIndexed { index, order ->

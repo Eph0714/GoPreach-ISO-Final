@@ -57,7 +57,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -119,7 +119,7 @@ fun ManagePublisherReportsScreen(
      * keeps the screen's own default "This Month" filter. */
     initialPeriodMonth: Long? = null,
     onBack: () -> Unit,
-    viewModel: ManagePublisherReportsViewModel = hiltViewModel(),
+    viewModel: ManagePublisherReportsViewModel = koinViewModel(),
 ) {
     LaunchedEffect(fixedCongregationId) { viewModel.restrictTo(fixedCongregationId) }
     LaunchedEffect(initialPeriodMonth) {

@@ -65,7 +65,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.AccountStatus
 import com.emfitsolutions.gopreach.data.model.Congregation
@@ -102,7 +102,7 @@ fun ManagePublishersScreen(
     readOnly: Boolean = false,
     onBack: () -> Unit,
     onAddNew: () -> Unit,
-    viewModel: ManagePublishersViewModel = hiltViewModel(),
+    viewModel: ManagePublishersViewModel = koinViewModel(),
 ) {
     // Super-Admin only (visibleCongregationId == null from the caller) — an
     // Admin/Coordinator Elder is already scoped to their own single

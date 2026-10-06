@@ -40,7 +40,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.InterestedPerson
 import com.emfitsolutions.gopreach.data.model.PipelineStage
@@ -75,7 +75,7 @@ fun ElderInterestedRecordsScreen(
     congregationId: String?,
     groupId: String?,
     onBack: () -> Unit,
-    viewModel: PipelineViewModel = hiltViewModel(),
+    viewModel: PipelineViewModel = koinViewModel(),
 ) {
     val congregationName by remember(congregationId) {
         if (congregationId != null) viewModel.congregationName(congregationId) else kotlinx.coroutines.flow.flowOf(null)

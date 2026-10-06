@@ -20,13 +20,11 @@ import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import com.emfitsolutions.gopreach.domain.duplicateNameKey
 import com.emfitsolutions.gopreach.domain.duplicateUsernameKey
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class PublisherRow(
     val person: Person,
@@ -52,8 +50,7 @@ data class PublisherRow(
  * publisher categories, so changing category *is* the CRUD-delete/reactivate
  * operation; the Person and their historical reports stay intact.
  */
-@HiltViewModel
-class ManagePublishersViewModel @Inject constructor(
+class ManagePublishersViewModel(
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val auditLogRepository: AuditLogRepository,

@@ -7,14 +7,12 @@ import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class LogRow(val entry: AuditLogEntry, val actorName: String)
 
@@ -25,8 +23,7 @@ data class LogRow(val entry: AuditLogEntry, val actorName: String)
  * [visibleCongregationId] further narrows the data itself for the congregation-
  * scoped roles (null means "show everything", i.e. Super-Admin).
  */
-@HiltViewModel
-class UserLogsViewModel @Inject constructor(
+class UserLogsViewModel(
     private val auditLogRepository: AuditLogRepository,
     private val personRepository: PersonRepository,
     congregationRepository: CongregationRepository,

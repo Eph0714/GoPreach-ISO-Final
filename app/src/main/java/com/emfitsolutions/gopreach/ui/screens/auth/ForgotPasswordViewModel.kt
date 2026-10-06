@@ -3,13 +3,11 @@ package com.emfitsolutions.gopreach.ui.screens.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class ForgotPasswordUiState(
     val username: String = "",
@@ -22,8 +20,7 @@ data class ForgotPasswordUiState(
  * a self-service emailed link (email is optional on Person) — this just files the
  * request for that role to see and action.
  */
-@HiltViewModel
-class ForgotPasswordViewModel @Inject constructor(
+class ForgotPasswordViewModel(
     private val authRepository: AuthRepository,
 ) : ViewModel() {
 

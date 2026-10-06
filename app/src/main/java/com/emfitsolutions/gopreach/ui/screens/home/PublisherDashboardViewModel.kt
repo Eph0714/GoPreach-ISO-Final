@@ -13,13 +13,11 @@ import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import com.emfitsolutions.gopreach.domain.DateRangeStore
 import com.emfitsolutions.gopreach.domain.MinistryStatisticsService
 import com.emfitsolutions.gopreach.ui.components.DateRange
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
 
 /** "Add Special Pioneer publisher status category" — Special Pioneer gets
  * exactly Regular Pioneer's treatment everywhere this shared helper is used
@@ -63,8 +61,7 @@ data class PublisherDashboardStats(
  * Admin/Coordinator Dashboard don't silently disagree for a dual-role
  * account.
  */
-@HiltViewModel
-class PublisherDashboardViewModel @Inject constructor(
+class PublisherDashboardViewModel(
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,
     private val preachingTimeRecordRepository: PreachingTimeRecordRepository,

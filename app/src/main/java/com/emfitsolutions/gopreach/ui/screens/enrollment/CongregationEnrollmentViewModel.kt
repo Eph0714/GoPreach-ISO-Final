@@ -7,13 +7,11 @@ import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.PhilippineLocationRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class CongregationEnrollmentUiState(
     val name: String = "",
@@ -36,8 +34,7 @@ data class CongregationEnrollmentUiState(
 )
 
 /** Spec §4.1 — Super-Admin only. */
-@HiltViewModel
-class CongregationEnrollmentViewModel @Inject constructor(
+class CongregationEnrollmentViewModel(
     private val congregationRepository: CongregationRepository,
     private val auditLogRepository: AuditLogRepository,
     private val locationTracker: LocationTracker,

@@ -1,7 +1,12 @@
 package com.emfitsolutions.gopreach
 
+import com.emfitsolutions.gopreach.di.appModule
+import com.emfitsolutions.gopreach.di.infraModule
+import org.koin.android.ext.koin.androidContext
+import org.koin.core.context.startKoin
+import org.koin.android.ext.android.inject
+import org.koin.androidx.workmanager.factory.KoinWorkerFactory
 import android.app.Application
-import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.emfitsolutions.gopreach.data.sync.PresenceHeartbeat
 import com.emfitsolutions.gopreach.data.sync.ReminderScheduler
@@ -10,43 +15,36 @@ import com.emfitsolutions.gopreach.data.sync.SyncScheduler
 import com.emfitsolutions.gopreach.notifications.CalendarAlarmRescheduler
 import com.emfitsolutions.gopreach.notifications.NotificationHelper
 import com.emfitsolutions.gopreach.notifications.NotificationSoundCoordinator
-import dagger.hilt.android.HiltAndroidApp
-import javax.inject.Inject
 
 /**
- * Application entry point. Hilt root for DI across the app.
+ * Application entry point. Koin is started here for DI across the app.
  *
- * Also configures WorkManager with [HiltWorkerFactory] so the offline sync queue
+ * Also configures WorkManager with [KoinWorkerFactory] so the offline sync queue
  * (Phase 1 — SyncWorker) can have its dependencies injected, and starts every
  * repository's Firestore listener via [RemoteSyncCoordinator] so the offline
  * cache reflects data created anywhere, not just on this device.
  */
-@HiltAndroidApp
 class GoPreachApp : Application(), Configuration.Provider {
 
-    @Inject
-    lateinit var workerFactory: HiltWorkerFactory
+    
+    val remoteSyncCoordinator: RemoteSyncCoordinator by inject()
 
-    @Inject
-    lateinit var remoteSyncCoordinator: RemoteSyncCoordinator
+    val reminderScheduler: ReminderScheduler by inject()
 
-    @Inject
-    lateinit var reminderScheduler: ReminderScheduler
+    val calendarAlarmRescheduler: CalendarAlarmRescheduler by inject()
 
-    @Inject
-    lateinit var calendarAlarmRescheduler: CalendarAlarmRescheduler
+    val syncScheduler: SyncScheduler by inject()
 
-    @Inject
-    lateinit var syncScheduler: SyncScheduler
+    val notificationSoundCoordinator: NotificationSoundCoordinator by inject()
 
-    @Inject
-    lateinit var notificationSoundCoordinator: NotificationSoundCoordinator
-
-    @Inject
-    lateinit var presenceHeartbeat: PresenceHeartbeat
+    val presenceHeartbeat: PresenceHeartbeat by inject()
 
     override fun onCreate() {
         super.onCreate()
+        startKoin {
+            androidContext(this@GoPreachApp)
+            modules(infraModule, appModule)
+        }
         remoteSyncCoordinator.startAll()
         NotificationHelper.ensureChannel(this)
         reminderScheduler.ensureScheduled()
@@ -69,6 +67,6 @@ class GoPreachApp : Application(), Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
-            .setWorkerFactory(workerFactory)
+            .setWorkerFactory(KoinWorkerFactory())
             .build()
 }

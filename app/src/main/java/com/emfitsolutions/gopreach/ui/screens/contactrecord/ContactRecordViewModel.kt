@@ -13,13 +13,11 @@ import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.InterestedPersonRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
 
 /** One entry in the consolidated directory — a Person-backed role (Publisher/
  * Coordinator Elder/Service Overseer/Ministerial Servant) or an Interested
@@ -102,8 +100,7 @@ const val MINISTERIAL_SERVANT = "Ministerial Servant"
  * get back a row from a different congregation no matter what the screen
  * does with the result.
  */
-@HiltViewModel
-class ContactRecordViewModel @Inject constructor(
+class ContactRecordViewModel(
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val interestedPersonRepository: InterestedPersonRepository,

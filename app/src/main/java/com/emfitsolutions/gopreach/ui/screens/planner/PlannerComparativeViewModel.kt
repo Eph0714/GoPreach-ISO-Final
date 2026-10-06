@@ -7,14 +7,12 @@ import com.emfitsolutions.gopreach.data.repository.PlannerDayRepository
 import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import com.emfitsolutions.gopreach.domain.MinistryStatisticsService
 import com.emfitsolutions.gopreach.domain.MonthBounds
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import java.util.Calendar
-import javax.inject.Inject
 
 /** One month's worth of the three metrics the Comparative Report tracks —
  * each independently computed the same way every other Planner period is
@@ -38,8 +36,7 @@ data class PlannerComparativeUiState(
  * Hours, Minutes, Return Visits, and Bible Studies" (My Planner enhancement
  * spec). The Publisher picks any Start/End month; every month in between is
  * computed the same way [PlannerMonthViewModel] computes a single month. */
-@HiltViewModel
-class PlannerComparativeViewModel @Inject constructor(
+class PlannerComparativeViewModel(
     private val plannerDayRepository: PlannerDayRepository,
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,

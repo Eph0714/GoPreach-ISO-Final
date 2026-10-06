@@ -16,14 +16,12 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.domain.PermissionChecker
 import com.emfitsolutions.gopreach.data.repository.AuthResult
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** The six "Account Type" buckets spec §10's tree lists, one per role this
  * feature manages credentials for (plus [PUBLISHER], which is a Publisher
@@ -61,8 +59,7 @@ data class AccountRow(
  * authorized to manage) — mirrored server-side in firestore.rules so a raw
  * Firestore write can't bypass this screen's own gating (spec §6/§11).
  */
-@HiltViewModel
-class AccountManagementViewModel @Inject constructor(
+class AccountManagementViewModel(
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val congregationRepository: CongregationRepository,

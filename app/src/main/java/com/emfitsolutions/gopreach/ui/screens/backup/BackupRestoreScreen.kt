@@ -31,7 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,7 +44,7 @@ import androidx.compose.ui.window.DialogProperties
 fun BackupRestoreScreen(
     currentPersonId: String,
     onBack: () -> Unit,
-    viewModel: BackupRestoreViewModel = hiltViewModel(),
+    viewModel: BackupRestoreViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 

@@ -9,22 +9,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.repository.AppSettingsRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
 
-@HiltViewModel
-class LogoViewModel @Inject constructor(
+class LogoViewModel(
     appSettingsRepository: AppSettingsRepository,
 ) : ViewModel() {
     val logoUrl: StateFlow<String?> = appSettingsRepository.observe()
@@ -43,7 +40,7 @@ class LogoViewModel @Inject constructor(
  * in the Control Panel would show up everywhere without each screen re-implementing this.
  */
 @Composable
-fun DynamicAppLogo(viewModel: LogoViewModel = hiltViewModel()) {
+fun DynamicAppLogo(viewModel: LogoViewModel = koinViewModel()) {
     val logoUrl by viewModel.logoUrl.collectAsStateWithLifecycle()
     if (logoUrl != null) {
         AsyncImage(

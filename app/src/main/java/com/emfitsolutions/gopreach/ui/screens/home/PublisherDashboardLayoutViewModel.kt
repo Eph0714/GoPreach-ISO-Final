@@ -11,7 +11,6 @@ import com.emfitsolutions.gopreach.data.model.moved
 import com.emfitsolutions.gopreach.data.model.reset
 import com.emfitsolutions.gopreach.data.model.sidePanelModules
 import com.emfitsolutions.gopreach.data.repository.DashboardModuleLayoutRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +18,6 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * "Publishers App – Customizable Module Navigation Redesign" — a thin
@@ -30,8 +28,7 @@ import javax.inject.Inject
  * screen ever offers to move is already an authorized, already-reachable
  * tile — this class only ever changes *where* one is drawn.
  */
-@HiltViewModel
-class PublisherDashboardLayoutViewModel @Inject constructor(
+class PublisherDashboardLayoutViewModel(
     private val repository: DashboardModuleLayoutRepository,
 ) : ViewModel() {
 

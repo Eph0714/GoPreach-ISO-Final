@@ -19,7 +19,6 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.domain.MonthBounds
 import com.emfitsolutions.gopreach.ui.screens.home.isPioneerCategory
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +27,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** A publisher (or pioneer) in the selected congregation who a manual field service record can be entered for. */
 data class ManualPublisher(val person: Person, val category: PublisherCategory, val congregationId: String) {
@@ -55,8 +53,7 @@ val ManualEntryRoles = setOf(
     AdminRole.COORDINATOR_ELDER,
 )
 
-@HiltViewModel
-class ManualFieldServiceViewModel @Inject constructor(
+class ManualFieldServiceViewModel(
     private val monthlyReportRepository: MonthlyReportRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val personRepository: PersonRepository,

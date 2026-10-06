@@ -80,7 +80,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -91,11 +91,9 @@ import com.emfitsolutions.gopreach.ui.components.SideItem
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
 import com.emfitsolutions.gopreach.ui.navigation.Destinations
 import com.emfitsolutions.gopreach.ui.screens.dashboard.CongregationStats
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 import kotlin.math.roundToInt
 
 /** The built-in Quick Access cards, in the default order. [isStat] cards show a live record count instead of a description. */
@@ -170,8 +168,7 @@ class QuickAccessDragState {
 }
 
 /** Stores each account's Quick Access choice in its own dashboard-layout document: follows the account across logins and devices. */
-@HiltViewModel
-class QuickAccessViewModel @Inject constructor(
+class QuickAccessViewModel(
     private val repository: DashboardModuleLayoutRepository,
 ) : ViewModel() {
     fun layout(personId: String): Flow<DashboardModuleLayout> = repository.observeFor(personId)
@@ -203,7 +200,7 @@ fun QuickAccessSection(
     dragState: QuickAccessDragState,
     onOpen: (QuickAccessEntry) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: QuickAccessViewModel = hiltViewModel(),
+    viewModel: QuickAccessViewModel = koinViewModel(),
 ) {
     val layout by viewModel.layout(personId).collectAsStateWithLifecycle(initialValue = DashboardModuleLayout(personId = personId))
 

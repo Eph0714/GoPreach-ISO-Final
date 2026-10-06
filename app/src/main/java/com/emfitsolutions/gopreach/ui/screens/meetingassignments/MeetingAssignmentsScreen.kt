@@ -59,7 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.CartAssignmentRow
 import com.emfitsolutions.gopreach.data.model.Congregation
@@ -101,7 +101,7 @@ fun MeetingAssignmentsScreen(
     fixedCongregationId: String?,
     readOnly: Boolean,
     onBack: () -> Unit,
-    viewModel: MeetingAssignmentsViewModel = hiltViewModel(),
+    viewModel: MeetingAssignmentsViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
     // Bug fix — same class of issue as ManageGroupsScreen's GroupDialog

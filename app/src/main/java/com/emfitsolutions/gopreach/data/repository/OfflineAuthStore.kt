@@ -5,13 +5,10 @@ import android.util.Base64
 import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.SecureRandom
 import java.security.spec.KeySpec
 import javax.crypto.SecretKeyFactory
 import javax.crypto.spec.PBEKeySpec
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val PREFS_NAME = "gopreach_offline_auth"
 private const val KEY_USERNAME = "username"
@@ -41,8 +38,7 @@ private const val KEY_LENGTH_BITS = 256
  * device, not a security hole (each person can still only unlock their own
  * cached data, never someone else's, while online).
  */
-@Singleton
-class OfflineAuthStore @Inject constructor(@ApplicationContext context: Context) {
+class OfflineAuthStore(context: Context) {
 
     private val prefs by lazy {
         val masterKey = MasterKey.Builder(context)

@@ -3,8 +3,6 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.domain.map.DrawingAccess
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Resolves what the signed-in person may do with the map drawing tools, from the
@@ -14,8 +12,7 @@ import javax.inject.Singleton
  * boundary check lives in [com.emfitsolutions.gopreach.domain.map.DrawingValidator];
  * the matching server-side rule lives in firestore.rules.
  */
-@Singleton
-class DrawingPermissionService @Inject constructor(
+class DrawingPermissionService(
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val groupRepository: GroupRepository,

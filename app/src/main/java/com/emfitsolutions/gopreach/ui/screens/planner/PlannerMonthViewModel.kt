@@ -15,7 +15,6 @@ import com.emfitsolutions.gopreach.data.repository.VisitRepository
 import com.emfitsolutions.gopreach.domain.DayBounds
 import com.emfitsolutions.gopreach.domain.MinistryStatisticsService
 import com.emfitsolutions.gopreach.domain.MonthBounds
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +22,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Calendar
-import javax.inject.Inject
 
 /** My Planner → Month (spec §23-§25). [totalMinutes]/[returnVisitCount]/
  * [bibleStudyCount] are each independently computed for the whole month
@@ -68,8 +66,7 @@ data class PlannerMonthUiState(
     val surplusMinutes: Int get() = (totalMinutes - goalMinutes).coerceAtLeast(0)
 }
 
-@HiltViewModel
-class PlannerMonthViewModel @Inject constructor(
+class PlannerMonthViewModel(
     private val plannerDayRepository: PlannerDayRepository,
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,

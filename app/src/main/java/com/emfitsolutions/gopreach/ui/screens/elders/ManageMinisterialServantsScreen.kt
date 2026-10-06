@@ -23,7 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
@@ -45,7 +45,7 @@ fun ManageMinisterialServantsScreen(
     readOnly: Boolean = false,
     onBack: () -> Unit,
     onAddNew: () -> Unit,
-    viewModel: ManageMinisterialServantsViewModel = hiltViewModel(),
+    viewModel: ManageMinisterialServantsViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
     var congregationFilter by rememberCongregationContext("ministerial_servants")

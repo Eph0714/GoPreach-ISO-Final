@@ -16,15 +16,12 @@ import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.ui.components.PublisherFormState
 import com.emfitsolutions.gopreach.ui.screens.login.PendingLoginNotice
 import com.emfitsolutions.gopreach.ui.screens.login.deviceHasBiometrics
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** Where the first-time setup is. A Publisher goes through all of them; anyone else only [CREDENTIALS]. */
 enum class SetupStep { LOADING, CREDENTIALS, PROFILE_REVIEW, PROFILE_EDIT, METHODS, FINISHING, NEEDS_ONLINE }
@@ -62,9 +59,8 @@ data class FirstLoginUiState(
  * temporary password still present -> credentials; changed but not confirmed -> review; confirmed -> the
  * re-login check (a session older than the confirmation is signed out; a newer sign-in completes setup).
  */
-@HiltViewModel
-class ForcedPasswordChangeViewModel @Inject constructor(
-    @ApplicationContext private val context: android.content.Context,
+class ForcedPasswordChangeViewModel(
+    private val context: android.content.Context,
     private val authRepository: AuthRepository,
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,

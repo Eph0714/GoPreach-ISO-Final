@@ -9,13 +9,11 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.domain.DateRangeStore
 import com.emfitsolutions.gopreach.ui.components.DateRange
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
 
 private const val TAG = "DashboardStatsViewModel"
 
@@ -78,8 +76,7 @@ private data class DashboardFilters(
     val dateRange: DateRange = DateRange.thisMonth(),
 )
 
-@HiltViewModel
-class DashboardStatsViewModel @Inject constructor(
+class DashboardStatsViewModel(
     congregationRepository: CongregationRepository,
     roleAssignmentRepository: RoleAssignmentRepository,
     monthlyReportRepository: MonthlyReportRepository,

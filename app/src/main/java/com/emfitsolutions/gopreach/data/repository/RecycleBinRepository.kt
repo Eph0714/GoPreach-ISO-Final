@@ -5,7 +5,6 @@ import com.emfitsolutions.gopreach.data.model.DeletedRecord
 import com.emfitsolutions.gopreach.data.model.TrashItem
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.gson.Gson
 import com.google.gson.JsonObject
@@ -13,8 +12,6 @@ import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "deletedRecords"
 private const val DAY_MS = 24L * 60 * 60 * 1000
@@ -35,14 +32,13 @@ sealed interface RestoreResult {
  * It rides on the same offline-first cache and sync queue as everything else, so a deletion, a restore and a
  * permanent delete all reach other devices through the normal sync.
  */
-@Singleton
-class RecycleBinRepository @Inject constructor(
+class RecycleBinRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
     private val gson: Gson,
     private val personRepository: PersonRepository,
     private val auditLogRepository: AuditLogRepository,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<DeletedRecord>> = offline.observeCollection(COLLECTION)
 

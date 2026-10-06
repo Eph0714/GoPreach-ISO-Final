@@ -36,7 +36,6 @@ import com.emfitsolutions.gopreach.data.repository.SharedLocationRepository
 import com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.TerritoryRepository
 import com.emfitsolutions.gopreach.data.repository.UserAccessGrantRepository
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
@@ -54,8 +53,6 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Starts every collection-wide `startRemoteSync()` Firestore listener, and
@@ -86,9 +83,8 @@ import javax.inject.Singleton
  * on demand by their own screens instead, since there's no fixed set of them
  * to start up front.)
  */
-@Singleton
 @OptIn(kotlinx.coroutines.FlowPreview::class, kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-class RemoteSyncCoordinator @Inject constructor(
+class RemoteSyncCoordinator(
     private val firebaseAuth: FirebaseAuth,
     private val connectivityObserver: ConnectivityObserver,
     private val personRepository: PersonRepository,
@@ -140,7 +136,7 @@ class RemoteSyncCoordinator @Inject constructor(
     private val yearlyPlannerGoalRepository: YearlyPlannerGoalRepository,
     private val creditHourRecordRepository: CreditHourRecordRepository,
     private val ministryTimerSessionRepository: MinistryTimerSessionRepository,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     private var started = false
 

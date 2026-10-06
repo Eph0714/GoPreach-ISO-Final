@@ -30,7 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.ui.components.LanguagesTagInput
 import com.emfitsolutions.gopreach.ui.components.PhilippineAddressPicker
@@ -43,7 +43,7 @@ fun CongregationEnrollmentScreen(
     currentPersonId: String,
     onBack: () -> Unit,
     onSaved: () -> Unit,
-    viewModel: CongregationEnrollmentViewModel = hiltViewModel(),
+    viewModel: CongregationEnrollmentViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 

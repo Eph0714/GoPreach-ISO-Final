@@ -6,11 +6,8 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.edit
 import com.emfitsolutions.gopreach.ui.theme.PrimaryPurple
 import com.emfitsolutions.gopreach.ui.theme.ThemeColorOption
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 enum class ThemePreference { SYSTEM, LIGHT, DARK }
 
@@ -28,9 +25,8 @@ private const val KEY_CUSTOM_COLOR = "theme_custom_color_argb"
  * something tied to a Person record — each user picks their own on their own
  * phone).
  */
-@Singleton
-class ThemePreferenceRepository @Inject constructor(
-    @ApplicationContext context: Context,
+class ThemePreferenceRepository(
+    context: Context,
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

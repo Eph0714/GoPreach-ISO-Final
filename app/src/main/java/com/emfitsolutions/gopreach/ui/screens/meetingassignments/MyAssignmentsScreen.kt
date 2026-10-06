@@ -25,7 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -47,7 +47,7 @@ fun MyAssignmentsScreen(
     currentPersonName: String,
     congregationId: String?,
     onBack: () -> Unit,
-    viewModel: MeetingAssignmentsViewModel = hiltViewModel(),
+    viewModel: MeetingAssignmentsViewModel = koinViewModel(),
 ) {
     val rowsFlow = remember(congregationId, currentPersonName) { viewModel.myAssignmentsFor(congregationId, currentPersonName) }
     val rows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())

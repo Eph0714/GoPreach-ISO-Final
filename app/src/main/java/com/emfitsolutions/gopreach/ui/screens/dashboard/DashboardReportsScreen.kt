@@ -48,7 +48,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.export.CsvExporter
@@ -180,7 +180,7 @@ fun DashboardStatsContent(
     /** Rendered where the removed charts used to be: the Recently Visited section for the displayed stats. */
     recentlyVisited: (@Composable (CongregationStats) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    viewModel: DashboardStatsViewModel = hiltViewModel(),
+    viewModel: DashboardStatsViewModel = koinViewModel(),
 ) {
     LaunchedEffect(visibleCongregationIds) { viewModel.restrictTo(visibleCongregationIds) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -461,7 +461,7 @@ fun DashboardReportsScreen(
      * role, same pattern [ReportsScreen]'s own `canEditReports` uses. */
     canExport: Boolean = false,
     onBack: () -> Unit,
-    viewModel: DashboardStatsViewModel = hiltViewModel(),
+    viewModel: DashboardStatsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current

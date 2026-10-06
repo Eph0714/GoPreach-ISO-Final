@@ -36,7 +36,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.TimerSessionStatus
 import com.emfitsolutions.gopreach.domain.DayBounds
@@ -76,7 +76,7 @@ fun MinistryTimerCard(
      * (Publisher Main Form) has no such date picker, so it defaults to
      * today. */
     targetDayMillis: Long = DayBounds.of(System.currentTimeMillis()).startInclusive,
-    viewModel: MinistryTimerViewModel = hiltViewModel(),
+    viewModel: MinistryTimerViewModel = koinViewModel(),
 ) {
     // remember(publisherPersonId): without this, the 1-second ticking effect
     // below would cause this to call runningSessionFor() fresh on every

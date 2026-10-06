@@ -72,7 +72,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.location.LatLng
 import com.emfitsolutions.gopreach.data.model.Congregation
@@ -181,7 +181,7 @@ fun PipelineScreen(
     // this screen's list they never saw.
     initialPersonId: String? = null,
     onBack: () -> Unit,
-    viewModel: PipelineViewModel = hiltViewModel(),
+    viewModel: PipelineViewModel = koinViewModel(),
 ) {
     var selectedPerson by remember { mutableStateOf<InterestedPerson?>(null) }
     var initialPersonResolved by remember { mutableStateOf(initialPersonId == null) }

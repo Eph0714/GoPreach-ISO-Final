@@ -57,7 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.InterestedPerson
 import com.emfitsolutions.gopreach.data.model.Person
@@ -95,7 +95,7 @@ fun PublisherAssignmentScreen(
     currentPersonId: String,
     onSearchCoordinates: () -> Unit,
     onBack: () -> Unit,
-    viewModel: PipelineViewModel = hiltViewModel(),
+    viewModel: PipelineViewModel = koinViewModel(),
 ) {
     var stageIndex by rememberSaveable { mutableStateOf(0) }
     val stage = PipelineStage.entries[stageIndex]

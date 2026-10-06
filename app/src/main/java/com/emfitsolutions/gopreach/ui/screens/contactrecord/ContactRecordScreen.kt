@@ -53,7 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
@@ -77,7 +77,7 @@ import kotlinx.coroutines.delay
 fun ContactRecordScreen(
     visibleCongregationId: String?,
     onBack: () -> Unit,
-    viewModel: ContactRecordViewModel = hiltViewModel(),
+    viewModel: ContactRecordViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
     val showToast = rememberActionToast()

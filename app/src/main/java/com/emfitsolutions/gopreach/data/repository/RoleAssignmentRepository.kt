@@ -3,13 +3,10 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.model.RoleAssignment
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "roleAssignments"
 
@@ -18,11 +15,10 @@ private const val COLLECTION = "roleAssignments"
  * runs against. Reads come from the local cache (offline-safe); a live Firestore
  * listener keeps that cache current whenever the app is online.
  */
-@Singleton
-class RoleAssignmentRepository @Inject constructor(
+class RoleAssignmentRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     /** Every RoleAssignment in the cache, any person, any status — for admin-facing
      * list screens (Manage Admins, Manage Elders, ...) that need to join across

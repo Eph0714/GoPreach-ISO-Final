@@ -17,15 +17,12 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.domain.DateRangeStore
 import com.emfitsolutions.gopreach.ui.components.DateRange
-import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import javax.inject.Inject
 
 data class PublisherReportRow(
     val person: Person,
@@ -160,8 +157,7 @@ fun List<PublisherReportRow>.categoryBibleStudies(): Map<PublisherCategory, Int>
  * timestamp, checked directly). `null` means "no filter" (all-time), used by
  * callers that haven't opted into date scoping.
  */
-@HiltViewModel
-class ReportsViewModel @Inject constructor(
+class ReportsViewModel(
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val monthlyReportRepository: MonthlyReportRepository,
@@ -169,7 +165,7 @@ class ReportsViewModel @Inject constructor(
     private val groupRepository: GroupRepository,
     private val congregationRepository: CongregationRepository,
     private val dateRangeStore: DateRangeStore,
-    @ApplicationContext private val context: Context,
+    private val context: Context,
 ) : ViewModel() {
 
     /** Spec §8 — the same selected [DateRange] the Dashboard's Reports screen

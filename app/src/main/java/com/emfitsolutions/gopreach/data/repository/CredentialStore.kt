@@ -3,9 +3,6 @@ package com.emfitsolutions.gopreach.data.repository
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Secure on-device storage for the two opt-in sign-in conveniences, each kept
@@ -22,8 +19,7 @@ import javax.inject.Singleton
  * Backed by [EncryptedSharedPreferences] (AES-256, key material in the Android Keystore),
  * never plain SharedPreferences. Nothing here is ever logged.
  */
-@Singleton
-class CredentialStore @Inject constructor(@ApplicationContext context: Context) {
+class CredentialStore(context: Context) {
 
     private val prefs by lazy {
         val masterKey = MasterKey.Builder(context)

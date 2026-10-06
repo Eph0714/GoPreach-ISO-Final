@@ -62,7 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.location.LatLng
 import com.emfitsolutions.gopreach.data.model.Congregation
@@ -112,7 +112,7 @@ fun ShareLocationScreen(
     ownCongregationId: String? = null,
     onBack: () -> Unit,
     onOpenTerritoryMap: (lat: Double, lng: Double, name: String) -> Unit,
-    viewModel: ShareLocationViewModel = hiltViewModel(),
+    viewModel: ShareLocationViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
     val isSharingFlow = remember(currentPersonId) { viewModel.isSharingFor(currentPersonId) }

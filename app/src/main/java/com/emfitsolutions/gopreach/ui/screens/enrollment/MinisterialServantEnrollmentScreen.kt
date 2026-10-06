@@ -30,7 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
 import com.emfitsolutions.gopreach.data.model.RegularElderRole
@@ -49,7 +49,7 @@ fun MinisterialServantEnrollmentScreen(
     currentPersonId: String,
     onBack: () -> Unit,
     onDone: () -> Unit,
-    viewModel: MinisterialServantEnrollmentViewModel = hiltViewModel(),
+    viewModel: MinisterialServantEnrollmentViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()

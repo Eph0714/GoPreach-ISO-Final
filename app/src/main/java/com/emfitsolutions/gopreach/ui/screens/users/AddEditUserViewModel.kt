@@ -21,7 +21,6 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.TempCredentials
 import com.emfitsolutions.gopreach.data.repository.UserAccessGrantRepository
 import com.emfitsolutions.gopreach.ui.screens.enrollment.splitName
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,7 +28,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class AddEditUserUiState(
     val isEditMode: Boolean = false,
@@ -61,8 +59,7 @@ data class AddEditUserUiState(
  * screen, one form, since editing a Circuit Overseer/custom user's permissions
  * and scope is the exact same shape as creating one, minus name/credentials.
  */
-@HiltViewModel
-class AddEditUserViewModel @Inject constructor(
+class AddEditUserViewModel(
     private val authRepository: AuthRepository,
     private val personRepository: PersonRepository,
     private val userAccessGrantRepository: UserAccessGrantRepository,

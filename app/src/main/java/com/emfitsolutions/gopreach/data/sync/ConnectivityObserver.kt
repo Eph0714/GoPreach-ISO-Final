@@ -8,7 +8,6 @@ import android.net.NetworkRequest
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -16,8 +15,6 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.merge
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val TAG = "ConnectivityObserver"
 
@@ -51,9 +48,8 @@ private const val TAG = "ConnectivityObserver"
  * NetworkCallback registration per active collector instead of one for the
  * whole app) is a negligible cost next to actually being correct.
  */
-@Singleton
-class ConnectivityObserver @Inject constructor(
-    @ApplicationContext private val context: Context,
+class ConnectivityObserver(
+    private val context: Context,
 ) {
     private fun connectivityManager() =
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

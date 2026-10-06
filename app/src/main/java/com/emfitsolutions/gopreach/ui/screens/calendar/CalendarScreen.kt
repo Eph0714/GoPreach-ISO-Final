@@ -40,7 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.Schedule
 import com.emfitsolutions.gopreach.data.model.ScheduleKind
@@ -68,7 +68,7 @@ fun CalendarScreen(
     currentPersonId: String,
     scope: CalendarScope,
     onBack: () -> Unit,
-    viewModel: CalendarViewModel = hiltViewModel(),
+    viewModel: CalendarViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
     // "Add a filter for Congregation" (Super-Admin only) — only offered when

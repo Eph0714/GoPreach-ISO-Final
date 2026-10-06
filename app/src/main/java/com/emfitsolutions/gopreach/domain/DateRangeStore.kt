@@ -4,8 +4,6 @@ import com.emfitsolutions.gopreach.ui.components.DateRange
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * "Main Form Date Range Filtering" spec §8 — "the selected date range must be
@@ -24,8 +22,7 @@ import javax.inject.Singleton
  * free; the "remembered across navigation" requirement is about moving
  * *between screens in one session*, not surviving a process kill.
  */
-@Singleton
-class DateRangeStore @Inject constructor() {
+class DateRangeStore() {
     private val _range = MutableStateFlow(DateRange.today())
     val range: StateFlow<DateRange> = _range.asStateFlow()
 

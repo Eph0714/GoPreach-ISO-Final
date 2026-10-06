@@ -19,23 +19,20 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
 import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.domain.UserSession
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
-@HiltViewModel
-class OfflineSessionBannerViewModel @Inject constructor(
+class OfflineSessionBannerViewModel(
     userSession: UserSession,
     connectivityObserver: ConnectivityObserver,
     private val authRepository: AuthRepository,
@@ -71,7 +68,7 @@ class OfflineSessionBannerViewModel @Inject constructor(
  * *network* connectivity, which stays "Online" through this entire state).
  */
 @Composable
-fun OfflineSessionBanner(viewModel: OfflineSessionBannerViewModel = hiltViewModel()) {
+fun OfflineSessionBanner(viewModel: OfflineSessionBannerViewModel = koinViewModel()) {
     val shouldShow by viewModel.shouldShow.collectAsStateWithLifecycle()
     if (!shouldShow) return
 

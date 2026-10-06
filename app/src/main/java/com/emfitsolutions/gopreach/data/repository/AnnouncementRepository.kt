@@ -4,25 +4,21 @@ import android.net.Uri
 import com.emfitsolutions.gopreach.data.model.Announcement
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val COLLECTION = "announcements"
 
 /** "Announcement Module" — CRUD for Super-Admin/Admin/Coordinator Elder,
  * read-only for every Publisher in the same congregation. */
-@Singleton
-class AnnouncementRepository @Inject constructor(
+class AnnouncementRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<Announcement>> = offline.observeCollection(COLLECTION)
 

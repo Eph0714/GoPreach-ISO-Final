@@ -12,7 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.PipelineStage
 import com.emfitsolutions.gopreach.domain.WeekBounds
@@ -43,7 +43,7 @@ internal fun PlannerWeekContent(
     val weekEnd = remember(weekStart) { Calendar.getInstance().apply { timeInMillis = weekStart; add(Calendar.DAY_OF_MONTH, 6) }.timeInMillis }
     val weekLabel = "${weekFormat.format(Date(weekStart))} – ${weekFormat.format(Date(weekEnd))}"
 
-    val creditViewModel: CreditHourEntryViewModel = hiltViewModel()
+    val creditViewModel: CreditHourEntryViewModel = koinViewModel()
     val creditDialogs = remember { CreditHourDialogState() }
     val categoryName = rememberCategoryNamer(creditViewModel)
     val expansion = rememberPlannerExpansionState(PlannerSectionKey.DAYS)

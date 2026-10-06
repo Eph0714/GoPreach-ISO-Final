@@ -14,7 +14,6 @@ import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentRepository
 import com.emfitsolutions.gopreach.domain.PermissionChecker
 import com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentResult
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +21,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** A barangay row for the Step 3 checklist — [takenByGroupName] non-null
  * means another Group already claims it (never set for a barangay this same
@@ -39,8 +37,7 @@ data class WizardUiState(
     val saveResult: TerritoryAssignmentResult? = null,
 )
 
-@HiltViewModel
-class TerritoryAssignmentWizardViewModel @Inject constructor(
+class TerritoryAssignmentWizardViewModel(
     private val territoryAssignmentRepository: TerritoryAssignmentRepository,
     private val groupRepository: GroupRepository,
     private val philippineLocationRepository: PhilippineLocationRepository,

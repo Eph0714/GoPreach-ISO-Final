@@ -4,12 +4,9 @@ import android.content.Context
 import android.util.Log
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -34,9 +31,8 @@ import kotlinx.coroutines.withTimeoutOrNull
  * returns `null`, which every caller already treats as "not covered yet" —
  * never a crash or a blocking error.
  */
-@Singleton
-class RemoteBarangayBoundaryRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class RemoteBarangayBoundaryRepository(
+    private val context: Context,
 ) {
     private val mutex = Mutex()
     private var municityIndex: Map<String, String>? = null // slug -> filename

@@ -36,7 +36,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.GroupChat
@@ -62,7 +62,7 @@ fun GroupChatListScreen(
     fixedCongregationId: String?,
     onBack: () -> Unit,
     onOpenGroupChat: (String) -> Unit,
-    viewModel: GroupChatViewModel = hiltViewModel(),
+    viewModel: GroupChatViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
     // "Add a filter for Congregation" (Super-Admin only) — only meaningful

@@ -16,13 +16,11 @@ import com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentResult
 import com.emfitsolutions.gopreach.data.repository.TerritoryBoundaryRepository
 import com.emfitsolutions.gopreach.ui.components.map.BoundaryGeometry
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** One municipality within a [GroupTerritoryRow] — [barangays] already sorted
  * by name. */
@@ -58,8 +56,7 @@ enum class TerritorySortOption(val label: String) {
     PROVINCE("Province"),
 }
 
-@HiltViewModel
-class TerritoryAssignmentsViewModel @Inject constructor(
+class TerritoryAssignmentsViewModel(
     private val territoryAssignmentRepository: TerritoryAssignmentRepository,
     private val groupRepository: GroupRepository,
     private val territoryBoundaryRepository: TerritoryBoundaryRepository,

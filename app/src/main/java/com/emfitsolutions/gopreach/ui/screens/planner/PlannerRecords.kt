@@ -14,7 +14,6 @@ import com.emfitsolutions.gopreach.domain.DayBounds
 import com.emfitsolutions.gopreach.domain.MinistryStatisticsService
 import com.emfitsolutions.gopreach.domain.MinistryStatisticsService.PersonActivitySummary
 import com.emfitsolutions.gopreach.domain.TimeBounds
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,7 +21,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * The individual records behind one planner period's summary figures, so
@@ -72,8 +70,7 @@ internal fun List<CreditHourRecord>.inPeriod(bounds: TimeBounds): List<CreditHou
  */
 private const val SUBMITTED_MONTH_MESSAGE = "This Record is Already Submitted"
 
-@HiltViewModel
-class CreditHourEntryViewModel @Inject constructor(
+class CreditHourEntryViewModel(
     private val recordRepository: CreditHourRecordRepository,
     private val categoryRepository: CreditHourCategoryRepository,
     private val monthlyReportRepository: com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository,

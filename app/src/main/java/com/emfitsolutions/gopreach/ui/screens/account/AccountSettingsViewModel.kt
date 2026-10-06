@@ -7,13 +7,11 @@ import com.emfitsolutions.gopreach.data.repository.AuthRepository
 import com.emfitsolutions.gopreach.data.repository.AuthResult
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.ui.components.PublisherFormState
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 data class AccountSettingsUiState(
     /** Personal Information — shown/editable for whoever is signed in,
@@ -57,8 +55,7 @@ data class AccountSettingsUiState(
  * the current password before changing X"); a password change signs the user
  * out afterward so they log back in with the new one. Name is plain profile
  * info and doesn't need re-authentication to change. */
-@HiltViewModel
-class AccountSettingsViewModel @Inject constructor(
+class AccountSettingsViewModel(
     private val authRepository: AuthRepository,
     private val personRepository: PersonRepository,
     private val credentialStore: com.emfitsolutions.gopreach.data.repository.CredentialStore,

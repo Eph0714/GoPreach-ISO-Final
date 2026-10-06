@@ -3,14 +3,11 @@ package com.emfitsolutions.gopreach.data.repository
 import android.content.Context
 import android.text.Html
 import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /**
  * Looks up the text of Bible verses in the New World Translation from the
@@ -29,9 +26,8 @@ import javax.inject.Singleton
  * Any failure (offline and not yet opened, page changed, verse not found)
  * returns null and the caller just leaves Remarks for the publisher to type.
  */
-@Singleton
-class BibleVerseTextRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class BibleVerseTextRepository(
+    private val context: Context,
 ) {
     /** A few recently used chapters kept in memory on top of the files. */
     private val memoryCache = object : LinkedHashMap<String, Map<Int, String>>(8, 0.75f, true) {

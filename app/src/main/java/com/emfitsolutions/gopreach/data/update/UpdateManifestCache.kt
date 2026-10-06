@@ -2,9 +2,6 @@ package com.emfitsolutions.gopreach.data.update
 
 import android.content.Context
 import androidx.core.content.edit
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val PREFS_NAME = "gopreach_update_manifest_cache"
 private const val KEY_ETAG = "etag"
@@ -32,9 +29,8 @@ private const val KEY_IS_CRITICAL = "is_critical"
  * [UpdateManifestRepository] falls back to whatever's cached here instead of
  * failing outright, so the device still has *a* working download link.
  */
-@Singleton
-class UpdateManifestCache @Inject constructor(
-    @ApplicationContext context: Context,
+class UpdateManifestCache(
+    context: Context,
 ) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

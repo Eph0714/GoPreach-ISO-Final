@@ -3,9 +3,6 @@ package com.emfitsolutions.gopreach.data.repository
 import android.content.Context
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import dagger.hilt.android.qualifiers.ApplicationContext
-import javax.inject.Inject
-import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -39,9 +36,8 @@ import kotlinx.coroutines.withContext
  * asset; nothing else in the app needs to change since a lookup miss here
  * already degrades gracefully (see [TerritoryLiveMap]'s circle fallback).
  */
-@Singleton
-class TerritoryBoundaryRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
+class TerritoryBoundaryRepository(
+    private val context: Context,
     private val remoteBarangayBoundaryRepository: RemoteBarangayBoundaryRepository,
 ) {
     private var loaded = false

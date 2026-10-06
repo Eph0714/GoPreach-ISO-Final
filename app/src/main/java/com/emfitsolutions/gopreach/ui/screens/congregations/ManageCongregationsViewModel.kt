@@ -13,13 +13,11 @@ import com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.VisitRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /** Spec §3/§5.1 — "Manage Congregation Master File", Super-Admin only.
  *
@@ -31,8 +29,7 @@ import javax.inject.Inject
  * Admin/Elder/Publisher RoleAssignment still pointing at it — active *or*
  * inactive, since an inactive one is still a real historical record — can
  * never be permanently deleted; only an empty congregation can be). */
-@HiltViewModel
-class ManageCongregationsViewModel @Inject constructor(
+class ManageCongregationsViewModel(
     private val congregationRepository: CongregationRepository,
     private val groupRepository: GroupRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,

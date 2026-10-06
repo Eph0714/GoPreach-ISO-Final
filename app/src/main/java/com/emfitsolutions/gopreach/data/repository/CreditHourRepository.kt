@@ -5,7 +5,6 @@ import com.emfitsolutions.gopreach.data.model.CreditHourRecord
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
 import com.emfitsolutions.gopreach.data.sync.pullFirestoreCollectionOnce
-import com.emfitsolutions.gopreach.di.ApplicationScope
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 import kotlinx.coroutines.CoroutineScope
@@ -14,8 +13,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
-import javax.inject.Inject
-import javax.inject.Singleton
 
 private const val CATEGORIES_COLLECTION = "creditHourCategories"
 private const val RECORDS_COLLECTION = "creditHourRecords"
@@ -24,11 +21,10 @@ private const val RECORDS_COLLECTION = "creditHourRecords"
  * Credit Hour Categories screen), never a hard-coded enum. The starting
  * list below is only ever *written into* the collection once; after that
  * every name/status is whatever an admin made it. */
-@Singleton
-class CreditHourCategoryRepository @Inject constructor(
+class CreditHourCategoryRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeActive(): Flow<List<CreditHourCategory>> =
         observeAll().map { list -> list.filter { it.active } }
@@ -105,11 +101,10 @@ class CreditHourCategoryRepository @Inject constructor(
 /** One or more Credit Hour entries per Publisher per day, each linked to its
  * category by [CreditHourRecord.categoryId] (never the category's display
  * text), so renaming or deactivating a category never breaks history. */
-@Singleton
-class CreditHourRecordRepository @Inject constructor(
+class CreditHourRecordRepository(
     private val offline: OfflineFirestoreRepository,
     private val firestore: FirebaseFirestore,
-    @ApplicationScope private val appScope: CoroutineScope,
+    private val appScope: CoroutineScope,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<CreditHourRecord>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }

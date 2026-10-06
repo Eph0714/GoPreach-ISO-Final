@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.notifications
 
+import org.koin.android.ext.android.inject
 import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
@@ -16,10 +17,8 @@ import androidx.core.app.NotificationCompat
 import com.emfitsolutions.gopreach.MainActivity
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.repository.NotificationSoundRepository
-import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import javax.inject.Inject
 
 private const val TAG = "AlarmRingService"
 
@@ -32,10 +31,9 @@ private const val TAG = "AlarmRingService"
  * in-app "Stop Alarm" banner (see [isRinging], shown on every role's Main
  * Form while this is running).
  */
-@AndroidEntryPoint
 class AlarmRingService : Service() {
 
-    @Inject lateinit var notificationSoundRepository: NotificationSoundRepository
+    val notificationSoundRepository: NotificationSoundRepository by inject()
 
     private var mediaPlayer: MediaPlayer? = null
     private var vibrator: Vibrator? = null
