@@ -1,0 +1,1233 @@
+rules_version = '2';
+
+// GoPreach Firestore security rules.
+//
+// Honest scope note: fine-grained per-role authorization for the four
+// original, built-in roles (Super-Admin, Admin Per Congregation, Coordinator
+// Elder, Regular Elder) is still enforced by the Android app's UI and
+// PermissionChecker, not by these rules — re-deriving "does this signed-in
+// Person hold an active RoleAssignment of role X in scope Y" for those roles
+// would need either Cloud Functions + custom claims, or denormalizing every
+// congregation/group assignment onto every write, both bigger additions than
+// this pass covers (and riskier to get right with no rules-testing setup in
+// this project — see AuthRepository's secondary-FirebaseApp comment for the
+// same kind of trade-off elsewhere in the app). What's below IS real,
+// however, for the *restricted* role the User Access Management feature
+// introduces (AdminRole.CIRCUIT_OVERSEER / any future grant-based custom
+// user): every one of their permission+scope checks is re-verified here,
+// server-side, from their own `userAccessGrants/{personId}` document — a UI
+// button being hidden was never the enforcement for that role; this is. This
+// is strictly additive: a restricted user is a brand-new kind of account
+// this pass introduces, so nothing that worked before can regress by
+// restricting it correctly now.
+//
+// The one other new check is `isSuperAdmin()`, which reads a denormalized
+// `people/{personId}.isSuperAdmin` flag (see Person.kt's doc comment and
+// SETUP.md's bootstrap steps) — the one cheap, query-free way to answer "is
+// this caller the Super-Admin" from a security rule without Cloud Functions.
+//
+// Hardening path for later: add a Cloud Function that mirrors every Person's
+// RoleAssignments (not just Super-Admin) onto their Auth custom claims, then
+// replace the plain `isSignedIn()` gates below with real role checks read
+// from `request.auth.token` — closing the remaining gap for the four
+// built-in roles too.
+
+function isSignedIn() {
+  return request.auth != null;
+}
+
+function personIdFromToken() {
+  return request.auth.token.email.split('@')[0];
+}
+
+// Every helper below takes [db] explicitly (the `database` path variable from
+// `match /databases/{database}/documents` isn't visible to a function defined
+// outside that block) — this is the documented pattern for reusable
+// cross-collection lookups in Firestore rules; passing it in keeps `exists()`/
+// `get()` resolvable without every helper needing its own `match` nesting.
+function isSuperAdmin(db) {
+  return isSignedIn() &&
+    exists(/databases/$(db)/documents/people/$(personIdFromToken())) &&
+    get(/databases/$(db)/documents/people/$(personIdFromToken())).data.get('isSuperAdmin', false) == true;
+}
+
+// "Group Chat Setting" module — unlike almost everything else in this file,
+// this one gets REAL congregation/role enforcement, not the coarse
+// isSignedIn()-only baseline (spec: an Admin must never reach another
+// congregation's chats/files, "even through direct URLs... or manually
+// modified request parameters"). This is only possible without Cloud
+// Functions/custom claims because Person.activeCongregationId/
+// activeAdminRole are denormalized fields (see Person.kt's doc comment),
+// kept in sync by UserSession every time a session's active role changes —
+// the exact same trade-off isSuperAdmin() above already accepts, just
+// updated automatically instead of by hand.
+function myPerson(db) {
+  return get(/databases/$(db)/documents/people/$(personIdFromToken())).data;
+}
+
+// True for a Coordinator Elder or Admin currently acting for [congregationId]
+// (their *active* role this session, from Person.activeAdminRole/
+// activeCongregationId) — or the Super-Admin, who may manage every
+// congregation's group chats (spec §5).
+function canManageGroupChatsFor(db, congregationId) {
+  return isSignedIn() && exists(/databases/$(db)/documents/people/$(personIdFromToken())) && (
+    isSuperAdmin(db) || (
+      myPerson(db).get('activeCongregationId', null) == congregationId &&
+      myPerson(db).get('activeAdminRole', null) in ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER']
+    )
+  );
+}
+
+// "Update Monthly Report Submission" — the admin-track roles allowed to
+// create/edit ANY publisher's Monthly Report within their own congregation
+// (Super-Admin: every congregation), matching the exact same role set the
+// Android app's own GoPreachNavGraph.canEditPublisherReports already grants
+// this screen to. Used below to scope [monthlyReports] writes precisely
+// instead of the old "any signed-in, non-restricted account" baseline, which
+// let ANY signed-in Publisher write/forge ANY OTHER publisher's report.
+function canManagePublisherReportsFor(db, congregationId) {
+  return isSignedIn() && exists(/databases/$(db)/documents/people/$(personIdFromToken())) && (
+    isSuperAdmin(db) || (
+      myPerson(db).get('activeCongregationId', null) == congregationId &&
+      myPerson(db).get('activeAdminRole', null) in
+        // "Secretary must have the same access level and permissions as
+        // Service Overseer" — added alongside it here, not in place of it.
+        ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'REGULAR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY']
+    )
+  );
+}
+
+// "Role assignment security" (Elders consolidation spec §33/§34) — the exact
+// admin-track role set that ever *enrolls* someone or edits their roles
+// anywhere in this app (Manage Admins/Congregations/Elders/Ministerial
+// Servants/Groups/Publishers/Users, and every enrollment screen — see each
+// one's own client-side gating): Super-Admin, or an Admin/Coordinator
+// Elder/Service Overseer/Secretary active in the exact congregation the
+// RoleAssignment belongs to. Deliberately narrower than
+// [canManagePublisherReportsFor] — Regular Elder can *view* Monthly Reports
+// but never enrolls anyone or edits a RoleAssignment anywhere in the app, so
+// it's left out here on purpose (including it would reopen the very
+// self-elevation gap this function exists to close).
+function canManageRoleAssignmentsFor(db, congregationId) {
+  return isSignedIn() && exists(/databases/$(db)/documents/people/$(personIdFromToken())) && (
+    isSuperAdmin(db) || (
+      myPerson(db).get('activeCongregationId', null) == congregationId &&
+      myPerson(db).get('activeAdminRole', null) in
+        ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY']
+    )
+  );
+}
+
+// Territory Assignment module — same role set as [canManageRoleAssignmentsFor]
+// (Super-Admin, or Admin/Coordinator Elder/Service Overseer/Secretary active
+// in the exact congregation the assignment belongs to). Deliberately NOT the
+// restrictedAllows()-is-always-true-for-every-built-in-role pattern
+// [groups]/[congregations] use below — this is genuine per-role-per-
+// congregation server-side enforcement, closing that gap specifically for
+// this module.
+// Deleted Records management: Super-Admin, or Admin / Coordinator Elder / Service Overseer / Secretary active in
+// the record's own congregation.
+function canManageTrashFor(db, congregationId) {
+  return isSignedIn() && exists(/databases/$(db)/documents/people/$(personIdFromToken())) && (
+    isSuperAdmin(db) || (
+      congregationId != null &&
+      myPerson(db).get('activeCongregationId', null) == congregationId &&
+      myPerson(db).get('activeAdminRole', null) in
+        ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY']
+    )
+  );
+}
+
+// FS Group RBAC — true when the caller holds the Overseer/Servant/Assistant slot of group [groupId].
+function isSlotHolderOfGroup(db, groupId) {
+  return isSignedIn() && groupId != null && exists(/databases/$(db)/documents/groups/$(groupId)) &&
+    personIdFromToken() in [
+      get(/databases/$(db)/documents/groups/$(groupId)).data.get('overseerPersonId', ''),
+      get(/databases/$(db)/documents/groups/$(groupId)).data.get('servantPersonId', ''),
+      get(/databases/$(db)/documents/groups/$(groupId)).data.get('assistantPersonId', '')
+    ];
+}
+
+function canManageTerritoryAssignmentsFor(db, congregationId) {
+  return isSignedIn() && exists(/databases/$(db)/documents/people/$(personIdFromToken())) && (
+    isSuperAdmin(db) || (
+      myPerson(db).get('activeCongregationId', null) == congregationId &&
+      myPerson(db).get('activeAdminRole', null) in
+        ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY']
+    )
+  );
+}
+
+// "Congregation Admin Access Control" spec §11/§12/§15/§30 — a
+// [RoleType.serialize]-shaped `roleType` string ("ADMIN:SUPER_ADMIN"/
+// "ADMIN:CIRCUIT_OVERSEER") naming one of the two roles nobody below
+// Super-Admin may ever assign, edit, or remove: "the Admin is not assigning
+// Super Admin... is not assigning Circuit Overseer." [canManageRoleAssignmentsFor]
+// alone only checks *whose* congregation a write targets, never *which*
+// role it names — without this, an Admin/Coordinator Elder/Service
+// Overseer/Secretary could otherwise write a RoleAssignment naming either of
+// these two roles for their own congregation and it would pass that check
+// outright.
+// Credit Hour Categories management — Super-Admin, or an Admin Per
+// Congregation acting in that role this session (same pair the app gates the
+// management screen on).
+function canManageCreditHourCategories(db) {
+  return isSignedIn() && exists(/databases/$(db)/documents/people/$(personIdFromToken())) && (
+    isSuperAdmin(db) || myPerson(db).get('activeAdminRole', null) == 'ADMIN_PER_CONGREGATION'
+  );
+}
+
+// Full CRUD on Publisher / Elder / Ministerial Servant records: the same role
+// set as [canManageRoleAssignmentsFor], editing the `people` profile of someone
+// in their own congregation. A target's congregation is its denormalized
+// `activeCongregationId`, which is null until that person first signs in, so a
+// never-signed-in target is accepted too (the only scope signal available).
+function canEditPersonProfile(db, targetPersonId) {
+  return isSignedIn() && exists(/databases/$(db)/documents/people/$(personIdFromToken())) && (
+    isSuperAdmin(db) || (
+      myPerson(db).get('activeAdminRole', null) in
+        ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY'] &&
+      myPerson(db).get('activeCongregationId', null) != null &&
+      exists(/databases/$(db)/documents/people/$(targetPersonId)) &&
+      get(/databases/$(db)/documents/people/$(targetPersonId)).data.get('activeCongregationId', null) in
+        [null, myPerson(db).get('activeCongregationId', null)]
+    )
+  );
+}
+
+function isPrivilegedRoleType(roleType) {
+  return roleType == 'ADMIN:SUPER_ADMIN' || roleType == 'ADMIN:CIRCUIT_OVERSEER';
+}
+
+// Account Management spec §5/§6/§11 — "do not simply hide unauthorized
+// account-management menus... all permission checks must also be performed
+// by the server/API/database authorization layer." [targetPersonId]'s own
+// `people` document is read directly (rather than [congregationId] being
+// passed in, unlike the helpers above) because the caller here is always
+// `people/{personId}` itself, where `resource`/`request.resource` describe
+// the target being written, not the caller — reading the target fresh via
+// `get()` keeps this helper usable from both the `update` rule below and any
+// future collection that needs "can I manage this specific person's
+// credentials" rather than "can I manage this congregation." Same
+// `activeCongregationId`/`activeAdminRole` denormalized-field trade-off as
+// every other helper in this file (see [canManageGroupChatsFor]'s own doc
+// comment) — a target's own `activeAdminRole` reflects whichever of their
+// roles they last signed in as, same as everywhere else this pattern is used.
+function canManageCredentialsFor(db, targetPersonId) {
+  return isSignedIn() && exists(/databases/$(db)/documents/people/$(personIdFromToken())) && (
+    isSuperAdmin(db) || (
+      exists(/databases/$(db)/documents/people/$(targetPersonId)) &&
+      myPerson(db).get('activeCongregationId', null) != null &&
+      myPerson(db).get('activeCongregationId', null) ==
+        get(/databases/$(db)/documents/people/$(targetPersonId)).data.get('activeCongregationId', null) &&
+      (
+        (myPerson(db).get('activeAdminRole', null) == 'ADMIN_PER_CONGREGATION' &&
+          get(/databases/$(db)/documents/people/$(targetPersonId)).data.get('activeAdminRole', null) in
+            [null, 'REGULAR_ELDER', 'MINISTERIAL_SERVANT']) ||
+        (myPerson(db).get('activeAdminRole', null) in ['COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY'] &&
+          get(/databases/$(db)/documents/people/$(targetPersonId)).data.get('activeAdminRole', null) == null)
+      )
+    )
+  );
+}
+
+// Spec §10/§19/§26 — a Pioneer's manually-adjusted preaching hours must carry
+// confirmation + non-blank remarks before Firestore will accept them; a
+// same-document field check, which is the one part of "server recalculates
+// and validates the authoritative values" this rules-only backend can
+// actually enforce (see the `monthlyReports` match block's own doc comment
+// for what it can't). Trivially true whenever either value is absent (a
+// Non-Pioneer report) or they already match (accepted as-is, no confirmation
+// needed).
+function hoursAdjustmentValid(data) {
+  let reported = data.get('hoursRendered', null);
+  let system = data.get('systemCalculatedHours', null);
+  return reported == null || system == null || reported == system ||
+    (data.get('hoursConfirmed', false) == true && data.get('hoursAdjustmentRemarks', '') != '');
+}
+
+// True if the caller is a participant of the group chat [chatData] belongs
+// to — works for both a Publisher and an Admin-track participant alike,
+// since participantIds is just a flat list of personIds either way.
+function isGroupChatParticipant(chatData) {
+  return isSignedIn() && personIdFromToken() in chatData.get('participantIds', []);
+}
+
+function groupChatAllowsRead(db, chatData) {
+  return isSuperAdmin(db) || isGroupChatParticipant(chatData) || canManageGroupChatsFor(db, chatData.get('congregationId', null));
+}
+
+function hasGrant(db) {
+  return isSignedIn() &&
+    exists(/databases/$(db)/documents/userAccessGrants/$(personIdFromToken()));
+}
+
+function myGrant(db) {
+  return get(/databases/$(db)/documents/userAccessGrants/$(personIdFromToken())).data;
+}
+
+function myGrantPermissions(db) {
+  return hasGrant(db) ? myGrant(db).permissions : [];
+}
+
+function grantScopeIncludesCongregation(db, congregationId) {
+  let g = myGrant(db);
+  return g.scopeType == 'ALL_CONGREGATIONS' ||
+    (g.scopeType == 'SELECTED_CONGREGATIONS' && congregationId in g.get('scopeCongregationIds', []));
+}
+
+// True if this caller may act under [permission] on data scoped to
+// [congregationId]. For a caller with NO grant at all (one of the four
+// built-in roles, or Super-Admin), this is deliberately permissive — matches
+// the pre-existing `isSignedIn()`-only baseline below. For a caller WHO HAS a
+// grant (a restricted user), it's the real permission+scope check spec §13
+// asks for: "Authenticated User -> Role -> Permission -> Scope -> Data".
+function restrictedAllows(db, permission, congregationId) {
+  return !hasGrant(db) || (
+    permission in myGrantPermissions(db) &&
+    grantScopeIncludesCongregation(db, congregationId)
+  );
+}
+
+// Same, but for an action with no existing congregation to scope against yet
+// (creating a brand-new Congregation document) — permission-only, since a
+// restricted user's scope is a list of *existing* congregation ids and a new
+// one obviously isn't in it yet.
+function restrictedAllowsPermission(db, permission) {
+  return !hasGrant(db) || permission in myGrantPermissions(db);
+}
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Super-Admin override: full read/write on every collection. Rules from
+    // overlapping matches are OR'd, so this only ever adds access — it also
+    // covers collection-wide listeners (e.g. `userAccessGrants`,
+    // `dashboardModuleLayouts`) that the per-document own-record rules below
+    // can't authorize, which showed up as a permanent "Sync error".
+    match /{document=**} {
+      allow read, write: if isSuperAdmin(database);
+    }
+
+    // Public write-only mailbox: spec §4.5 "forgot password" is submitted by
+    // someone who, by definition, cannot sign in yet.
+    match /passwordResetRequests/{requestId} {
+      allow create: if true;
+      allow read, update, delete: if isSignedIn();
+    }
+
+    // Public read-only: login is by username (spec §5.1/5.2), so the app must
+    // resolve username -> synthetic Auth email (see AuthEmail.kt) *before* the
+    // user is signed in — a chicken-and-egg problem that requires this lookup
+    // to work unauthenticated. No secrets live here (passwords are in Auth,
+    // not Firestore); the trade-off is that names/contact/address are
+    // technically fetchable without signing in, matching the coarser
+    // "authenticated read/write" baseline this whole ruleset already accepts
+    // (see file-level note above).
+    match /people/{personId} {
+      allow read: if true;
+      // Bug fix ("Congregation Admin Access Control" spec §11/§30 — "cannot
+      // assign themselves Super Admin"): this used to be plain
+      // `isSignedIn()`, meaning ANY signed-in account (a Publisher included)
+      // could set `isSuperAdmin: true` on *any* `people` document — their
+      // own or anyone else's — with a single direct Firestore write, no app
+      // UI involved at all. No legitimate flow in this app ever sets this
+      // field on any document (it's bootstrapped once by hand per
+      // SETUP.md — see [isSuperAdmin]'s own doc comment); requiring it to
+      // stay exactly what it already was on every write (`false` on a
+      // brand-new document, unchanged on every update) closes that
+      // self-escalation path completely without touching a single
+      // legitimate write this app's own code makes.
+      allow create: if isSignedIn() && request.resource.data.get('isSuperAdmin', false) == false;
+      // Account Management spec §6/§11 — until this pass, this was plain
+      // `isSignedIn()` (the isSuperAdmin-immutability guard above was the
+      // only real check): ANY signed-in account could overwrite ANY OTHER
+      // person's `username`/`accountStatus`/every other field, with no
+      // congregation or role check at all — the Android app's own UI gating
+      // was the *only* thing stopping, say, a Regular Elder from directly
+      // writing another congregation's Admin's username via a raw Firestore
+      // call. Self-editing (every existing self-service flow — username/
+      // password change, profile edits, forced first-login change) is
+      // unrestricted, same as before; a write to someone else's document is
+      // now allowed only when [canManageCredentialsFor] authorizes the actor
+      // for that specific target AND the write touches only the two fields
+      // Account Management ever changes on someone else's behalf — never a
+      // general "any admin can edit any field of any person" hole.
+      allow update: if isSignedIn() &&
+        request.resource.data.get('isSuperAdmin', false) == resource.data.get('isSuperAdmin', false) &&
+        (
+          personId == personIdFromToken() ||
+          canEditPersonProfile(database, personId) ||
+          (
+            canManageCredentialsFor(database, personId) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username', 'accountStatus'])
+          )
+        );
+      allow delete: if isSignedIn();
+    }
+
+    // User Access Management (spec §2/§6-§8/§13): only a Super-Admin may
+    // create/edit a restricted user's permissions and scope ("Only the
+    // Super-Admin can... Define user access permissions") — OR an Admin whose
+    // *own* grant already includes MANAGE_USERS (spec §14: "Admin can manage
+    // users only if explicitly authorized"). A restricted user may always
+    // read their own grant (so the app can show them their own access),
+    // never anyone else's.
+    match /userAccessGrants/{personId} {
+      allow read: if isSignedIn() && (personId == personIdFromToken() || isSuperAdmin(database) || 'MANAGE_USERS' in myGrantPermissions(database));
+      allow write: if isSignedIn() && (isSuperAdmin(database) || 'MANAGE_USERS' in myGrantPermissions(database));
+    }
+
+    match /congregations/{congregationId} {
+      allow read: if restrictedAllows(database, 'VIEW_CONGREGATIONS', congregationId);
+      allow create: if restrictedAllowsPermission(database, 'ADD_CONGREGATIONS');
+      allow update: if restrictedAllows(database, 'EDIT_CONGREGATIONS', congregationId);
+      allow delete: if restrictedAllows(database, 'DELETE_CONGREGATIONS', congregationId);
+    }
+
+    // FS Group RBAC — Super-Admin: every group; Admin / Coordinator Elder / Service Overseer / Secretary
+    // (active role): groups of their own congregation; a Group Overseer/Servant/Assistant: may update (never
+    // create, delete or deactivate) only the group whose slot they hold. Each arm is gated behind
+    // `!hasGrant` / `hasGrant` for the same reason as /roleAssignments below. Reads stay as before.
+    match /groups/{groupId} {
+      allow read: if restrictedAllows(database, 'VIEW_GROUPS', resource.data.get('congregationId', null));
+      allow create: if (!hasGrant(database) && canManageRoleAssignmentsFor(database, request.resource.data.get('congregationId', null))) ||
+        (hasGrant(database) && restrictedAllows(database, 'MANAGE_GROUPS', request.resource.data.get('congregationId', null)));
+      allow update: if (!hasGrant(database) &&
+          request.resource.data.get('congregationId', null) == resource.data.get('congregationId', null) &&
+          (canManageRoleAssignmentsFor(database, resource.data.get('congregationId', null)) ||
+            (isSignedIn() && personIdFromToken() in [resource.data.get('overseerPersonId', ''),
+              resource.data.get('servantPersonId', ''), resource.data.get('assistantPersonId', '')] &&
+              request.resource.data.get('status', 'ACTIVE') == resource.data.get('status', 'ACTIVE')))) ||
+        (hasGrant(database) && restrictedAllows(database, 'MANAGE_GROUPS', resource.data.get('congregationId', null)));
+      allow delete: if (!hasGrant(database) && canManageRoleAssignmentsFor(database, resource.data.get('congregationId', null))) ||
+        (hasGrant(database) && restrictedAllows(database, 'MANAGE_GROUPS', resource.data.get('congregationId', null)));
+    }
+
+    // Territory Assignment module — see [canManageTerritoryAssignmentsFor]'s
+    // own comment for why this is real per-role-per-congregation enforcement
+    // rather than the restrictedAllows() pattern above. Read stays plain
+    // isSignedIn() — same trust level every other admin-track list (Groups,
+    // Congregations) already reads at; only claiming/releasing a barangay
+    // needed the tighter write check.
+    match /territoryAssignments/{assignmentId} {
+      allow read: if isSignedIn();
+      allow create: if canManageTerritoryAssignmentsFor(database, request.resource.data.get('congregationId', null));
+      // congregationId is immutable on edit — a congregation is a fixed
+      // scope for this record, never reassignable.
+      allow update: if canManageTerritoryAssignmentsFor(database, resource.data.get('congregationId', null)) &&
+        request.resource.data.get('congregationId', null) == resource.data.get('congregationId', null);
+      allow delete: if canManageTerritoryAssignmentsFor(database, resource.data.get('congregationId', null));
+    }
+
+    // Per Publisher Assignment — one barangay (plus optional Return Visits)
+    // assigned to one Publisher. Same role set/congregation scope as the FS
+    // Group territory assignments above; congregationId is immutable.
+    match /publisherTerritoryAssignments/{assignmentId} {
+      allow read: if isSignedIn();
+      allow create: if canManageTerritoryAssignmentsFor(database, request.resource.data.get('congregationId', null));
+      allow update: if canManageTerritoryAssignmentsFor(database, resource.data.get('congregationId', null)) &&
+        request.resource.data.get('congregationId', null) == resource.data.get('congregationId', null);
+      allow delete: if canManageTerritoryAssignmentsFor(database, resource.data.get('congregationId', null));
+    }
+
+    // Territory Map pins (a spot + text mark, dropped by long-press). Everyone
+    // signed in may read (the app filters to the user's own congregation — a
+    // whole-collection listener can't satisfy a per-document congregation
+    // check); a pin can only be created as oneself, and removed by its creator
+    // or by a role with territory access in that congregation.
+    // Deleted Records (the recycle bin): every module's "Delete" moves a full snapshot here instead of erasing it.
+    // Only the person who deleted it, or an admin-track role of that congregation / the Super-Admin, may read,
+    // restore (= delete the entry after writing the originals back) or permanently delete it. An entry is only
+    // ever created as oneself and never edited.
+    match /deletedRecords/{recordId} {
+      allow read: if isSignedIn() && (
+        resource.data.get('deletedByPersonId', null) == personIdFromToken() ||
+        canManageTrashFor(database, resource.data.get('congregationId', null))
+      );
+      allow create: if isSignedIn() && request.resource.data.get('deletedByPersonId', null) == personIdFromToken();
+      allow update: if false;
+      allow delete: if isSignedIn() && (
+        resource.data.get('deletedByPersonId', null) == personIdFromToken() ||
+        canManageTrashFor(database, resource.data.get('congregationId', null))
+      );
+    }
+
+    match /mapPins/{pinId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() &&
+        request.resource.data.get('createdByPersonId', null) == personIdFromToken() &&
+        inMyActiveCongregation(database, request.resource.data.get('congregationId', null));
+      allow update, delete: if isSignedIn() && (
+        resource.data.get('createdByPersonId', null) == personIdFromToken() ||
+        canManageTerritoryAssignmentsFor(database, resource.data.get('congregationId', null))
+      );
+    }
+
+    // ---- Map drawings: completed-territory polygons and pins -------------------
+    //
+    // Who may draw (matches the app's DrawingAccess / GroupAccessScope):
+    //   * Super-Admin ........................ anywhere
+    //   * Admin / Coordinator Elder /
+    //     Service Overseer / Secretary ....... any FS Group territory of their own congregation
+    //   * Group Overseer / Servant / Assistant  only the FS Group whose slot they hold ...
+    //     ... AND, geometrically, only inside that territory.
+    //
+    // Rules cannot loop over coordinates, so the geometric half is enforced the only way
+    // rules can: every drawing carries its bounding box (minLat..maxLng), and a group-level
+    // caller's box must sit inside the territory's published box in `territoryBounds/{id}`
+    // — which only congregation-wide roles can write, never the group-level users it
+    // constrains. The exact polygon test runs in the app before anything is saved
+    // (DrawingValidator); a modified client that skips it is still held to the box here.
+    // (An exact server-side polygon test would need a Cloud Function, i.e. the Blaze plan.)
+    // Super-Admin, or Admin / Coordinator Elder / Service Overseer / Secretary acting for [congregationId]
+    // (canManageTerritoryAssignmentsFor already includes the Super-Admin).
+    function slotDrawFor(db, congregationId, groupId) {
+      return isSignedIn() && isSlotHolderOfGroup(db, groupId) &&
+        get(/databases/$(db)/documents/groups/$(groupId)).data.get('congregationId', null) == congregationId;
+    }
+
+    function canDrawFor(db, congregationId, groupId) {
+      return isSignedIn() && (canManageTerritoryAssignmentsFor(db, congregationId) || slotDrawFor(db, congregationId, groupId));
+    }
+
+    // The drawing sits in a real territory (claimed barangay) of the group/congregation it names.
+    function drawingTerritoryOk(db, d) {
+      let tid = d.get('territoryId', null);
+      let claim = get(/databases/$(db)/documents/territoryAssignmentBarangays/$(tid)).data;
+      return tid is string && tid.size() > 0 &&
+        exists(/databases/$(db)/documents/territoryAssignmentBarangays/$(tid)) &&
+        claim.get('congregationId', null) == d.get('congregationId', null) &&
+        claim.get('groupId', null) == d.get('groupId', null);
+    }
+
+    // The drawing's bounding box lies inside the territory's published bounding box.
+    function drawingInsideTerritoryBounds(db, d) {
+      let tid = d.get('territoryId', null);
+      let b = get(/databases/$(db)/documents/territoryBounds/$(tid)).data;
+      return exists(/databases/$(db)/documents/territoryBounds/$(tid)) &&
+        b.get('congregationId', null) == d.get('congregationId', null) &&
+        b.get('groupId', null) == d.get('groupId', null) &&
+        b.minLat <= d.minLat && b.maxLat >= d.maxLat && b.minLng <= d.minLng && b.maxLng >= d.maxLng;
+    }
+
+    function drawingShapeOk(d) {
+      return d.minLat is number && d.maxLat is number && d.minLng is number && d.maxLng is number &&
+        d.minLat >= -90 && d.maxLat <= 90 && d.minLng >= -180 && d.maxLng <= 180 &&
+        d.minLat <= d.maxLat && d.minLng <= d.maxLng &&
+        d.geometryJson is string && d.geometryJson.size() > 0 && d.geometryJson.size() <= 60000 &&
+        drawingPolygonOk(d);
+    }
+
+    // A polygon always has a status, and its color IS the status color (green / amber / red) — never arbitrary.
+    function drawingPolygonOk(d) {
+      let s = d.get('status', null);
+      let c = d.get('fillColor', null);
+      let o = d.get('fillOpacity', -1);
+      let r = d.get('remarks', '');
+      let nm = d.get('name', '');
+      return o >= 0 && o <= 1 && r is string && r.size() <= 1000 && nm is string && nm.size() <= 120 &&
+        ((s == 'FINISHED' && c == '#43A047') || (s == 'TO_CONTINUE' && c == '#FBC02D') || (s == 'TO_DO' && c == '#E53935'));
+    }
+
+
+    function drawingWriteOk(db, d) {
+      // Congregation-wide roles and the Super-Admin may draw across a territory; a group-level user
+      // must stay inside their own territory's published box.
+      let wide = canManageTerritoryAssignmentsFor(db, d.get('congregationId', null));
+      return drawingShapeOk(d) &&
+        d.get('updatedByUserId', null) == personIdFromToken() &&
+        (wide || slotDrawFor(db, d.get('congregationId', null), d.get('groupId', null))) &&
+        // Congregation-wide roles may also draw in an area no FS Group has claimed (territoryId ''); everyone else must name a real territory.
+        (d.get('territoryId', '') == '' ? wide : drawingTerritoryOk(db, d)) &&
+        (wide || drawingInsideTerritoryBounds(db, d));
+    }
+
+    match /territoryDrawings/{drawingId} {
+      allow read: if isSignedIn();
+      allow create: if drawingWriteOk(database, request.resource.data) &&
+        request.resource.data.get('userId', null) == personIdFromToken();
+      // The app saves with set(), so an edit of an existing drawing arrives here. The caller must be
+      // allowed to draw in the drawing's CURRENT group and in the new state; its author, congregation and
+      // creation time can never be rewritten.
+      allow update: if drawingWriteOk(database, request.resource.data) &&
+        canDrawFor(database, resource.data.get('congregationId', null), resource.data.get('groupId', null)) &&
+        request.resource.data.get('congregationId', null) == resource.data.get('congregationId', null) &&
+        request.resource.data.get('userId', null) == resource.data.get('userId', null) &&
+        request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null);
+      // Deleting something already gone (an unsynced draft deleted before it ever uploaded) is harmless.
+      allow delete: if isSignedIn() && (
+        resource == null ||
+        canDrawFor(database, resource.data.get('congregationId', null), resource.data.get('groupId', null))
+      );
+    }
+
+    // Audit trail of drawing actions — append-only; congregation-wide roles read it.
+    match /territoryDrawingAudits/{auditId} {
+      allow read: if canManageTerritoryAssignmentsFor(database, resource.data.get('congregationId', null));
+      allow create: if isSignedIn() &&
+        request.resource.data.get('userId', null) == personIdFromToken() &&
+        canDrawFor(database, request.resource.data.get('congregationId', null), request.resource.data.get('groupId', null));
+      allow update, delete: if false;
+    }
+
+    // Territory bounding boxes the drawing rules compare against. Only congregation-wide roles write them.
+    match /territoryBounds/{territoryId} {
+      allow read: if isSignedIn();
+      allow create, update: if canManageTerritoryAssignmentsFor(database, request.resource.data.get('congregationId', null)) &&
+        exists(/databases/$(database)/documents/territoryAssignmentBarangays/$(territoryId)) &&
+        get(/databases/$(database)/documents/territoryAssignmentBarangays/$(territoryId)).data.get('congregationId', null) == request.resource.data.get('congregationId', null) &&
+        get(/databases/$(database)/documents/territoryAssignmentBarangays/$(territoryId)).data.get('groupId', null) == request.resource.data.get('groupId', null) &&
+        request.resource.data.minLat is number && request.resource.data.maxLat is number &&
+        request.resource.data.minLng is number && request.resource.data.maxLng is number &&
+        request.resource.data.minLat <= request.resource.data.maxLat && request.resource.data.minLng <= request.resource.data.maxLng;
+      allow delete: if canManageTerritoryAssignmentsFor(database, resource.data.get('congregationId', null));
+    }
+
+    // One doc per claimed barangay, id == "${congregationId}_${barangayId}"
+    // (see TerritoryAssignmentBarangay's own doc comment) — that deterministic
+    // id, combined with the create rule below, is what makes "a barangay can
+    // only ever be assigned to one FS Group per congregation" an actual
+    // database-enforced guarantee rather than just a client-side check:
+    // TerritoryAssignmentRepository's transaction can only ever create this
+    // exact document once, and this rule additionally pins congregationId/
+    // barangayId as immutable once set, so an "edit" of a claim is always a
+    // delete + create under a different deterministic id, never a rewrite of
+    // the fields that make the id meaningful.
+    match /territoryAssignmentBarangays/{claimId} {
+      allow read: if isSignedIn();
+      allow create: if canManageTerritoryAssignmentsFor(database, request.resource.data.get('congregationId', null));
+      allow update: if canManageTerritoryAssignmentsFor(database, resource.data.get('congregationId', null)) &&
+        request.resource.data.get('congregationId', null) == resource.data.get('congregationId', null) &&
+        request.resource.data.get('barangayId', null) == resource.data.get('barangayId', null);
+      allow delete: if canManageTerritoryAssignmentsFor(database, resource.data.get('congregationId', null));
+    }
+
+    // Elders and Publishers are both `roleAssignments` rows (see
+    // RoleAssignment.kt — the app's own data model, not this file's
+    // invention); the permission that applies depends on which one a given
+    // document actually is, so a restricted user's read/write is allowed here
+    // if EITHER their Elders or their Publishers permission (for the right
+    // congregation) covers it.
+    match /roleAssignments/{assignmentId} {
+      allow read: if !hasGrant(database) ||
+        restrictedAllows(database, 'VIEW_ELDERS', resource.data.get('congregationId', null)) ||
+        restrictedAllows(database, 'VIEW_PUBLISHERS', resource.data.get('congregationId', null));
+      // Bug fix ("Role assignment security" — spec §33/§34): this used to be
+      // `!hasGrant(database) || ...`, meaning ANY signed-in, non-restricted
+      // account — a plain Publisher included — could write an arbitrary
+      // RoleAssignment document, congregation and role both entirely
+      // client-chosen, and elevate themselves (or anyone) to Coordinator
+      // Elder/Super-Admin/any other role with a single direct Firestore
+      // call, no matter what the app's own UI hid or disabled. Every
+      // legitimate write in this app's own code is already performed by an
+      // admin-track account's session (every enrollment screen and every
+      // Manage screen that edits a role — see canManageRoleAssignmentsFor's
+      // own doc comment for the exact list); a plain Publisher never
+      // legitimately writes here at all, so this closes the gap without
+      // narrowing anything the app actually uses.
+      // Bug fix, caught by an actual rules-emulator test run, not just a
+      // syntax dry-run — [restrictedAllows] is `!hasGrant(db) || (...)`: for
+      // any *non*-restricted account (every built-in role — Super-Admin,
+      // Admin, Coordinator Elder, Service Overseer, Secretary — none of
+      // which ever hold a `userAccessGrants` doc), `!hasGrant(db)` alone is
+      // already `true`, so `restrictedAllows(...)` returns `true`
+      // unconditionally for them regardless of the permission/congregation
+      // argument. Combining that with the new [canManageRoleAssignmentsFor]/
+      // [isPrivilegedRoleType] check via a plain top-level `||` (as this
+      // used to read) meant the *old*, blanket-permissive branch still won
+      // every time for a non-restricted account — a Congregation Admin could
+      // still create a SUPER_ADMIN/CIRCUIT_OVERSEER RoleAssignment, or one
+      // for another congregation entirely, exactly the gap this rule was
+      // supposed to close, just via a different `||` arm. Each
+      // `restrictedAllows(...)` branch below is now explicitly gated behind
+      // `hasGrant(database)` so it only ever applies to an actual grant-based
+      // restricted user (its only real purpose — see [restrictedAllows]'s
+      // own doc comment) and can never again act as an accidental bypass for
+      // everyone else.
+      allow create: if (!hasGrant(database) && canManageRoleAssignmentsFor(database, request.resource.data.get('congregationId', null)) &&
+          (isSuperAdmin(database) || !isPrivilegedRoleType(request.resource.data.get('roleType', '')))) ||
+        (hasGrant(database) && (
+          restrictedAllows(database, 'MANAGE_ELDERS', request.resource.data.get('congregationId', null)) ||
+          restrictedAllows(database, 'MANAGE_PUBLISHERS', request.resource.data.get('congregationId', null))));
+      allow update: if (!hasGrant(database) && canManageRoleAssignmentsFor(database, resource.data.get('congregationId', null)) &&
+          (isSuperAdmin(database) ||
+            (!isPrivilegedRoleType(resource.data.get('roleType', '')) && !isPrivilegedRoleType(request.resource.data.get('roleType', ''))))) ||
+        (hasGrant(database) && (
+          restrictedAllows(database, 'MANAGE_ELDERS', resource.data.get('congregationId', null)) ||
+          restrictedAllows(database, 'MANAGE_PUBLISHERS', resource.data.get('congregationId', null))));
+      allow delete: if (!hasGrant(database) && canManageRoleAssignmentsFor(database, resource.data.get('congregationId', null)) &&
+          (isSuperAdmin(database) || !isPrivilegedRoleType(resource.data.get('roleType', '')))) ||
+        (hasGrant(database) && (
+          restrictedAllows(database, 'MANAGE_ELDERS', resource.data.get('congregationId', null)) ||
+          restrictedAllows(database, 'MANAGE_PUBLISHERS', resource.data.get('congregationId', null))));
+      // FS Group RBAC — a Group Overseer/Servant/Assistant managing their own group's members: may change ONLY the
+      // group link fields, and only moving someone into or out of a group whose slot they hold.
+      allow update: if !hasGrant(database) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['groupId', 'regularElderRole', 'lastEditedByPersonId', 'lastEditedAt']) &&
+        (isSlotHolderOfGroup(database, resource.data.get('groupId', null)) ||
+          isSlotHolderOfGroup(database, request.resource.data.get('groupId', null)));
+    }
+
+    match /monthlyReports/{reportId} {
+      allow read: if restrictedAllows(database, 'VIEW_PUBLISHER_REPORTS', resource.data.get('congregationId', null)) ||
+        restrictedAllows(database, 'VIEW_GROUP_REPORTS', resource.data.get('congregationId', null)) ||
+        restrictedAllows(database, 'VIEW_CONGREGATION_REPORTS', resource.data.get('congregationId', null));
+      // A restricted user's report access is view-only in every one of the
+      // spec's own worked examples — none of them grant report edits.
+      //
+      // "The publisher can edit... until the service overseer marks it
+      // Posted, that's the time the publisher can no longer edit the
+      // record" — enforced here too, not only in the app's own UI: once a
+      // report's status is POSTED, the one publisher it belongs to
+      // (personIdFromToken() == its own publisherPersonId) can never write
+      // to it again — update or delete — no matter what the client sends.
+      // `resource` is null on create (a brand-new report), so this never
+      // blocks a publisher creating/saving their own not-yet-posted report.
+      //
+      // Bug fix ("Update Monthly Report Submission" spec §5/§6/§26 — "a
+      // Publisher must never be able to... submit another Publisher's
+      // participation answer"): this used to have NO ownership check at
+      // all — any signed-in, non-restricted account could write a
+      // `monthlyReports` document under ANY OTHER publisherPersonId/
+      // congregationId with arbitrary values, not just their own. Now
+      // requires EITHER `request.resource.data.publisherPersonId ==
+      // personIdFromToken()` (a Publisher may only ever write their own
+      // report — and, only on that path, must satisfy
+      // [hoursAdjustmentValid]: spec §10/§19's "confirmation + remarks
+      // required when manually-reported Pioneer hours differ from the
+      // system-calculated total," the one aggregate-adjacent rule this
+      // rules-only backend (no Cloud Functions — see this file's own
+      // doc comment) can actually enforce as a same-document check) OR
+      // [canManagePublisherReportsFor] (an admin-track role/Super-Admin
+      // correcting a report on a Publisher's behalf — deliberately NOT
+      // subject to [hoursAdjustmentValid], since that confirmation
+      // mechanic is about a Publisher's own self-service submission, not
+      // an already-trusted administrative correction).
+      //
+      // What this rules-only backend genuinely CANNOT do (documented here
+      // rather than silently attempted): independently recompute the
+      // Bible Study unique-person count or the Pioneer hours SUM from the
+      // `interestedPeople`/`preachingTimeRecords` collections and reject a
+      // client submission that disagrees — Firestore rules have no
+      // cross-collection aggregation, only per-document field checks. That
+      // would need Cloud Functions, which this app has deliberately never
+      // introduced (see ReminderWorker's own doc comment on why every
+      // check here is client-side). The authoritative values in practice
+      // are computed once, client-side, from this Publisher's own already-
+      // synced records — the same trust model every other computed value
+      // in this app (Dashboard totals, Consolidated Report, ...) already
+      // uses — validated only for ownership, congregation, and the hours-
+      // confirmation shape above.
+      //
+      // Duplicate-submission lock: once a report is SUBMITTED/CORRECTED, its own
+      // publisher can't overwrite it (a second device, a replayed request, another
+      // screen) — it only opens again when an admin-track role unlocks it or returns
+      // it (status becomes DRAFT/RETURNED). Reports have one fixed id per publisher
+      // and month, so a second submission for the same month lands on this same
+      // document and is rejected here. A write identical to what is already stored
+      // is still accepted, so a retried sync never turns into a permanent error.
+      allow write: if !hasGrant(database) &&
+        !(resource != null && resource.data.status == 'POSTED' && resource.data.publisherPersonId == personIdFromToken()) &&
+        !(resource != null && request.resource != null &&
+          resource.data.status in ['SUBMITTED', 'CORRECTED'] &&
+          resource.data.publisherPersonId == personIdFromToken() &&
+          !canManagePublisherReportsFor(database, resource.data.congregationId) &&
+          request.resource.data != resource.data) &&
+        (
+          request.resource == null ? isSuperAdmin(database) : (
+            (request.resource.data.publisherPersonId == personIdFromToken() && hoursAdjustmentValid(request.resource.data)) ||
+            canManagePublisherReportsFor(database, request.resource.data.congregationId)
+          )
+        );
+    }
+
+    // "Preaching Time Records — Super Admin Management Module" spec §8/§10 —
+    // this collection had NO dedicated rule before this (it fell through to
+    // the broad `isSignedIn()` catch-all at the bottom of this file), so
+    // nothing stopped any signed-in Publisher from reading, editing, or
+    // outright deleting any OTHER publisher's per-day preaching time log.
+    // Read/create/update keep that same broad `isSignedIn()`-style baseline
+    // every other un-migrated collection in this file still has (this task
+    // isn't a general congregation-isolation pass for this collection —
+    // narrowing read access would also break "Consolidated Monthly Report",
+    // which already relies on every admin being able to read every
+    // publisher's records) — the one deliberate, real tightening here is
+    // `delete`: spec §8's own diagram ("Role = Super Admin? NO -> Reject
+    // Request") is enforced here, server-side, not just by hiding the Force
+    // Delete button in the UI. A non-Super-Admin client cannot get Firestore
+    // to execute a delete on this collection no matter what the app would
+    // otherwise let through or how the request is crafted.
+    match /preachingTimeRecords/{recordId} {
+      allow read, create, update: if isSignedIn();
+      allow delete: if isSuperAdmin(database);
+    }
+
+    // "My Bible Text Record" module spec §20/§31: "Never trust a
+    // PublisherID supplied by the frontend... perform ownership checks on
+    // the backend." Unlike most of this file's collections (see the
+    // file-level note — fine-grained per-role authorization elsewhere is
+    // still UI-enforced, not rules-enforced), these two get a real,
+    // self-contained ownership check: a document's own `publisherPersonId`
+    // field must equal the caller's own personId, derived from their auth
+    // token, never from anything the client sends as a plain "which
+    // publisher is this for" parameter. No `get()`/`exists()` needed (no
+    // cross-document role lookup, just a field-equality check), so this is
+    // cheap to enforce for real.
+    match /bibleTextCategories/{categoryId} {
+      allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
+      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
+    }
+    match /bibleTextRecords/{recordId} {
+      allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
+      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
+    }
+
+    // My Planner's own data — same real ownership check as bibleTextRecords/
+    // bibleTextCategories above, not the plain isSignedIn()-only catch-all
+    // every one of these six collections fell back to before: any signed-in
+    // Publisher could otherwise read or overwrite *any other* Publisher's
+    // daily records, Hours Goals, Credit Hours, or Ministry Timer sessions.
+    // The Android app's own query for each of these is now scoped to match
+    // (`.whereEqualTo("publisherPersonId", ...)`, see PlannerDayRepository
+    // .startRemoteSync's doc comment) — an unconstrained list() query is
+    // what a resource.data-based rule like this can never satisfy.
+    match /plannerDays/{id} {
+      allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
+      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
+    }
+    match /monthlyPlannerGoals/{id} {
+      allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
+      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
+    }
+    match /weeklyPlannerGoals/{id} {
+      allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
+      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
+    }
+    match /yearlyPlannerGoals/{id} {
+      allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
+      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
+    }
+    match /creditHourRecords/{id} {
+      allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
+      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
+    }
+    match /ministryTimerSessions/{id} {
+      allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
+      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
+    }
+
+    // "Group Chat Setting" module (spec §2-13). Every rule below reads from
+    // `resource.data`/`request.resource.data` directly — cheap field
+    // equality plus the one `get()` on the caller's own Person doc (see
+    // canManageGroupChatsFor/isGroupChatParticipant), no query.
+    match /groupChats/{groupChatId} {
+      allow read: if groupChatAllowsRead(database, resource.data);
+      // Only a Coordinator Elder/Admin creating within their own active
+      // congregation, or Super-Admin, may create a group chat at all —
+      // "Only the Coordinator Elder... the Admin must also have authority."
+      allow create: if canManageGroupChatsFor(database, request.resource.data.congregationId);
+      // Update covers both settings edits (Coordinator Elder/Admin/Super-
+      // Admin) AND every participant's own read-count/last-message rollup
+      // from sendMessage()/markRead() — a plain participant is never
+      // allowed to rewrite congregationId/participantIds themselves this
+      // way (see the second clause), only their own readCounts entry plus
+      // the denormalized lastMessage*/messageCount fields a send touches.
+      allow update: if canManageGroupChatsFor(database, resource.data.congregationId) || (
+        isGroupChatParticipant(resource.data) &&
+        request.resource.data.congregationId == resource.data.congregationId &&
+        request.resource.data.participantIds == resource.data.participantIds
+      );
+      allow delete: if isSuperAdmin(database) || canManageGroupChatsFor(database, resource.data.congregationId);
+
+      match /messages/{messageId} {
+        allow read: if groupChatAllowsRead(database, get(/databases/$(database)/documents/groupChats/$(groupChatId)).data);
+        // A message's own senderId must be the caller's real identity
+        // (never trust a client-supplied sender), and the caller must
+        // actually belong to the parent chat.
+        allow create: if request.resource.data.senderId == personIdFromToken() &&
+          groupChatAllowsRead(database, get(/databases/$(database)/documents/groupChats/$(groupChatId)).data);
+        // "Allow the sender to edit and delete (to everyone, delete for me)
+        // the message he sent" — a real, still-narrow update rule, not a
+        // reopened "anyone can rewrite any message" hole: senderId/createdAt
+        // may never change (identity/ordering stay immutable), and only two
+        // shapes of write are allowed —
+        //  1. the sender editing text/isEdited/editedAt, or soft-deleting via
+        //     isDeletedForEveryone (clearing text/attachment fields), or
+        //  2. ANY participant appending only their own id to
+        //     deletedForPersonIds ("delete for me") — enforced by requiring
+        //     every other field (text/attachment/isDeletedForEveryone) stay
+        //     byte-for-byte unchanged, so a non-sender literally cannot touch
+        //     message content this way.
+        // Chat history/audit otherwise stays intact — deletion is always
+        // soft (a placeholder), never a real doc removal (see delete below).
+        allow update: if isSuperAdmin(database) || (
+          groupChatAllowsRead(database, get(/databases/$(database)/documents/groupChats/$(groupChatId)).data) &&
+          request.resource.data.senderId == resource.data.senderId &&
+          request.resource.data.createdAt == resource.data.createdAt &&
+          (
+            personIdFromToken() == resource.data.senderId ||
+            (
+              request.resource.data.text == resource.data.text &&
+              request.resource.data.get('attachmentUrl', null) == resource.data.get('attachmentUrl', null) &&
+              request.resource.data.get('isDeletedForEveryone', false) == resource.data.get('isDeletedForEveryone', false)
+            )
+          )
+        );
+        // No hard delete of a sent message — chat history stays intact for
+        // audit (spec §12); Super-Admin can still clean up via deleting the
+        // whole group chat above if truly needed.
+        allow delete: if false;
+      }
+    }
+
+    // "Territory Map: Congregation-Restricted Return Visit Access" — Return
+    // Visit/Bible Study/Searching records ([InterestedPerson]) and their
+    // Visit History ([Visit], the `visits` subcollection) get real,
+    // server-side congregation enforcement on every WRITE here, on top of
+    // the existing PipelineViewModel/PipelineScreen UI checks (see those
+    // files' own doc comments) — spec: "Congregation access must be enforced
+    // at both the frontend and backend... Do not rely only on hiding map
+    // markers or UI buttons."
+    //
+    // Deliberately write-side only (create/update/delete) for now, not
+    // read/list: a read restriction here would also have to reject
+    // [com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection]'s
+    // single unfiltered app-wide listener on `interestedPeople` (started
+    // once per sign-in — see RemoteSyncCoordinator.kt) and the unfiltered
+    // `visits` collection-group listener the Consolidated Monthly Report
+    // uses (see VisitRepository.startRemoteSyncAllForCongregationView) —
+    // Firestore denies an ENTIRE unfiltered query the instant any document
+    // it could return would fail a per-document read rule, for every caller,
+    // not just narrow the results. Neither listener is congregation-scoped
+    // today, so a read rule here would break Return Visit/Bible Study/
+    // Searching sync and the Consolidated Report outright rather than just
+    // closing the "open by direct ID" gap. That's a separate, larger
+    // follow-up (query-scoping the mirror + a `congregationId` field on
+    // `Visit` for the collection-group case), not done here.
+    function interestedPersonCongregationId(db, personId) {
+      return get(/databases/$(db)/documents/interestedPeople/$(personId)).data.get('congregationId', null);
+    }
+
+    function interestedPersonOwnerId(db, personId) {
+      return get(/databases/$(db)/documents/interestedPeople/$(personId)).data.get('publisherPersonId', null);
+    }
+
+    // "Territory Map Return Visit Permissions" — a Bible Study's visit
+    // history is deliberately excluded from the shared Return Visit history
+    // permission below; this is how a `visits` write rule tells the two
+    // apart, since [Visit] itself carries no stage of its own (see that
+    // model's own doc comment) — it's always the *parent* InterestedPerson's
+    // current [PipelineStage] name that decides.
+    function interestedPersonPipelineStage(db, personId) {
+      return get(/databases/$(db)/documents/interestedPeople/$(personId)).data.get('pipelineStage', null);
+    }
+
+    // True for the Super-Admin (every congregation), or a signed-in caller
+    // whose own denormalized `activeCongregationId` (Publisher or the four
+    // admin-track roles alike) matches [congregationId].
+    function inMyActiveCongregation(db, congregationId) {
+      return isSuperAdmin(db) || (
+        isSignedIn() &&
+        exists(/databases/$(db)/documents/people/$(personIdFromToken())) &&
+        myPerson(db).get('activeCongregationId', null) == congregationId
+      );
+    }
+
+    // Diagnosed 2026-09-11: exact-id congregation matching kept rejecting a
+    // real, previously-working same-congregation Publisher save with
+    // PERMISSION_DENIED, even though both her own account and the record
+    // read as the same congregation on screen — the explanation that fits
+    // is two different `congregations/{id}` documents sharing the same
+    // display name (a duplicate-congregation data issue, not a rule bug).
+    // This resolves each side to its congregation's own `name` and accepts
+    // a match on name as a fallback when the id doesn't match, so this
+    // specific class of data duplication can't silently lock a legitimate
+    // same-congregation save out — without opening write access to every
+    // congregation the way a blanket isSignedIn() would.
+    function congregationNameOf(db, congregationId) {
+      return congregationId != null && exists(/databases/$(db)/documents/congregations/$(congregationId))
+        ? get(/databases/$(db)/documents/congregations/$(congregationId)).data.get('name', null)
+        : null;
+    }
+
+    function inMyActiveCongregationByNameOrId(db, congregationId) {
+      return inMyActiveCongregation(db, congregationId) || (
+        isSignedIn() &&
+        exists(/databases/$(db)/documents/people/$(personIdFromToken())) &&
+        congregationNameOf(db, congregationId) != null &&
+        congregationNameOf(db, myPerson(db).get('activeCongregationId', null)) == congregationNameOf(db, congregationId)
+      );
+    }
+
+    match /interestedPeople/{personId} {
+      allow read: if isSignedIn();
+      // A brand-new record must be stamped with the creator's own active
+      // congregation — never a client-chosen one (spec §20: "Do not trust...
+      // TerritoryCongregationID [when] supplied by the frontend"). Uses the
+      // name-or-id match (see [inMyActiveCongregationByNameOrId]'s own doc
+      // comment) for the same duplicate-congregation-document resilience as
+      // update/delete below.
+      allow create: if inMyActiveCongregationByNameOrId(database, request.resource.data.get('congregationId', null));
+      // Rollback (2026-09-11): the stricter "record's own owner (or
+      // admin-track role) only" version of this rule — which required
+      // resource.data.publisherPersonId == personIdFromToken() — is the
+      // *intended* long-term design (closing a real "any same-congregation
+      // Publisher can edit/delete anyone else's record" gap) but had
+      // apparently never actually been deployed to production until it was
+      // tried today; deploying it surfaced real, previously-working saves
+      // failing with PERMISSION_DENIED. Restoring the same "any signed-in
+      // member of this record's own active congregation" rule [create]
+      // already uses (now widened to also match by congregation *name*, see
+      // above) to stop the active production regression first —
+      // re-tightening this back to owner-only needs to happen alongside an
+      // audit/backfill of existing publisherPersonId/congregationId data,
+      // not as a same-day rules-only deploy.
+      //
+      // "Forward to Other Publisher" accept (same congregation, Publisher-
+      // to-Publisher, no admin step — PublisherForwardRequestsViewModel
+      // .accept, which reassigns publisherPersonId to the accepting
+      // Publisher) is automatically covered by the same-congregation check
+      // below — both the sender and the accepting Publisher are already in
+      // this record's own congregation — so the receiving Publisher's
+      // "Forwarded to Me" accept, and the notification/badge that already
+      // reads the resulting record, both keep working unchanged.
+      allow update: if inMyActiveCongregationByNameOrId(database, resource.data.get('congregationId', null)) ||
+        // "Forward to Other Congregation" accept — an admin-track role
+        // active in the *receiving* congregation (ForwardRequestsViewModel
+        // .accept) reassigns a record it doesn't yet share a congregation
+        // with, so the plain same-congregation check above can't cover it.
+        canManagePublisherReportsFor(database, request.resource.data.get('congregationId', null));
+      allow delete: if inMyActiveCongregationByNameOrId(database, resource.data.get('congregationId', null));
+
+      match /visits/{visitId} {
+        allow read: if isSignedIn();
+        // The creator field must be the caller's own real identity — never
+        // trust a client-supplied Publisher id (spec §20) — and only within
+        // the parent Return Visit's own Territory Congregation. "Territory
+        // Map Return Visit Permissions" spec §3/§12 — a Bible Study's visit
+        // history is excluded from the shared "any congregation member may
+        // add Return Visit history" permission entirely: only that Bible
+        // Study's own enrolled Publisher (`interestedPersonOwnerId`) or
+        // Super-Admin may add one. A Return Visit (or Searching) record has
+        // no such extra check — any same-congregation Publisher may add
+        // their own visit to it, same as before.
+        allow create: if inMyActiveCongregationByNameOrId(database, interestedPersonCongregationId(database, personId)) &&
+          request.resource.data.get('createdByPersonId', null) == personIdFromToken() &&
+          (interestedPersonPipelineStage(database, personId) != 'BIBLE_STUDY' ||
+            isSuperAdmin(database) ||
+            interestedPersonOwnerId(database, personId) == personIdFromToken());
+        // "Each Publisher may edit... only the Visit History entries that
+        // they personally created" (spec §8) for a Return Visit/Searching
+        // record — congregation access AND per-entry ownership both
+        // required; the creator field itself may never change on an edit.
+        // For a Bible Study, per the same exclusion as `create` above, only
+        // that record's own enrolled Publisher may edit *any* of its visit
+        // history, not merely the entries they personally logged (spec §3:
+        // "Only the enrolled publisher may edit the Bible Study visit
+        // history" — no per-entry-creator carve-out for this stage). Super-
+        // Admin is the one explicitly authorized override this app's role
+        // system actually has today (mirrors [canManageAllVisitHistory] in
+        // PipelineScreen/PipelineViewModel).
+        allow update: if inMyActiveCongregationByNameOrId(database, interestedPersonCongregationId(database, personId)) &&
+          (isSuperAdmin(database) ||
+            (interestedPersonPipelineStage(database, personId) == 'BIBLE_STUDY' &&
+              interestedPersonOwnerId(database, personId) == personIdFromToken()) ||
+            (interestedPersonPipelineStage(database, personId) != 'BIBLE_STUDY' &&
+              resource.data.get('createdByPersonId', null) == personIdFromToken())) &&
+          request.resource.data.get('createdByPersonId', null) == resource.data.get('createdByPersonId', null) &&
+          request.resource.data.get('interestedPersonId', null) == resource.data.get('interestedPersonId', null);
+        // Same ownership rule as update, PLUS (Return Visit/Searching only)
+        // a narrow cascade exception: the record's own original/enrolled
+        // Publisher (its `publisherPersonId`) may delete any of its Visit
+        // History entries, not just their own — needed for
+        // PipelineViewModel.permanentlyDelete, which deletes every visit
+        // under a record when that record's owner permanently deletes the
+        // whole thing (spec's "Admin Record Deletion"). This is scoped to
+        // deleting the entry alongside its own parent, never a standing
+        // grant to edit/reassign another Publisher's history — update above
+        // still has no such exception. For a Bible Study this cascade
+        // exception and the plain owner-delete case collapse into the same
+        // "enrolled Publisher only" check anyway, so no separate branch is
+        // needed there.
+        allow delete: if inMyActiveCongregationByNameOrId(database, interestedPersonCongregationId(database, personId)) &&
+          (isSuperAdmin(database) ||
+            interestedPersonOwnerId(database, personId) == personIdFromToken() ||
+            (interestedPersonPipelineStage(database, personId) != 'BIBLE_STUDY' &&
+              resource.data.get('createdByPersonId', null) == personIdFromToken()));
+      }
+    }
+
+    // "Add Online Users Indicator" — one `presence/{personId}` document per
+    // currently-signed-in session (see PresenceHeartbeat, the only thing
+    // that ever writes here), tagged with that session's own denormalized
+    // `activeCongregationId` (the same field Group Chat/Territory Map access
+    // already relies on — kept in sync by UserSession). Read access is the
+    // feature's own access rule, enforced here at the query level, not just
+    // by which query the client happens to send (spec §9): Super-Admin sees
+    // every congregation's presence; a congregation-based caller sees only
+    // presence rows tagged with their own current congregation —
+    // `inMyActiveCongregation` is the exact same helper Territory Map's
+    // Return Visit congregation restriction already uses.
+    match /presence/{personId} {
+      allow read: if isSuperAdmin(database) || inMyActiveCongregation(database, resource.data.get('congregationId', null));
+      // Only the session itself may ever write its own presence document —
+      // and only ever tagged with its own real activeCongregationId, never
+      // an arbitrary one a malicious client could pick to appear "online" in
+      // a congregation it doesn't actually belong to. `request.resource ==
+      // null` covers PresenceHeartbeat's own best-effort delete on sign-out,
+      // where there is no `request.resource` to check a congregationId on.
+      allow write: if isSignedIn() && personIdFromToken() == personId &&
+        (request.resource == null ||
+          request.resource.data.get('congregationId', null) == myPerson(database).get('activeCongregationId', null));
+    }
+
+    // "Publishers App – Customizable Module Navigation Redesign" — a
+    // Publisher's own personal Main Form/Side Panel arrangement (spec §6).
+    // Purely a per-account display preference (which panel an
+    // already-authorized module sits in), never a permission grant (spec
+    // §10) — so, same as `presence/{personId}` above, only the session
+    // itself may ever read or write its own document.
+    match /dashboardModuleLayouts/{personId} {
+      allow read, write: if isSignedIn() && personIdFromToken() == personId;
+    }
+
+    // Credit Hour Categories: every signed-in user reads the list (the
+    // Credit Hours dropdown); only Super-Admin / Admin manage it. The one
+    // exception is first-run seeding of the fixed-id starting list
+    // (`default_*`, see CreditHourCategoryRepository.DEFAULT_CATEGORIES),
+    // which any signed-in device may *create* — never update or delete —
+    // so the list exists even before an admin ever opens the screen.
+    match /creditHourCategories/{categoryId} {
+      allow read: if isSignedIn();
+      allow create: if canManageCreditHourCategories(database) ||
+        (isSignedIn() && categoryId.matches('^default_[a-z_]+$'));
+      allow update, delete: if canManageCreditHourCategories(database);
+    }
+
+    // Bug fix (2026-09-12, "the exact same collections the 'document.matches()
+    // threw an error' bug used to hit are STILL denied for real on a real
+    // device, even after that fix, even after a full uninstall+reinstall+
+    // fresh sign-in ruled out every device/session-local explanation"):
+    // reproduced live, repeatedly — `interestedPeople` (an explicit,
+    // non-recursive `match /interestedPeople/{personId}` block) synced
+    // correctly the entire time on the same device/session where
+    // `forwardRequests`/`publisherForwardRequests`/`territories`/`schedules`/
+    // et al — every one of them reachable *only* via the recursive
+    // `{document=**}` wildcard below — kept failing every single listen
+    // attempt with PERMISSION_DENIED. Both rely on nothing more than
+    // `isSignedIn()`; the only structural difference is explicit match vs.
+    // recursive-wildcard-only match, and that's what tracked with which one
+    // actually worked. Whatever the precise cause (this project has no
+    // rules-testing setup against *production* Firestore itself, only the
+    // local emulator — see this file's own top-of-file note), giving each of
+    // these its own explicit block, exactly like `interestedPeople` already
+    // has, sidesteps it rather than continuing to guess at it. Same
+    // permission as before (`isSignedIn()`, nothing tighter or looser) —
+    // this is a structural fix, not a permission change.
+    match /forwardRequests/{requestId} { allow read, write: if isSignedIn(); }
+    match /publisherForwardRequests/{requestId} { allow read, write: if isSignedIn(); }
+    match /houseHolderAssignments/{assignmentId} { allow read, write: if isSignedIn(); }
+    match /territories/{territoryId} { allow read, write: if isSignedIn(); }
+    match /schedules/{scheduleId} { allow read, write: if isSignedIn(); }
+    match /elderTitles/{titleId} { allow read, write: if isSignedIn(); }
+    // App-wide settings (logo, Session Timeout Setting): every signed-in user
+    // reads them; only Super-Admin, Admins and Elders may change them.
+    match /appSettings/{settingId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isSuperAdmin(database) || (
+        exists(/databases/$(database)/documents/people/$(personIdFromToken())) &&
+        myPerson(database).get('activeAdminRole', null) in
+          ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'REGULAR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY']
+      ));
+    }
+    match /auditLog/{logId} { allow read, write: if isSignedIn(); }
+    match /sharedLocations/{locationId} { allow read, write: if isSignedIn(); }
+    match /savedLocations/{locationId} { allow read, write: if isSignedIn(); }
+    match /cartAssignments/{assignmentId} { allow read, write: if isSignedIn(); }
+    match /locationSharingSettings/{settingId} { allow read, write: if isSignedIn(); }
+    match /publisherVisibilitySettings/{settingId} { allow read, write: if isSignedIn(); }
+    match /midweekMeetingSchedules/{scheduleId} { allow read, write: if isSignedIn(); }
+    match /publicTalkSchedules/{scheduleId} { allow read, write: if isSignedIn(); }
+    match /announcements/{announcementId} { allow read, write: if isSignedIn(); }
+
+    // Everything else not given its own explicit block above (backups,
+    // anything future collections not yet named here, ...): authenticated
+    // read/write, unchanged from before — none of these are named in the
+    // spec's permission list, and today's UI never routes a restricted user
+    // to them anyway.
+    //
+    // CRITICAL: `{document=**}` is a *recursive* wildcard — it matches every
+    // path in the database, including every one already handled by a
+    // specific `match` block above. Firestore combines every `match` block
+    // whose pattern fits a given path with a logical OR, so left unqualified
+    // this single `isSignedIn()` clause silently re-grants blanket access to
+    // ALL of them, no matter how restrictive their own rule is (a plain
+    // `isSignedIn()` is strictly weaker than every check above, so it always
+    // wins the OR whenever it's satisfied). Concretely, before this guard was
+    // widened to cover them too, this catch-all was quietly overriding:
+    //  - `userAccessGrants` — any signed-in account, not just Super-Admin/
+    //    MANAGE_USERS, could write ANY `userAccessGrants/{personId}` document,
+    //    including their own — a full self-service privilege-escalation path
+    //    (grant yourself ALL_CONGREGATIONS + every Permission).
+    //  - `congregations`/`groups`/`roleAssignments`/`monthlyReports` — every
+    //    `restrictedAllows()` permission+scope check for a grant-based
+    //    restricted user (spec §6-§8/§13) was a dead check; such an account
+    //    actually had full, unrestricted read/write everywhere via this
+    //    catch-all instead.
+    //  - `bibleTextCategories`/`bibleTextRecords` — the "must equal the
+    //    caller's own personId" ownership check never applied; any signed-in
+    //    user could read/edit/delete anyone's Bible Text records.
+    //  - `groupChats` (and its `messages`) — the congregation isolation
+    //    ("an Admin must never reach another congregation's chats... even
+    //    through direct URLs") never applied; any signed-in user could read
+    //    or write any chat/message in any congregation.
+    // The guard below excludes every one of those subtrees (plus
+    // `interestedPeople`, added by the Territory Map pass, and
+    // `dashboardModuleLayouts`, added by the customizable-dashboard pass)
+    // from this clause, so each keeps only its own, real rule; everything
+    // NOT listed here (schedules, territories, shared locations, app
+    // settings, backups, audit log, ...) is unaffected.
+    //
+    // Heads-up: this is a genuine tightening, not just a doc fix — any
+    // restricted (Circuit Overseer/grant-based) account already provisioned
+    // in production was silently operating with full access until now; after
+    // this change they're actually held to their configured grant for the
+    // first time. Expect that to be a visible, correct narrowing for any such
+    // live account, not a regression.
+    //
+    // Bug fix ("Sync Error" on EVERY territory/schedule/shared-location/app-
+    // settings/backup/audit-log write, for every account, always): `document`
+    // bound by a recursive `{document=**}` wildcard is a `path` value, not a
+    // string — `path` has no `.matches()` (that's a String method). The
+    // original `!document.matches('^(...)($/.*)?$')` therefore threw
+    // "Function not found error: Name: [matches]" on every single
+    // evaluation, and Firestore treats an evaluation error as a denial, so
+    // this entire catch-all — the only rule that ever allowed
+    // territories/schedules/sharedLocations/appSettings/backups/auditLog at
+    // all — silently rejected everything with PERMISSION_DENIED. SyncWorker
+    // correctly classifies PERMISSION_DENIED as a permanent failure, which is
+    // exactly the "Sync Error" this was reported as. Confirmed against the
+    // rules emulator: a signed-in Publisher's `setDoc` to `territories/t1`
+    // failed with that exact error before this fix and succeeds after it.
+    // Fixed by comparing the path's own first segment (a plain string a
+    // `path` can be indexed for, no conversion needed) against the same
+    // exclusion list, instead of trying to regex-match the whole path as a
+    // string.
+    match /{document=**} {
+      allow read, write: if isSignedIn() && !(document[0] in [
+        'interestedPeople', 'passwordResetRequests', 'people', 'userAccessGrants', 'congregations',
+        'groups', 'roleAssignments', 'monthlyReports', 'bibleTextCategories', 'bibleTextRecords',
+        'groupChats', 'preachingTimeRecords', 'presence', 'dashboardModuleLayouts',
+        'forwardRequests', 'publisherForwardRequests', 'houseHolderAssignments', 'territories', 'schedules', 'elderTitles',
+        'appSettings', 'auditLog', 'sharedLocations', 'savedLocations', 'cartAssignments',
+        'locationSharingSettings', 'midweekMeetingSchedules', 'publicTalkSchedules', 'announcements',
+        'creditHourCategories', 'publisherTerritoryAssignments', 'mapPins', 'plannerDays', 'monthlyPlannerGoals', 'weeklyPlannerGoals',
+        'yearlyPlannerGoals', 'creditHourRecords', 'ministryTimerSessions',
+        'territoryAssignments', 'territoryAssignmentBarangays', 'deletedRecords',
+        'territoryDrawings', 'territoryDrawingAudits', 'territoryBounds'
+      ]);
+    }
+  }
+}

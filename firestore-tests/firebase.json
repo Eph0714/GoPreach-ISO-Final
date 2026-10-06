@@ -1,0 +1,10 @@
+{
+  "firestore": {
+    "rules": "_emulator_placeholder.rules"
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8089
+    }
+  }
+}

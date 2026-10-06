@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Matches ApkDownloader's updatesDir: getExternalFilesDir(null)/updates/ -->
+    <external-files-path name="updates" path="updates/" />
+    <!-- Temp full-resolution photos from the camera app before they're
+         downsampled/compressed into a SupportingImage (see
+         SupportingImageCapture.kt) — cacheDir/camera/, safe to purge anytime. -->
+    <cache-path name="camera" path="camera/" />
+    <!-- "My Bible Text Record" export/share files (see BibleTextExporter.kt) —
+         cacheDir/exports/, safe to purge anytime. -->
+    <cache-path name="exports" path="exports/" />
+</paths>

@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "447241272069",
+    "project_id": "gopreach-957a6",
+    "storage_bucket": "gopreach-957a6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:447241272069:android:4657c3819c3533d62dd56c",
+        "android_client_info": {
+          "package_name": "com.emfitsolutions.gopreach"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD8tUNSKi9ouF5ZLFDJtBHvNr3EtZAYIrc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:447241272069:android:2838a8d37e2f0b682dd56c",
+        "android_client_info": {
+          "package_name": "com.emfitsolutions.gopreach.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD8tUNSKi9ouF5ZLFDJtBHvNr3EtZAYIrc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

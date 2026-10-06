@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base theme; Compose (ui/theme/Theme.kt) owns all real theming. This just sets the
+         window background shown before Compose attaches. Matches Compose's own light
+         background (SurfaceLight, #FFFFFFFF) exactly, not a separate branded color — a
+         cold launch (which is when Android ever shows this window background at all,
+         Compose navigation never does) now blends straight into the Login screen instead
+         of showing a distinct purple "splash" moment first (explicit request: "remove the
+         splash when logging in using all accounts"). -->
+    <style name="Theme.GoPreach" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:statusBarColor" tools:targetApi="21">@android:color/white</item>
+        <!-- Android 12+ (API 31) shows its own splash screen on every cold
+             launch regardless of app code — there is no way to fully opt out
+             of it. The closest to "removed" is making it render nothing
+             visible: white background (matching the app, not a separate
+             branded color) and a transparent icon instead of the launcher
+             icon the OS would otherwise center automatically. -->
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@android:color/white</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@drawable/splash_icon_none</item>
+    </style>
+</resources>

@@ -1,0 +1,21 @@
+{
+  "name": "gopreach-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GoPreach sync API for Hostinger Business Web Hosting (Node.js + MySQL)",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/server.js",
+    "migrate": "node src/migrate.js",
+    "import:firestore": "node scripts/import-firestore.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jose": "^5.9.6",
+    "mysql2": "^3.11.5"
+  }
+}

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- Interested Person supporting-place image capture (spec §1) — the
+         in-app camera preview capture flow. android:required="false" so the
+         app still installs on a device/emulator with no camera; the feature
+         itself is optional per spec §7 either way. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <!-- In-app auto-update (see data/update): hands the downloaded APK to the
+         system Package Installer rather than installing it directly. Required
+         on API 26+ to launch that installer from within an app at all. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Calendar Alarm (notifications/AlarmScheduler.kt + AlarmRingService.kt):
+         an exact-time alarm that rings (looping sound + vibration) until the
+         user stops it, same as a phone alarm clock. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Exact alarms don't survive a reboot; re-arms them on next boot (see
+         notifications/BootCompletedReceiver.kt). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- Share Location while Preaching (data/location/LocationSharingService.kt):
+         keeps publishing fixes after the Publisher leaves the Share Location
+         screen, not just while it happens to stay open. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <application
+        android:name=".GoPreachApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.GoPreach"
+        android:usesCleartextTraffic="false"
+        android:supportsRtl="true">
+
+        <!-- On-demand WorkManager init: GoPreachApp supplies its own Configuration
+             (HiltWorkerFactory), so the default androidx.startup initializer must be removed. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
+        <!-- Exposes the downloaded update APK (in this app's private external
+             files dir) to the system Package Installer via a content:// URI —
+             the standard, required mechanism since Android stopped allowing
+             file:// URIs to be shared between apps. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Calendar Alarm — see notifications/AlarmScheduler.kt's doc comment. -->
+        <receiver android:name=".notifications.CalendarAlarmReceiver" android:exported="false" />
+        <receiver android:name=".notifications.AlarmStopReceiver" android:exported="false" />
+        <receiver android:name=".notifications.BootCompletedReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+        <service
+            android:name=".notifications.AlarmRingService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Share Location while Preaching — see LocationSharingService.kt's doc comment. -->
+        <service
+            android:name=".data.location.LocationSharingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.GoPreach"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- "If the receiving Publisher downloads and taps the exported
+                 My Bible Text Record file, it must import automatically" —
+                 tapping a file/attachment carrying this app's own distinctive
+                 export MIME type (see BibleTextExporter.BIBLE_TEXT_EXPORT_MIME_TYPE)
+                 opens straight into GoPreach instead of a generic zip/archive
+                 app or a cluttered chooser. singleTask above so an already-
+                 running instance receives it via onNewIntent rather than a
+                 second Activity instance being created. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="application/vnd.gopreach.bibletext+zip" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

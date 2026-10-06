@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solid purple backdrop behind the GoPreach logo (drawable/ic_launcher_foreground.png),
+     matching the logo's own background color exactly (#6611B5, sampled from the source
+     artwork's corner pixel) so the adaptive icon mask crop (circle/squircle/rounded-square,
+     depending on launcher) looks seamless. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="#6611B5" />
+</shape>

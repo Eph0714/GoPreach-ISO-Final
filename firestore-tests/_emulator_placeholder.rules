@@ -1,0 +1,13 @@
+// Not the real rules — just satisfies the Firestore emulator's config
+// requirement that its rules file live inside this project directory.
+// rules.test.mjs loads the *actual* ../firestore.rules content directly via
+// readFileSync() and hands it to initializeTestEnvironment(); this file's
+// content is never what's actually tested.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "gopreach-firestore-rules-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "firebase emulators:exec --project gopreach-rules-test --only firestore \"node rules.test.mjs\""
+  },
+  "dependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.19.0"
+  }
+}

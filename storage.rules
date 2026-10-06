@@ -1,0 +1,38 @@
+rules_version = '2';
+
+// GoPreach Storage rules. Same authenticated-only baseline as
+// firestore.rules (see that file for the fine-grained-authorization trade-off
+// note) — the app-settings/logo path is meant to be Super-Admin-only in
+// practice, enforced today by the Control Panel screen's visibility, not by
+// these rules yet.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // "Group Chat Setting" attachments — real congregation/participant
+    // enforcement (spec §11: "Files must not be publicly accessible... even
+    // through direct URLs"), mirroring firestore.rules' groupChats checks
+    // via a cross-service `firestore.get()` on the parent chat doc. Same
+    // Person.activeCongregationId/activeAdminRole denormalization
+    // firestore.rules uses (see that file's comment) — Storage rules can
+    // read Firestore documents but not call functions defined over there,
+    // so this re-derives the same check locally.
+    function groupChatFilePersonId() {
+      return request.auth.token.email.split('@')[0];
+    }
+    function groupChatFileAllowed(groupChatId) {
+      let chat = firestore.get(/databases/(default)/documents/groupChats/$(groupChatId)).data;
+      let person = firestore.get(/databases/(default)/documents/people/$(groupChatFilePersonId())).data;
+      return person.get('isSuperAdmin', false) == true ||
+        groupChatFilePersonId() in chat.get('participantIds', []) ||
+        (person.get('activeCongregationId', '') == chat.get('congregationId', '') &&
+         person.get('activeAdminRole', '') in ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER']);
+    }
+    match /groupChats/{groupChatId}/{allPaths=**} {
+      allow read, write: if request.auth != null && groupChatFileAllowed(groupChatId);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
