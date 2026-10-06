@@ -70,7 +70,7 @@ import com.emfitsolutions.gopreach.domain.TimeBounds
 import com.emfitsolutions.gopreach.ui.components.MinistryTimerCard
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
 import com.emfitsolutions.gopreach.ui.navigation.Destinations
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 /**
  * My Planner (spec §16-§27, extended with the Dashboard/My Planner

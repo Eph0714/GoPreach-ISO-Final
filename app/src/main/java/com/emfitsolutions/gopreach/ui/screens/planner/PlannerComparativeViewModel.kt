@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 /** One month's worth of the three metrics the Comparative Report tracks —
  * each independently computed the same way every other Planner period is

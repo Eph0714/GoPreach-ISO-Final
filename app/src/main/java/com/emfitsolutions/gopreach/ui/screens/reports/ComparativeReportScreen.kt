@@ -57,7 +57,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 /** Searching / Return Visit / Bible Study counts for one calendar month. */
 data class StageCounts(val searching: Int, val returnVisit: Int, val bibleStudy: Int) {

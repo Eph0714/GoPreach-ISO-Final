@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 import java.util.Date
 import java.util.Locale
 

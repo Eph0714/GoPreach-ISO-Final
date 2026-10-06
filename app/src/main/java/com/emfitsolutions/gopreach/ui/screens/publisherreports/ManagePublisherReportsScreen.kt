@@ -76,7 +76,7 @@ import com.emfitsolutions.gopreach.ui.components.FormDialog
 import com.emfitsolutions.gopreach.ui.components.QuickDateRange
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
 import java.text.SimpleDateFormat
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 import java.util.Locale
 import androidx.compose.ui.window.DialogProperties
 

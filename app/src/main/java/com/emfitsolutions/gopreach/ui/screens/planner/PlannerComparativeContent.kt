@@ -45,7 +45,7 @@ import com.emfitsolutions.gopreach.data.export.ComparativeReportPdfExporter
 import com.emfitsolutions.gopreach.ui.components.charts.LineSeries
 import com.emfitsolutions.gopreach.ui.components.charts.MultiSeriesLineChart
 import java.text.SimpleDateFormat
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 import java.util.Date
 import java.util.Locale
 

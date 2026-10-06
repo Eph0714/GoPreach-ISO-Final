@@ -19,7 +19,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.PipelineStage
 import com.emfitsolutions.gopreach.domain.WeekBounds
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 /** My Planner → Week (Dashboard/My Planner integration spec §4-§7) — a
  * "Weekly Report" summary, an "Hour Goal for This Week" stepper (Remaining

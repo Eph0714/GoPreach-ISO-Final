@@ -63,7 +63,7 @@ import com.emfitsolutions.gopreach.ui.components.DateRange
 import com.emfitsolutions.gopreach.ui.components.DateRangeFilterBar
 import com.emfitsolutions.gopreach.ui.components.QuickDateRange
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 /** "For Admin, Elders and Service overseer select [All Group, Per Group]
  * filter in report" — [PER_GROUP] additionally needs one Group actually

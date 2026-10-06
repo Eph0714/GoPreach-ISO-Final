@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 /** One day's row in the Weekly Planner's 7-day-wide table (spec §5) — the
  * per-day figures shown side by side, Monday..Sunday. */

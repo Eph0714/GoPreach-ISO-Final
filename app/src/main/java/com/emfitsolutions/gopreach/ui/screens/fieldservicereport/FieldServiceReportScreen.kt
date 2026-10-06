@@ -55,7 +55,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.ui.screens.territoryassignments.SimpleDropdown
 import kotlinx.coroutines.flow.emptyFlow
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 // Approximations of the sample's theme fills, shared with the print layout.
 private val FILL_REPORTS = Color(0xFFFBE3D6)

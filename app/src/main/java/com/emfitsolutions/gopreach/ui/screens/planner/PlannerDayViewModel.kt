@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 /** My Planner → Day (spec §17-§22) — everything the Day tab shows, all
  * derived from [dayStart] plus the Publisher's own data. [totalMinutes] is

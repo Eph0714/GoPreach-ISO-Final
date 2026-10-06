@@ -28,7 +28,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 /** Midnight, this week's Monday — spec's own example, "Week for August
  * 31-September 6," is a Monday-Sunday span, matching

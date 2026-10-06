@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import java.util.Calendar
+import com.emfitsolutions.gopreach.platform.Calendar
 
 /** Midnight on the 1st of whichever month [monthsAgo] months before the
  * current one — 0 = this month, 1 = last month. Shared by every "which
