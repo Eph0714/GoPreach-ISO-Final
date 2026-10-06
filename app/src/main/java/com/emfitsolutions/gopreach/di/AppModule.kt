@@ -192,6 +192,8 @@ import com.emfitsolutions.gopreach.data.remote.SyncApi
 import com.emfitsolutions.gopreach.data.remote.SyncTransportException
 import com.emfitsolutions.gopreach.data.sync.BackendConfig
 import com.emfitsolutions.gopreach.data.sync.SyncEngine
+import com.emfitsolutions.gopreach.data.sync.AndroidWriteQueuedListener
+import com.emfitsolutions.gopreach.data.sync.WriteQueuedListener
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.tasks.await
@@ -213,6 +215,8 @@ val infraModule = module {
     single { get<AppDatabase>().syncQueueDao() }
     single { buildPsgcDatabase(get()) }
     single { get<PsgcDatabase>().psgcDao() }
+
+    single<WriteQueuedListener> { AndroidWriteQueuedListener(get(), get(), get()) }
 
     // Hostinger backend sync (only used when BackendConfig.enabled)
     single { HttpClient(OkHttp) }

@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.data.repository
 
+import com.emfitsolutions.gopreach.data.sync.saveNow
 import com.emfitsolutions.gopreach.data.model.SharedLocation
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection

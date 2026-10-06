@@ -22,7 +22,7 @@ class KoinGraphTest {
             extraTypes = listOf(
                 Context::class, WorkerParameters::class, Gson::class, CoroutineScope::class,
                 FirebaseAuth::class, FirebaseFirestore::class, FirebaseStorage::class,
-                CacheDao::class, SyncQueueDao::class, PsgcDao::class, com.emfitsolutions.gopreach.data.sync.SyncEngine::class,
+                CacheDao::class, SyncQueueDao::class, PsgcDao::class, com.emfitsolutions.gopreach.data.sync.SyncEngine::class, com.emfitsolutions.gopreach.data.sync.WriteQueuedListener::class,
             ),
         )
     }

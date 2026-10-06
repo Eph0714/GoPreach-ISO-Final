@@ -87,6 +87,7 @@ fun <T : Any> mirrorFirestoreCollection(
     query: Query = firestore.collection(collectionPath),
     idOf: (T) -> String,
 ): Flow<Unit> = callbackFlow {
+    @Suppress("UNCHECKED_CAST") val serializer = kotlinx.serialization.serializer(clazz) as kotlinx.serialization.KSerializer<T>
     var retryCount = 0
 
     fun attach() {
@@ -123,7 +124,7 @@ fun <T : Any> mirrorFirestoreCollection(
                             // as if the user had edited it, inflating "pending changes" by
                             // hundreds for data nobody touched.
                             DocumentChange.Type.REMOVED -> offline.deleteFromServer(collectionPath, idOf(model))
-                            else -> offline.cacheFromServer(collectionPath, idOf(model), model)
+                            else -> offline.cacheFromServer(serializer, collectionPath, idOf(model), model)
                         }
                     } catch (e: Exception) {
                         // Reproduced, confirmed root cause of "the app closes right after a
@@ -173,11 +174,12 @@ suspend fun <T : Any> pullFirestoreCollectionOnce(
     query: Query = firestore.collection(collectionPath),
     idOf: (T) -> String,
 ) {
+    @Suppress("UNCHECKED_CAST") val serializer = kotlinx.serialization.serializer(clazz) as kotlinx.serialization.KSerializer<T>
     val snapshot = query.get(Source.SERVER).await()
     for (document in snapshot.documents) {
         try {
             val model = document.toObject(clazz) ?: continue
-            offline.cacheFromServer(collectionPath, idOf(model), model)
+            offline.cacheFromServer(serializer, collectionPath, idOf(model), model)
         } catch (e: Exception) {
             // Same "one bad document must never take down the rest" rule as
             // the live-listener path above.

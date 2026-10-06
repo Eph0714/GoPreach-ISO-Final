@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.data.repository
 
+import com.emfitsolutions.gopreach.data.sync.saveNow
 import android.net.Uri
 import com.emfitsolutions.gopreach.data.model.Person
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository

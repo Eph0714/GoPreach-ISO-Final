@@ -6,11 +6,12 @@ import com.emfitsolutions.gopreach.data.local.dao.CacheDao
 import com.emfitsolutions.gopreach.data.local.dao.SyncQueueDao
 import com.emfitsolutions.gopreach.data.model.SyncOperationType
 import com.emfitsolutions.gopreach.data.model.SyncState
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.gson.Gson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.tasks.await
+import com.emfitsolutions.gopreach.data.json.DocJson
+import com.emfitsolutions.gopreach.data.json.decode
+import com.emfitsolutions.gopreach.data.json.encode
+import com.emfitsolutions.gopreach.platform.nowMillis
 
 /**
  * Offline-first read/write path shared by every domain repository (Congregations,
@@ -41,14 +42,14 @@ class OfflineFirestoreRepository(
     // can only do via @PublishedApi-internal, not private, members.
     @PublishedApi internal val cacheDao: CacheDao,
     private val syncQueueDao: SyncQueueDao,
-    @PublishedApi internal val gson: Gson,
-    private val syncScheduler: SyncScheduler,
-    private val syncStatusCenter: SyncStatusCenter,
-    private val connectivityObserver: ConnectivityObserver,
+    private val writeQueued: WriteQueuedListener,
 ) {
+    @PublishedApi internal inline fun <reified T> decodeOrNull(row: CachedDocumentEntity): T? =
+        try { DocJson.decode<T>(row.payloadJson) } catch (e: Exception) { null } // one malformed row must never break a whole list
+
     inline fun <reified T> observeCollection(collectionPath: String): Flow<List<T>> =
         cacheDao.observeCollection(collectionPath).map { rows ->
-            rows.map { gson.fromJson(it.payloadJson, T::class.java) }
+            rows.mapNotNull { decodeOrNull<T>(it) }
         }
 
     /** See [CacheDao.observeCollectionsMatching] — for a variable-parent
@@ -56,14 +57,14 @@ class OfflineFirestoreRepository(
      * one fixed [collectionPath]. */
     inline fun <reified T> observeCollectionsMatching(pathPattern: String): Flow<List<T>> =
         cacheDao.observeCollectionsMatching(pathPattern).map { rows ->
-            rows.map { gson.fromJson(it.payloadJson, T::class.java) }
+            rows.mapNotNull { decodeOrNull<T>(it) }
         }
 
     suspend inline fun <reified T> get(collectionPath: String, documentId: String): T? =
-        cacheDao.get(collectionPath, documentId)?.let { gson.fromJson(it.payloadJson, T::class.java) }
+        cacheDao.get(collectionPath, documentId)?.let { decodeOrNull<T>(it) }
 
-    suspend fun <T> save(collectionPath: String, documentId: String, data: T) {
-        saveRawJson(collectionPath, documentId, gson.toJson(data))
+    suspend inline fun <reified T> save(collectionPath: String, documentId: String, data: T) {
+        saveRawJson(collectionPath, documentId, DocJson.encode(data))
     }
 
     /** Same write path as [save], but for a payload that's already serialized —
@@ -71,7 +72,7 @@ class OfflineFirestoreRepository(
      * restore entries straight from a backup file without a round-trip through a
      * typed model. */
     suspend fun saveRawJson(collectionPath: String, documentId: String, json: String) {
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         cacheDao.upsert(
             CachedDocumentEntity(
                 collectionPath = collectionPath,
@@ -106,46 +107,13 @@ class OfflineFirestoreRepository(
      * immediately rather than waiting for the next connectivity transition or
      * periodic floor. */
     private fun onWriteQueued() {
-        syncStatusCenter.onWriteQueued(connectivityObserver.isOnline())
-        syncScheduler.triggerSyncIfOnline()
+        writeQueued.onWriteQueued()
     }
 
-    /**
-     * Same local-cache write as [save], but also pushes the document straight
-     * to Firestore immediately and marks it synced — for the rare write that
-     * can't wait for the user's next manual "Sync to Server" tap.
-     *
-     * Bug fix: [com.emfitsolutions.gopreach.data.repository.AuthRepository
-     * .createAccountWithTempCredentials] used to only call [save] for the new
-     * account's Person/RoleAssignment documents — fine for this app's normal
-     * "manual sync only" design (spec §17), except a freshly enrolled user's
-     * very next action is almost always signing in **on their own device**,
-     * where [com.emfitsolutions.gopreach.data.repository.AuthRepository
-     * .findPersonByUsername] queries Firestore directly. Until the enrolling
-     * admin's device happened to sync (which could be indefinitely, since
-     * sync is manual-only), that lookup found nothing and every brand-new
-     * account — Coordinator Elder, Service Overseer, Regular Elder,
-     * Publisher, Admin, alike, since they all share that one enrollment
-     * method — failed to log in with "Invalid username or password" despite
-     * correct temp credentials. Only safe to call when the caller already
-     * knows the device is online (i.e. it just made a successful, unrelated
-     * network call itself, as account creation always does) — this is not a
-     * general-purpose replacement for [save].
-     */
-    suspend fun saveNow(firestore: FirebaseFirestore, collectionPath: String, documentId: String, data: Any) {
-        // Cache-first, same as always — this part can't fail in a way that
-        // should stop the caller. The immediate push below is a best-effort
-        // improvement on top of it, not a replacement: if it throws for any
-        // reason (a transient network drop right after the online-only
-        // operation that justified calling this in the first place), the
-        // document is still safely queued and will reach the server on the
-        // next normal sync exactly as it always would have.
-        save(collectionPath, documentId, data)
-        runCatching {
-            firestore.collection(collectionPath).document(documentId).set(data).await()
-            cacheDao.updateSyncState(collectionPath, documentId, SyncState.SYNCED.name)
-            syncQueueDao.removeForDocument(collectionPath, documentId)
-        }
+    /** Marks a document as already on the server and drops its queued upload (used by the Android `saveNow` extension). */
+    suspend fun markSynced(collectionPath: String, documentId: String) {
+        cacheDao.updateSyncState(collectionPath, documentId, SyncState.SYNCED.name)
+        syncQueueDao.removeForDocument(collectionPath, documentId)
     }
 
     suspend fun delete(collectionPath: String, documentId: String) {
@@ -157,7 +125,7 @@ class OfflineFirestoreRepository(
                 documentId = documentId,
                 operationType = SyncOperationType.DELETE.name,
                 payloadJson = null,
-                createdAt = System.currentTimeMillis(),
+                createdAt = nowMillis(),
             )
         )
         onWriteQueued()
@@ -177,14 +145,14 @@ class OfflineFirestoreRepository(
      * reflects reality if anything ever inspects this row directly; it's
      * simply never placed in the upload queue in the first place, which is
      * what actually keeps it out of every sync run. */
-    suspend fun <T> saveLocalOnly(collectionPath: String, documentId: String, data: T) {
+    suspend inline fun <reified T> saveLocalOnly(collectionPath: String, documentId: String, data: T) {
         cacheDao.upsert(
             CachedDocumentEntity(
                 collectionPath = collectionPath,
                 documentId = documentId,
-                payloadJson = gson.toJson(data),
+                payloadJson = DocJson.encode(data),
                 syncState = SyncState.PENDING.name,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = nowMillis(),
             )
         )
     }
@@ -197,14 +165,18 @@ class OfflineFirestoreRepository(
      * back up as if the user had just edited it, inflating "pending changes" by
      * hundreds for data nobody ever touched). Marked SYNCED, not PENDING, since
      * it's already exactly what the server has. */
-    suspend fun <T> cacheFromServer(collectionPath: String, documentId: String, data: T) {
+    suspend inline fun <reified T> cacheFromServer(collectionPath: String, documentId: String, data: T) =
+        cacheFromServer(kotlinx.serialization.serializer<T>(), collectionPath, documentId, data)
+
+    /** Same as the reified overload, for callers that only have a runtime serializer (the Firestore mirror). */
+    suspend fun <T> cacheFromServer(serializer: kotlinx.serialization.KSerializer<T>, collectionPath: String, documentId: String, data: T) {
         cacheDao.upsert(
             CachedDocumentEntity(
                 collectionPath = collectionPath,
                 documentId = documentId,
-                payloadJson = gson.toJson(data),
+                payloadJson = DocJson.encodeToString(serializer, data),
                 syncState = SyncState.SYNCED.name,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = nowMillis(),
             )
         )
     }
