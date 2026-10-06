@@ -104,7 +104,7 @@ class ManageAnnouncementsViewModel(
             }
             try {
                 if (pickedImageUri != null) {
-                    val url = announcementRepository.uploadImage(saved.id, pickedImageUri)
+                    val url = announcementRepository.uploadImage(saved.id, pickedImageUri.toString())
                     saved = announcementRepository.save(saved.copy(imageUrl = url))
                 } else if (removeImage && saved.imageUrl != null) {
                     announcementRepository.deleteImage(saved.id)
@@ -116,7 +116,7 @@ class ManageAnnouncementsViewModel(
             }
             try {
                 if (pickedAttachmentUri != null) {
-                    val url = announcementRepository.uploadAttachment(saved.id, pickedAttachmentUri)
+                    val url = announcementRepository.uploadAttachment(saved.id, pickedAttachmentUri.toString())
                     saved = announcementRepository.save(saved.copy(attachmentUrl = url, attachmentFileName = pickedAttachmentFileName))
                 } else if (removeAttachment && saved.attachmentUrl != null) {
                     announcementRepository.deleteAttachment(saved.id)

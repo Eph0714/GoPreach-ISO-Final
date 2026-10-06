@@ -51,7 +51,7 @@ class HomeViewModel(
         val person = state.value.person ?: return
         viewModelScope.launch {
             try {
-                val url = personRepository.uploadProfileImage(person.id, imageUri)
+                val url = personRepository.uploadProfileImage(person.id, imageUri.toString())
                 personRepository.save(person.copy(profileImageUrl = url))
             } catch (e: Exception) {
                 Log.e(TAG, "Profile image upload failed", e)

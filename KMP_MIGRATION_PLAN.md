@@ -108,4 +108,7 @@ work to a first iOS TestFlight build, longer to match every screen.
 * **Phase 7a (done):** `RemoteCollections` interface (new ids, live mirror, one-shot pull; Firestore impl on Android). 21 pure repositories moved to `shared/commonMain`
   (Schedule, Congregation, InterestedPerson, Announcement-free set, PlannerGoals, Meeting, ... see `shared/.../data/repository`), plus `NaturalOrder`. Regression test for the document-id annotation added.
   Still in the app (Android-only deps): Person/RoleAssignment/MonthlyReport/SharedLocation (`saveNow`), Announcement/AppSettings/GroupChat (Storage + Uri), TerritoryDrawing (sync status), PlannerDay (needs MonthlyReport), Auth, Visit, MapPin, CreditHour, Backup, RecycleBin, TerritoryAssignment.
-* **Next:** get the Hostinger API live, test the switch on the phone; then batch 2 of repositories (abstract `saveNow`, sync status, Storage), then ViewModels/UI.
+* **Phase 8 (done):** `saveNow` (`RemoteCollections.pushNow`), `NetworkStatus`, `RemoteFiles` (Storage; Uri -> String) abstractions; `TimeBounds` (Day/Week/Month/Year) rewritten on kotlinx-datetime with tests.
+  Moved to shared: Person, RoleAssignment, MonthlyReport, SharedLocation, PlannerDay, TerritoryDrawing, Announcement, AppSettings (27 repositories total in `shared`).
+  Still in the app: Auth, Visit, MapPin, CreditHour, GroupChat, Backup, RecycleBin, TerritoryAssignment (direct Firestore calls / transactions / Gson / logging).
+* **Next:** get the Hostinger API live, test the switch on the phone; move the last 8 repositories; then ViewModels and UI to common.

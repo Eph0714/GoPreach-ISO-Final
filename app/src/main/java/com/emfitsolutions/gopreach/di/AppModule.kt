@@ -195,6 +195,10 @@ import com.emfitsolutions.gopreach.data.sync.SyncEngine
 import com.emfitsolutions.gopreach.data.sync.AndroidWriteQueuedListener
 import com.emfitsolutions.gopreach.data.sync.WriteQueuedListener
 import com.emfitsolutions.gopreach.data.sync.RemoteCollections
+import com.emfitsolutions.gopreach.data.sync.NetworkStatus
+import com.emfitsolutions.gopreach.data.sync.AndroidNetworkStatus
+import com.emfitsolutions.gopreach.data.sync.FirebaseRemoteFiles
+import com.emfitsolutions.gopreach.data.remote.RemoteFiles
 import com.emfitsolutions.gopreach.data.sync.FirestoreRemoteCollections
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -219,6 +223,8 @@ val infraModule = module {
     single { get<PsgcDatabase>().psgcDao() }
 
     single<RemoteCollections> { FirestoreRemoteCollections(get(), get(), get()) }
+    single<NetworkStatus> { AndroidNetworkStatus(get(), get()) }
+    single<RemoteFiles> { FirebaseRemoteFiles(get()) }
     single<WriteQueuedListener> { AndroidWriteQueuedListener(get(), get(), get()) }
 
     // Hostinger backend sync (only used when BackendConfig.enabled)

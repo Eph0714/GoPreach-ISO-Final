@@ -7,11 +7,10 @@ import com.emfitsolutions.gopreach.data.model.SyncState
 import com.emfitsolutions.gopreach.data.model.TerritoryBounds
 import com.emfitsolutions.gopreach.data.model.TerritoryDrawing
 import com.emfitsolutions.gopreach.data.model.TerritoryDrawingAudit
-import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.platform.nowMillis
 import com.emfitsolutions.gopreach.data.sync.RemoteCollections
-import com.emfitsolutions.gopreach.data.sync.SyncStatusCenter
+import com.emfitsolutions.gopreach.platform.nowMillis
+import com.emfitsolutions.gopreach.data.sync.NetworkStatus
 import com.emfitsolutions.gopreach.domain.map.DrawingGeometry
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -39,8 +38,7 @@ class TerritoryDrawingRepository(
     private val offline: OfflineFirestoreRepository,
     private val remote: RemoteCollections,
     private val cacheDao: CacheDao,
-    private val syncStatusCenter: SyncStatusCenter,
-    private val connectivityObserver: ConnectivityObserver,
+    private val network: NetworkStatus,
 ) {
     fun observeAll(): Flow<List<TerritoryDrawing>> = offline.observeCollection(DRAWINGS)
 
@@ -51,7 +49,7 @@ class TerritoryDrawingRepository(
      * server rejected or that failed to upload is [DrawingSyncState.SYNC_FAILED].
      */
     fun observeSyncStates(): Flow<Map<String, DrawingSyncState>> =
-        combine(cacheDao.observeSyncStates(DRAWINGS), syncStatusCenter.isSyncing) { rows, syncing ->
+        combine(cacheDao.observeSyncStates(DRAWINGS), network.isSyncing) { rows, syncing ->
             rows.associate { row ->
                 row.documentId to when (row.syncState) {
                     SyncState.SYNCED.name -> DrawingSyncState.SYNCED
@@ -135,7 +133,7 @@ class TerritoryDrawingRepository(
             fillOpacity = (updated ?: original)?.fillOpacity,
             status = (updated ?: original)?.status,
             at = nowMillis(),
-            syncInfo = if (connectivityObserver.isOnline()) "SYNCED" else "PENDING",
+            syncInfo = if (network.isOnline()) "SYNCED" else "PENDING",
         )
         offline.save(AUDITS, row.id, row)
     }

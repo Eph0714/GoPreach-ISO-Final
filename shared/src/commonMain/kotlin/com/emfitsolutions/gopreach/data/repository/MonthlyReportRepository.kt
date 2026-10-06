@@ -3,9 +3,7 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.sync.saveNow
 import com.emfitsolutions.gopreach.data.model.MonthlyReport
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import com.emfitsolutions.gopreach.data.model.ReportStatus
 import com.emfitsolutions.gopreach.domain.MonthBounds
 import kotlinx.coroutines.flow.Flow
@@ -20,8 +18,7 @@ private val SUBMITTED_STATUSES = setOf(ReportStatus.SUBMITTED, ReportStatus.CORR
  * Admin-side Bible-study/hours report views (spec §5.1). */
 class MonthlyReportRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<MonthlyReport>> = offline.observeCollection(COLLECTION)
 
@@ -61,7 +58,7 @@ class MonthlyReportRepository(
     suspend fun saveNow(report: MonthlyReport): MonthlyReport {
         val id = report.id.ifBlank { reportIdFor(report) }
         val withId = report.copy(id = id)
-        offline.saveNow(firestore, COLLECTION, id, withId)
+        offline.saveNow(remote, COLLECTION, id, withId)
         return withId
     }
 
@@ -69,7 +66,7 @@ class MonthlyReportRepository(
      * same month lands on the same document, so the server can recognise and reject the duplicate
      * instead of storing a second report. Falls back to a random id if either part is missing. */
     private fun reportIdFor(report: MonthlyReport): String {
-        if (report.publisherPersonId.isBlank() || report.periodMonth <= 0L) return firestore.collection(COLLECTION).document().id
+        if (report.publisherPersonId.isBlank() || report.periodMonth <= 0L) return remote.newId(COLLECTION)
         val month = java.text.SimpleDateFormat("yyyyMM", java.util.Locale.US).format(java.util.Date(report.periodMonth))
         return "${report.publisherPersonId}_$month"
     }
@@ -77,5 +74,5 @@ class MonthlyReportRepository(
     suspend fun delete(reportId: String) = offline.delete(COLLECTION, reportId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, MonthlyReport::class.java) { it.id }
+        remote.mirror(COLLECTION, MonthlyReport::class) { it.id }
 }

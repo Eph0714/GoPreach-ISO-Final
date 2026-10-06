@@ -1,16 +1,13 @@
 package com.emfitsolutions.gopreach.data.repository
 
-import android.net.Uri
 import com.emfitsolutions.gopreach.data.model.AppSettings
+import com.emfitsolutions.gopreach.data.remote.RemoteFiles
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.platform.nowMillis
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.tasks.await
 
 private const val COLLECTION = "appSettings"
 
@@ -22,10 +19,9 @@ private const val COLLECTION = "appSettings"
  */
 class AppSettingsRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val storage: FirebaseStorage,
+    private val remote: RemoteCollections,
+    private val files: RemoteFiles,
     private val auditLogRepository: AuditLogRepository,
-    private val appScope: CoroutineScope,
 ) {
     fun observe(): Flow<AppSettings> =
         offline.observeCollection<AppSettings>(COLLECTION).map { list ->
@@ -35,10 +31,8 @@ class AppSettingsRepository(
     /** Uploads [imageUri] to Storage and points [AppSettings.logoUrl] at it. Super-Admin
      * only — enforced by the Control Panel screen's visibility, mirrored server-side
      * by Firestore/Storage security rules on this path. */
-    suspend fun uploadLogo(imageUri: Uri, updatedByPersonId: String) {
-        val ref = storage.reference.child("app-settings/logo.png")
-        ref.putFile(imageUri).await()
-        val downloadUrl = ref.downloadUrl.await().toString()
+    suspend fun uploadLogo(imageUri: String, updatedByPersonId: String) {
+        val downloadUrl = files.upload("app-settings/logo.png", imageUri)
         // copy() of the current doc, not a fresh AppSettings(): this document
         // also carries the session-timeout settings, which must survive a logo change.
         val current = observe().first()
@@ -47,7 +41,7 @@ class AppSettingsRepository(
             AppSettings.GLOBAL_ID,
             current.copy(
                 logoUrl = downloadUrl,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = nowMillis(),
                 updatedByPersonId = updatedByPersonId,
             ),
         )
@@ -66,7 +60,7 @@ class AppSettingsRepository(
             current.copy(
                 sessionTimeoutEnabled = enabled,
                 sessionTimeoutMinutes = clamped,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = nowMillis(),
                 updatedByPersonId = updatedByPersonId,
             ),
         )
@@ -87,7 +81,7 @@ class AppSettingsRepository(
             current.copy(
                 trashAutoDeleteEnabled = enabled,
                 trashRetentionDays = safeDays,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = nowMillis(),
                 updatedByPersonId = updatedByPersonId,
             ),
         )
@@ -99,5 +93,5 @@ class AppSettingsRepository(
     }
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, AppSettings::class.java) { it.id }
+        remote.mirror(COLLECTION, AppSettings::class) { it.id }
 }

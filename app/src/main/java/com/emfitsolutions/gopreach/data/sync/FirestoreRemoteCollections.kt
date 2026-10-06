@@ -4,6 +4,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.tasks.await
 import kotlin.reflect.KClass
 
 /** Android/Firestore implementation of [RemoteCollections]. */
@@ -21,6 +22,10 @@ class FirestoreRemoteCollections(
 
     override fun <T : Any> mirror(collectionPath: String, kClass: KClass<T>, equalTo: Pair<String, String>?, idOf: (T) -> String): Flow<Unit> =
         mirrorFirestoreCollection(firestore, offline, appScope, collectionPath, kClass.java, query(collectionPath, equalTo), idOf)
+
+    override suspend fun pushNow(collectionPath: String, documentId: String, data: Any) {
+        firestore.collection(collectionPath).document(documentId).set(data).await()
+    }
 
     override suspend fun <T : Any> pullOnce(collectionPath: String, kClass: KClass<T>, equalTo: Pair<String, String>?, idOf: (T) -> String) =
         pullFirestoreCollectionOnce(firestore, offline, collectionPath, kClass.java, query(collectionPath, equalTo), idOf)

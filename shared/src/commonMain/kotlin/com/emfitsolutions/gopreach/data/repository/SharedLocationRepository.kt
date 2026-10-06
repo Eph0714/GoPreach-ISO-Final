@@ -3,9 +3,7 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.sync.saveNow
 import com.emfitsolutions.gopreach.data.model.SharedLocation
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -15,8 +13,7 @@ private const val COLLECTION = "sharedLocations"
  * overwritten on each update; this is live presence, not a location history log. */
 class SharedLocationRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<SharedLocation>> = offline.observeCollection(COLLECTION)
 
@@ -46,11 +43,11 @@ class SharedLocationRepository(
      * Still cache-first underneath, so a fix made moments before connectivity
      * drops simply falls back to the normal queued path instead of being
      * lost. */
-    suspend fun update(location: SharedLocation) = offline.saveNow(firestore, COLLECTION, location.publisherPersonId, location)
+    suspend fun update(location: SharedLocation) = offline.saveNow(remote, COLLECTION, location.publisherPersonId, location)
 
     suspend fun stopSharing(publisherPersonId: String, lastKnown: SharedLocation) =
-        offline.saveNow(firestore, COLLECTION, publisherPersonId, lastKnown.copy(isSharing = false))
+        offline.saveNow(remote, COLLECTION, publisherPersonId, lastKnown.copy(isSharing = false))
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, SharedLocation::class.java) { it.publisherPersonId }
+        remote.mirror(COLLECTION, SharedLocation::class) { it.publisherPersonId }
 }

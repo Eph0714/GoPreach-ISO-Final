@@ -1,15 +1,11 @@
 package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.sync.saveNow
-import android.net.Uri
 import com.emfitsolutions.gopreach.data.model.Person
+import com.emfitsolutions.gopreach.data.remote.RemoteFiles
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.tasks.await
 
 private const val COLLECTION = "people"
 
@@ -20,16 +16,15 @@ private const val COLLECTION = "people"
  */
 class PersonRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val storage: FirebaseStorage,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
+    private val files: RemoteFiles,
 ) {
     fun observeAll(): Flow<List<Person>> = offline.observeCollection(COLLECTION)
 
     suspend fun get(personId: String): Person? = offline.get(COLLECTION, personId)
 
     suspend fun save(person: Person): Person {
-        val id = person.id.ifBlank { firestore.collection(COLLECTION).document().id }
+        val id = person.id.ifBlank { remote.newId(COLLECTION) }
         val withId = person.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId
@@ -39,9 +34,9 @@ class PersonRepository(
      * see [OfflineFirestoreRepository.saveNow] for why this exists
      * ([AuthRepository.createAccountWithTempCredentials] is its only caller). */
     suspend fun saveNow(person: Person): Person {
-        val id = person.id.ifBlank { firestore.collection(COLLECTION).document().id }
+        val id = person.id.ifBlank { remote.newId(COLLECTION) }
         val withId = person.copy(id = id)
-        offline.saveNow(firestore, COLLECTION, id, withId)
+        offline.saveNow(remote, COLLECTION, id, withId)
         return withId
     }
 
@@ -67,14 +62,11 @@ class PersonRepository(
      * re-upload simply overwrites it), same pattern
      * [AnnouncementRepository.uploadImage] already uses. Returns the
      * download URL; the caller saves it onto [Person.profileImageUrl]. */
-    suspend fun uploadProfileImage(personId: String, imageUri: Uri): String {
-        val ref = storage.reference.child("people/$personId/profile")
-        ref.putFile(imageUri).await()
-        return ref.downloadUrl.await().toString()
-    }
+    suspend fun uploadProfileImage(personId: String, imageUri: String): String =
+        files.upload("people/$personId/profile", imageUri)
 
     /** Mirrors server-side Person changes into the local cache; call once per
      * session (see [RoleAssignmentRepository.startRemoteSync] for the pattern). */
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, Person::class.java) { it.id }
+        remote.mirror(COLLECTION, Person::class) { it.id }
 }

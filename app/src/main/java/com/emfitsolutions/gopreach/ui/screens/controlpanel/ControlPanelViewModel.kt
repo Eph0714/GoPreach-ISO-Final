@@ -55,7 +55,7 @@ class ControlPanelViewModel(
         _uiState.update { it.copy(isUploading = true, errorMessage = null) }
         viewModelScope.launch {
             try {
-                appSettingsRepository.uploadLogo(imageUri, updatedByPersonId)
+                appSettingsRepository.uploadLogo(imageUri.toString(), updatedByPersonId)
                 _uiState.update { it.copy(isUploading = false) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isUploading = false, errorMessage = e.localizedMessage ?: "Upload failed.") }

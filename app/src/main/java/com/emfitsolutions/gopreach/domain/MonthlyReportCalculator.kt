@@ -6,31 +6,6 @@ import com.emfitsolutions.gopreach.data.model.PreachingTimeRecord
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
 import com.emfitsolutions.gopreach.data.model.RecordStatus
 import com.emfitsolutions.gopreach.data.model.Visit
-import java.util.Calendar
-
-/** First-of-month..first-of-next-month `[start, end)` millis for the month
- * containing [periodMonthStart] (itself already a first-of-month epoch, same
- * shape as [com.emfitsolutions.gopreach.data.model.MonthlyReport.periodMonth]).
- * Exclusive upper bound rather than "23:59:59.999" avoids any leap-
- * second/millisecond-rounding edge case at the exact month boundary — spec
- * §1/§4/§11's "handle 28/29/30/31-day months correctly" is exactly what
- * [Calendar.MONTH] arithmetic (not a hand-rolled day count) already does for
- * free. */
-data class MonthBounds(val startInclusive: Long, val endExclusive: Long) : TimeBounds {
-    override fun contains(millis: Long): Boolean = millis >= startInclusive && millis < endExclusive
-
-    companion object {
-        fun of(periodMonthStart: Long): MonthBounds {
-            val start = (Calendar.getInstance().clone() as Calendar).apply {
-                timeInMillis = periodMonthStart
-                set(Calendar.DAY_OF_MONTH, 1)
-                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-            }
-            val end = (start.clone() as Calendar).apply { add(Calendar.MONTH, 1) }
-            return MonthBounds(start.timeInMillis, end.timeInMillis)
-        }
-    }
-}
 
 /** Result of [MonthlyReportCalculator.calculate] — every value this app can
  * actually derive automatically for one Publisher/congregation/month, plus
