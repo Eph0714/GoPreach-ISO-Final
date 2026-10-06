@@ -23,6 +23,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `groupChats/{groupChatId}`
  */
+@kotlinx.serialization.Serializable
 data class GroupChat(
     @DocumentId val id: String = "",
     val congregationId: String = "",
@@ -49,6 +50,7 @@ data class GroupChat(
 
 /** What kind of file a [GroupChatMessage]'s attachment is — drives the
  * Shared Documents folder grouping (spec §9: Images / PDF / Word / Excel). */
+@kotlinx.serialization.Serializable
 enum class GroupChatAttachmentType { IMAGE, PDF, WORD, EXCEL }
 
 /**
@@ -59,6 +61,7 @@ enum class GroupChatAttachmentType { IMAGE, PDF, WORD, EXCEL }
  *
  * Firestore collection: `groupChats/{groupChatId}/messages/{messageId}`
  */
+@kotlinx.serialization.Serializable
 data class GroupChatMessage(
     @DocumentId val id: String = "",
     val senderId: String = "",

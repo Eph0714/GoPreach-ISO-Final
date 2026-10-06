@@ -7,6 +7,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  * [HOUSE]), but the type field is already there so a future multi-image
  * picker (spec's "Multiple Images – Future Ready" §8) is a UI change only,
  * not a data-model migration. */
+@kotlinx.serialization.Serializable
 enum class SupportingImageType { HOUSE, GATE, LANDMARK, MEETING_PLACE, OTHER }
 
 /**
@@ -26,6 +27,7 @@ enum class SupportingImageType { HOUSE, GATE, LANDMARK, MEETING_PLACE, OTHER }
  * SupportingImageCapture.kt) keeps the encoded size to a few hundred KB at
  * most, comfortably inside Firestore's 1 MiB per-document limit.
  */
+@kotlinx.serialization.Serializable
 data class SupportingImage(
     val type: String = SupportingImageType.HOUSE.name,
     val base64Jpeg: String = "",
@@ -46,6 +48,7 @@ data class SupportingImage(
  *
  * Firestore collection: `interestedPeople/{interestedPersonId}`
  */
+@kotlinx.serialization.Serializable
 data class InterestedPerson(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",
@@ -182,6 +185,7 @@ data class InterestedPerson(
  *
  * Firestore collection: `interestedPeople/{interestedPersonId}/visits/{visitId}`
  */
+@kotlinx.serialization.Serializable
 data class Visit(
     @DocumentId val id: String = "",
     val interestedPersonId: String = "",
@@ -239,6 +243,7 @@ data class Visit(
  *
  * Firestore collection: `forwardRequests/{forwardRequestId}`
  */
+@kotlinx.serialization.Serializable
 data class ForwardRequest(
     @DocumentId val id: String = "",
     val interestedPersonId: String = "",
@@ -277,6 +282,7 @@ data class ForwardRequest(
  *
  * Firestore collection: `publisherForwardRequests/{publisherForwardRequestId}`
  */
+@kotlinx.serialization.Serializable
 data class PublisherForwardRequest(
     @DocumentId val id: String = "",
     val interestedPersonId: String = "",
@@ -298,6 +304,7 @@ data class PublisherForwardRequest(
  * [ForwardRequestStatus] (different name for the "declined" state, plus a
  * [COMPLETED] state neither forward flow has), matching the "House Holder
  * Assignment" spec's own exact five states verbatim. */
+@kotlinx.serialization.Serializable
 enum class HouseholderAssignmentStatus { PENDING, ACCEPTED, REJECTED, CANCELLED, COMPLETED }
 
 /**
@@ -333,6 +340,7 @@ enum class HouseholderAssignmentStatus { PENDING, ACCEPTED, REJECTED, CANCELLED,
  *
  * Firestore collection: `houseHolderAssignments/{assignmentId}`
  */
+@kotlinx.serialization.Serializable
 data class HouseholderAssignment(
     @DocumentId val id: String = "",
     val interestedPersonId: String = "",

@@ -10,6 +10,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `appSettings/{id}` — exactly one document, id [GLOBAL_ID].
  */
+@kotlinx.serialization.Serializable
 data class AppSettings(
     @DocumentId val id: String = GLOBAL_ID,
     val logoUrl: String? = null,

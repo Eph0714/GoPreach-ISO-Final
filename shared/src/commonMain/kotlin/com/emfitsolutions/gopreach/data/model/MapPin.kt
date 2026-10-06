@@ -10,6 +10,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `mapPins/{id}`
  */
+@kotlinx.serialization.Serializable
 data class MapPin(
     @DocumentId val id: String = "",
     val congregationId: String = "",

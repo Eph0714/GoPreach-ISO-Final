@@ -13,6 +13,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `publisherTerritoryAssignments/{assignmentId}`
  */
+@kotlinx.serialization.Serializable
 data class PublisherTerritoryAssignment(
     @DocumentId val id: String = "",
     val congregationId: String = "",

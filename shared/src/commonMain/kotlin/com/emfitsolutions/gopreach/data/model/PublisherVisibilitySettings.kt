@@ -10,6 +10,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `publisherVisibilitySettings/{congregationId}`
  */
+@kotlinx.serialization.Serializable
 data class PublisherVisibilitySettings(
     @DocumentId val id: String = "",
     /** Other Publishers can see (and add visits to) Searching records assigned to someone else. */
@@ -69,4 +70,5 @@ fun InterestedPerson.canPublisherAddVisit(publisherPersonId: String): Boolean =
     pipelineStage != PipelineStage.BIBLE_STUDY || this.publisherPersonId == publisherPersonId
 
 /** How long a record may go without a visit before it needs follow-up: [followUpValue] days, months or years. */
+@kotlinx.serialization.Serializable
 enum class FollowUpUnit(val label: String) { DAYS("Days"), MONTHS("Months"), YEARS("Years") }

@@ -11,6 +11,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `auditLog/{entryId}`
  */
+@kotlinx.serialization.Serializable
 data class AuditLogEntry(
     @DocumentId val id: String = "",
     val actorPersonId: String = "",

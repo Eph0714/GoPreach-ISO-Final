@@ -12,6 +12,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `locationSharingSettings/{congregationId}`
  */
+@kotlinx.serialization.Serializable
 data class LocationSharingSettings(
     @DocumentId val congregationId: String = "",
     val sharingDurationMinutes: Int = DEFAULT_DURATION_MINUTES,

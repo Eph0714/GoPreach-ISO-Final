@@ -10,6 +10,7 @@ import com.emfitsolutions.gopreach.platform.PropertyName
  *
  * Firestore collection: `sharedLocations/{publisherPersonId}`
  */
+@kotlinx.serialization.Serializable
 data class SharedLocation(
     @DocumentId val publisherPersonId: String = "",
     val congregationId: String = "",

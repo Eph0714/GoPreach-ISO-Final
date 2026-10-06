@@ -23,6 +23,7 @@ import com.emfitsolutions.gopreach.platform.padded
  *
  * Firestore collection: `plannerDays/{publisherPersonId_yyyyMMdd}`
  */
+@kotlinx.serialization.Serializable
 data class PlannerDay(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",

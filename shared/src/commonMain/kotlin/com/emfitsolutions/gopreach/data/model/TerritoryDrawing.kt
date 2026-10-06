@@ -8,6 +8,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  * fixed per status so it means the same thing on every map: green = Finished, amber = To Continue,
  * red = To Do. Never user-chosen.
  */
+@kotlinx.serialization.Serializable
 enum class DrawingStatus(val label: String, val colorHex: String, val borderHex: String, val meaning: String) {
     FINISHED("Finished", "#43A047", "#1B5E20", "Already worked"),
     TO_CONTINUE("To Continue", "#FBC02D", "#B26A00", "Started, more work needed"),
@@ -33,6 +34,7 @@ enum class DrawingStatus(val label: String, val colorHex: String, val borderHex:
  *
  * Firestore collection: `territoryDrawings/{id}`
  */
+@kotlinx.serialization.Serializable
 data class TerritoryDrawing(
     @DocumentId val id: String = "",
     val geometryJson: String = "",
@@ -71,6 +73,7 @@ data class TerritoryDrawing(
 )
 
 /** Every kind of change the audit trail records. */
+@kotlinx.serialization.Serializable
 enum class DrawingAction { CREATED, UPDATED, COLOR_CHANGED, STATUS_CHANGED, MOVED, DELETED, RESTORED }
 
 /**
@@ -79,6 +82,7 @@ enum class DrawingAction { CREATED, UPDATED, COLOR_CHANGED, STATUS_CHANGED, MOVE
  *
  * Firestore collection: `territoryDrawingAudits/{id}` — create-only.
  */
+@kotlinx.serialization.Serializable
 data class TerritoryDrawingAudit(
     @DocumentId val id: String = "",
     val drawingId: String = "",
@@ -107,6 +111,7 @@ data class TerritoryDrawingAudit(
  *
  * Firestore collection: `territoryBounds/{territoryId}`
  */
+@kotlinx.serialization.Serializable
 data class TerritoryBounds(
     @DocumentId val id: String = "",
     val congregationId: String = "",
@@ -119,6 +124,7 @@ data class TerritoryBounds(
 )
 
 /** Per-device sync progress of one drawing. */
+@kotlinx.serialization.Serializable
 enum class DrawingSyncState(val label: String) {
     SYNCED("Synced"),
     PENDING_SYNC("Pending Sync"),

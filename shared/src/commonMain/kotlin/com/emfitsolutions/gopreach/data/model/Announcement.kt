@@ -9,6 +9,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `announcements/{announcementId}`
  */
+@kotlinx.serialization.Serializable
 data class Announcement(
     @DocumentId val id: String = "",
     val congregationId: String = "",

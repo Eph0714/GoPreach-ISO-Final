@@ -9,6 +9,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  * which modules exist, never their routes. A module hidden/unauthorized for
  * this Publisher's role never becomes reachable just because it moved.
  */
+@kotlinx.serialization.Serializable
 enum class DashboardModuleLocation { MAIN_FORM, SIDE_PANEL }
 
 /**
@@ -23,6 +24,7 @@ enum class DashboardModuleLocation { MAIN_FORM, SIDE_PANEL }
  * Time Record) keeps its existing Pioneer-only gating unchanged — a
  * non-Pioneer never sees it in either panel, customization or not.
  */
+@kotlinx.serialization.Serializable
 enum class DashboardModuleId {
     MY_TOTAL_HOURS,
     SEARCHING,
@@ -94,6 +96,7 @@ fun DashboardModuleId.defaultLocation(): DashboardModuleLocation = DashboardModu
  * list each panel renders, and [moved]/[reset] for the two ways this
  * document changes.
  */
+@kotlinx.serialization.Serializable
 data class DashboardModuleLayout(
     @DocumentId val personId: String = "",
     val mainFormModuleIds: List<String> = emptyList(),
@@ -149,6 +152,7 @@ fun DashboardModuleLayout.reset(): DashboardModuleLayout =
     copy(mainFormModuleIds = emptyList(), sidePanelModuleIds = emptyList(), updatedAt = com.emfitsolutions.gopreach.platform.nowMillis())
 
 /** The My Planner sections a Publisher can show or hide for themselves. */
+@kotlinx.serialization.Serializable
 enum class PlannerSection(val label: String) {
     HOURS("Hours / Minutes"),
     CREDIT_HOURS("Credit Hours"),

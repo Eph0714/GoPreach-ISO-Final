@@ -2,6 +2,7 @@ package com.emfitsolutions.gopreach.data.model
 
 import com.emfitsolutions.gopreach.platform.DocumentId
 
+@kotlinx.serialization.Serializable
 enum class TimerSessionStatus { RUNNING, PAUSED, COMPLETED }
 
 /**
@@ -28,6 +29,7 @@ enum class TimerSessionStatus { RUNNING, PAUSED, COMPLETED }
  *
  * Firestore collection: `ministryTimerSessions/{sessionId}`
  */
+@kotlinx.serialization.Serializable
 data class MinistryTimerSession(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",

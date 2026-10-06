@@ -3,6 +3,7 @@ package com.emfitsolutions.gopreach.data.model
 import com.emfitsolutions.gopreach.platform.DocumentId
 
 /** Firestore collection: `congregations/{congregationId}` */
+@kotlinx.serialization.Serializable
 data class Congregation(
     @DocumentId val id: String = "",
     val name: String = "",
@@ -48,6 +49,7 @@ data class Congregation(
  *
  * Firestore collection: `groups/{groupId}`
  */
+@kotlinx.serialization.Serializable
 data class Group(
     @DocumentId val id: String = "",
     val congregationId: String = "",
@@ -107,6 +109,7 @@ data class Group(
  *
  * Firestore collection: `elderTitles/{elderTitleId}`
  */
+@kotlinx.serialization.Serializable
 data class ElderTitleEntity(
     @DocumentId val id: String = "",
     val titleName: String = "",
@@ -114,6 +117,7 @@ data class ElderTitleEntity(
 )
 
 /** Firestore collection: `territories/{territoryId}` */
+@kotlinx.serialization.Serializable
 data class Territory(
     @DocumentId val id: String = "",
     val congregationId: String = "",
@@ -144,6 +148,7 @@ data class Territory(
  *
  * Firestore collection: `territoryAssignments/{assignmentId}`
  */
+@kotlinx.serialization.Serializable
 data class TerritoryAssignment(
     @DocumentId val id: String = "",
     val congregationId: String = "",
@@ -173,6 +178,7 @@ data class TerritoryAssignment(
  *
  * Firestore collection: `territoryAssignmentBarangays/{congregationId}_{barangayId}`
  */
+@kotlinx.serialization.Serializable
 data class TerritoryAssignmentBarangay(
     @DocumentId val id: String = "",
     val congregationId: String = "",

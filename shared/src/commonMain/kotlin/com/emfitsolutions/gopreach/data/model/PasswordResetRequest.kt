@@ -2,6 +2,7 @@ package com.emfitsolutions.gopreach.data.model
 
 import com.emfitsolutions.gopreach.platform.DocumentId
 
+@kotlinx.serialization.Serializable
 enum class PasswordResetRequestStatus { PENDING, RESOLVED }
 
 /**
@@ -12,6 +13,7 @@ enum class PasswordResetRequestStatus { PENDING, RESOLVED }
  *
  * Firestore collection: `passwordResetRequests/{requestId}`
  */
+@kotlinx.serialization.Serializable
 data class PasswordResetRequest(
     @DocumentId val id: String = "",
     val requestedUsername: String = "",

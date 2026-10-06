@@ -27,6 +27,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  * — new — is what the Publisher's own resubmission from RETURNED becomes
  * (instead of a plain SUBMITTED), so the audit trail shows this was a
  * correction, not an original submission. */
+@kotlinx.serialization.Serializable
 enum class ReportStatus { DRAFT, SUBMITTED, POSTED, RETURNED, CORRECTED }
 
 const val SOURCE_PUBLISHER = "PUBLISHER"
@@ -73,6 +74,7 @@ const val SOURCE_PUBLISHER = "PUBLISHER"
 const val SOURCE_MANUAL = "MANUAL"
 
  */
+@kotlinx.serialization.Serializable
 data class MonthlyReport(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",
@@ -193,6 +195,7 @@ data class MonthlyReport(
  *
  * Firestore collection: `auxiliaryPioneerRanges/{rangeId}`
  */
+@kotlinx.serialization.Serializable
 data class AuxiliaryPioneerRange(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",

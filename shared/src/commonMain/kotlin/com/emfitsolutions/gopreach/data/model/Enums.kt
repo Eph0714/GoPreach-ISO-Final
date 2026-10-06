@@ -1,6 +1,7 @@
 package com.emfitsolutions.gopreach.data.model
 
 /** Administration track — hierarchical, congregation/group-scoped (spec §2.1). */
+@kotlinx.serialization.Serializable
 enum class AdminRole {
     SUPER_ADMIN,
     ADMIN_PER_CONGREGATION,
@@ -76,6 +77,7 @@ fun AdminRole.displayLabel(): String = when (this) {
  * scattered through the app, so a future permission is one new case plus
  * whatever screen checks it — not a schema change (spec §12/§15).
  */
+@kotlinx.serialization.Serializable
 enum class Permission {
     VIEW_CONGREGATIONS, ADD_CONGREGATIONS, EDIT_CONGREGATIONS, DELETE_CONGREGATIONS,
     VIEW_ELDERS, MANAGE_ELDERS,
@@ -90,6 +92,7 @@ enum class Permission {
 /** WHERE a [Permission] applies for a restricted user (spec §6) — kept entirely
  * separate from [Permission] itself so "can view reports" and "for which
  * congregations" are independently configurable. */
+@kotlinx.serialization.Serializable
 enum class ScopeType {
     ALL_CONGREGATIONS,
     SELECTED_CONGREGATIONS,
@@ -101,9 +104,11 @@ enum class ScopeType {
  * A deactivated/suspended account can never sign in, full stop, regardless of
  * how many active RoleAssignments it still holds; nothing about its historical
  * records is touched. */
+@kotlinx.serialization.Serializable
 enum class AccountStatus { ACTIVE, INACTIVE, SUSPENDED }
 
 /** Publisher track — categories, not a hierarchy (spec §2.2). */
+@kotlinx.serialization.Serializable
 enum class PublisherCategory {
     REGULAR_PIONEER,
     /** "Add Special Pioneer publisher status category" — functionally
@@ -146,6 +151,7 @@ val PublisherCategory.displayName: String
  * publisher in this [PublisherCategory]" — a Person can hold several RoleAssignments
  * at once (spec §3: a Coordinator Elder who is also a Regular Pioneer).
  */
+@kotlinx.serialization.Serializable
 sealed class RoleType {
     data class Admin(val role: AdminRole) : RoleType()
     data class Publisher(val category: PublisherCategory) : RoleType()
@@ -168,6 +174,7 @@ sealed class RoleType {
     }
 }
 
+@kotlinx.serialization.Serializable
 enum class RoleAssignmentStatus { ACTIVE, INACTIVE }
 
 /**
@@ -180,6 +187,7 @@ enum class RoleAssignmentStatus { ACTIVE, INACTIVE }
  * [AccountStatus] respectively) and keep using those, rather than gaining a
  * second, redundant status field.
  */
+@kotlinx.serialization.Serializable
 enum class RecordStatus { ACTIVE, INACTIVE }
 
 /** "Preaching Availability" module — a Publisher's own self-reported general
@@ -188,6 +196,7 @@ enum class RecordStatus { ACTIVE, INACTIVE }
  * so it can be shown/used when a Service Overseer/Admin/Super-Admin is
  * choosing who to assign a House Holder Assignment to, and on this
  * Publisher's own profile for any other signed-in account to see. */
+@kotlinx.serialization.Serializable
 enum class PreachingDay(val label: String, val shortLabel: String) {
     MONDAY("Monday", "Mon"),
     TUESDAY("Tuesday", "Tue"),
@@ -203,8 +212,10 @@ enum class PreachingDay(val label: String, val shortLabel: String) {
  * a fixed 3-way split that drives Group-completeness validation and which of a
  * Group's three Regular Elder slots this person fills. Every Group needs exactly
  * one of each to be considered fully assigned. */
+@kotlinx.serialization.Serializable
 enum class RegularElderRole { GROUP_OVERSEER, GROUP_SERVANT, GROUP_ASSISTANT }
 
+@kotlinx.serialization.Serializable
 enum class Gender { MALE, FEMALE }
 
 /** Outcome of one preaching visit logged against a Return Visit or Bible
@@ -213,6 +224,7 @@ enum class Gender { MALE, FEMALE }
  * `HouseholderStatus` — this app's only user of that enum was [Visit.outcome]
  * itself, so this is a rename-in-place to the spec's exact vocabulary, not a
  * parallel field. */
+@kotlinx.serialization.Serializable
 enum class VisitOutcome {
     /** NH */ NOT_AT_HOME,
     /** B */ BUSY,
@@ -231,6 +243,7 @@ enum class VisitOutcome {
  * (see PipelineViewModel.advanceStage, and that same screen's own
  * `nextStage()`/`previousStage()`); never a direct Searching↔Bible Study
  * jump in either direction. */
+@kotlinx.serialization.Serializable
 enum class PipelineStage { SEARCHING, RETURN_VISIT, BIBLE_STUDY }
 
 /** Lifecycle of one cross-congregation [ForwardRequest] ("Forward to Other
@@ -245,9 +258,12 @@ enum class PipelineStage { SEARCHING, RETURN_VISIT, BIBLE_STUDY }
  * user" — is only ever set by the *sending* publisher themselves, and only
  * while still [PENDING]; once a request has moved to [ACCEPTED]/[DECLINED]
  * the receiving side has already acted and there's nothing left to cancel. */
+@kotlinx.serialization.Serializable
 enum class ForwardRequestStatus { PENDING, ACCEPTED, DECLINED, CANCELLED }
 
 /** Local-only sync state for offline-first CRUD (spec §6.5), stored alongside cached rows. */
+@kotlinx.serialization.Serializable
 enum class SyncState { SYNCED, PENDING, FAILED }
 
+@kotlinx.serialization.Serializable
 enum class SyncOperationType { CREATE, UPDATE, DELETE }

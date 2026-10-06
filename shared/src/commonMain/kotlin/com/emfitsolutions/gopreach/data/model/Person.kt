@@ -10,6 +10,7 @@ import com.emfitsolutions.gopreach.platform.PropertyName
  *
  * Firestore collection: `people/{personId}`
  */
+@kotlinx.serialization.Serializable
 data class Person(
     @DocumentId val id: String = "",
     val lastName: String = "",

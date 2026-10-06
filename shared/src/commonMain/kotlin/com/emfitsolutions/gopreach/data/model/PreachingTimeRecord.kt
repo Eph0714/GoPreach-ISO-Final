@@ -11,6 +11,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `preachingTimeRecords/{recordId}`
  */
+@kotlinx.serialization.Serializable
 data class PreachingTimeRecord(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",

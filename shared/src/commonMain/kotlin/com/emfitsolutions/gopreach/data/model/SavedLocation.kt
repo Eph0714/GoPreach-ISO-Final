@@ -12,6 +12,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `savedLocations/{id}`
  */
+@kotlinx.serialization.Serializable
 data class SavedLocation(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",

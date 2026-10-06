@@ -2,6 +2,7 @@ package com.emfitsolutions.gopreach.data.model
 
 import com.emfitsolutions.gopreach.platform.DocumentId
 
+@kotlinx.serialization.Serializable
 enum class ScheduleKind { CALENDAR_EVENT, CHAT_SCHEDULE, PERSONAL_NOTE }
 
 /**
@@ -12,6 +13,7 @@ enum class ScheduleKind { CALENDAR_EVENT, CHAT_SCHEDULE, PERSONAL_NOTE }
  *
  * Firestore collection: `schedules/{scheduleId}`
  */
+@kotlinx.serialization.Serializable
 data class Schedule(
     @DocumentId val id: String = "",
     val kind: ScheduleKind = ScheduleKind.CALENDAR_EVENT,

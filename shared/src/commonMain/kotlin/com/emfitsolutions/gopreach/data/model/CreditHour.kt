@@ -10,6 +10,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `creditHourCategories/{categoryId}`
  */
+@kotlinx.serialization.Serializable
 data class CreditHourCategory(
     @DocumentId val id: String = "",
     val name: String = "",
@@ -28,6 +29,7 @@ data class CreditHourCategory(
  *
  * Firestore collection: `creditHourRecords/{recordId}`
  */
+@kotlinx.serialization.Serializable
 data class CreditHourRecord(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",

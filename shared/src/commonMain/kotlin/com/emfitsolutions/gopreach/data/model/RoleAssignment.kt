@@ -12,6 +12,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  *
  * Firestore collection: `roleAssignments/{roleAssignmentId}`
  */
+@kotlinx.serialization.Serializable
 data class RoleAssignment(
     @DocumentId val id: String = "",
     val personId: String = "",

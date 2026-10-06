@@ -13,6 +13,7 @@ import com.emfitsolutions.gopreach.platform.padded
  *
  * Firestore collection: `monthlyPlannerGoals/{publisherPersonId_yyyyMM}`
  */
+@kotlinx.serialization.Serializable
 data class MonthlyPlannerGoal(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",
@@ -36,6 +37,7 @@ data class MonthlyPlannerGoal(
  *
  * Firestore collection: `weeklyPlannerGoals/{publisherPersonId_weekStartMillis}`
  */
+@kotlinx.serialization.Serializable
 data class WeeklyPlannerGoal(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",
@@ -55,6 +57,7 @@ data class WeeklyPlannerGoal(
  *
  * Firestore collection: `yearlyPlannerGoals/{publisherPersonId_yyyy}`
  */
+@kotlinx.serialization.Serializable
 data class YearlyPlannerGoal(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",

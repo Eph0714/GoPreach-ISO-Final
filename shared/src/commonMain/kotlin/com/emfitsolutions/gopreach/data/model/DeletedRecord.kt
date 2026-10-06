@@ -11,6 +11,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  * of that field is put back only if the document still exists and the field is still empty, so a newer change is
  * never overwritten.
  */
+@kotlinx.serialization.Serializable
 data class TrashItem(
     val collectionPath: String = "",
     val documentId: String = "",
@@ -24,6 +25,7 @@ data class TrashItem(
  * the optional retention period expires. [itemsJson] is the JSON list of [TrashItem]s (a record plus related
  * documents such as a Publisher's role assignments and reports).
  */
+@kotlinx.serialization.Serializable
 data class DeletedRecord(
     @DocumentId val id: String = "",
     /** `deleted` while it sits here. A restored or permanently deleted entry is removed (the audit log keeps the history). */

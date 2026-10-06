@@ -14,6 +14,7 @@ package com.emfitsolutions.gopreach.data.model
  * `get()`/`exists()` by a known path instead of a query, which rules can't do
  * against arbitrary fields. Never create one with a different document id.
  */
+@kotlinx.serialization.Serializable
 data class UserAccessGrant(
     val personId: String = "",
 

@@ -13,6 +13,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  * (the spec's own example — "Our History in Motion," no minutes listed) and
  * an assignment can name more than one publisher ("Evarose and Jovy").
  */
+@kotlinx.serialization.Serializable
 data class MidweekAssignmentItem(
     val particular: String = "",
     val durationMinutes: String = "",
@@ -22,6 +23,7 @@ data class MidweekAssignmentItem(
 /** The Midweek Meeting Schedule's three fixed sub-categories — spec's own
  * names and background-fill colors; what's *inside* each ([MidweekAssignmentItem]
  * list on [MidweekMeetingSchedule]) is fully user-entered, never hard-coded. */
+@kotlinx.serialization.Serializable
 enum class MidweekSection(val displayLabel: String) {
     TREASURES("TREASURES FROM GOD'S WORD"),
     FIELD_MINISTRY("APPLY YOURSELF TO THE FIELD MINISTRY"),
@@ -38,6 +40,7 @@ enum class MidweekSection(val displayLabel: String) {
  *
  * Firestore collection: `midweekMeetingSchedules/{scheduleId}`
  */
+@kotlinx.serialization.Serializable
 data class MidweekMeetingSchedule(
     @DocumentId val id: String = "",
     val congregationId: String = "",
@@ -72,6 +75,7 @@ data class MidweekMeetingSchedule(
  *
  * Firestore collection: `publicTalkSchedules/{rowId}`
  */
+@kotlinx.serialization.Serializable
 data class PublicTalkScheduleRow(
     @DocumentId val id: String = "",
     val congregationId: String = "",
@@ -98,6 +102,7 @@ data class PublicTalkScheduleRow(
  *
  * Firestore collection: `cartAssignments/{rowId}`
  */
+@kotlinx.serialization.Serializable
 data class CartAssignmentRow(
     @DocumentId val id: String = "",
     val congregationId: String = "",

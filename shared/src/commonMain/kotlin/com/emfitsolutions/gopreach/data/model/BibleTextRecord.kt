@@ -33,6 +33,7 @@ const val LEGACY_EVENT_PLACEHOLDER = "Personal Bible Study"
  *
  * Firestore collection: `bibleTextCategories/{eventId}`
  */
+@kotlinx.serialization.Serializable
 data class BibleTextCategory(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",
@@ -78,6 +79,7 @@ data class BibleTextCategory(
  * subtopic's [id] within the same Event, or null for a top-level subtopic —
  * a subtopic can itself contain subtopics, to any depth ("theme inside a
  * sub theme, and so on"). */
+@kotlinx.serialization.Serializable
 data class BibleTextSubtopic(
     val id: String = "",
     val name: String = "",
@@ -111,6 +113,7 @@ data class BibleTextSubtopic(
  *
  * Firestore collection: `bibleTextRecords/{recordId}`
  */
+@kotlinx.serialization.Serializable
 data class BibleTextRecord(
     @DocumentId val id: String = "",
     val publisherPersonId: String = "",
@@ -160,6 +163,7 @@ data class BibleTextRecord(
  * found again from [lank] + [jwLocale], so nothing device-specific is stored
  * in the synced record.
  */
+@kotlinx.serialization.Serializable
 data class SavedVideo(
     val title: String = "",
     val lank: String = "",

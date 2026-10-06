@@ -92,4 +92,7 @@ work to a first iOS TestFlight build, longer to match every screen.
   `NameOrder`, `PersonDuplicateDetection`, `CredentialGenerator`, Bible reference data) now live in `shared/commonMain`.
   `@DocumentId` / `@PropertyName` are `expect`/`actual` (Firebase on Android, no-op on iOS); `platform/Time.kt` holds date helpers.
   App builds; 28 shared tests + app tests pass.
-* **Next:** repository interfaces + sync engine (Room KMP), then Hilt -> Koin.
+* **Phase 2b (done):** Room cache + outbox (`CachedDocumentEntity`, `PendingSyncOperationEntity`, `CacheDao`, `SyncQueueDao`, `AppDatabase`)
+  moved to `shared/commonMain` on Room KMP 2.7 (same tables, same schema v2, migration kept, so installed apps upgrade in place).
+* **Phase 2c (done):** every model is `@Serializable`; `DocJson` (kotlinx.serialization, Gson-compatible settings) + round-trip tests.
+* **Next:** Hilt -> Koin, then move `OfflineFirestoreRepository`/sync engine behind a `RemoteDocumentApi` interface (Firestore adapter on Android, Ktor/Hostinger on iOS), and swap Gson -> `DocJson` in the repositories.
