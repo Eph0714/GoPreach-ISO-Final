@@ -22,13 +22,20 @@ kotlin {
             api("androidx.room:room-runtime:2.7.2")
             implementation("androidx.sqlite:sqlite-bundled:2.5.2")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+            implementation("io.ktor:ktor-client-core:3.0.3")
         }
         androidMain.dependencies {
+            implementation("io.ktor:ktor-client-okhttp:3.0.3")
             // Only for the @DocumentId / @PropertyName typealiases while Firestore is still in use; goes away with the backend switch.
             implementation(project.dependencies.platform("com.google.firebase:firebase-bom:33.3.0"))
             implementation("com.google.firebase:firebase-firestore-ktx")
         }
+        iosMain.dependencies {
+            implementation("io.ktor:ktor-client-darwin:3.0.3")
+        }
         commonTest.dependencies {
+            implementation("io.ktor:ktor-client-mock:3.0.3")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
             implementation(kotlin("test"))
         }
     }
