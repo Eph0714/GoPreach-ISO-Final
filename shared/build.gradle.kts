@@ -2,6 +2,8 @@ plugins {
     id("org.jetbrains.kotlin.multiplatform")
     id("com.android.library")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("com.google.devtools.ksp")
+    id("androidx.room")
 }
 
 kotlin {
@@ -17,6 +19,9 @@ kotlin {
         commonMain.dependencies {
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
             api("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
+            api("androidx.room:room-runtime:2.7.2")
+            implementation("androidx.sqlite:sqlite-bundled:2.5.2")
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
         }
         androidMain.dependencies {
             // Only for the @DocumentId / @PropertyName typealiases while Firestore is still in use; goes away with the backend switch.
@@ -37,4 +42,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+room { schemaDirectory("$projectDir/schemas") }
+
+dependencies {
+    add("kspAndroid", "androidx.room:room-compiler:2.7.2")
+    add("kspIosX64", "androidx.room:room-compiler:2.7.2")
+    add("kspIosArm64", "androidx.room:room-compiler:2.7.2")
+    add("kspIosSimulatorArm64", "androidx.room:room-compiler:2.7.2")
 }
