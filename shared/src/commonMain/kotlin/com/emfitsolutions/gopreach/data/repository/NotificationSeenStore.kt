@@ -1,7 +1,8 @@
 package com.emfitsolutions.gopreach.data.repository
 
-import android.content.Context
-import androidx.core.content.edit
+import com.emfitsolutions.gopreach.platform.KeyValueStores
+import com.emfitsolutions.gopreach.platform.edit
+import com.emfitsolutions.gopreach.platform.nowMillis
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -29,9 +30,9 @@ enum class NotificationCategory { TRANSFER_REQUEST, MONTHLY_REPORT, ANNOUNCEMENT
  * devices or be visible to anyone else.
  */
 class NotificationSeenStore(
-    context: Context,
+    stores: KeyValueStores,
 ) {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = stores.open(PREFS_NAME)
 
     private val _lastSeenAt = MutableStateFlow<Map<String, Long>>(emptyMap())
     val lastSeenAt: StateFlow<Map<String, Long>> = _lastSeenAt
@@ -45,7 +46,7 @@ class NotificationSeenStore(
 
     fun markSeenNow(category: NotificationCategory, personId: String) {
         val k = key(category, personId)
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         prefs.edit { putLong(k, now) }
         _lastSeenAt.value = _lastSeenAt.value + (k to now)
     }

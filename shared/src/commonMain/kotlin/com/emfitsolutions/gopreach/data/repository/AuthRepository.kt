@@ -1,24 +1,16 @@
 package com.emfitsolutions.gopreach.data.repository
 
-import android.content.Context
-import android.util.Log
 import com.emfitsolutions.gopreach.data.model.Person
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
+import com.emfitsolutions.gopreach.platform.Log
+import com.emfitsolutions.gopreach.platform.nowMillis
 import com.emfitsolutions.gopreach.data.model.PasswordResetRequest
 import com.emfitsolutions.gopreach.data.model.RoleAssignment
 import com.emfitsolutions.gopreach.data.model.RoleType
 import com.emfitsolutions.gopreach.domain.CredentialGenerator
 import com.emfitsolutions.gopreach.domain.PermissionChecker
-import com.google.firebase.FirebaseApp
-import com.google.firebase.FirebaseNetworkException
-import com.google.firebase.FirebaseTooManyRequestsException
-import com.google.firebase.auth.EmailAuthProvider
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
-import com.google.firebase.auth.FirebaseAuthInvalidUserException
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withTimeout
 
 /** "Fix the Login API and Database Errors... Display user-friendly messages...
@@ -32,9 +24,9 @@ import kotlinx.coroutines.withTimeout
 private const val SIGN_IN_TIMEOUT_MS = 15_000L
 private fun friendlyAuthErrorMessage(e: Throwable): String = when (e) {
     is TimeoutCancellationException -> "Connection timeout. Please check your internet connection and try again."
-    is FirebaseNetworkException -> "No internet connection. Please check your connection and try again."
-    is FirebaseTooManyRequestsException -> "Too many attempts. Please wait a moment and try again."
-    is FirebaseAuthInvalidCredentialsException, is FirebaseAuthInvalidUserException -> "Invalid username or password."
+    is AuthFailure.Network -> "No internet connection. Please check your connection and try again."
+    is AuthFailure.TooManyRequests -> "Too many attempts. Please wait a moment and try again."
+    is AuthFailure.InvalidCredentials, is AuthFailure.InvalidUser -> "Invalid username or password."
     else -> "Server temporarily unavailable. Please try again later."
 }
 
@@ -56,9 +48,8 @@ data class TempCredentials(
  * username-based login maps onto Firebase's email-based accounts.
  */
 class AuthRepository(
-    private val appContext: Context,
-    private val firebaseAuth: FirebaseAuth,
-    private val firestore: FirebaseFirestore,
+    private val auth: AuthService,
+    private val remote: RemoteCollections,
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val auditLogRepository: AuditLogRepository,
@@ -74,17 +65,10 @@ class AuthRepository(
     }
 
     val currentPersonId: String?
-        get() = personIdFromAuthEmail(firebaseAuth.currentUser?.email) ?: offlineSessionMarker.personId.value
+        get() = personIdFromAuthEmail(auth.currentUser?.email) ?: offlineSessionMarker.personId.value
 
     suspend fun findPersonByUsername(username: String): Person? =
-        firestore.collection("people")
-            .whereEqualTo("username", username)
-            .limit(1)
-            .get()
-            .await()
-            .documents
-            .firstOrNull()
-            ?.toObject(Person::class.java)
+        remote.findFirst("people", "username", username, Person::class)
 
     suspend fun signIn(username: String, password: String): AuthResult {
         Log.d(TAG, "Login request started")
@@ -124,7 +108,7 @@ class AuthRepository(
             Log.d(TAG, "Account usable: FALSE")
             return AuthResult.Error("This account has been deactivated. Contact your administrator.")
         }
-        firebaseAuth.signInWithEmailAndPassword(authEmailFor(person.id), password).await()
+        auth.signIn(authEmailFor(person.id), password)
         Log.d(TAG, "Password verified: TRUE")
         // Cache-only: a stale pre-sign-in snapshot must never get queued as a
         // pending upload here (see PersonRepository.cacheFromServer's doc
@@ -202,7 +186,7 @@ class AuthRepository(
     }
 
     fun signOut() {
-        firebaseAuth.signOut()
+        auth.signOut()
         offlineSessionMarker.clear()
     }
 
@@ -228,7 +212,7 @@ class AuthRepository(
             username = username,
             isTemporaryCredential = true,
             temporaryPassword = tempPassword,
-            createdAt = System.currentTimeMillis(),
+            createdAt = nowMillis(),
             createdByPersonId = enrollingPersonId,
         )
         // saveNow, not save: this document must exist on the server the
@@ -265,17 +249,7 @@ class AuthRepository(
     }
 
     private suspend fun createSecondaryAuthAccount(personId: String, tempPassword: String) {
-        val appName = "temp-account-$personId"
-        val secondaryApp = FirebaseApp.initializeApp(appContext, FirebaseApp.getInstance().options, appName)
-        try {
-            withTimeout(SIGN_IN_TIMEOUT_MS) {
-                val secondaryAuth = FirebaseAuth.getInstance(secondaryApp)
-                secondaryAuth.createUserWithEmailAndPassword(authEmailFor(personId), tempPassword).await()
-                secondaryAuth.signOut()
-            }
-        } finally {
-            secondaryApp.delete()
-        }
+        withTimeout(SIGN_IN_TIMEOUT_MS) { auth.createAccount(authEmailFor(personId), tempPassword) }
     }
 
     private suspend fun uniqueUsername(base: String): String {
@@ -289,7 +263,7 @@ class AuthRepository(
      * re-login with the new credentials — this only updates Auth + the Person
      * record and signs the user out; the caller navigates back to Login. */
     suspend fun forcedPasswordChange(newUsername: String, newPassword: String): AuthResult {
-        val user = firebaseAuth.currentUser
+        val user = auth.currentUser
             ?: return AuthResult.Error("Session expired — please log in again.")
         val personId = personIdFromAuthEmail(user.email)
             ?: return AuthResult.Error("Session expired — please log in again.")
@@ -300,7 +274,7 @@ class AuthRepository(
         val person = personRepository.get(personId)
             ?: return AuthResult.Error("Account record not found.")
         return try {
-            user.updatePassword(newPassword).await()
+            auth.updatePassword(newPassword)
             val updated = person.copy(username = newUsername, isTemporaryCredential = false, temporaryPassword = null)
             personRepository.save(updated) // local cache + offline queue, for consistency with the rest of the app
             // The queued write above happens asynchronously in the background — if it
@@ -310,8 +284,8 @@ class AuthRepository(
             // every time otherwise). So also write synchronously, here, before
             // signing out — Firestore's native .set(pojo) skips the @DocumentId
             // field automatically, unlike the offline queue's Gson-based path.
-            firestore.collection("people").document(personId).set(updated).await()
-            firebaseAuth.signOut()
+            remote.pushNow("people", personId, updated)
+            auth.signOut()
             AuthResult.Success(updated, requiresPasswordChange = false)
         } catch (e: Exception) {
             AuthResult.Error(e.localizedMessage ?: "Couldn't update your credentials.")
@@ -325,16 +299,16 @@ class AuthRepository(
      * finished: the temporary password stops working now (the Auth password changes and the stored copy is
      * erased), but [Person.isTemporaryCredential] stays true until the re-login proves the new credentials. */
     suspend fun changeCredentialsKeepingSession(newUsername: String, newPassword: String): AuthResult {
-        val user = firebaseAuth.currentUser ?: return AuthResult.Error("Session expired — please log in again.")
+        val user = auth.currentUser ?: return AuthResult.Error("Session expired — please log in again.")
         val personId = personIdFromAuthEmail(user.email) ?: return AuthResult.Error("Session expired — please log in again.")
         val existing = findPersonByUsername(newUsername)
         if (existing != null && existing.id != personId) return AuthResult.Error("That username is already taken.")
         val person = personRepository.get(personId) ?: return AuthResult.Error("Account record not found.")
         return try {
-            user.updatePassword(newPassword).await()
+            auth.updatePassword(newPassword)
             val updated = person.copy(username = newUsername, temporaryPassword = null)
             // Synchronous as well as queued: the new username must exist on the server before anyone signs in with it.
-            firestore.collection("people").document(personId).set(updated).await()
+            remote.pushNow("people", personId, updated)
             personRepository.cacheFromServer(updated)
             AuthResult.Success(updated, requiresPasswordChange = true)
         } catch (e: Exception) {
@@ -348,8 +322,8 @@ class AuthRepository(
         val personId = currentPersonId ?: return AuthResult.Error("Session expired — please log in again.")
         if (person.id != personId) return AuthResult.Error("Account mismatch — please log in again.")
         return try {
-            val confirmed = person.copy(setupConfirmedAt = System.currentTimeMillis())
-            firestore.collection("people").document(personId).set(confirmed).await()
+            val confirmed = person.copy(setupConfirmedAt = nowMillis())
+            remote.pushNow("people", personId, confirmed)
             personRepository.cacheFromServer(confirmed)
             AuthResult.Success(confirmed, requiresPasswordChange = true)
         } catch (e: Exception) {
@@ -360,15 +334,15 @@ class AuthRepository(
     /** When this device last signed in to the server with a password (not a token refresh), or null if there is no
      * server session (offline). Compared with [Person.setupConfirmedAt] to tell the required re-login apart from the
      * wizard's own session. */
-    fun lastSignInAtMillis(): Long? = firebaseAuth.currentUser?.metadata?.lastSignInTimestamp
+    fun lastSignInAtMillis(): Long? = auth.currentUser?.lastSignInAtMillis
 
     /** The Publisher signed in again with their new credentials: setup is finished. */
     suspend fun completeFirstLogin(): AuthResult {
         val personId = currentPersonId ?: return AuthResult.Error("Session expired — please log in again.")
         val person = personRepository.get(personId) ?: return AuthResult.Error("Account record not found.")
         return try {
-            val done = person.copy(isTemporaryCredential = false, temporaryPassword = null, setupCompletedAt = System.currentTimeMillis())
-            firestore.collection("people").document(personId).set(done).await()
+            val done = person.copy(isTemporaryCredential = false, temporaryPassword = null, setupCompletedAt = nowMillis())
+            remote.pushNow("people", personId, done)
             personRepository.cacheFromServer(done)
             auditLogRepository.log(actorPersonId = personId, action = "COMPLETE_FIRST_LOGIN_SETUP")
             AuthResult.Success(done, requiresPasswordChange = false)
@@ -395,16 +369,15 @@ class AuthRepository(
     suspend fun verifyCurrentPassword(password: String): Result<Unit> = reauthenticate(password)
 
     private suspend fun reauthenticate(currentPassword: String): Result<Unit> {
-        val user = firebaseAuth.currentUser ?: return Result.failure(IllegalStateException("Session expired — please log in again."))
-        val email = user.email ?: return Result.failure(IllegalStateException("Session expired — please log in again."))
+        if (auth.currentUser?.email == null) return Result.failure(IllegalStateException("Session expired — please log in again."))
         return try {
-            user.reauthenticate(EmailAuthProvider.getCredential(email, currentPassword)).await()
+            auth.reauthenticate(currentPassword)
             Result.success(Unit)
-        } catch (e: FirebaseAuthInvalidCredentialsException) {
+        } catch (e: AuthFailure.InvalidCredentials) {
             Result.failure(IllegalStateException("Current password is incorrect."))
-        } catch (e: FirebaseNetworkException) {
+        } catch (e: AuthFailure.Network) {
             Result.failure(IllegalStateException("No internet connection. Check your network and try again."))
-        } catch (e: FirebaseTooManyRequestsException) {
+        } catch (e: AuthFailure.TooManyRequests) {
             Result.failure(IllegalStateException("Too many attempts. Please wait a moment and try again."))
         } catch (e: Exception) {
             Result.failure(IllegalStateException(e.localizedMessage ?: "Couldn't verify your current password. Please try again."))
@@ -427,7 +400,7 @@ class AuthRepository(
             val previousUsername = person.username
             val updated = person.copy(username = trimmed)
             personRepository.save(updated)
-            firestore.collection("people").document(personId).set(updated).await()
+            remote.pushNow("people", personId, updated)
             auditLogRepository.log(
                 actorPersonId = personId,
                 action = "CHANGE_OWN_USERNAME",
@@ -450,11 +423,11 @@ class AuthRepository(
         val personId = currentPersonId ?: return AuthResult.Error("Session expired — please log in again.")
         if (newPassword.length < 6) return AuthResult.Error("New password must be at least 6 characters.")
         reauthenticate(currentPassword).onFailure { return AuthResult.Error(it.message ?: "Current password is incorrect.") }
-        val user = firebaseAuth.currentUser ?: return AuthResult.Error("Session expired — please log in again.")
+        val user = auth.currentUser ?: return AuthResult.Error("Session expired — please log in again.")
         return try {
-            user.updatePassword(newPassword).await()
+            auth.updatePassword(newPassword)
             auditLogRepository.log(actorPersonId = personId, action = "CHANGE_OWN_PASSWORD", targetType = "Person", targetId = personId)
-            firebaseAuth.signOut()
+            auth.signOut()
             AuthResult.Success(personRepository.get(personId) ?: Person(id = personId), requiresPasswordChange = false)
         } catch (e: Exception) {
             AuthResult.Error(e.localizedMessage ?: "Couldn't update your password.")
@@ -484,7 +457,7 @@ class AuthRepository(
             val previousUsername = target.username
             val updated = target.copy(username = trimmed)
             personRepository.save(updated)
-            firestore.collection("people").document(targetPersonId).set(updated).await()
+            remote.pushNow("people", targetPersonId, updated)
             auditLogRepository.log(
                 actorPersonId = actingPersonId,
                 action = "ACCOUNT_MGMT_USERNAME_CHANGE",
@@ -507,9 +480,9 @@ class AuthRepository(
             requestedUsername = username,
             personId = person?.id,
             targetPersonId = person?.createdByPersonId,
-            requestedAt = System.currentTimeMillis(),
+            requestedAt = nowMillis(),
         )
-        val id = firestore.collection("passwordResetRequests").document().id
-        firestore.collection("passwordResetRequests").document(id).set(request.copy(id = id)).await()
+        val id = remote.newId("passwordResetRequests")
+        remote.pushNow("passwordResetRequests", id, request.copy(id = id))
     }
 }

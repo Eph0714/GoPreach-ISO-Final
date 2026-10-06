@@ -56,10 +56,10 @@ data class PullPage(
 )
 
 @Serializable
-internal data class PushRequest(val ops: List<PushOp>)
+data class PushRequest(val ops: List<PushOp>)
 
 @Serializable
-internal data class PushResponse(val results: List<PushResult> = emptyList())
+data class PushResponse(val results: List<PushResult> = emptyList())
 
 /** Thrown for network problems and non-2xx answers; the engine treats these as "try again later", not as a bad record. */
 class SyncTransportException(message: String, val statusCode: Int? = null, cause: Throwable? = null) : Exception(message, cause)

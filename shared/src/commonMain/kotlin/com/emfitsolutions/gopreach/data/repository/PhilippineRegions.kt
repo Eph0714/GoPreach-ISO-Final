@@ -12,7 +12,7 @@ package com.emfitsolutions.gopreach.data.repository
  * [PhilippineLocationRepository]'s `normalize`), so casing/punctuation don't
  * matter. Province names must match the bundled data's own names.
  */
-internal object PhilippineRegions {
+object PhilippineRegions {
     private class Region(val aliases: List<String>, val provinces: List<String>)
 
     private val regions = listOf(

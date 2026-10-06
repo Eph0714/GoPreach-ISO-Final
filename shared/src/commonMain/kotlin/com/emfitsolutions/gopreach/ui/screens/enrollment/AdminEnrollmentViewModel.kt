@@ -91,7 +91,7 @@ class AdminEnrollmentViewModel(
 /** Enrollment forms take one "Name" field per spec wording; Person stores it
  * split. A single space is the split point — good enough for the common case,
  * with everything after the first space folded into the last name. */
-internal fun splitName(fullName: String): Pair<String, String> {
+fun splitName(fullName: String): Pair<String, String> {
     val trimmed = fullName.trim()
     val spaceIndex = trimmed.indexOf(' ')
     return if (spaceIndex == -1) trimmed to "" else trimmed.substring(0, spaceIndex) to trimmed.substring(spaceIndex + 1).trim()

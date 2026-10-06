@@ -70,6 +70,9 @@ class FirestoreRemoteCollections(
         awaitClose { registration.remove() }
     }
 
+    override suspend fun <T : Any> findFirst(collectionPath: String, field: String, value: String, kClass: KClass<T>): T? =
+        firestore.collection(collectionPath).whereEqualTo(field, value).limit(1).get().await().documents.firstOrNull()?.toObject(kClass.java)
+
     override suspend fun <T : Any> pullOnce(collectionPath: String, kClass: KClass<T>, equalTo: Pair<String, String>?, idOf: (T) -> String) =
         pullFirestoreCollectionOnce(firestore, offline, collectionPath, kClass.java, query(collectionPath, equalTo), idOf)
 }

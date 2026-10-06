@@ -47,6 +47,9 @@ interface RemoteCollections {
         idOf: (T) -> String,
     ): Flow<Unit>
 
+    /** The first document of [collectionPath] whose [field] equals [value], read from the SERVER; null if none. */
+    suspend fun <T : Any> findFirst(collectionPath: String, field: String, value: String, kClass: KClass<T>): T?
+
     /** One request/response pull of [collectionPath] into the cache (the fallback when a live feed cannot be sustained). */
     suspend fun <T : Any> pullOnce(
         collectionPath: String,

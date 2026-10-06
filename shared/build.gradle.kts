@@ -38,6 +38,7 @@ kotlin {
         }
         androidMain.dependencies {
             implementation("io.ktor:ktor-client-okhttp:3.0.3")
+            implementation("androidx.security:security-crypto:1.1.0-alpha06")
             // Only for the @DocumentId / @PropertyName typealiases while Firestore is still in use; goes away with the backend switch.
             implementation(project.dependencies.platform("com.google.firebase:firebase-bom:33.3.0"))
             implementation("com.google.firebase:firebase-firestore-ktx")

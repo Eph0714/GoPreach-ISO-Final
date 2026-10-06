@@ -1,9 +1,10 @@
 package com.emfitsolutions.gopreach.data.repository
 
-import android.content.Context
+import com.emfitsolutions.gopreach.platform.KeyValueStores
+import com.emfitsolutions.gopreach.platform.edit
+import com.emfitsolutions.gopreach.platform.nowMillis
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.core.content.edit
 import com.emfitsolutions.gopreach.ui.theme.PrimaryPurple
 import com.emfitsolutions.gopreach.ui.theme.ThemeColorOption
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,9 +27,9 @@ private const val KEY_CUSTOM_COLOR = "theme_custom_color_argb"
  * phone).
  */
 class ThemePreferenceRepository(
-    context: Context,
+    stores: KeyValueStores,
 ) {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = stores.open(PREFS_NAME)
 
     private val _preference = MutableStateFlow(readStoredTheme())
     val preference: StateFlow<ThemePreference> = _preference

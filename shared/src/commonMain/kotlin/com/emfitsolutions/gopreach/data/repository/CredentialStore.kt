@@ -1,8 +1,8 @@
 package com.emfitsolutions.gopreach.data.repository
 
-import android.content.Context
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import com.emfitsolutions.gopreach.platform.KeyValueStores
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 
 /**
  * Secure on-device storage for the two opt-in sign-in conveniences, each kept
@@ -19,20 +19,9 @@ import androidx.security.crypto.MasterKey
  * Backed by [EncryptedSharedPreferences] (AES-256, key material in the Android Keystore),
  * never plain SharedPreferences. Nothing here is ever logged.
  */
-class CredentialStore(context: Context) {
+class CredentialStore(private val stores: KeyValueStores) {
 
-    private val prefs by lazy {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        EncryptedSharedPreferences.create(
-            context,
-            "gopreach_credentials",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
-    }
+    private val prefs by lazy { stores.openSecure(PREFS_NAME) }
 
     // --- Remember Login ---------------------------------------------------------
 
@@ -85,6 +74,7 @@ class CredentialStore(context: Context) {
     }
 
     companion object {
+        private const val PREFS_NAME = "gopreach_credentials"
         private const val KEY_USERNAME = "username"
         private const val KEY_PASSWORD = "password"
         private const val KEY_BIO_USERNAME = "biometricUsername"

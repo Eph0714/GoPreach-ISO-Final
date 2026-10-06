@@ -1,6 +1,6 @@
 package com.emfitsolutions.gopreach.domain
 
-import android.util.Log
+import com.emfitsolutions.gopreach.platform.Log
 import com.emfitsolutions.gopreach.data.model.AdminRole
 import com.emfitsolutions.gopreach.data.model.Person
 import com.emfitsolutions.gopreach.data.model.RoleAssignment
@@ -8,12 +8,12 @@ import com.emfitsolutions.gopreach.data.model.RoleAssignmentStatus
 import com.emfitsolutions.gopreach.data.model.RoleType
 import com.emfitsolutions.gopreach.data.model.UserAccessGrant
 import com.emfitsolutions.gopreach.data.model.displayLabel
+import com.emfitsolutions.gopreach.data.repository.AuthService
 import com.emfitsolutions.gopreach.data.repository.OfflineSessionMarker
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.UserAccessGrantRepository
 import com.emfitsolutions.gopreach.data.repository.personIdFromAuthEmail
-import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -154,20 +154,14 @@ data class SessionState(
  * [PermissionChecker].
  */
 class UserSession(
-    private val firebaseAuth: FirebaseAuth,
+    private val auth: AuthService,
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val userAccessGrantRepository: UserAccessGrantRepository,
     private val offlineSessionMarker: OfflineSessionMarker,
     appScope: CoroutineScope,
 ) {
-    private fun authStateFlow(): Flow<String?> = callbackFlow {
-        val listener = FirebaseAuth.AuthStateListener { auth ->
-            trySend(personIdFromAuthEmail(auth.currentUser?.email))
-        }
-        firebaseAuth.addAuthStateListener(listener)
-        awaitClose { firebaseAuth.removeAuthStateListener(listener) }
-    }
+    private fun authStateFlow(): Flow<String?> = auth.authState().map { personIdFromAuthEmail(it?.email) }
 
     /** Firebase's own persisted sign-in wins when present (the normal case —
      * survives app restart with no network needed on its own); [OfflineSessionMarker]
@@ -292,7 +286,7 @@ class UserSession(
                             // automatically if something else in the app ever
                             // did complete a real Firebase sign-in in the
                             // background.
-                            isOfflineOnlySession = firebaseAuth.currentUser == null,
+                            isOfflineOnlySession = auth.currentUser == null,
                         )
                     }
                 }

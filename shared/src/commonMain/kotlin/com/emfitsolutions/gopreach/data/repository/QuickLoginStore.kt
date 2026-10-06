@@ -1,8 +1,8 @@
 package com.emfitsolutions.gopreach.data.repository
 
-import android.content.Context
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import com.emfitsolutions.gopreach.platform.KeyValueStores
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import com.emfitsolutions.gopreach.domain.QuickLoginPolicy
 import com.emfitsolutions.gopreach.domain.SecretHasher
 
@@ -36,18 +36,9 @@ sealed interface QuickLoginCheck {
  *  - the failed-attempt counter and lock time, so closing the app doesn't reset the throttle.
  * It is bound to this device, so it does not move to a new phone: set it up again there.
  */
-class QuickLoginStore(context: Context) {
+class QuickLoginStore(private val stores: KeyValueStores) {
 
-    private val prefs by lazy {
-        val masterKey = MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
-        EncryptedSharedPreferences.create(
-            context,
-            "gopreach_quicklogin",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
-    }
+    private val prefs by lazy { stores.openSecure(PREFS_NAME) }
 
     fun isEnrolled(method: QuickLoginMethod): Boolean =
         prefs.getString(k(method, HASH), null) != null && prefs.getString(k(method, PASSWORD), null) != null
@@ -75,10 +66,10 @@ class QuickLoginStore(context: Context) {
     fun disableAll() = QuickLoginMethod.entries.forEach(::disable)
 
     /** How long [method] is still locked, in ms (0 when it isn't). */
-    fun lockRemainingMs(method: QuickLoginMethod, now: Long = System.currentTimeMillis()): Long =
+    fun lockRemainingMs(method: QuickLoginMethod, now: Long = nowMillis()): Long =
         (prefs.getLong(k(method, LOCKED_UNTIL), 0L) - now).coerceAtLeast(0L)
 
-    fun verify(method: QuickLoginMethod, secret: String, now: Long = System.currentTimeMillis()): QuickLoginCheck {
+    fun verify(method: QuickLoginMethod, secret: String, now: Long = nowMillis()): QuickLoginCheck {
         val hash = prefs.getString(k(method, HASH), null)
         val username = prefs.getString(k(method, USERNAME), null)
         val password = prefs.getString(k(method, PASSWORD), null)
@@ -109,6 +100,7 @@ class QuickLoginStore(context: Context) {
     private fun k(method: QuickLoginMethod, field: String) = "${method.key}_$field"
 
     private companion object {
+        const val PREFS_NAME = "gopreach_quicklogin"
         const val HASH = "hash"
         const val USERNAME = "username"
         const val PASSWORD = "password"
