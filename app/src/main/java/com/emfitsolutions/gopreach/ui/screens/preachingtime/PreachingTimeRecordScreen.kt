@@ -156,7 +156,7 @@ fun PreachingTimeRecordScreen(
                                     Text(dateFormat.format(Date(record.date)), style = MaterialTheme.typography.titleMedium)
                                     Text("${"%.2f".format(record.hoursConsumed)} hours", style = MaterialTheme.typography.bodyMedium)
                                     if (record.remarks != null) {
-                                        Text(record.remarks, style = MaterialTheme.typography.bodySmall)
+                                        Text(record.remarks!!, style = MaterialTheme.typography.bodySmall)
                                     }
                                     if (record.status == RecordStatus.INACTIVE) {
                                         Text("Inactive", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -295,7 +295,7 @@ private fun PreachingTimeRecordDialog(
                     ReadOnlyField("Date Created", formatRecordTimestamp(existingRecord.createdAt))
                     if (existingRecord.lastEditedAt != null) {
                         ReadOnlyField("Updated By", existingRecord.lastEditedByPersonId ?: "—")
-                        ReadOnlyField("Date Updated", formatRecordTimestamp(existingRecord.lastEditedAt))
+                        ReadOnlyField("Date Updated", formatRecordTimestamp(existingRecord.lastEditedAt!!))
                     }
                 }
     }

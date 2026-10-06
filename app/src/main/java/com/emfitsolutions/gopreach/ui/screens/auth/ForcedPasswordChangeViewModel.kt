@@ -105,7 +105,7 @@ class ForcedPasswordChangeViewModel @Inject constructor(
         when {
             !isPublisher || loaded.temporaryPassword != null -> _uiState.update { it.copy(step = SetupStep.CREDENTIALS) }
             loaded.setupConfirmedAt == null -> _uiState.update { it.copy(step = SetupStep.PROFILE_REVIEW) }
-            else -> checkRelogin(loaded.setupConfirmedAt)
+            else -> checkRelogin(loaded.setupConfirmedAt!!)
         }
     }
 

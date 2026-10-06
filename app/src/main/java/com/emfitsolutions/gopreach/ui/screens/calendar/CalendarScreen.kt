@@ -149,7 +149,7 @@ fun CalendarScreen(
                                     Text("Personal note", style = MaterialTheme.typography.labelSmall)
                                 }
                                 if (event.description != null) {
-                                    Text(event.description, style = MaterialTheme.typography.bodySmall)
+                                    Text(event.description!!, style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                             if (editable) {

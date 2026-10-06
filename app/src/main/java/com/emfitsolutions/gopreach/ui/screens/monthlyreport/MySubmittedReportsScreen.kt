@@ -130,7 +130,7 @@ private fun SubmittedReportCard(report: MonthlyReport) {
             }
             if (report.submittedAt != null) {
                 Text(
-                    stringResource(R.string.my_reports_submitted_at, formatRecordTimestamp(report.submittedAt)),
+                    stringResource(R.string.my_reports_submitted_at, formatRecordTimestamp(report.submittedAt!!)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -1508,8 +1508,8 @@ private fun GpsLocationSection(person: InterestedPerson, currentPersonId: String
                         Text("GPS Location Captured", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 4.dp))
                     }
                     ClickableCoordinatesText(lat = person.gpsLat!!, lng = person.gpsLng!!, label = person.name.ifBlank { null })
-                    if (person.gpsAccuracy != null) Text("Accuracy: ${person.gpsAccuracy.toInt()} meters", style = MaterialTheme.typography.bodyMedium)
-                    if (person.gpsCapturedAt != null) Text("Captured: ${formatRecordTimestamp(person.gpsCapturedAt)}", style = MaterialTheme.typography.bodySmall)
+                    if (person.gpsAccuracy != null) Text("Accuracy: ${person.gpsAccuracy!!.toInt()} meters", style = MaterialTheme.typography.bodyMedium)
+                    if (person.gpsCapturedAt != null) Text("Captured: ${formatRecordTimestamp(person.gpsCapturedAt!!)}", style = MaterialTheme.typography.bodySmall)
                     // "Cannot Change the parent address/location" — a
                     // Publisher who doesn't own this record sees the
                     // captured location above, never these mutation controls.

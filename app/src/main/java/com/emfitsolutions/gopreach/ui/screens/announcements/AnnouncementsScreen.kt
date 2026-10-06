@@ -192,7 +192,7 @@ fun AnnouncementsScreen(
                                 maxLines = 3,
                             )
                             if (announcement.attachmentUrl != null) {
-                                AttachmentRow(url = announcement.attachmentUrl, fileName = announcement.attachmentFileName)
+                                AttachmentRow(url = announcement.attachmentUrl!!, fileName = announcement.attachmentFileName)
                             }
                             Text(
                                 formatRecordTimestamp(announcement.createdAt),
@@ -268,7 +268,7 @@ fun AnnouncementsScreen(
                     }
                     Text(toView.details, style = MaterialTheme.typography.bodyMedium)
                     if (toView.attachmentUrl != null) {
-                        AttachmentRow(url = toView.attachmentUrl, fileName = toView.attachmentFileName)
+                        AttachmentRow(url = toView.attachmentUrl!!, fileName = toView.attachmentFileName)
                     }
                     Text(
                         formatRecordTimestamp(toView.createdAt),

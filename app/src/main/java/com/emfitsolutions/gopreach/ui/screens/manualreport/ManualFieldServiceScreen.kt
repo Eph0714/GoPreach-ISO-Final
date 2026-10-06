@@ -361,7 +361,7 @@ fun ManualFieldServiceScreen(
                                 )
                                 if (r.lastEditedByPersonId != null && r.lastEditedAt != null && r.lastEditedAt != r.createdAt) {
                                     Text(
-                                        "Last modified by ${names[r.lastEditedByPersonId] ?: "—"} · ${dateTimeFormat.format(Date(r.lastEditedAt))}",
+                                        "Last modified by ${names[r.lastEditedByPersonId] ?: "—"} · ${dateTimeFormat.format(Date(r.lastEditedAt!!))}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )

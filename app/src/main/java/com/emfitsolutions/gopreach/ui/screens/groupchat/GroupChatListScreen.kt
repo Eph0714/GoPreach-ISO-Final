@@ -178,7 +178,7 @@ private fun GroupChatRow(chat: GroupChat, congregationName: String?, unreadCount
             }
             Column(horizontalAlignment = Alignment.End) {
                 if (chat.lastMessageAt != null) {
-                    Text(formatRecordTimestamp(chat.lastMessageAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(formatRecordTimestamp(chat.lastMessageAt!!), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 if (unreadCount > 0) {
                     Box(modifier = Modifier.padding(top = 4.dp)) {
