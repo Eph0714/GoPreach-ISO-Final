@@ -42,7 +42,7 @@ data class PlannerPeriodRecords(
     val bibleStudies: List<PersonActivitySummary> = emptyList(),
 )
 
-internal fun buildPeriodRecords(
+fun buildPeriodRecords(
     publisherPersonId: String,
     bounds: TimeBounds,
     allDays: List<PlannerDay>,
@@ -59,7 +59,7 @@ internal fun buildPeriodRecords(
 /** Credit Hour entries whose own date falls in [bounds] — keyed off
  * [CreditHourRecord.resolvedDayStart], so an entry counts toward its period
  * whether or not a [PlannerDay] document exists for that date. */
-internal fun List<CreditHourRecord>.inPeriod(bounds: TimeBounds): List<CreditHourRecord> =
+fun List<CreditHourRecord>.inPeriod(bounds: TimeBounds): List<CreditHourRecord> =
     filter { bounds.contains(it.resolvedDayStart()) }
 
 /**
@@ -155,11 +155,11 @@ class CreditHourEntryViewModel(
  * has any (Monthly Calendar/List view's per-day figure) — Credit Hours are
  * computed separately via [dailyCreditMinutes] and never merged into this,
  * matching the app's existing "Credit Hours stay separate" rule. */
-internal fun dailyMinutes(allDays: List<PlannerDay>, bounds: TimeBounds): Map<Long, Int> =
+fun dailyMinutes(allDays: List<PlannerDay>, bounds: TimeBounds): Map<Long, Int> =
     allDays.filter { it.totalMinutes > 0 && bounds.contains(it.dayStart) }.associate { it.dayStart to it.totalMinutes }
 
 /** Per-day Credit Hours total for every day in [bounds] that has any. */
-internal fun dailyCreditMinutes(creditRecords: List<CreditHourRecord>, bounds: TimeBounds): Map<Long, Int> =
+fun dailyCreditMinutes(creditRecords: List<CreditHourRecord>, bounds: TimeBounds): Map<Long, Int> =
     creditRecords.inPeriod(bounds).groupBy { it.resolvedDayStart() }.mapValues { (_, records) -> records.sumOf { it.totalMinutes } }
 
 /** Per-day unique-person count at [stage] (Return Visit or Bible Study) for
@@ -168,7 +168,7 @@ internal fun dailyCreditMinutes(creditRecords: List<CreditHourRecord>, bounds: T
  * independently re-run per day (spec §32/§37: a daily count is its own
  * day's unique persons, never a slice of the month's). Days with zero are
  * left out, matching [dailyMinutes]/[dailyCreditMinutes]'s own shape. */
-internal fun dailyUniquePersonCounts(
+fun dailyUniquePersonCounts(
     publisherPersonId: String,
     people: List<InterestedPerson>,
     visits: List<Visit>,
