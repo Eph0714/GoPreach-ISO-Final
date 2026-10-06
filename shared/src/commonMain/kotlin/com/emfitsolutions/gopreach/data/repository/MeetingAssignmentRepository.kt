@@ -4,9 +4,7 @@ import com.emfitsolutions.gopreach.data.model.CartAssignmentRow
 import com.emfitsolutions.gopreach.data.model.MidweekMeetingSchedule
 import com.emfitsolutions.gopreach.data.model.PublicTalkScheduleRow
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 
 private const val MIDWEEK_COLLECTION = "midweekMeetingSchedules"
@@ -14,20 +12,19 @@ private const val MIDWEEK_COLLECTION = "midweekMeetingSchedules"
 /** "Meeting Assignments" module — Midweek Meeting Schedule half. */
 class MidweekMeetingScheduleRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<MidweekMeetingSchedule>> = offline.observeCollection(MIDWEEK_COLLECTION)
 
     suspend fun save(schedule: MidweekMeetingSchedule): MidweekMeetingSchedule {
-        val id = schedule.id.ifBlank { firestore.collection(MIDWEEK_COLLECTION).document().id }
+        val id = schedule.id.ifBlank { remote.newId(MIDWEEK_COLLECTION) }
         val withId = schedule.copy(id = id)
         offline.save(MIDWEEK_COLLECTION, id, withId)
         return withId
     }
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, MIDWEEK_COLLECTION, MidweekMeetingSchedule::class.java) { it.id }
+        remote.mirror(MIDWEEK_COLLECTION, MidweekMeetingSchedule::class) { it.id }
 }
 
 private const val PUBLIC_TALK_COLLECTION = "publicTalkSchedules"
@@ -36,13 +33,12 @@ private const val PUBLIC_TALK_COLLECTION = "publicTalkSchedules"
  * half. */
 class PublicTalkScheduleRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<PublicTalkScheduleRow>> = offline.observeCollection(PUBLIC_TALK_COLLECTION)
 
     suspend fun save(row: PublicTalkScheduleRow): PublicTalkScheduleRow {
-        val id = row.id.ifBlank { firestore.collection(PUBLIC_TALK_COLLECTION).document().id }
+        val id = row.id.ifBlank { remote.newId(PUBLIC_TALK_COLLECTION) }
         val withId = row.copy(id = id)
         offline.save(PUBLIC_TALK_COLLECTION, id, withId)
         return withId
@@ -51,7 +47,7 @@ class PublicTalkScheduleRepository(
     suspend fun delete(rowId: String) = offline.delete(PUBLIC_TALK_COLLECTION, rowId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, PUBLIC_TALK_COLLECTION, PublicTalkScheduleRow::class.java) { it.id }
+        remote.mirror(PUBLIC_TALK_COLLECTION, PublicTalkScheduleRow::class) { it.id }
 }
 
 private const val CART_ASSIGNMENT_COLLECTION = "cartAssignments"
@@ -63,13 +59,12 @@ private const val CART_ASSIGNMENT_COLLECTION = "cartAssignments"
  * here, for both of these row types. */
 class CartAssignmentRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<CartAssignmentRow>> = offline.observeCollection(CART_ASSIGNMENT_COLLECTION)
 
     suspend fun save(row: CartAssignmentRow): CartAssignmentRow {
-        val id = row.id.ifBlank { firestore.collection(CART_ASSIGNMENT_COLLECTION).document().id }
+        val id = row.id.ifBlank { remote.newId(CART_ASSIGNMENT_COLLECTION) }
         val withId = row.copy(id = id)
         offline.save(CART_ASSIGNMENT_COLLECTION, id, withId)
         return withId
@@ -78,5 +73,5 @@ class CartAssignmentRepository(
     suspend fun delete(rowId: String) = offline.delete(CART_ASSIGNMENT_COLLECTION, rowId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, CART_ASSIGNMENT_COLLECTION, CartAssignmentRow::class.java) { it.id }
+        remote.mirror(CART_ASSIGNMENT_COLLECTION, CartAssignmentRow::class) { it.id }
 }

@@ -105,4 +105,7 @@ work to a first iOS TestFlight build, longer to match every screen.
 * **Phase 6a (done):** `OfflineFirestoreRepository` (the cache read/write path every repository uses) moved to `shared/commonMain` on `DocJson` instead of Gson;
   platform bits split out (`WriteQueuedListener`, Android-only `saveNow`). Malformed cached rows are skipped, not fatal.
 * **Fix (found on device):** models must use `@field:DocumentId` / `@field:PropertyName` — plain `@DocumentId` on a common-code constructor property attaches to the *parameter*, so Firestore left ids blank (login built `@gopreach.internal`). Startup also purges blank-id cache rows and queued writes.
-* **Next:** get the Hostinger API live, test the switch on the phone; then split repositories into common CRUD + Android-only Firestore listeners, and move them (and ViewModels/UI) to common.
+* **Phase 7a (done):** `RemoteCollections` interface (new ids, live mirror, one-shot pull; Firestore impl on Android). 21 pure repositories moved to `shared/commonMain`
+  (Schedule, Congregation, InterestedPerson, Announcement-free set, PlannerGoals, Meeting, ... see `shared/.../data/repository`), plus `NaturalOrder`. Regression test for the document-id annotation added.
+  Still in the app (Android-only deps): Person/RoleAssignment/MonthlyReport/SharedLocation (`saveNow`), Announcement/AppSettings/GroupChat (Storage + Uri), TerritoryDrawing (sync status), PlannerDay (needs MonthlyReport), Auth, Visit, MapPin, CreditHour, Backup, RecycleBin, TerritoryAssignment.
+* **Next:** get the Hostinger API live, test the switch on the phone; then batch 2 of repositories (abstract `saveNow`, sync status, Storage), then ViewModels/UI.

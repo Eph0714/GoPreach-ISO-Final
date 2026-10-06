@@ -2,9 +2,7 @@ package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.UserAccessGrant
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -19,8 +17,7 @@ private const val COLLECTION = "userAccessGrants"
  */
 class UserAccessGrantRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<UserAccessGrant>> = offline.observeCollection(COLLECTION)
 
@@ -37,5 +34,5 @@ class UserAccessGrantRepository(
     suspend fun delete(personId: String) = offline.delete(COLLECTION, personId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, UserAccessGrant::class.java) { it.personId }
+        remote.mirror(COLLECTION, UserAccessGrant::class) { it.personId }
 }

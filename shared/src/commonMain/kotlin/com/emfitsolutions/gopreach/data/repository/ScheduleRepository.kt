@@ -2,9 +2,7 @@ package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.Schedule
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 
 private const val COLLECTION = "schedules"
@@ -13,13 +11,12 @@ private const val COLLECTION = "schedules"
  * [Schedule] rows distinguished by [com.emfitsolutions.gopreach.data.model.ScheduleKind]. */
 class ScheduleRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<Schedule>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(schedule: Schedule): Schedule {
-        val id = schedule.id.ifBlank { firestore.collection(COLLECTION).document().id }
+        val id = schedule.id.ifBlank { remote.newId(COLLECTION) }
         val withId = schedule.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId
@@ -28,5 +25,5 @@ class ScheduleRepository(
     suspend fun delete(scheduleId: String) = offline.delete(COLLECTION, scheduleId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, Schedule::class.java) { it.id }
+        remote.mirror(COLLECTION, Schedule::class) { it.id }
 }

@@ -2,10 +2,7 @@ package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.BibleTextRecord
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.data.sync.pullFirestoreCollectionOnce
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -20,15 +17,14 @@ private const val COLLECTION = "bibleTextRecords"
  * ownership checks on the backend"). */
 class BibleTextRecordRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<BibleTextRecord>> =
         offline.observeCollection<BibleTextRecord>(COLLECTION)
             .map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
 
     suspend fun save(record: BibleTextRecord): BibleTextRecord {
-        val id = record.id.ifBlank { firestore.collection(COLLECTION).document().id }
+        val id = record.id.ifBlank { remote.newId(COLLECTION) }
         val withId = record.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId
@@ -46,13 +42,7 @@ class BibleTextRecordRepository(
      * every time. Scoping the query itself to just this Publisher's own
      * records is what actually makes the existing rule satisfiable. */
     fun startRemoteSync(publisherPersonId: String): Flow<Unit> =
-        mirrorFirestoreCollection(
-            firestore, offline, appScope, COLLECTION, BibleTextRecord::class.java,
-            query = firestore.collection(COLLECTION).whereEqualTo("publisherPersonId", publisherPersonId),
-        ) { it.id }
+        remote.mirror(COLLECTION, BibleTextRecord::class, equalTo = "publisherPersonId" to publisherPersonId) { it.id }
 
-    suspend fun pullOnce(publisherPersonId: String) = pullFirestoreCollectionOnce(
-        firestore, offline, COLLECTION, BibleTextRecord::class.java,
-        query = firestore.collection(COLLECTION).whereEqualTo("publisherPersonId", publisherPersonId),
-    ) { it.id }
+    suspend fun pullOnce(publisherPersonId: String) = remote.pullOnce(COLLECTION, BibleTextRecord::class, equalTo = "publisherPersonId" to publisherPersonId) { it.id }
 }

@@ -2,10 +2,8 @@ package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.InterestedPerson
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.data.sync.pullFirestoreCollectionOnce
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.platform.nowMillis
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 
 private const val COLLECTION = "interestedPeople"
@@ -16,14 +14,13 @@ private const val COLLECTION = "interestedPeople"
  * repository alongside the Interested People CRUD screens in Phase 5. */
 class InterestedPersonRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<InterestedPerson>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(person: InterestedPerson): InterestedPerson {
-        val id = person.id.ifBlank { firestore.collection(COLLECTION).document().id }
-        val withId = person.copy(id = id, updatedAt = System.currentTimeMillis())
+        val id = person.id.ifBlank { remote.newId(COLLECTION) }
+        val withId = person.copy(id = id, updatedAt = nowMillis())
         offline.save(COLLECTION, id, withId)
         return withId
     }
@@ -31,7 +28,7 @@ class InterestedPersonRepository(
     suspend fun delete(personId: String) = offline.delete(COLLECTION, personId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, InterestedPerson::class.java) { it.id }
+        remote.mirror(COLLECTION, InterestedPerson::class) { it.id }
 
-    suspend fun pullOnce() = pullFirestoreCollectionOnce(firestore, offline, COLLECTION, InterestedPerson::class.java) { it.id }
+    suspend fun pullOnce() = remote.pullOnce(COLLECTION, InterestedPerson::class) { it.id }
 }

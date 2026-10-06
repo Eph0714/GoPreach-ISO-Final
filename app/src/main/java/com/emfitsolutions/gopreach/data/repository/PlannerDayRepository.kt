@@ -2,10 +2,8 @@ package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.PlannerDay
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.data.sync.pullFirestoreCollectionOnce
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.platform.nowMillis
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -17,9 +15,8 @@ private const val COLLECTION = "plannerDays"
  * highlighting. */
 class PlannerDayRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
+    private val remote: RemoteCollections,
     private val monthlyReportRepository: MonthlyReportRepository,
-    private val appScope: CoroutineScope,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<PlannerDay>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
@@ -36,7 +33,7 @@ class PlannerDayRepository(
 
     suspend fun save(day: PlannerDay): PlannerDay {
         val id = day.id.ifBlank { PlannerDay.idFor(day.publisherPersonId, day.dayStart) }
-        val withId = day.copy(id = id, updatedAt = System.currentTimeMillis())
+        val withId = day.copy(id = id, updatedAt = nowMillis())
         offline.save(COLLECTION, id, withId)
         return withId
     }
@@ -57,7 +54,7 @@ class PlannerDayRepository(
             id = PlannerDay.idFor(publisherPersonId, alignedDayStart),
             publisherPersonId = publisherPersonId,
             dayStart = alignedDayStart,
-            createdAt = System.currentTimeMillis(),
+            createdAt = nowMillis(),
         )
         save(base.copy(totalMinutes = newTotal))
     }
@@ -71,15 +68,9 @@ class PlannerDayRepository(
      * every Publisher, on every device, every time — not a per-device bug,
      * a query/rule mismatch that was silently breaking this for everyone. */
     fun startRemoteSync(publisherPersonId: String): Flow<Unit> =
-        mirrorFirestoreCollection(
-            firestore, offline, appScope, COLLECTION, PlannerDay::class.java,
-            query = firestore.collection(COLLECTION).whereEqualTo("publisherPersonId", publisherPersonId),
-        ) { it.id }
+        remote.mirror(COLLECTION, PlannerDay::class, equalTo = "publisherPersonId" to publisherPersonId) { it.id }
 
     /** See [pullFirestoreCollectionOnce]'s doc comment — a one-shot fallback
      * for a device whose live listener can't sustain a connection. */
-    suspend fun pullOnce(publisherPersonId: String) = pullFirestoreCollectionOnce(
-        firestore, offline, COLLECTION, PlannerDay::class.java,
-        query = firestore.collection(COLLECTION).whereEqualTo("publisherPersonId", publisherPersonId),
-    ) { it.id }
+    suspend fun pullOnce(publisherPersonId: String) = remote.pullOnce(COLLECTION, PlannerDay::class, equalTo = "publisherPersonId" to publisherPersonId) { it.id }
 }

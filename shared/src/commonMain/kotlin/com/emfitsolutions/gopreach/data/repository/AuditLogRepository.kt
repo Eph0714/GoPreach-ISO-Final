@@ -2,9 +2,8 @@ package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.AuditLogEntry
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.platform.nowMillis
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 
 private const val COLLECTION = "auditLog"
@@ -23,8 +22,7 @@ private const val COLLECTION = "auditLog"
  * activity up, not about hiding what other admins have already logged. */
 class AuditLogRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<AuditLogEntry>> = offline.observeCollection(COLLECTION)
 
@@ -36,7 +34,7 @@ class AuditLogRepository(
         congregationId: String? = null,
         details: String? = null,
     ) {
-        val id = firestore.collection(COLLECTION).document().id
+        val id = remote.newId(COLLECTION)
         offline.saveLocalOnly(
             COLLECTION,
             id,
@@ -47,7 +45,7 @@ class AuditLogRepository(
                 targetType = targetType,
                 targetId = targetId,
                 congregationId = congregationId,
-                timestamp = System.currentTimeMillis(),
+                timestamp = nowMillis(),
                 details = details,
             ),
         )
@@ -67,5 +65,5 @@ class AuditLogRepository(
     }
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, AuditLogEntry::class.java) { it.id }
+        remote.mirror(COLLECTION, AuditLogEntry::class) { it.id }
 }

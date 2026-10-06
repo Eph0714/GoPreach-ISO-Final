@@ -2,9 +2,7 @@ package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.PreachingTimeRecord
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -18,8 +16,7 @@ private const val COLLECTION = "preachingTimeRecords"
  * [VisitRepository]. */
 class PreachingTimeRecordRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<PreachingTimeRecord>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
@@ -29,7 +26,7 @@ class PreachingTimeRecordRepository(
     fun observeAll(): Flow<List<PreachingTimeRecord>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(record: PreachingTimeRecord): PreachingTimeRecord {
-        val id = record.id.ifBlank { firestore.collection(COLLECTION).document().id }
+        val id = record.id.ifBlank { remote.newId(COLLECTION) }
         val withId = record.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId
@@ -42,5 +39,5 @@ class PreachingTimeRecordRepository(
     suspend fun permanentlyDelete(recordId: String) = offline.delete(COLLECTION, recordId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, PreachingTimeRecord::class.java) { it.id }
+        remote.mirror(COLLECTION, PreachingTimeRecord::class) { it.id }
 }

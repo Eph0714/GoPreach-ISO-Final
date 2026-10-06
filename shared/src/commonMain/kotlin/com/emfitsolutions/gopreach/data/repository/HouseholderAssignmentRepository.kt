@@ -2,9 +2,7 @@ package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.HouseholderAssignment
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 
 private const val COLLECTION = "houseHolderAssignments"
@@ -16,13 +14,12 @@ private const val COLLECTION = "houseHolderAssignments"
  * device created it. */
 class HouseholderAssignmentRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<HouseholderAssignment>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(assignment: HouseholderAssignment): HouseholderAssignment {
-        val id = assignment.id.ifBlank { firestore.collection(COLLECTION).document().id }
+        val id = assignment.id.ifBlank { remote.newId(COLLECTION) }
         val withId = assignment.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId
@@ -36,5 +33,5 @@ class HouseholderAssignmentRepository(
     }
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, HouseholderAssignment::class.java) { it.id }
+        remote.mirror(COLLECTION, HouseholderAssignment::class) { it.id }
 }

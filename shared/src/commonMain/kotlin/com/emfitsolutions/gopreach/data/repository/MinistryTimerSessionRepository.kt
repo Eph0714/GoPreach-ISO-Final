@@ -3,10 +3,7 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.model.MinistryTimerSession
 import com.emfitsolutions.gopreach.data.model.TimerSessionStatus
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.emfitsolutions.gopreach.data.sync.pullFirestoreCollectionOnce
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -16,8 +13,7 @@ private const val COLLECTION = "ministryTimerSessions"
  * comment for how this survives navigation without a foreground service. */
 class MinistryTimerSessionRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<MinistryTimerSession>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
@@ -35,7 +31,7 @@ class MinistryTimerSessionRepository(
     fun observeAll(): Flow<List<MinistryTimerSession>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(session: MinistryTimerSession): MinistryTimerSession {
-        val id = session.id.ifBlank { firestore.collection(COLLECTION).document().id }
+        val id = session.id.ifBlank { remote.newId(COLLECTION) }
         val withId = session.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId
@@ -44,13 +40,7 @@ class MinistryTimerSessionRepository(
     suspend fun delete(sessionId: String) = offline.delete(COLLECTION, sessionId)
 
     fun startRemoteSync(publisherPersonId: String): Flow<Unit> =
-        mirrorFirestoreCollection(
-            firestore, offline, appScope, COLLECTION, MinistryTimerSession::class.java,
-            query = firestore.collection(COLLECTION).whereEqualTo("publisherPersonId", publisherPersonId),
-        ) { it.id }
+        remote.mirror(COLLECTION, MinistryTimerSession::class, equalTo = "publisherPersonId" to publisherPersonId) { it.id }
 
-    suspend fun pullOnce(publisherPersonId: String) = pullFirestoreCollectionOnce(
-        firestore, offline, COLLECTION, MinistryTimerSession::class.java,
-        query = firestore.collection(COLLECTION).whereEqualTo("publisherPersonId", publisherPersonId),
-    ) { it.id }
+    suspend fun pullOnce(publisherPersonId: String) = remote.pullOnce(COLLECTION, MinistryTimerSession::class, equalTo = "publisherPersonId" to publisherPersonId) { it.id }
 }

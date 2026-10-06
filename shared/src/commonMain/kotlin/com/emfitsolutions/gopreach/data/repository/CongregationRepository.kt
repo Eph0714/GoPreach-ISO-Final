@@ -5,9 +5,7 @@ import com.emfitsolutions.gopreach.data.model.ElderTitleEntity
 import com.emfitsolutions.gopreach.data.model.Group
 import com.emfitsolutions.gopreach.data.model.Territory
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -18,8 +16,7 @@ import kotlinx.coroutines.flow.map
  */
 class CongregationRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     private val collection = "congregations"
 
@@ -29,7 +26,7 @@ class CongregationRepository(
         observeAll().first().none { it.code.equals(code, ignoreCase = true) && it.id != excludingId }
 
     suspend fun save(congregation: Congregation): Congregation {
-        val id = congregation.id.ifBlank { firestore.collection(collection).document().id }
+        val id = congregation.id.ifBlank { remote.newId(collection) }
         val withId = congregation.copy(id = id)
         offline.save(collection, id, withId)
         return withId
@@ -38,14 +35,13 @@ class CongregationRepository(
     suspend fun delete(congregationId: String) = offline.delete(collection, congregationId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, collection, Congregation::class.java) { it.id }
+        remote.mirror(collection, Congregation::class) { it.id }
 }
 
 /** Groups within a congregation (spec §3: "CRUD Groups + assign 1 Elder"). */
 class GroupRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     private val collection = "groups"
 
@@ -53,7 +49,7 @@ class GroupRepository(
     fun observeAll(): Flow<List<Group>> = offline.observeCollection<Group>(collection).map { list -> list.sortedWith(com.emfitsolutions.gopreach.domain.GroupNameOrder) }
 
     suspend fun save(group: Group): Group {
-        val id = group.id.ifBlank { firestore.collection(collection).document().id }
+        val id = group.id.ifBlank { remote.newId(collection) }
         val withId = group.copy(id = id)
         offline.save(collection, id, withId)
         return withId
@@ -62,14 +58,13 @@ class GroupRepository(
     suspend fun delete(groupId: String) = offline.delete(collection, groupId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, collection, Group::class.java) { it.id }
+        remote.mirror(collection, Group::class) { it.id }
 }
 
 /** Regular Elder "specific title" lookup table (spec §3), full CRUD for admins. */
 class ElderTitleRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     private val collection = "elderTitles"
 
@@ -79,7 +74,7 @@ class ElderTitleRepository(
     fun observeAll(): Flow<List<ElderTitleEntity>> = offline.observeCollection(collection)
 
     suspend fun save(title: ElderTitleEntity): ElderTitleEntity {
-        val id = title.id.ifBlank { firestore.collection(collection).document().id }
+        val id = title.id.ifBlank { remote.newId(collection) }
         val withId = title.copy(id = id)
         offline.save(collection, id, withId)
         return withId
@@ -88,21 +83,20 @@ class ElderTitleRepository(
     suspend fun delete(titleId: String) = offline.delete(collection, titleId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, collection, ElderTitleEntity::class.java) { it.id }
+        remote.mirror(collection, ElderTitleEntity::class) { it.id }
 }
 
 /** Territory Master File (spec §3, §5.1). */
 class TerritoryRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     private val collection = "territories"
 
     fun observeAll(): Flow<List<Territory>> = offline.observeCollection(collection)
 
     suspend fun save(territory: Territory): Territory {
-        val id = territory.id.ifBlank { firestore.collection(collection).document().id }
+        val id = territory.id.ifBlank { remote.newId(collection) }
         val withId = territory.copy(id = id)
         offline.save(collection, id, withId)
         return withId
@@ -111,5 +105,5 @@ class TerritoryRepository(
     suspend fun delete(territoryId: String) = offline.delete(collection, territoryId)
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, collection, Territory::class.java) { it.id }
+        remote.mirror(collection, Territory::class) { it.id }
 }

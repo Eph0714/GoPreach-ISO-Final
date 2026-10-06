@@ -9,11 +9,10 @@ import com.emfitsolutions.gopreach.data.model.TerritoryDrawing
 import com.emfitsolutions.gopreach.data.model.TerritoryDrawingAudit
 import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
+import com.emfitsolutions.gopreach.platform.nowMillis
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import com.emfitsolutions.gopreach.data.sync.SyncStatusCenter
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
 import com.emfitsolutions.gopreach.domain.map.DrawingGeometry
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -38,11 +37,10 @@ private const val BOUNDS = "territoryBounds"
  */
 class TerritoryDrawingRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
+    private val remote: RemoteCollections,
     private val cacheDao: CacheDao,
     private val syncStatusCenter: SyncStatusCenter,
     private val connectivityObserver: ConnectivityObserver,
-    private val appScope: CoroutineScope,
 ) {
     fun observeAll(): Flow<List<TerritoryDrawing>> = offline.observeCollection(DRAWINGS)
 
@@ -64,11 +62,11 @@ class TerritoryDrawingRepository(
         }.distinctUntilChanged()
 
     /** A fresh id — generated locally by the Firestore SDK, so it works offline. */
-    fun newId(): String = firestore.collection(DRAWINGS).document().id
+    fun newId(): String = remote.newId(DRAWINGS)
 
     /** Saves a brand-new drawing ([TerritoryDrawing.id] may be blank; one is assigned). */
     suspend fun create(drawing: TerritoryDrawing, role: String): TerritoryDrawing {
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         val saved = drawing.copy(
             id = drawing.id.ifBlank { newId() },
             createdAt = now,
@@ -84,7 +82,7 @@ class TerritoryDrawingRepository(
     /** Saves an edit of [old]. The audit action is derived from what actually changed (one row per change). */
     suspend fun update(old: TerritoryDrawing, edited: TerritoryDrawing, editorId: String, editorName: String, role: String): TerritoryDrawing {
         val saved = edited.copy(id = old.id, createdAt = old.createdAt, userId = old.userId, userName = old.userName, userRole = old.userRole,
-            updatedAt = System.currentTimeMillis(), updatedByUserId = editorId, updatedByName = editorName)
+            updatedAt = nowMillis(), updatedByUserId = editorId, updatedByName = editorName)
         offline.save(DRAWINGS, saved.id, saved)
         val moved = old.geometryJson != saved.geometryJson
         val recolored = old.fillColor != saved.fillColor || old.fillOpacity != saved.fillOpacity || old.borderColor != saved.borderColor
@@ -123,7 +121,7 @@ class TerritoryDrawingRepository(
         actorId: String = drawing.userId,
     ) {
         val row = TerritoryDrawingAudit(
-            id = firestore.collection(AUDITS).document().id,
+            id = remote.newId(AUDITS),
             drawingId = drawing.id,
             action = action,
             userId = actorId,
@@ -136,7 +134,7 @@ class TerritoryDrawingRepository(
             fillColor = (updated ?: original)?.let { it.fillColor },
             fillOpacity = (updated ?: original)?.fillOpacity,
             status = (updated ?: original)?.status,
-            at = System.currentTimeMillis(),
+            at = nowMillis(),
             syncInfo = if (connectivityObserver.isOnline()) "SYNCED" else "PENDING",
         )
         offline.save(AUDITS, row.id, row)
@@ -160,16 +158,16 @@ class TerritoryDrawingRepository(
         ) return
         offline.save(
             BOUNDS, territoryId,
-            TerritoryBounds(territoryId, congregationId, groupId, b.minLat, b.maxLat, b.minLng, b.maxLng, System.currentTimeMillis()),
+            TerritoryBounds(territoryId, congregationId, groupId, b.minLat, b.maxLat, b.minLng, b.maxLng, nowMillis()),
         )
     }
 
     // ---- live mirrors ------------------------------------------------------------
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, DRAWINGS, TerritoryDrawing::class.java) { it.id }
+        remote.mirror(DRAWINGS, TerritoryDrawing::class) { it.id }
 
     fun startBoundsRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, BOUNDS, TerritoryBounds::class.java) { it.id }
+        remote.mirror(BOUNDS, TerritoryBounds::class) { it.id }
 }
 

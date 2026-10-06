@@ -1,7 +1,6 @@
 package com.emfitsolutions.gopreach.domain
 
 import com.emfitsolutions.gopreach.data.model.Group
-import java.math.BigInteger
 
 /**
  * Alphabetical order that reads the way people expect: case-insensitive, and numbers inside a name compare by
@@ -19,12 +18,19 @@ object NaturalOrder {
             val x = ca[i]
             val y = cb[i]
             val bothNumbers = x[0].isDigit() && y[0].isDigit()
-            val result = if (bothNumbers) BigInteger(x).compareTo(BigInteger(y)) else x.lowercase().compareTo(y.lowercase())
+            val result = if (bothNumbers) compareNumbers(x, y) else x.lowercase().compareTo(y.lowercase())
             if (result != 0) return result
         }
         if (ca.size != cb.size) return ca.size.compareTo(cb.size)
         // Same letters and numbers: fall back to exact text so the order is stable and total.
         return a.compareTo(b)
+    }
+
+    /** Compares two digit strings by numeric value without a size limit (leading zeros ignored). */
+    private fun compareNumbers(x: String, y: String): Int {
+        val a = x.trimStart('0')
+        val b = y.trimStart('0')
+        return if (a.length != b.length) a.length.compareTo(b.length) else a.compareTo(b)
     }
 
     /** "FS GROUP 10" -> ["FS GROUP ", "10"]: runs of digits and runs of everything else. */

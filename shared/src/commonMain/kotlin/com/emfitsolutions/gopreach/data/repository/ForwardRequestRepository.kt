@@ -2,9 +2,7 @@ package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.ForwardRequest
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
-import com.emfitsolutions.gopreach.data.sync.mirrorFirestoreCollection
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.CoroutineScope
+import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
 
 private const val COLLECTION = "forwardRequests"
@@ -16,13 +14,12 @@ private const val COLLECTION = "forwardRequests"
  * their own device too. */
 class ForwardRequestRepository(
     private val offline: OfflineFirestoreRepository,
-    private val firestore: FirebaseFirestore,
-    private val appScope: CoroutineScope,
+    private val remote: RemoteCollections,
 ) {
     fun observeAll(): Flow<List<ForwardRequest>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(request: ForwardRequest): ForwardRequest {
-        val id = request.id.ifBlank { firestore.collection(COLLECTION).document().id }
+        val id = request.id.ifBlank { remote.newId(COLLECTION) }
         val withId = request.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId
@@ -38,5 +35,5 @@ class ForwardRequestRepository(
     }
 
     fun startRemoteSync(): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, COLLECTION, ForwardRequest::class.java) { it.id }
+        remote.mirror(COLLECTION, ForwardRequest::class) { it.id }
 }
