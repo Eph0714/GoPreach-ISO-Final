@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
+import com.emfitsolutions.gopreach.data.print.escapeHtml
 import android.content.Context
 import com.emfitsolutions.gopreach.data.print.OrientationMode
 import com.emfitsolutions.gopreach.data.print.PrintOptions
@@ -355,7 +356,7 @@ object FieldServiceReportExporter {
     private fun StringBuilder.appendSheet(sheet: FieldServiceReportSheet) {
         val rc = sheet.reportColumns
         val hc = sheet.hourColumns
-        fun e(s: String) = ReportPrinter.escapeHtml(s)
+        fun e(s: String) = escapeHtml(s)
         append("<table class=\"noborder\"><tr><td><b>").append(e(sheet.groupName)).append("</b></td></tr>")
         append("<tr><td>").append(e(sheet.titleLine)).append("</td></tr>")
         append("<tr><td><b>").append(e(sheet.countLine)).append("</b></td></tr>")

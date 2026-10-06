@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -24,13 +25,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.emfitsolutions.gopreach.R
-import com.emfitsolutions.gopreach.data.export.CsvExporter
 import com.emfitsolutions.gopreach.data.model.GroupChatAttachmentType
 import com.emfitsolutions.gopreach.data.model.GroupChatMessage
 import com.emfitsolutions.gopreach.ui.components.FormDialog
@@ -99,7 +98,7 @@ fun SharedDocumentsDialog(groupName: String, messages: List<GroupChatMessage>, o
 
 @Composable
 private fun DocumentRow(message: GroupChatMessage) {
-    val context = LocalContext.current
+    val actions = rememberPlatformActions()
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -119,7 +118,7 @@ private fun DocumentRow(message: GroupChatMessage) {
                 GroupChatAttachmentType.PDF -> "application/pdf"
                 else -> "*/*"
             }
-            CsvExporter.openWithChooser(context, Uri.parse(message.attachmentUrl), mime)
+            actions.openFile(message.attachmentUrl!!, mime)
         }) {
             Icon(Icons.Rounded.Download, contentDescription = stringResource(R.string.chat_download_cd))
         }

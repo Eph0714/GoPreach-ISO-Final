@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.publisherreports
 
+import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import com.emfitsolutions.gopreach.data.model.displayName
@@ -62,12 +63,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.emfitsolutions.gopreach.R
-import com.emfitsolutions.gopreach.data.export.CsvExporter
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.Person
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
 import com.emfitsolutions.gopreach.data.model.ReportStatus
-import com.emfitsolutions.gopreach.data.print.ReportPrinter
 import com.emfitsolutions.gopreach.data.print.ReportTable
 import com.emfitsolutions.gopreach.ui.components.CongregationFilterDropdown
 import com.emfitsolutions.gopreach.ui.components.DateRange
@@ -127,6 +126,7 @@ fun ManagePublisherReportsScreen(
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val actions = rememberPlatformActions()
     var pendingEdit by remember { mutableStateOf<PublisherReportRow?>(null) }
     var pendingDelete by remember { mutableStateOf<PublisherReportRow?>(null) }
     var pendingReturnForCorrection by remember { mutableStateOf<PublisherReportRow?>(null) }
@@ -146,10 +146,10 @@ fun ManagePublisherReportsScreen(
     val csvExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
             try {
-                val wrote = CsvExporter.write(context, uri, reportTable.title, subtitle = null, columns = reportTable.columns, rows = reportTable.rows, totals = reportTable.totals)
+                val wrote = actions.writeCsv(uri.toString(), reportTable)
                 if (wrote) {
                     showToast(exportCsvSuccess)
-                    CsvExporter.openWithChooser(context, uri, "text/csv")
+                    actions.openFile(uri.toString(), "text/csv")
                 } else {
                     showToast(exportFailedWrite)
                 }
@@ -177,7 +177,7 @@ fun ManagePublisherReportsScreen(
                     // there were no rows — a disabled IconButton's icon
                     // renders at reduced alpha, which on this TopAppBar read
                     // as "not there at all." Always enabled now.
-                    IconButton(onClick = { ReportPrinter.print(context, reportTable) }) {
+                    IconButton(onClick = { actions.print(reportTable) }) {
                         Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(R.string.reports_export_pdf_cd))
                     }
                     // "Export as ... excel" — CSV, opens directly in any

@@ -142,7 +142,7 @@ class LocationSharingService : Service() {
             // three-state example ("📍 Location: Updating...") only needs a
             // fix to exist on-device.
             _locationAcquired.value = true
-            val meetsAccuracy = fix.accuracyMeters == null || fix.accuracyMeters <= settings.accuracyRadiusMeters
+            val meetsAccuracy = fix.accuracyMeters == null || fix.accuracyMeters!! <= settings.accuracyRadiusMeters
             if (!meetsAccuracy) return
             val location = SharedLocation(
                 publisherPersonId = publisherPersonId,

@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.territoryassignments
 
+import com.emfitsolutions.gopreach.data.print.escapeHtml
 import androidx.compose.foundation.background
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import com.emfitsolutions.gopreach.data.print.OrientationMode
@@ -282,7 +283,7 @@ private fun buildAllTerritoriesListHtml(
     textColor: Color,
     mutedTextColor: Color,
 ): String = buildString {
-    fun e(s: String) = ReportPrinter.escapeHtml(s)
+    fun e(s: String) = escapeHtml(s)
     append("<html><head><meta charset=\"utf-8\"><style>")
     append("@page{size:landscape;margin:10mm} ")
     append("*{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box} ")

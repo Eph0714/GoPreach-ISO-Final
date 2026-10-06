@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.data.print.escapeHtml
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -215,7 +216,7 @@ private fun SummaryBlock(range: String, accent: Color, metrics: List<GraphMetric
  * the actual ranges) plus a compact summary table, sized for one landscape page.
  */
 fun comparativeGraphHtml(labelA: String, labelB: String, monthsA: List<Long>, monthsB: List<Long>, metrics: List<GraphMetric>, metric: GraphMetric): String {
-    fun e(s: String) = ReportPrinter.escapeHtml(s)
+    fun e(s: String) = escapeHtml(s)
     val shortMonth = SimpleDateFormat("MMM", Locale.getDefault())
     val longest = maxOf(metric.valuesA.size, metric.valuesB.size).coerceAtLeast(1)
     val max = maxOf(metric.valuesA.maxOrNull() ?: 0.0, metric.valuesB.maxOrNull() ?: 0.0).coerceAtLeast(0.0001)

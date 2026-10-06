@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -95,6 +96,7 @@ fun GroupChatScreen(
     viewModel: GroupChatViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
+    val actions = rememberPlatformActions()
     val showToast = rememberActionToast()
     val chatFlow = remember(groupChatId) { viewModel.groupChat(groupChatId) }
     val chat by chatFlow.collectAsStateWithLifecycle(initialValue = null)
@@ -438,6 +440,7 @@ private fun MessageBubble(
                 }
                 if (message.attachmentUrl != null) {
                     val context = LocalContext.current
+                    val actions = rememberPlatformActions()
                     val attachmentFallback = stringResource(R.string.chat_attachment_fallback)
                     if (message.attachmentType == GroupChatAttachmentType.IMAGE) {
                         AsyncImage(
@@ -445,12 +448,12 @@ private fun MessageBubble(
                             contentDescription = null,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxWidth().height(160.dp).padding(top = 4.dp, bottom = 4.dp)
-                                .clickable { com.emfitsolutions.gopreach.data.export.CsvExporter.openWithChooser(context, Uri.parse(message.attachmentUrl), "image/*") },
+                                .clickable { actions.openFile(message.attachmentUrl!!, "image/*") },
                         )
                     } else {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
-                                .clickable { com.emfitsolutions.gopreach.data.export.CsvExporter.openWithChooser(context, Uri.parse(message.attachmentUrl), "*/*") },
+                                .clickable { actions.openFile(message.attachmentUrl!!, "*/*") },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             // A plain "primary" tint here would fight the

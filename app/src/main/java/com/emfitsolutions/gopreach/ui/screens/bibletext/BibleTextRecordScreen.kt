@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.bibletext
 
+import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import android.net.Uri
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -93,7 +94,6 @@ import com.emfitsolutions.gopreach.data.model.BibleTextRecord
 import com.emfitsolutions.gopreach.data.model.BibleTextSubtopic
 import com.emfitsolutions.gopreach.data.model.LEGACY_EVENT_PLACEHOLDER
 import com.emfitsolutions.gopreach.data.model.Person
-import com.emfitsolutions.gopreach.data.print.ReportPrinter
 import com.emfitsolutions.gopreach.data.repository.BibleTextLanguagePreference
 import com.emfitsolutions.gopreach.data.print.ReportTable
 import com.emfitsolutions.gopreach.domain.NwtBibleReferenceData
@@ -197,6 +197,7 @@ private fun EventListScreen(
 ) {
     val showToast = rememberActionToast()
     val context = LocalContext.current
+    val actions = rememberPlatformActions()
     val coroutineScope = rememberCoroutineScope()
 
     var searchText by remember { mutableStateOf("") }
@@ -292,7 +293,7 @@ private fun EventListScreen(
                             DropdownMenuItem(
                                 text = { Text("Print") },
                                 leadingIcon = { Icon(Icons.Rounded.PictureAsPdf, contentDescription = null) },
-                                onClick = { showMoreMenu = false; ReportPrinter.print(context, bibleTextReportTable(filtered)) },
+                                onClick = { showMoreMenu = false; actions.print(bibleTextReportTable(filtered)) },
                             )
                             DropdownMenuItem(
                                 text = { Text("Share") },
@@ -1152,6 +1153,7 @@ private fun BibleTextCard(
     onEnterSelection: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val actions = rememberPlatformActions()
     val showToast = rememberActionToast()
     val bookNumber = NwtBibleReferenceData.book(text.bibleVersionId, text.languageId, text.bibleBookId)?.order
     val jwLocale = NwtBibleReferenceData.language(text.languageId)?.jwLocale
@@ -1364,6 +1366,7 @@ private fun BibleTextRecordDialog(
 ) {
     val version = NwtBibleReferenceData.defaultVersion
     val context = LocalContext.current
+    val actions = rememberPlatformActions()
     // Bible Language — now with a picker so a record can be kept in another
     // language the New World Translation is published in. An existing record
     // starts on whatever language it already had (spec §7: never silently

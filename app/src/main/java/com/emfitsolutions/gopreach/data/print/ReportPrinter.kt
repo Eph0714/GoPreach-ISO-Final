@@ -16,33 +16,6 @@ private const val TAG = "ReportPrinter"
  * any one screen's own data class, so it's reusable across every "make all
  * reports have a print preview" report in the app.
  */
-data class ReportTable(
-    val title: String,
-    val columns: List<String>,
-    val rows: List<List<String>>,
-    /** Rendered as its own small summary block below the table — e.g.
-     * "Total Bible Study" to "12". */
-    val totals: List<Pair<String, String>> = emptyList(),
-    /** Reporting period / congregation, shown under the title ("October 2026 • Solano Tagalog Congregation"). */
-    val subtitle: String? = null,
-    /** Names under signature lines ("Prepared by", "Noted by"); the block is kept together on one page. */
-    val signatureLabels: List<String> = emptyList(),
-    /**
-     * How many records this report covers — taken by each report from the same filtered data it lists (never
-     * deleted records, never anything outside the selected congregation / filters). Shown under the title when
-     * printed or saved as PDF and in [shareText]. Null for a report that is a set of figures rather than a list.
-     */
-    val count: Int? = null,
-    /** What is being counted, e.g. "Total Publishers" or "Total Bible Studies". */
-    val countLabel: String = "Total Records",
-) {
-    /** "Total Publishers: 35", or null when the report has no record count. */
-    val countText: String? get() = count?.let { "$countLabel: $it" }
-
-    /** A concise plain-text version for Send As Text: title, period, count. */
-    fun shareText(): String = listOfNotNull(title, subtitle?.takeIf { it.isNotBlank() }, countText).joinToString("\n")
-}
-
 /**
  * "Make all reports have a print preview" — Android's own [PrintManager] +
  * a throwaway [WebView], no third-party PDF library needed. Every Android

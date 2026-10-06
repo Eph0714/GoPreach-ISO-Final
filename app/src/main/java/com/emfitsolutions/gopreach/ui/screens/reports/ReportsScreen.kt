@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
+import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -45,7 +46,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
@@ -53,11 +53,9 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.R
-import com.emfitsolutions.gopreach.data.export.CsvExporter
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.Group
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
-import com.emfitsolutions.gopreach.data.print.ReportPrinter
 import com.emfitsolutions.gopreach.data.print.ReportTable
 import com.emfitsolutions.gopreach.ui.components.DateRange
 import com.emfitsolutions.gopreach.ui.components.DateRangeFilterBar
@@ -152,7 +150,7 @@ fun ReportsScreen(
     // already visible on screen, not a new data exposure, so there's no
     // separate Permission gate the way Add/Edit/Delete have via [readOnly]
     // elsewhere.
-    val context = LocalContext.current
+    val actions = rememberPlatformActions()
     val showToast = rememberActionToast()
     // "Change the Header text of the Publishers Report" — the printed/
     // exported report's own heading names the actual congregation being
@@ -177,10 +175,10 @@ fun ReportsScreen(
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
             try {
-                val wrote = CsvExporter.write(context, uri, reportTable.title, subtitle = null, columns = reportTable.columns, rows = reportTable.rows, totals = reportTable.totals)
+                val wrote = actions.writeCsv(uri.toString(), reportTable)
                 if (wrote) {
                     showToast(exportCsvSuccess)
-                    CsvExporter.openWithChooser(context, uri, "text/csv")
+                    actions.openFile(uri.toString(), "text/csv")
                 } else {
                     showToast(exportFailedWrite)
                 }
@@ -215,7 +213,7 @@ fun ReportsScreen(
                     // Dedicated PDF/Excel icons — distinct from the generic
                     // Print/Share glyphs, so the two actions read at a glance
                     // as "export as PDF" and "export as Excel" specifically.
-                    IconButton(onClick = { ReportPrinter.print(context, reportTable) }) {
+                    IconButton(onClick = { actions.print(reportTable) }) {
                         Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(R.string.reports_export_pdf_cd))
                     }
                     IconButton(onClick = { exportLauncher.launch(exportFileName) }) {

@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
+import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import com.emfitsolutions.gopreach.data.model.displayName
@@ -52,10 +53,7 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import kotlinx.coroutines.flow.collect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.ui.platform.LocalContext
 import com.emfitsolutions.gopreach.R
-import com.emfitsolutions.gopreach.data.export.CsvExporter
-import com.emfitsolutions.gopreach.data.print.ReportPrinter
 import com.emfitsolutions.gopreach.data.print.ReportTable
 import com.emfitsolutions.gopreach.ui.components.DateRangeFilterBar
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
@@ -93,7 +91,7 @@ fun ConsolidatedReportScreen(
     // "Make all reports have a print preview [and] export as pdf or excel,
     // put a heading" — same shared ReportTable/CsvExporter/ReportPrinter
     // shape every other report screen uses.
-    val context = LocalContext.current
+    val actions = rememberPlatformActions()
     val showToast = rememberActionToast()
     val reportTable = remember(uiState.visibleEntries, uiState.dateRange) { consolidatedReportTableFor(uiState) }
     // Bug fix ("I cannot see any PDF or Excel"): see ReportsScreen's matching
@@ -106,10 +104,10 @@ fun ConsolidatedReportScreen(
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
             try {
-                val wrote = CsvExporter.write(context, uri, reportTable.title, subtitle = null, columns = reportTable.columns, rows = reportTable.rows, totals = reportTable.totals)
+                val wrote = actions.writeCsv(uri.toString(), reportTable)
                 if (wrote) {
                     showToast(exportCsvSuccess)
-                    CsvExporter.openWithChooser(context, uri, "text/csv")
+                    actions.openFile(uri.toString(), "text/csv")
                 } else {
                     showToast(exportFailedWrite)
                 }
@@ -134,7 +132,7 @@ fun ConsolidatedReportScreen(
                     // which on this TopAppBar read as "not there at all."
                     // Always enabled now; printing/exporting with nothing to
                     // show just produces a heading-only result.
-                    IconButton(onClick = { ReportPrinter.print(context, reportTable) }) {
+                    IconButton(onClick = { actions.print(reportTable) }) {
                         Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(R.string.reports_export_pdf_cd))
                     }
                     IconButton(onClick = { exportLauncher.launch(exportFileName) }) {

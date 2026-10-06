@@ -31,22 +31,6 @@ import java.net.URL
 import java.util.Locale
 import kotlin.coroutines.resume
 
-data class LatLng(val lat: Double, val lng: Double, val accuracyMeters: Float?)
-
-/** The structured pieces of an on-device [Geocoder] result that matter for
- * "Add a dropdown for City, Municipalities, Town Barangay... automatic if
- * the publisher captures the coordinates" — [barangay] ([android.location
- * .Address.getSubLocality]) is the least reliable of the three (varies by
- * device/geocoder backend, and is frequently null even when the other two
- * resolve fine); callers treat every field as a best-effort suggestion the
- * publisher can still override via [com.emfitsolutions.gopreach.ui.components
- * .PhilippineAddressPicker], never an authoritative fill. */
-data class GeocodedAddress(
-    val barangay: String?,
-    val cityMunicipality: String?,
-    val province: String?,
-)
-
 /**
  * Thin wrapper over Play Services' fused location provider — used by Share
  * Location (spec §6.1) and available for GPS-coordinate capture on Publisher/
@@ -54,14 +38,14 @@ data class GeocodedAddress(
  * threshold + weak-signal fallback are left as a follow-up product decision;
  * this surfaces `accuracyMeters` so a caller can apply one).
  */
-class LocationTracker(
+class AndroidLocationTracker(
     private val context: Context,
-) {
+) : LocationTracker {
     private companion object {
         const val TAG = "LocationTracker"
     }
 
-    fun hasLocationPermission(): Boolean =
+    override fun hasLocationPermission(): Boolean =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
 
@@ -73,11 +57,11 @@ class LocationTracker(
      * returning null on its own can't distinguish "no fix yet" from "no
      * provider is even on," so callers check this first and give the
      * specific message instead of a generic failure. */
-    fun isLocationServicesEnabled(): Boolean =
+    override fun isLocationServicesEnabled(): Boolean =
         LocationManagerCompat.isLocationEnabled(context.getSystemService(Context.LOCATION_SERVICE) as LocationManager)
 
     @SuppressLint("MissingPermission") // caller checks hasLocationPermission() first
-    suspend fun getCurrentLocation(): LatLng? {
+    override suspend fun getCurrentLocation(): LatLng? {
         if (!hasLocationPermission()) return null
         val client = LocationServices.getFusedLocationProviderClient(context)
         // PRIORITY_HIGH_ACCURACY, not BALANCED_POWER_ACCURACY — the latter
@@ -103,7 +87,7 @@ class LocationTracker(
      * so sharing can visibly turn on immediately, then upgrades to a fresh
      * [getCurrentLocation] fix on its very next cycle regardless. */
     @SuppressLint("MissingPermission") // caller checks hasLocationPermission() first
-    suspend fun getLastKnownLocation(): LatLng? {
+    override suspend fun getLastKnownLocation(): LatLng? {
         if (!hasLocationPermission()) return null
         val client = LocationServices.getFusedLocationProviderClient(context)
         val location = client.lastLocation.await() ?: return null
@@ -131,7 +115,7 @@ class LocationTracker(
      * the same reason [getCurrentLocation] uses it — see that function's own
      * doc comment. */
     @SuppressLint("MissingPermission") // caller checks hasLocationPermission() first
-    fun requestLocationUpdatesFlow(intervalMillis: Long = 15_000L, minUpdateIntervalMillis: Long = 8_000L): Flow<LatLng> = callbackFlow {
+    override fun requestLocationUpdatesFlow(intervalMillis: Long, minUpdateIntervalMillis: Long): Flow<LatLng> = callbackFlow {
         if (!hasLocationPermission()) {
             close()
             return@callbackFlow
@@ -167,7 +151,7 @@ class LocationTracker(
      * failure (no network, no geocoder backend on this device, nothing
      * found) — callers show the coordinates alone in that case rather than
      * blocking on an address that may never resolve. */
-    suspend fun reverseGeocode(lat: Double, lng: Double): String? = withContext(Dispatchers.IO) {
+    override suspend fun reverseGeocode(lat: Double, lng: Double): String? = withContext(Dispatchers.IO) {
         if (!Geocoder.isPresent()) return@withContext null
         runCatching {
             val geocoder = Geocoder(context, Locale.getDefault())
@@ -192,7 +176,7 @@ class LocationTracker(
      * line. Returns null (not a [GeocodedAddress] with all-null fields) if
      * the geocoder has nothing at all, so callers can tell "no match" apart
      * from "matched, but couldn't identify any of the three levels." */
-    suspend fun reverseGeocodeAddress(lat: Double, lng: Double): GeocodedAddress? {
+    override suspend fun reverseGeocodeAddress(lat: Double, lng: Double): GeocodedAddress? {
         val onDevice = reverseGeocodeOnDevice(lat, lng)
         Log.d(TAG, "on-device geocoder -> $onDevice")
         // Phones without Google's geocoder backend (e.g. Huawei devices
@@ -278,7 +262,7 @@ class LocationTracker(
      * any failure (no network, no geocoder backend on this device, nothing
      * found for that text) — the caller falls back to its own "couldn't find
      * that" error rather than assuming this always resolves. */
-    suspend fun geocodeAddress(query: String): LatLng? = withContext(Dispatchers.IO) {
+    override suspend fun geocodeAddress(query: String): LatLng? = withContext(Dispatchers.IO) {
         if (!Geocoder.isPresent()) return@withContext null
         runCatching {
             val geocoder = Geocoder(context, Locale.getDefault())

@@ -7,38 +7,28 @@ import java.util.Date
 import java.util.Locale
 
 /** Paper sizes GoPreach users print on. The system print dialog (which doubles as the print preview) can still change it per print. */
-enum class PaperSize(val label: String, private val media: PrintAttributes.MediaSize) {
-    A4("A4", PrintAttributes.MediaSize.ISO_A4),
-    LETTER("Letter (8.5 x 11 in)", PrintAttributes.MediaSize.NA_LETTER),
-    LEGAL("Legal (8.5 x 14 in)", PrintAttributes.MediaSize.NA_LEGAL);
-
-    fun oriented(landscape: Boolean): PrintAttributes.MediaSize = if (landscape) media.asLandscape() else media.asPortrait()
-
-    companion object {
-        /** Letter where Letter is the norm (the Philippines, US, Canada, Mexico), A4 elsewhere. */
-        fun defaultFor(locale: Locale): PaperSize = when (locale.country) {
-            "PH", "US", "CA", "MX" -> LETTER
-            else -> A4
-        }
+/** Android's media size for a paper size and orientation. */
+fun PaperSize.mediaSize(landscape: Boolean): PrintAttributes.MediaSize {
+    val media = when (this) {
+        PaperSize.A4 -> PrintAttributes.MediaSize.ISO_A4
+        PaperSize.LETTER -> PrintAttributes.MediaSize.NA_LETTER
+        PaperSize.LEGAL -> PrintAttributes.MediaSize.NA_LEGAL
     }
+    return if (landscape) media.asLandscape() else media.asPortrait()
 }
 
-enum class OrientationMode(val label: String) {
-    AUTO("Automatic (best fit)"), PORTRAIT("Portrait"), LANDSCAPE("Landscape")
+/** Letter where Letter is the norm (the Philippines, US, Canada, Mexico), A4 elsewhere. */
+fun defaultPaperSizeFor(locale: Locale): PaperSize = when (locale.country) {
+    "PH", "US", "CA", "MX" -> PaperSize.LETTER
+    else -> PaperSize.A4
 }
-
-/** A report's own hints to the layout; everything else comes from the user's print settings. */
-data class PrintOptions(
-    /** Force an orientation for this report (e.g. a wide sheet); null follows the user's setting / the content. */
-    val orientation: OrientationMode? = null,
-)
 
 /** The user's saved print settings (Settings → Printing). Per device, like the theme. */
 class PrintPreferences(context: Context) {
     private val prefs = context.getSharedPreferences("gopreach_settings", Context.MODE_PRIVATE)
 
     var paperSize: PaperSize
-        get() = runCatching { PaperSize.valueOf(prefs.getString(KEY_PAPER, null)!!) }.getOrDefault(PaperSize.defaultFor(Locale.getDefault()))
+        get() = runCatching { PaperSize.valueOf(prefs.getString(KEY_PAPER, null)!!) }.getOrDefault(defaultPaperSizeFor(Locale.getDefault()))
         set(value) { prefs.edit().putString(KEY_PAPER, value.name).apply() }
 
     var orientation: OrientationMode
@@ -70,7 +60,7 @@ object PrintLayout {
 
     fun attributes(context: Context, landscape: Boolean): PrintAttributes =
         PrintAttributes.Builder()
-            .setMediaSize(PrintPreferences(context).paperSize.oriented(landscape))
+            .setMediaSize(PrintPreferences(context).paperSize.mediaSize(landscape))
             .setMinMargins(PrintAttributes.Margins(MARGIN_MILS, MARGIN_MILS, MARGIN_MILS, MARGIN_MILS))
             .build()
 

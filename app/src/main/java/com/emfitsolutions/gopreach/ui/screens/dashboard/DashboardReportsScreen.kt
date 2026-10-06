@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.dashboard
 
+import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -47,15 +48,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.R
-import com.emfitsolutions.gopreach.data.export.CsvExporter
-import com.emfitsolutions.gopreach.data.print.ReportPrinter
 import com.emfitsolutions.gopreach.data.print.ReportTable
 import com.emfitsolutions.gopreach.ui.components.DateRange
 import com.emfitsolutions.gopreach.ui.components.DateRangeFilterBar
@@ -195,7 +193,7 @@ fun DashboardStatsContent(
     // called on every composition of this composable, not only while a
     // dialog happens to be open; [pendingExportTable] is what the launcher's
     // callback actually writes, set right before each `launch()` call.
-    val context = LocalContext.current
+    val actions = rememberPlatformActions()
     val showToast = rememberActionToast()
     var pendingExportTable by remember { mutableStateOf<ReportTable?>(null) }
     val exportCsvSuccess = stringResource(R.string.reports_export_csv_success)
@@ -206,10 +204,10 @@ fun DashboardStatsContent(
         val table = pendingExportTable
         if (uri != null && table != null) {
             try {
-                val wrote = CsvExporter.write(context, uri, table.title, subtitle = null, columns = table.columns, rows = table.rows, totals = table.totals)
+                val wrote = actions.writeCsv(uri.toString(), table)
                 if (wrote) {
                     showToast(exportCsvSuccess)
-                    CsvExporter.openWithChooser(context, uri, "text/csv")
+                    actions.openFile(uri.toString(), "text/csv")
                 } else {
                     showToast(exportFailedWrite)
                 }
@@ -421,7 +419,7 @@ fun DashboardStatsContent(
                         // when there's nothing in this particular list to
                         // export (e.g. a figure with zero members).
                         IconButton(
-                            onClick = { ReportPrinter.print(context, memberReportTable) },
+                            onClick = { actions.print(memberReportTable) },
                             enabled = matchingMembers.isNotEmpty(),
                         ) {
                             Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(R.string.reports_export_pdf_cd))
@@ -464,7 +462,7 @@ fun DashboardReportsScreen(
     viewModel: DashboardStatsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val actions = rememberPlatformActions()
     val showToast = rememberActionToast()
 
     // Same [displayed] derivation [DashboardStatsContent] uses internally —
@@ -487,10 +485,10 @@ fun DashboardReportsScreen(
         val table = reportTable
         if (uri != null && table != null) {
             try {
-                val wrote = CsvExporter.write(context, uri, table.title, subtitle = null, columns = table.columns, rows = table.rows, totals = table.totals)
+                val wrote = actions.writeCsv(uri.toString(), table)
                 if (wrote) {
                     showToast(exportCsvSuccess)
-                    CsvExporter.openWithChooser(context, uri, "text/csv")
+                    actions.openFile(uri.toString(), "text/csv")
                 } else {
                     showToast(exportFailedWrite)
                 }
@@ -521,7 +519,7 @@ fun DashboardReportsScreen(
                         // plain-CSV-for-Excel pair [ReportsScreen] already
                         // uses — no new export mechanism to maintain.
                         IconButton(
-                            onClick = { reportTable?.let { ReportPrinter.print(context, it) } },
+                            onClick = { reportTable?.let { actions.print(it) } },
                             enabled = reportTable != null,
                         ) {
                             Icon(Icons.Rounded.PictureAsPdf, contentDescription = stringResource(R.string.reports_export_pdf_cd))

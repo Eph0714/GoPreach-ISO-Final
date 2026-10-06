@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
+import com.emfitsolutions.gopreach.data.print.escapeHtml
+import com.emfitsolutions.gopreach.data.print.escapeHtml
+import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Column
@@ -25,14 +28,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
-import com.emfitsolutions.gopreach.data.print.ReportPrinter
 import com.emfitsolutions.gopreach.ui.components.CongregationFilterDropdown
 import com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt
 import com.emfitsolutions.gopreach.ui.components.rememberCongregationContext
@@ -64,7 +65,7 @@ fun FieldServiceGroupReportScreen(
     onBack: () -> Unit,
     viewModel: FieldServiceGroupReportViewModel = koinViewModel(),
 ) {
-    val context = LocalContext.current
+    val actions = rememberPlatformActions()
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
     // "Add a filter for Congregation" (Super-Admin only) — a real scoped
     // role's own [congregationIds] is already a fixed one-element set, so
@@ -87,7 +88,7 @@ fun FieldServiceGroupReportScreen(
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
-                    IconButton(onClick = { ReportPrinter.printHtml(context, "Field Service Group Report", buildFieldServiceGroupReportHtml(rows, showCongregationHeadings)) }) {
+                    IconButton(onClick = { actions.printHtml("Field Service Group Report", buildFieldServiceGroupReportHtml(rows, showCongregationHeadings)) }) {
                         Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Print / Export as PDF")
                     }
                 },
@@ -148,7 +149,7 @@ fun FieldServiceGroupReportScreen(
  * report can never drift from what's on screen (same discipline every other
  * report's own table-builder function follows in this app). */
 private fun buildFieldServiceGroupReportHtml(rows: List<FieldServiceGroupReportRow>, showCongregationHeadings: Boolean): String = buildString {
-    val e = ReportPrinter::escapeHtml
+    val e = ::escapeHtml
     append("<html><head><meta charset=\"utf-8\"><style>")
     append("body{font-family:sans-serif;font-size:12px;} h2{text-align:center;} ")
     append("h3.congregation{margin-top:18px;border-bottom:1px solid #999;padding-bottom:2px;} ")

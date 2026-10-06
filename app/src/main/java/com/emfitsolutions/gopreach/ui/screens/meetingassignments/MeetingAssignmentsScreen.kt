@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.meetingassignments
 
+import com.emfitsolutions.gopreach.data.print.escapeHtml
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -940,7 +941,7 @@ private fun MidweekSection.printTextColor(): String = when (this) {
  * columns-and-rows shape, so it bypasses that generic path entirely instead
  * of contorting it to fit. */
 private fun buildMidweekPrintHtml(congregationName: String, weekStart: Long, schedule: MidweekMeetingSchedule?): String {
-    fun esc(s: String) = ReportPrinter.escapeHtml(s)
+    fun esc(s: String) = escapeHtml(s)
     var number = 0
     val sectionsHtml = buildString {
         MidweekSection.entries.forEach { section ->

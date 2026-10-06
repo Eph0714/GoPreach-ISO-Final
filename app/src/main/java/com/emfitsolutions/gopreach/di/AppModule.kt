@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.di
 
+import com.emfitsolutions.gopreach.data.location.AndroidLocationTracker
 import com.emfitsolutions.gopreach.data.location.LocationTracker
 import com.emfitsolutions.gopreach.data.repository.AnnouncementRepository
 import com.emfitsolutions.gopreach.data.repository.AnnouncementSeenStore
@@ -231,6 +232,7 @@ val infraModule = module {
     single<RemoteFiles> { FirebaseRemoteFiles(get()) }
     single<KeyValueStores> { AndroidKeyValueStores(get()) }
     single<AuthService> { FirebaseAuthService(get(), get()) }
+    single<LocationTracker> { AndroidLocationTracker(get()) }
     single<WriteQueuedListener> { AndroidWriteQueuedListener(get(), get(), get()) }
 
     // Hostinger backend sync (only used when BackendConfig.enabled)
@@ -247,7 +249,6 @@ val infraModule = module {
 val appModule = module {
 
     // Repositories, services, stores
-    singleOf(::LocationTracker)
     singleOf(::AnnouncementRepository)
     singleOf(::AnnouncementSeenStore)
     singleOf(::AppSettingsRepository)

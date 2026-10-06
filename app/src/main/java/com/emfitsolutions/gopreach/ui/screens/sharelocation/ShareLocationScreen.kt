@@ -378,7 +378,7 @@ fun ShareLocationScreen(
                             onClick = { onOpenTerritoryMap(fix.lat, fix.lng, currentPersonName) },
                         )
                         if (fix.accuracyMeters != null) {
-                            Text("Accuracy: ${fix.accuracyMeters.toInt()} meters", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Accuracy: ${fix.accuracyMeters!!.toInt()} meters", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Text("Only shown to you — not shared.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         OutlinedButton(onClick = { shownCoordinates = null; coordinatesError = null }, modifier = Modifier.fillMaxWidth()) {

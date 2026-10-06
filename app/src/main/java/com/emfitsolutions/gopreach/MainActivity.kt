@@ -78,7 +78,10 @@ class MainActivity : AppCompatActivity() {
             // customColor only matters when that pick is ThemeColorOption.CUSTOM (a
             // color wheel/eyedropper choice).
             val nameOrder by nameOrderPreference.order.collectAsStateWithLifecycle()
-            androidx.compose.runtime.CompositionLocalProvider(com.emfitsolutions.gopreach.ui.components.LocalNameOrder provides nameOrder) {
+            androidx.compose.runtime.CompositionLocalProvider(
+                com.emfitsolutions.gopreach.ui.components.LocalNameOrder provides nameOrder,
+                com.emfitsolutions.gopreach.platform.LocalPlatformActions provides com.emfitsolutions.gopreach.data.print.rememberAndroidPlatformActions(),
+            ) {
             GoPreachTheme(darkTheme = darkTheme, dynamicColor = false, colorOption = colorOption, customColor = customColor) {
                 // enableEdgeToEdge() opts this app out of the system's automatic
                 // windowSoftInputMode="adjustResize" handling — Compose has to react to

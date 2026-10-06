@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.householdervisithistory
 
+import com.emfitsolutions.gopreach.data.print.escapeHtml
+import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -42,17 +44,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.emfitsolutions.gopreach.data.export.CsvExporter
 import com.emfitsolutions.gopreach.data.model.InterestedPerson
 import com.emfitsolutions.gopreach.data.model.PipelineStage
 import com.emfitsolutions.gopreach.data.model.Visit
-import com.emfitsolutions.gopreach.data.print.ReportPrinter
 import com.emfitsolutions.gopreach.data.print.ReportTable
 import com.emfitsolutions.gopreach.ui.components.CongregationFilterDropdown
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
@@ -131,7 +130,7 @@ fun HouseholderVisitHistoryScreen(
     LaunchedEffect(congregationId) { viewModel.restrictTo(congregationId) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val personNames by viewModel.personNames.collectAsStateWithLifecycle()
-    val context = LocalContext.current
+    val actions = rememberPlatformActions()
     val showToast = rememberActionToast()
     var selectedRow by remember { mutableStateOf<HouseholderRow?>(null) }
 
@@ -204,10 +203,10 @@ fun HouseholderVisitHistoryScreen(
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri != null) {
             try {
-                val wrote = CsvExporter.write(context, uri, exportTable.title, subtitle = null, columns = exportTable.columns, rows = exportTable.rows, totals = exportTable.totals)
+                val wrote = actions.writeCsv(uri.toString(), exportTable)
                 if (wrote) {
                     showToast("Exported to Excel (CSV).")
-                    CsvExporter.openWithChooser(context, uri, "text/csv")
+                    actions.openFile(uri.toString(), "text/csv")
                 } else {
                     showToast("Couldn't write the file.")
                 }
@@ -227,7 +226,7 @@ fun HouseholderVisitHistoryScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { ReportPrinter.printHtml(context, "House Holder Visit History", buildHouseholderVisitHistoryPrintHtml(uiState.rows, personNames), PrintOptions(OrientationMode.LANDSCAPE)) },
+                        onClick = { actions.printHtml("House Holder Visit History", buildHouseholderVisitHistoryPrintHtml(uiState.rows, personNames), PrintOptions(OrientationMode.LANDSCAPE)) },
                         enabled = uiState.rows.isNotEmpty(),
                     ) {
                         Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Print / Export as PDF")
@@ -383,7 +382,7 @@ private fun unusedTypeAnchor(person: InterestedPerson) = person
  * building nothing new). */
 private fun buildHouseholderVisitHistoryPrintHtml(rows: List<HouseholderRow>, personNames: Map<String, String>): String {
     val dateFormat = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-    fun esc(text: String) = ReportPrinter.escapeHtml(text)
+    fun esc(text: String) = escapeHtml(text)
     return buildString {
         append("<html><head><meta charset=\"utf-8\"><style>")
         append("body{font-family:sans-serif;font-size:12px;} h2{text-align:center;} ")
