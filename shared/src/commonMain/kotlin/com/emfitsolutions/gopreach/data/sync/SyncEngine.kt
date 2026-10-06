@@ -38,6 +38,8 @@ class SyncEngine(
     private val queueDao: SyncQueueDao,
     private val collections: List<String>? = null,
     private val batchSize: Int = 50,
+    /** Collections whose model keeps the document id in a field other than `id` (e.g. sharedLocations -> publisherPersonId). */
+    private val idFieldByCollection: Map<String, String> = emptyMap(),
 ) {
     suspend fun syncOnce(): SyncReport {
         val up = flushOutbox()
@@ -111,7 +113,7 @@ class SyncEngine(
             CachedDocumentEntity(
                 collectionPath = change.collection,
                 documentId = change.id,
-                payloadJson = DocJson.encodeToString(JsonElement.serializer(), withId(change.data, change.id)),
+                payloadJson = DocJson.encodeToString(JsonElement.serializer(), withId(change.data, change.collection, change.id)),
                 syncState = SyncState.SYNCED.name,
                 updatedAt = nowMillis(),
             ),
@@ -120,8 +122,10 @@ class SyncEngine(
     }
 
     // The server stores a document without its id (like Firestore); the app's models carry it as a field.
-    private fun withId(data: JsonElement, id: String): JsonElement =
-        if (data is JsonObject && "id" !in data) JsonObject(data + ("id" to JsonPrimitive(id))) else data
+    private fun withId(data: JsonElement, collection: String, id: String): JsonElement {
+        val field = idFieldByCollection[collection] ?: "id"
+        return if (data is JsonObject && field !in data) JsonObject(data + (field to JsonPrimitive(id))) else data
+    }
 
     private suspend fun readCursor(): Long =
         cacheDao.get(META_COLLECTION, CURSOR_DOC)?.payloadJson?.toLongOrNull() ?: 0L

@@ -36,6 +36,7 @@ class SyncWorker (
     private val gson: Gson,
     private val syncStatusCenter: SyncStatusCenter,
     private val connectivityObserver: ConnectivityObserver,
+    private val syncEngine: SyncEngine,
     // "Make sync also pull the latest data down" — a device whose live
     // listener can't sustain a connection (see [RemoteSyncCoordinator
     // .retryIfNeeded]'s doc comment for a real one found this way) never
@@ -84,6 +85,16 @@ class SyncWorker (
         )
     }
 
+    /** Hostinger-backend mode: the shared [SyncEngine] uploads the queue and downloads what changed. */
+    private suspend fun doBackendWork(isManual: Boolean): Result {
+        syncStatusCenter.onSyncStarted()
+        val report = try { syncEngine.syncOnce() } finally { syncStatusCenter.onSyncEnded() }
+        val failed = if (report.transportError != null) 1 else 0
+        if (report.transportError == null) syncStatusCenter.onSyncFinished(report.uploaded, report.rejected, isManual)
+        setProgress(workDataOf(KEY_UPLOADED to report.uploaded, KEY_FAILED to failed + report.rejected, KEY_TOTAL to report.uploaded + failed + report.rejected, KEY_FINISHED to true))
+        return if (report.transportError != null) Result.retry() else Result.success()
+    }
+
     override suspend fun doWork(): Result {
         val isManual = inputData.getBoolean(KEY_MANUAL, false)
 
@@ -116,6 +127,8 @@ class SyncWorker (
             setProgress(workDataOf(KEY_UPLOADED to 0, KEY_FAILED to 0, KEY_TOTAL to 0, KEY_FINISHED to true, KEY_SKIPPED_OFFLINE to true))
             return Result.success()
         }
+
+        if (BackendConfig.enabled) return doBackendWork(isManual)
 
         // Runs even when there's nothing local to upload below — this is the
         // "download" half, entirely independent of the pending-queue check

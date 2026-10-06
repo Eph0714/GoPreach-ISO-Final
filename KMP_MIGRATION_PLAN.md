@@ -100,4 +100,6 @@ work to a first iOS TestFlight build, longer to match every screen.
 * **Phase 4a (done):** `SyncApi` + Ktor `HttpSyncApi` (Hostinger push/pull contract) and the platform-independent `SyncEngine`
   (upload outbox, download by cursor; keeps unsent local edits, keeps rejected edits as permanent failures, keeps the queue on network errors)
   in `shared/commonMain` with 9 tests (fake DAOs + Ktor MockEngine). OkHttp engine on Android, Darwin on iOS. Android still uses Firestore.
-* **Next:** Android switch (flag) to run `SyncEngine` instead of Firestore once the backend is live; repositories Gson -> `DocJson`; then move repositories/ViewModels to common.
+* **Phase 5a (done):** Android switch. `gopreach.backendUrl=...` in local.properties makes `SyncWorker` run the shared `SyncEngine` (Hostinger) instead of Firestore and
+  turns off the Firestore listeners; empty (default) = Firestore as before. Per-collection id field handled (`idFieldByCollection`). Not yet tested against a live backend.
+* **Next:** get the Hostinger API live (currently the domain answers 404, no app running), then test the switch on the phone; repositories Gson -> `DocJson`; move repositories/ViewModels/UI to common.

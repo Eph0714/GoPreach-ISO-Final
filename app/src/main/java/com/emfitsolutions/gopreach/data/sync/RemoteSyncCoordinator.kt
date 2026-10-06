@@ -245,6 +245,7 @@ class RemoteSyncCoordinator(
      * network call when the cached token is still valid, and re-attaching an
      * already-healthy listener is harmless. */
     fun retryIfNeeded() {
+        if (BackendConfig.enabled) return
         val user = firebaseAuth.currentUser
         appScope.launch {
             // `true` forces a real refresh rather than trusting whatever's
@@ -261,6 +262,7 @@ class RemoteSyncCoordinator(
     }
 
     fun startAll() {
+        if (BackendConfig.enabled) return // the backend path syncs through SyncEngine, not Firestore listeners
         if (started) return
         started = true
         // Force a fresh token before every collection's very first attempt —

@@ -138,6 +138,13 @@ class SyncEngineTest {
         assertEquals(6L, api.pullSince.last())
     }
 
+    @Test fun usesTheCollectionsOwnIdField() = runTest {
+        val e = SyncEngine(api, cache, queue, idFieldByCollection = mapOf("sharedLocations" to "publisherPersonId"))
+        api.pages += PullPage(listOf(PullChange("sharedLocations", "ana", buildJsonObject { put("lat", 1) }, seq = 1)), cursor = 1)
+        e.pull()
+        assertTrue(cache.get("sharedLocations", "ana")!!.payloadJson.contains("\"publisherPersonId\":\"ana\""))
+    }
+
     @Test fun downloadNeverOverwritesAnUnsentLocalEdit() = runTest {
         queueSet("people", "juan", """{"id":"juan","firstName":"Local"}""")
         api.pages += PullPage(listOf(PullChange("people", "juan", buildJsonObject { put("firstName", "Server") }, seq = 9)), cursor = 9)

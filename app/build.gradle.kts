@@ -21,6 +21,7 @@ val localProperties = Properties().apply {
     if (localPropertiesFile.exists()) localPropertiesFile.inputStream().use { load(it) }
 }
 val tomtomApiKey: String = localProperties.getProperty("tomtomApiKey", "")
+val backendUrl: String = localProperties.getProperty("gopreach.backendUrl", "")
 
 // MapTiler's "Dark" basemap (Territory Assignment's Barangay Boundary map,
 // Night mode) — same per-developer-secret reasoning as the TomTom key above:
@@ -54,6 +55,7 @@ android {
         // Boundary map now renders entirely on free/keyless OpenStreetMap-
         // backed tiles.
         buildConfigField("String", "TOMTOM_API_KEY", "\"$tomtomApiKey\"")
+        buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
         buildConfigField("String", "MAPTILER_API_KEY", "\"$mapTilerApiKey\"")
         buildConfigField("String", "MAPILLARY_TOKEN", "\"$mapillaryToken\"")
     }
@@ -171,6 +173,7 @@ dependencies {
     // Hilt
     implementation(platform("io.insert-koin:koin-bom:4.0.4"))
     implementation("io.insert-koin:koin-android")
+    implementation("io.ktor:ktor-client-okhttp:3.0.3")
     implementation("io.insert-koin:koin-compose")
     implementation("io.insert-koin:koin-compose-viewmodel")
     implementation("io.insert-koin:koin-androidx-workmanager")

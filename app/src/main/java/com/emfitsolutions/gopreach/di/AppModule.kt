@@ -187,6 +187,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.androidx.workmanager.dsl.workerOf
+import com.emfitsolutions.gopreach.data.remote.HttpSyncApi
+import com.emfitsolutions.gopreach.data.remote.SyncApi
+import com.emfitsolutions.gopreach.data.remote.SyncTransportException
+import com.emfitsolutions.gopreach.data.sync.BackendConfig
+import com.emfitsolutions.gopreach.data.sync.SyncEngine
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.okhttp.OkHttp
+import kotlinx.coroutines.tasks.await
 import org.koin.core.module.dsl.singleOf
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
@@ -205,6 +213,16 @@ val infraModule = module {
     single { get<AppDatabase>().syncQueueDao() }
     single { buildPsgcDatabase(get()) }
     single { get<PsgcDatabase>().psgcDao() }
+
+    // Hostinger backend sync (only used when BackendConfig.enabled)
+    single { HttpClient(OkHttp) }
+    single<SyncApi> {
+        val auth = get<FirebaseAuth>()
+        HttpSyncApi(get(), BackendConfig.baseUrl) {
+            auth.currentUser?.getIdToken(false)?.await()?.token ?: throw SyncTransportException("Not signed in")
+        }
+    }
+    single { SyncEngine(get(), get(), get(), idFieldByCollection = BackendConfig.idFieldByCollection) }
 }
 
 val appModule = module {
