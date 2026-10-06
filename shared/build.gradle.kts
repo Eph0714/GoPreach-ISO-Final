@@ -4,6 +4,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
     id("androidx.room")
+    id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.compose")
 }
 
 kotlin {
@@ -19,6 +21,11 @@ kotlin {
         commonMain.dependencies {
             implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
             api("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
+            api(compose.runtime)
+            api(compose.foundation)
+            api(compose.material3)
+            api(compose.ui)
+            api(compose.materialIconsExtended)
             api("androidx.room:room-runtime:2.7.2")
             implementation("androidx.sqlite:sqlite-bundled:2.5.2")
             implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")

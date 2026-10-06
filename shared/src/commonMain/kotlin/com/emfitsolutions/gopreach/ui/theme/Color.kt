@@ -1,7 +1,6 @@
 package com.emfitsolutions.gopreach.ui.theme
 
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 
 // GoPreach brand palette — light theme: Purple + White, per explicit user
 // request ("GoPreach App: Purple Brand Logo and Purple/White Theme"). Hue
@@ -54,22 +53,18 @@ data class ThemeColorSwatch(
  * "For theme color, let the users select from color wheel... eyedrop a
  * color" — a picked seed color has no hand-tuned container/secondary/dark
  * tones the way the six fixed presets above do, so this derives the same
- * six-role shape from just the one seed, via plain HSV math (no new
- * dependency — [android.graphics.Color]'s HSV conversion is a platform API,
- * not a library). [light] is clamped to a value/saturation range that keeps
+ * six-role shape from just the one seed, via plain HSV math (no
+ * platform API). [light] is clamped to a value/saturation range that keeps
  * [Theme.kt]'s hard-coded `onPrimary = Color.White` legible even against a
  * very pale or very saturated pick — the applied color may differ slightly
  * from the exact picked pixel for that reason, same trade-off any accent-
  * color picker with a fixed contrasting label color has to make.
  */
 fun generateSwatch(seed: Color): ThemeColorSwatch {
-    val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(seed.toArgb(), hsv)
-    val hue = hsv[0]
-    val saturation = hsv[1]
+    val (hue, saturation) = hueAndSaturation(seed)
 
     fun tone(sat: Float, value: Float): Color =
-        Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, sat.coerceIn(0f, 1f), value.coerceIn(0f, 1f))))
+        Color.hsv(hue, sat.coerceIn(0f, 1f), value.coerceIn(0f, 1f))
 
     return ThemeColorSwatch(
         // Clamped so white text (Theme.kt's fixed onPrimary) stays readable
@@ -81,4 +76,22 @@ fun generateSwatch(seed: Color): ThemeColorSwatch {
         darkContainer = tone(saturation.coerceAtMost(0.85f), 0.32f),
         secondaryDark = tone(saturation * 0.35f, 0.88f),
     )
+}
+
+/** Hue (0..360) and saturation (0..1) of [c], the same values `android.graphics.Color.colorToHSV` reports. */
+internal fun hueAndSaturation(c: Color): Pair<Float, Float> {
+    val r = c.red
+    val g = c.green
+    val b = c.blue
+    val max = maxOf(r, g, b)
+    val min = minOf(r, g, b)
+    val delta = max - min
+    val saturation = if (max == 0f) 0f else delta / max
+    val hue = when {
+        delta == 0f -> 0f
+        max == r -> 60f * (((g - b) / delta) % 6f)
+        max == g -> 60f * (((b - r) / delta) + 2f)
+        else -> 60f * (((r - g) / delta) + 4f)
+    }
+    return (if (hue < 0f) hue + 360f else hue) to saturation
 }
