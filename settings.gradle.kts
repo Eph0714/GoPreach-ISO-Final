@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "GoPreach"
 include(":app")
+include(":shared")

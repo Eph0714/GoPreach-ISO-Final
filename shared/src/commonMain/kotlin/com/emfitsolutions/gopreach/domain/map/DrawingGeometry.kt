@@ -1,8 +1,14 @@
 package com.emfitsolutions.gopreach.domain.map
 
-import com.google.gson.JsonArray
-import com.google.gson.JsonObject
-import com.google.gson.JsonParser
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.hypot
@@ -38,7 +44,7 @@ object DrawingGeometry {
     // ---- projection ---------------------------------------------------------
 
     private class Proj(refLat: Double) {
-        val kx = M_PER_DEG_LNG * cos(Math.toRadians(refLat))
+        val kx = M_PER_DEG_LNG * cos(refLat * PI / 180.0)
         fun x(p: GeoPoint) = p.lng * kx
         fun y(p: GeoPoint) = p.lat * M_PER_DEG_LAT
     }
@@ -321,41 +327,34 @@ object DrawingGeometry {
         return hypot(px - (ax + t * dx), py - (ay + t * dy))
     }
 
-    // ---- GeoJSON ------------------------------------------------------------
+    // ---- GeoJSON (kotlinx.serialization, so it runs on Android and iOS alike) -----------------------------------
 
     /** GeoJSON `Polygon` string for [ring] (closed, counter-clockwise, `[lng, lat]` order). */
     fun polygonJson(ring: List<GeoPoint>): String {
         val ccw = ensureCounterClockwise(ring)
-        val coords = JsonArray()
-        (ccw + ccw.first()).forEach { coords.add(position(it)) }
-        val outer = JsonArray().apply { add(coords) }
-        return JsonObject().apply {
-            addProperty("type", "Polygon")
-            add("coordinates", outer)
-        }.toString()
+        val coords = JsonArray((ccw + ccw.first()).map(::position))
+        return JsonObject(mapOf("type" to JsonPrimitive("Polygon"), "coordinates" to JsonArray(listOf(coords)))).toString()
     }
 
-    fun pointJson(p: GeoPoint): String = JsonObject().apply {
-        addProperty("type", "Point")
-        add("coordinates", position(p))
-    }.toString()
+    fun pointJson(p: GeoPoint): String =
+        JsonObject(mapOf("type" to JsonPrimitive("Point"), "coordinates" to position(p))).toString()
 
-    private fun position(p: GeoPoint) = JsonArray().apply { add(p.lng); add(p.lat) }
+    private fun position(p: GeoPoint) = JsonArray(listOf(JsonPrimitive(p.lng), JsonPrimitive(p.lat)))
 
     /** The outer ring of a GeoJSON `Polygon` string without its repeated closing point, or null if it isn't one. */
     fun parsePolygon(json: String): List<GeoPoint>? = runCatching {
-        val obj = JsonParser.parseString(json).asJsonObject
-        if (obj.get("type")?.asString != "Polygon") return null
-        val outer = obj.getAsJsonArray("coordinates").first().asJsonArray
-        val ring = outer.map { pos -> pos.asJsonArray.let { GeoPoint(lat = it[1].asDouble, lng = it[0].asDouble) } }
+        val obj = Json.parseToJsonElement(json).jsonObject
+        if (obj["type"]?.jsonPrimitive?.content != "Polygon") return null
+        val outer = obj["coordinates"]!!.jsonArray.first().jsonArray
+        val ring = outer.map { pos -> pos.jsonArray.let { GeoPoint(lat = it[1].jsonPrimitive.double, lng = it[0].jsonPrimitive.double) } }
         (if (ring.size > 1 && ring.first() == ring.last()) ring.dropLast(1) else ring).takeIf { it.size >= 3 }
     }.getOrNull()
 
     fun parsePoint(json: String): GeoPoint? = runCatching {
-        val obj = JsonParser.parseString(json).asJsonObject
-        if (obj.get("type")?.asString != "Point") return null
-        val c = obj.getAsJsonArray("coordinates")
-        GeoPoint(lat = c[1].asDouble, lng = c[0].asDouble)
+        val obj = Json.parseToJsonElement(json).jsonObject
+        if (obj["type"]?.jsonPrimitive?.content != "Point") return null
+        val c = obj["coordinates"]!!.jsonArray
+        GeoPoint(lat = c[1].jsonPrimitive.double, lng = c[0].jsonPrimitive.double)
     }.getOrNull()
 
     /** Cheap "did the shape change" test, to tell a color-only edit from a reshape. */

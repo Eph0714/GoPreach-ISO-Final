@@ -205,6 +205,8 @@ dependencies {
 
     // JSON for the offline cache/outbox payloads (see data/local)
     implementation("com.google.code.gson:gson:2.11.0")
+    // Kotlin Multiplatform shared module (geometry now; models, rules and UI move here step by step).
+    implementation(project(":shared"))
 
     // Testing
     testImplementation("junit:junit:4.13.2")

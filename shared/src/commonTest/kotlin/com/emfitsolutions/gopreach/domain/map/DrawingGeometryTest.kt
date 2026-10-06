@@ -1,11 +1,11 @@
 package com.emfitsolutions.gopreach.domain.map
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import kotlin.test.Test
 
 class DrawingGeometryTest {
     // ~1.1 km x ~1.07 km square near Bayombong.
@@ -37,7 +37,7 @@ class DrawingGeometryTest {
     fun simplificationDropsRedundantPointsButKeepsTheShape() {
         val straight = (0..50).map { p(16.0, 121.0 + it * 0.0001) } + p(16.01, 121.005) + p(16.0, 121.0)
         val ring = DrawingGeometry.closeStroke(straight, toleranceMeters = 3.0)!!
-        assertTrue("expected a handful of vertices, got ${ring.size}", ring.size <= 4)
+        assertTrue(ring.size <= 4, "expected a handful of vertices, got ${ring.size}")
     }
 
     @Test

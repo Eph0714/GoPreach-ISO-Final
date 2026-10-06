@@ -82,3 +82,10 @@ work to a first iOS TestFlight build, longer to match every screen.
 2. JSON: **kotlinx.serialization** instead of Gson.
 3. Maps: **maplibre-compose** (keeps MapLibre as the only map engine, as required).
 4. Keep Firebase Auth for logins at first (the API verifies its tokens).
+
+## Progress log
+
+* **Phase 1 started (done):** `:shared` Kotlin Multiplatform module added (Android + iosX64/iosArm64/iosSimulatorArm64; iOS
+  targets compile on a Mac/CI only). `DrawingGeometry` (+14 tests) moved to `shared/commonMain`/`commonTest`, with Gson replaced
+  by kotlinx.serialization. The app depends on `:shared` and still builds; all existing app tests pass.
+* **Next:** models + permissions (`DrawingPermissions`, `GroupAccessScope`, data models without the Firebase annotation).
