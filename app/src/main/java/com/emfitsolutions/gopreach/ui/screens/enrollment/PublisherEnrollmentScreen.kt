@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.enrollment
 
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import androidx.compose.foundation.verticalScroll
 import com.emfitsolutions.gopreach.ui.components.PublisherFormFields
 import com.emfitsolutions.gopreach.ui.components.PublisherFormState
@@ -93,9 +95,7 @@ fun PublisherEnrollmentScreen(
                 TempCredentialsResultCard(credentials = uiState.result!!, onDone = onDone)
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-                        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-                    ) { granted -> if (granted) viewModel.captureLocation() }
+                    val locationPermissionLauncher = rememberPermissionRequester() { granted -> if (granted) viewModel.captureLocation() }
 
                     // The same field set as the Edit Publisher dialog (see PublisherFormFields): names, middle
                     // initial, extension, gender, contacts, address, province/municipality/barangay,
@@ -113,7 +113,7 @@ fun PublisherEnrollmentScreen(
                         locationError = uiState.locationError,
                         onUseCurrentLocation = {
                             if (viewModel.hasLocationPermission()) viewModel.captureLocation()
-                            else locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                            else locationPermissionLauncher.launch(AppPermission.LOCATION)
                         },
                     )
 

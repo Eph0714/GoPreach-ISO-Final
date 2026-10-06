@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.publishers
 
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Box
@@ -488,9 +490,7 @@ private fun EditPublisherDialog(
             }
         }
     }
-    val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) captureLocation() }
+    val locationPermissionLauncher = rememberPermissionRequester() { granted -> if (granted) captureLocation() }
 
     fun submit(moveConfirmed: Boolean = false) {
         val message = requiredFieldsMessage(
@@ -548,7 +548,7 @@ private fun EditPublisherDialog(
                     locationError = locationError,
                     onUseCurrentLocation = {
                         if (viewModel.hasLocationPermission()) captureLocation()
-                        else locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                        else locationPermissionLauncher.launch(AppPermission.LOCATION)
                     },
                 )
 

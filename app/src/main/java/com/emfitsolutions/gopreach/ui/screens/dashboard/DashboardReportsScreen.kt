@@ -1,11 +1,11 @@
 package com.emfitsolutions.gopreach.ui.screens.dashboard
 
+import com.emfitsolutions.gopreach.platform.rememberFileCreator
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -200,7 +200,7 @@ fun DashboardStatsContent(
     val exportFailedWrite = stringResource(R.string.reports_export_failed_write)
     val exportFailedUnknown = stringResource(R.string.reports_export_failed_unknown)
     val exportFailedGenericTemplate = stringResource(R.string.reports_export_failed_generic)
-    val statExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+    val statExportLauncher = rememberFileCreator("text/csv") { uri ->
         val table = pendingExportTable
         if (uri != null && table != null) {
             try {
@@ -481,7 +481,7 @@ fun DashboardReportsScreen(
     val exportFailedWrite = stringResource(R.string.reports_export_failed_write)
     val exportFailedUnknown = stringResource(R.string.reports_export_failed_unknown)
     val exportFailedGenericTemplate = stringResource(R.string.reports_export_failed_generic)
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+    val exportLauncher = rememberFileCreator("text/csv") { uri ->
         val table = reportTable
         if (uri != null && table != null) {
             try {

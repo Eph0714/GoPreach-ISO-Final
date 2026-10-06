@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.account
 
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.PublisherFormFields
 import androidx.compose.foundation.layout.Column
@@ -119,9 +121,7 @@ fun AccountSettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-                androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-            ) { granted -> if (granted) viewModel.captureLocation() }
+            val locationPermissionLauncher = rememberPermissionRequester() { granted -> if (granted) viewModel.captureLocation() }
             PublisherFormFields(
                 form = uiState.profile,
                 onChange = viewModel::onProfileChange,
@@ -131,7 +131,7 @@ fun AccountSettingsScreen(
                 locationError = uiState.locationError,
                 onUseCurrentLocation = {
                     if (viewModel.hasLocationPermission()) viewModel.captureLocation()
-                    else locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                    else locationPermissionLauncher.launch(AppPermission.LOCATION)
                 },
             )
             if (uiState.profileError != null) Text(uiState.profileError!!, color = MaterialTheme.colorScheme.error)

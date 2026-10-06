@@ -1,6 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
-import android.Manifest
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -23,8 +24,6 @@ import com.emfitsolutions.gopreach.data.model.PlannerSection
 import com.emfitsolutions.gopreach.data.model.isPlannerSectionVisible
 import com.emfitsolutions.gopreach.ui.components.DateRange
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -254,10 +253,10 @@ fun PublisherHomeScreen(
     // Monthly Report reminder notifications (see ReminderWorker) need this
     // granted on Android 13+ — asked once here, the Main Form, rather than
     // buried behind a settings toggle nobody would find.
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    val notificationPermissionLauncher = rememberPermissionRequester() {}
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            notificationPermissionLauncher.launch(AppPermission.NOTIFICATIONS)
         }
     }
     if (showExitConfirm) {

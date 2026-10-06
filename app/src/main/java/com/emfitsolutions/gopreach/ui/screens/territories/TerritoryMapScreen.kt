@@ -1,13 +1,13 @@
 package com.emfitsolutions.gopreach.ui.screens.territories
 
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import com.emfitsolutions.gopreach.platform.rememberToaster
 import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -382,11 +382,11 @@ fun TerritoryMapScreen(
     var permissionAsked by rememberSaveable { mutableStateOf(false) }
     var locationIssue by remember { mutableStateOf<LocationIssue?>(null) }
     var locationRefreshKey by remember { mutableIntStateOf(0) }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { locationRefreshKey++ }
+    val permissionLauncher = rememberPermissionRequester() { locationRefreshKey++ }
     LaunchedEffect(locationRefreshKey) {
         if (!viewModel.hasLocationPermission()) {
             locationIssue = LocationIssue.NO_PERMISSION
-            if (locationRefreshKey == 0) { permissionAsked = true; permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)) }
+            if (locationRefreshKey == 0) { permissionAsked = true; permissionLauncher.launch(AppPermission.LOCATION) }
             return@LaunchedEffect
         }
         if (!viewModel.isLocationServicesEnabled()) {
@@ -441,7 +441,7 @@ fun TerritoryMapScreen(
     var locationHelp by remember { mutableStateOf<LocationIssue?>(null) } // a "go to settings" explanation
     fun requestLocationPermission() {
         permissionAsked = true
-        permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+        permissionLauncher.launch(AppPermission.LOCATION)
     }
     fun recenter() {
         when {
@@ -759,7 +759,7 @@ fun TerritoryMapScreen(
                         issue = issue,
                         onAction = {
                             if (issue == LocationIssue.NO_PERMISSION) {
-                                permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                                permissionLauncher.launch(AppPermission.LOCATION)
                             } else {
                                 locationRefreshKey++
                             }

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -111,7 +113,7 @@ fun SupportingImageSection(
             isProcessing = false
         }
     }
-    val requestCameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val requestCameraPermission = rememberPermissionRequester() { granted ->
         if (granted) launchCameraInternal(context) { pendingUri = it; takePicture.launch(it) } else permissionDenied = true
     }
     val launchCamera = {
@@ -121,7 +123,7 @@ fun SupportingImageSection(
         if (hasPermission) {
             launchCameraInternal(context) { pendingUri = it; takePicture.launch(it) }
         } else {
-            requestCameraPermission.launch(Manifest.permission.CAMERA)
+            requestCameraPermission.launch(AppPermission.CAMERA)
         }
     }
 

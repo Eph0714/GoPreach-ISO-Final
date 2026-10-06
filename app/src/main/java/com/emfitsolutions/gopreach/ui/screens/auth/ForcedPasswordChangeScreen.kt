@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.auth
 
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -187,9 +189,7 @@ private fun ReviewRow(label: String, value: String) {
 
 @Composable
 private fun EditStep(state: FirstLoginUiState, viewModel: ForcedPasswordChangeViewModel) {
-    val locationPermissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) viewModel.captureLocation() }
+    val locationPermissionLauncher = rememberPermissionRequester() { granted -> if (granted) viewModel.captureLocation() }
 
     Text("Edit Your Details", style = MaterialTheme.typography.headlineMedium)
     PublisherFormFields(
@@ -201,7 +201,7 @@ private fun EditStep(state: FirstLoginUiState, viewModel: ForcedPasswordChangeVi
         locationError = state.locationError,
         onUseCurrentLocation = {
             if (viewModel.hasLocationPermission()) viewModel.captureLocation()
-            else locationPermissionLauncher.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+            else locationPermissionLauncher.launch(AppPermission.LOCATION)
         },
     )
     state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }

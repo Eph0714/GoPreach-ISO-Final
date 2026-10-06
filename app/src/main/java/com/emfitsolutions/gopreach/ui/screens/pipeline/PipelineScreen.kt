@@ -1,9 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
-import android.Manifest
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import com.emfitsolutions.gopreach.ui.components.RecordFound
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -759,11 +758,11 @@ private fun CoordinatesEditorField(coordinates: CoordinatesValue?, onChange: (Co
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val permissionLauncher = rememberPermissionRequester() { granted ->
         if (granted) runCapture() else captureError = "Location permission was denied, so coordinates could not be captured. You may enter the Current Address manually."
     }
     fun startCapture() {
-        if (viewModel.hasLocationPermission()) runCapture() else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (viewModel.hasLocationPermission()) runCapture() else permissionLauncher.launch(AppPermission.LOCATION)
     }
 
     when {
@@ -1487,11 +1486,11 @@ private fun GpsLocationSection(person: InterestedPerson, currentPersonId: String
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val permissionLauncher = rememberPermissionRequester() { granted ->
         if (granted) runCapture() else captureError = "Location permission was denied, so coordinates could not be captured. You may enter the Current Address manually."
     }
     fun startCapture() {
-        if (viewModel.hasLocationPermission()) runCapture() else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        if (viewModel.hasLocationPermission()) runCapture() else permissionLauncher.launch(AppPermission.LOCATION)
     }
 
     Column(modifier = Modifier.padding(top = 16.dp)) {

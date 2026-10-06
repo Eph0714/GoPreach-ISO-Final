@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
+import com.emfitsolutions.gopreach.platform.rememberFileCreator
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
@@ -16,8 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.PictureAsPdf
@@ -101,7 +100,7 @@ fun ConsolidatedReportScreen(
     val exportFailedWrite = stringResource(R.string.reports_export_failed_write)
     val exportFailedUnknown = stringResource(R.string.reports_export_failed_unknown)
     val exportFailedGenericTemplate = stringResource(R.string.reports_export_failed_generic)
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+    val exportLauncher = rememberFileCreator("text/csv") { uri ->
         if (uri != null) {
             try {
                 val wrote = actions.writeCsv(uri.toString(), reportTable)

@@ -1,15 +1,14 @@
 package com.emfitsolutions.gopreach.ui.screens.householdervisithistory
 
+import com.emfitsolutions.gopreach.platform.rememberFileCreator
 import com.emfitsolutions.gopreach.data.print.escapeHtml
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
-import androidx.activity.compose.rememberLauncherForActivityResult
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import com.emfitsolutions.gopreach.data.print.OrientationMode
 import com.emfitsolutions.gopreach.data.print.PrintOptions
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -200,7 +199,7 @@ fun HouseholderVisitHistoryScreen(
             totals = listOf("Total House Holders" to uiState.rows.size.toString()),
         )
     }
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+    val exportLauncher = rememberFileCreator("text/csv") { uri ->
         if (uri != null) {
             try {
                 val wrote = actions.writeCsv(uri.toString(), exportTable)

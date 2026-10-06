@@ -1,12 +1,11 @@
 package com.emfitsolutions.gopreach.ui.screens.sharelocation
 
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
-import android.Manifest
 import com.emfitsolutions.gopreach.ui.components.RecordFound
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -181,7 +180,7 @@ fun ShareLocationScreen(
         showToast("Location sharing is now active.")
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val permissionLauncher = rememberPermissionRequester() { granted ->
         if (granted) {
             activateSharing()
         } else {
@@ -208,7 +207,7 @@ fun ShareLocationScreen(
             if (fix != null) shownCoordinates = fix else coordinatesError = "Could not get your current coordinates. Make sure location is turned on and try again."
         }
     }
-    val coordinatesPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val coordinatesPermissionLauncher = rememberPermissionRequester() { granted ->
         if (granted) fetchCoordinates() else coordinatesError = "Location permission is required to show your coordinates."
     }
     fun showMyCoordinates() {
@@ -217,7 +216,7 @@ fun ShareLocationScreen(
         } else if (viewModel.hasLocationPermission()) {
             fetchCoordinates()
         } else {
-            coordinatesPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            coordinatesPermissionLauncher.launch(AppPermission.LOCATION)
         }
     }
 
@@ -226,7 +225,7 @@ fun ShareLocationScreen(
             if (viewModel.hasLocationPermission()) {
                 activateSharing()
             } else {
-                permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                permissionLauncher.launch(AppPermission.LOCATION)
             }
         } else {
             showToast("Location services are disabled. Please enable GPS to continue.")

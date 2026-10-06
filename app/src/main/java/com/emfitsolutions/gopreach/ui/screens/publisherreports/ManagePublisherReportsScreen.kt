@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.publisherreports
 
+import com.emfitsolutions.gopreach.platform.rememberFileCreator
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
@@ -60,8 +61,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.Person
@@ -143,7 +142,7 @@ fun ManagePublisherReportsScreen(
     val exportFailedWrite = stringResource(R.string.reports_export_failed_write)
     val exportFailedUnknown = stringResource(R.string.reports_export_failed_unknown)
     val exportFailedGenericTemplate = stringResource(R.string.reports_export_failed_generic)
-    val csvExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+    val csvExportLauncher = rememberFileCreator("text/csv") { uri ->
         if (uri != null) {
             try {
                 val wrote = actions.writeCsv(uri.toString(), reportTable)

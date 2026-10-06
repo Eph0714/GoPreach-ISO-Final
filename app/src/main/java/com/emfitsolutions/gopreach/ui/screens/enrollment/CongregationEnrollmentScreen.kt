@@ -1,8 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.enrollment
 
-import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -100,13 +99,11 @@ fun CongregationEnrollmentScreen(
                 onChanged = viewModel::onAddressLevelsChanged,
                 modifier = Modifier.fillMaxWidth(),
             )
-            val locationPermissionLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.RequestPermission(),
-            ) { granted -> if (granted) viewModel.captureLocation() }
+            val locationPermissionLauncher = rememberPermissionRequester() { granted -> if (granted) viewModel.captureLocation() }
             OutlinedButton(
                 onClick = {
                     if (viewModel.hasLocationPermission()) viewModel.captureLocation()
-                    else locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                    else locationPermissionLauncher.launch(AppPermission.LOCATION)
                 },
                 enabled = !uiState.isCapturingLocation,
                 modifier = Modifier.fillMaxWidth(),

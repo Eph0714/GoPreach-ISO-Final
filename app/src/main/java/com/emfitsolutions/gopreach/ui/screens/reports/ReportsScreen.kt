@@ -1,13 +1,12 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
+import com.emfitsolutions.gopreach.platform.rememberFileCreator
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
-import androidx.activity.compose.rememberLauncherForActivityResult
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import com.emfitsolutions.gopreach.data.model.displayName
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -172,7 +171,7 @@ fun ReportsScreen(
     val exportFailedWrite = stringResource(R.string.reports_export_failed_write)
     val exportFailedUnknown = stringResource(R.string.reports_export_failed_unknown)
     val exportFailedGenericTemplate = stringResource(R.string.reports_export_failed_generic)
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+    val exportLauncher = rememberFileCreator("text/csv") { uri ->
         if (uri != null) {
             try {
                 val wrote = actions.writeCsv(uri.toString(), reportTable)

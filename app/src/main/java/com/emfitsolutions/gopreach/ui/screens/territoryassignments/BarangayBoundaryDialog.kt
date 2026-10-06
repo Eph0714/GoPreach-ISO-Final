@@ -1,10 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.territoryassignments
 
-import android.Manifest
+import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.platform.AppPermission
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -131,7 +130,7 @@ fun BarangayBoundaryDialog(
         }
         isLiveLocationOn = true
     }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    val permissionLauncher = rememberPermissionRequester() { granted ->
         if (granted) {
             turnOnLiveLocation()
         } else {
@@ -144,7 +143,7 @@ fun BarangayBoundaryDialog(
         } else if (viewModel.hasLocationPermission()) {
             turnOnLiveLocation()
         } else {
-            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+            permissionLauncher.launch(AppPermission.LOCATION)
         }
     }
 
