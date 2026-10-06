@@ -47,6 +47,10 @@ interface CacheDao {
     @Query("UPDATE cached_documents SET syncState = :syncState WHERE collectionPath = :collectionPath AND documentId = :documentId")
     suspend fun updateSyncState(collectionPath: String, documentId: String, syncState: String)
 
+    /** Removes rows cached under an empty id (left by a build whose models lost their document-id annotation). */
+    @Query("DELETE FROM cached_documents WHERE documentId = ''")
+    suspend fun deleteBlankIds()
+
     @Delete
     suspend fun deleteEntity(entity: CachedDocumentEntity)
 }

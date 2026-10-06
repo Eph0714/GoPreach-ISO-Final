@@ -98,7 +98,7 @@ fun DashboardModuleId.defaultLocation(): DashboardModuleLocation = DashboardModu
  */
 @kotlinx.serialization.Serializable
 data class DashboardModuleLayout(
-    @DocumentId val personId: String = "",
+    @field:DocumentId val personId: String = "",
     val mainFormModuleIds: List<String> = emptyList(),
     val sidePanelModuleIds: List<String> = emptyList(),
     /** My Planner sections this Publisher has switched off (see

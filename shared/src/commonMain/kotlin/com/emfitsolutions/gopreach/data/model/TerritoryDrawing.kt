@@ -36,7 +36,7 @@ enum class DrawingStatus(val label: String, val colorHex: String, val borderHex:
  */
 @kotlinx.serialization.Serializable
 data class TerritoryDrawing(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val geometryJson: String = "",
     /** Fill, "#RRGGBB" — always the [status] color (never user-chosen). */
     val fillColor: String = DrawingStatus.FINISHED.colorHex,
@@ -84,7 +84,7 @@ enum class DrawingAction { CREATED, UPDATED, COLOR_CHANGED, STATUS_CHANGED, MOVE
  */
 @kotlinx.serialization.Serializable
 data class TerritoryDrawingAudit(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val drawingId: String = "",
     val action: DrawingAction = DrawingAction.CREATED,
     val userId: String = "",
@@ -113,7 +113,7 @@ data class TerritoryDrawingAudit(
  */
 @kotlinx.serialization.Serializable
 data class TerritoryBounds(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val groupId: String = "",
     val minLat: Double = 0.0,

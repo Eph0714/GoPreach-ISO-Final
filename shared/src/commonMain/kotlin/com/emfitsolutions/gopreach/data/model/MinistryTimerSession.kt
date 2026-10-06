@@ -31,7 +31,7 @@ enum class TimerSessionStatus { RUNNING, PAUSED, COMPLETED }
  */
 @kotlinx.serialization.Serializable
 data class MinistryTimerSession(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     val plannerDayId: String = "",
     val startTime: Long = 0L,

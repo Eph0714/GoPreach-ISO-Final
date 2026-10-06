@@ -35,6 +35,7 @@ class FakeCacheDao : CacheDao {
     override suspend fun updateSyncState(collectionPath: String, documentId: String, syncState: String) {
         rows[collectionPath to documentId]?.let { rows[collectionPath to documentId] = it.copy(syncState = syncState) }
     }
+    override suspend fun deleteBlankIds() { rows.keys.removeAll { it.second.isEmpty() } }
     override suspend fun deleteEntity(entity: CachedDocumentEntity) { rows.remove(entity.collectionPath to entity.documentId) }
 }
 
@@ -46,6 +47,7 @@ class FakeQueueDao : SyncQueueDao {
     override fun observePendingCount(): Flow<Int> = flowOf(ops.count { !it.isPermanentFailure })
     override fun observePermanentFailureCount(): Flow<Int> = flowOf(ops.count { it.isPermanentFailure })
     override suspend fun remove(operation: PendingSyncOperationEntity) { ops.removeAll { it.id == operation.id } }
+    override suspend fun removeBlankIds() { ops.removeAll { it.documentId.isEmpty() } }
     override suspend fun removeForDocument(collectionPath: String, documentId: String) { ops.removeAll { it.collectionPath == collectionPath && it.documentId == documentId } }
     override suspend fun recordFailure(id: Long, error: String) = update(id) { it.copy(retryCount = it.retryCount + 1, lastError = error) }
     override suspend fun markPermanentFailure(id: Long, error: String) = update(id) { it.copy(retryCount = it.retryCount + 1, lastError = error, isPermanentFailure = true) }

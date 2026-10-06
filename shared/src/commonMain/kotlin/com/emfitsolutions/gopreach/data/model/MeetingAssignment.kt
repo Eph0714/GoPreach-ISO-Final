@@ -42,7 +42,7 @@ enum class MidweekSection(val displayLabel: String) {
  */
 @kotlinx.serialization.Serializable
 data class MidweekMeetingSchedule(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val weekStartDate: Long = 0L,
     val treasuresItems: List<MidweekAssignmentItem> = emptyList(),
@@ -77,7 +77,7 @@ data class MidweekMeetingSchedule(
  */
 @kotlinx.serialization.Serializable
 data class PublicTalkScheduleRow(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val date: Long = 0L,
     val theme: String = "",
@@ -104,7 +104,7 @@ data class PublicTalkScheduleRow(
  */
 @kotlinx.serialization.Serializable
 data class CartAssignmentRow(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val date: Long = 0L,
     val location: String = "",

@@ -12,7 +12,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  */
 @kotlinx.serialization.Serializable
 data class AppSettings(
-    @DocumentId val id: String = GLOBAL_ID,
+    @field:DocumentId val id: String = GLOBAL_ID,
     val logoUrl: String? = null,
     /** "Session Timeout Setting" — log everyone out after [sessionTimeoutMinutes]
      * of no interaction while [sessionTimeoutEnabled]. App-wide (one value for

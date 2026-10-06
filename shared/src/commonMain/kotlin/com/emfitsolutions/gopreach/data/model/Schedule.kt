@@ -15,7 +15,7 @@ enum class ScheduleKind { CALENDAR_EVENT, CHAT_SCHEDULE, PERSONAL_NOTE }
  */
 @kotlinx.serialization.Serializable
 data class Schedule(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val kind: ScheduleKind = ScheduleKind.CALENDAR_EVENT,
     val title: String = "",
     val description: String? = null,

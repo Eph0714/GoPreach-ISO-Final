@@ -12,7 +12,7 @@ import com.emfitsolutions.gopreach.platform.PropertyName
  */
 @kotlinx.serialization.Serializable
 data class SharedLocation(
-    @DocumentId val publisherPersonId: String = "",
+    @field:DocumentId val publisherPersonId: String = "",
     val congregationId: String = "",
     val groupId: String? = null,
     val lat: Double = 0.0,

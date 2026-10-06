@@ -4,6 +4,8 @@ import com.emfitsolutions.gopreach.di.appModule
 import com.emfitsolutions.gopreach.di.infraModule
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
+import org.koin.android.ext.android.get
+import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.androidx.workmanager.factory.KoinWorkerFactory
 import android.app.Application
@@ -45,6 +47,7 @@ class GoPreachApp : Application(), Configuration.Provider {
             androidContext(this@GoPreachApp)
             modules(infraModule, appModule)
         }
+        kotlinx.coroutines.GlobalScope.launch { runCatching { get<com.emfitsolutions.gopreach.data.local.dao.CacheDao>().deleteBlankIds(); get<com.emfitsolutions.gopreach.data.local.dao.SyncQueueDao>().removeBlankIds() } }
         remoteSyncCoordinator.startAll()
         NotificationHelper.ensureChannel(this)
         reminderScheduler.ensureScheduled()

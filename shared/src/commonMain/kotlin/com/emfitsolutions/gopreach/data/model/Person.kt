@@ -12,7 +12,7 @@ import com.emfitsolutions.gopreach.platform.PropertyName
  */
 @kotlinx.serialization.Serializable
 data class Person(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val lastName: String = "",
     val firstName: String = "",
     val middleInitial: String? = null,

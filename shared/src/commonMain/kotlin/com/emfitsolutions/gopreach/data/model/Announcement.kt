@@ -11,7 +11,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  */
 @kotlinx.serialization.Serializable
 data class Announcement(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val title: String = "",
     val details: String = "",

@@ -27,7 +27,7 @@ data class TrashItem(
  */
 @kotlinx.serialization.Serializable
 data class DeletedRecord(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     /** `deleted` while it sits here. A restored or permanently deleted entry is removed (the audit log keeps the history). */
     val status: String = STATUS_DELETED,
     /** What kind of record: "Publisher", "Return Visit", "Monthly Report", ... */

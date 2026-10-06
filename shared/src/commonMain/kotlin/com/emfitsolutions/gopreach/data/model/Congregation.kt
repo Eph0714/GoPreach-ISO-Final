@@ -5,7 +5,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
 /** Firestore collection: `congregations/{congregationId}` */
 @kotlinx.serialization.Serializable
 data class Congregation(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val name: String = "",
     /** "The Address must be replaced with (Province/City, Municipality,
      * Barangay)" — kept only as a derived, human-readable "Barangay,
@@ -51,7 +51,7 @@ data class Congregation(
  */
 @kotlinx.serialization.Serializable
 data class Group(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val name: String = "",
     /** Legacy single-elder field from before the three-role structure below —
@@ -111,7 +111,7 @@ data class Group(
  */
 @kotlinx.serialization.Serializable
 data class ElderTitleEntity(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val titleName: String = "",
     val active: Boolean = true,
 )
@@ -119,7 +119,7 @@ data class ElderTitleEntity(
 /** Firestore collection: `territories/{territoryId}` */
 @kotlinx.serialization.Serializable
 data class Territory(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val name: String = "",
     val description: String? = null,
@@ -150,7 +150,7 @@ data class Territory(
  */
 @kotlinx.serialization.Serializable
 data class TerritoryAssignment(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val groupId: String = "",
     val provinceId: Int = 0,
@@ -180,7 +180,7 @@ data class TerritoryAssignment(
  */
 @kotlinx.serialization.Serializable
 data class TerritoryAssignmentBarangay(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val assignmentId: String = "",
     val groupId: String = "",

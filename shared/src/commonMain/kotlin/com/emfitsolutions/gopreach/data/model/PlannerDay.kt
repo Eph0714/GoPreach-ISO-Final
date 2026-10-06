@@ -25,7 +25,7 @@ import com.emfitsolutions.gopreach.platform.padded
  */
 @kotlinx.serialization.Serializable
 data class PlannerDay(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     /** Start-of-day epoch millis for the date this record belongs to (same
      * `[start, end)`-window anchor [com.emfitsolutions.gopreach.domain

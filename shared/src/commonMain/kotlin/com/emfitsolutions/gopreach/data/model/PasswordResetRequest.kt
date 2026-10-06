@@ -15,7 +15,7 @@ enum class PasswordResetRequestStatus { PENDING, RESOLVED }
  */
 @kotlinx.serialization.Serializable
 data class PasswordResetRequest(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val requestedUsername: String = "",
     /** Resolved at request time when the username matches a known Person; null if
      * the username couldn't be found (the enrolling role still sees the raw text). */

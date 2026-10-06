@@ -12,7 +12,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  */
 @kotlinx.serialization.Serializable
 data class MapPin(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val text: String = "",
     val lat: Double = 0.0,

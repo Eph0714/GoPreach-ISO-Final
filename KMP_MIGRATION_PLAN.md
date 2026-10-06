@@ -104,4 +104,5 @@ work to a first iOS TestFlight build, longer to match every screen.
   turns off the Firestore listeners; empty (default) = Firestore as before. Per-collection id field handled (`idFieldByCollection`). Not yet tested against a live backend.
 * **Phase 6a (done):** `OfflineFirestoreRepository` (the cache read/write path every repository uses) moved to `shared/commonMain` on `DocJson` instead of Gson;
   platform bits split out (`WriteQueuedListener`, Android-only `saveNow`). Malformed cached rows are skipped, not fatal.
+* **Fix (found on device):** models must use `@field:DocumentId` / `@field:PropertyName` — plain `@DocumentId` on a common-code constructor property attaches to the *parameter*, so Firestore left ids blank (login built `@gopreach.internal`). Startup also purges blank-id cache rows and queued writes.
 * **Next:** get the Hostinger API live, test the switch on the phone; then split repositories into common CRUD + Android-only Firestore listeners, and move them (and ViewModels/UI) to common.

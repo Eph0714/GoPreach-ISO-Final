@@ -54,6 +54,10 @@ interface SyncQueueDao {
     @Query("DELETE FROM pending_sync_operations WHERE collectionPath = :collectionPath AND documentId = :documentId")
     suspend fun removeForDocument(collectionPath: String, documentId: String)
 
+    /** Drops queued writes with an empty document id (junk left by a build whose models lost their document-id annotation; they can never succeed). */
+    @Query("DELETE FROM pending_sync_operations WHERE documentId = ''")
+    suspend fun removeBlankIds()
+
     @Query("UPDATE pending_sync_operations SET retryCount = retryCount + 1, lastError = :error WHERE id = :id")
     suspend fun recordFailure(id: Long, error: String)
 

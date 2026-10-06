@@ -15,7 +15,7 @@ import com.emfitsolutions.gopreach.platform.padded
  */
 @kotlinx.serialization.Serializable
 data class MonthlyPlannerGoal(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     val year: Int = 0,
     val month: Int = 0,
@@ -39,7 +39,7 @@ data class MonthlyPlannerGoal(
  */
 @kotlinx.serialization.Serializable
 data class WeeklyPlannerGoal(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     val weekStart: Long = 0L,
     val goalHours: Int = 0,
@@ -59,7 +59,7 @@ data class WeeklyPlannerGoal(
  */
 @kotlinx.serialization.Serializable
 data class YearlyPlannerGoal(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     val year: Int = 0,
     val goalHours: Int = 0,

@@ -35,7 +35,7 @@ const val LEGACY_EVENT_PLACEHOLDER = "Personal Bible Study"
  */
 @kotlinx.serialization.Serializable
 data class BibleTextCategory(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     /** The Event/occasion type — required for a new record (spec §1/§20);
      * blank for anything saved before this upgrade (see this class's own doc
@@ -115,7 +115,7 @@ data class BibleTextSubtopic(
  */
 @kotlinx.serialization.Serializable
 data class BibleTextRecord(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     val bibleVersionId: String = "",
     val languageId: String = "",

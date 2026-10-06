@@ -14,7 +14,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  */
 @kotlinx.serialization.Serializable
 data class RoleAssignment(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val personId: String = "",
 
     /** Serialized [RoleType] — an AdminRole or a PublisherCategory. */

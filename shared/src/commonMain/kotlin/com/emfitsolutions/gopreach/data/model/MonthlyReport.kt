@@ -76,7 +76,7 @@ const val SOURCE_MANUAL = "MANUAL"
  */
 @kotlinx.serialization.Serializable
 data class MonthlyReport(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     val congregationId: String = "",
     val category: PublisherCategory = PublisherCategory.REGULAR_PUBLISHER,
@@ -197,7 +197,7 @@ data class MonthlyReport(
  */
 @kotlinx.serialization.Serializable
 data class AuxiliaryPioneerRange(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     val startDate: Long = 0L,
     /** Null while the range is open-ended pending confirmation of an end date. */

@@ -15,7 +15,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  */
 @kotlinx.serialization.Serializable
 data class PublisherTerritoryAssignment(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val publisherPersonId: String = "",
     val publisherName: String = "",

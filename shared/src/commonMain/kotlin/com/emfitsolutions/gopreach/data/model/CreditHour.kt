@@ -12,7 +12,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  */
 @kotlinx.serialization.Serializable
 data class CreditHourCategory(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val name: String = "",
     val description: String? = null,
     val active: Boolean = true,
@@ -31,7 +31,7 @@ data class CreditHourCategory(
  */
 @kotlinx.serialization.Serializable
 data class CreditHourRecord(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     /** [PlannerDay.id] this entry belongs to — see that class's own doc
      * comment for the deterministic `personId_yyyyMMdd` id shape. */

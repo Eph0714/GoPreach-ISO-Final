@@ -13,7 +13,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  */
 @kotlinx.serialization.Serializable
 data class AuditLogEntry(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val actorPersonId: String = "",
     /** Short machine-readable action code, e.g. "SIGN_IN", "ENROLL_ADMIN",
      * "CREATE_CONGREGATION", "UPLOAD_LOGO", "RESTORE_BACKUP". */

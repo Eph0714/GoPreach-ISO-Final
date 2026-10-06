@@ -14,7 +14,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  */
 @kotlinx.serialization.Serializable
 data class LocationSharingSettings(
-    @DocumentId val congregationId: String = "",
+    @field:DocumentId val congregationId: String = "",
     val sharingDurationMinutes: Int = DEFAULT_DURATION_MINUTES,
     val accuracyRadiusMeters: Int = DEFAULT_ACCURACY_METERS,
     val updatedByPersonId: String? = null,

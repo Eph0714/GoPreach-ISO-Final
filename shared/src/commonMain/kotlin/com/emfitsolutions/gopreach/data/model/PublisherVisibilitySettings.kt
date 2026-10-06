@@ -12,7 +12,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  */
 @kotlinx.serialization.Serializable
 data class PublisherVisibilitySettings(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     /** Other Publishers can see (and add visits to) Searching records assigned to someone else. */
     val showOthersSearching: Boolean = false,
     /** Other Publishers can see (and add visits to) Return Visit records assigned to someone else. */

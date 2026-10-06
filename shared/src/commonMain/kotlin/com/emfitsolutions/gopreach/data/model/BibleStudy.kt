@@ -50,7 +50,7 @@ data class SupportingImage(
  */
 @kotlinx.serialization.Serializable
 data class InterestedPerson(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val publisherPersonId: String = "",
     /** The congregation this record currently belongs to — set at creation
      * from the enrolling publisher's own assignment, and the one field a
@@ -187,7 +187,7 @@ data class InterestedPerson(
  */
 @kotlinx.serialization.Serializable
 data class Visit(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val interestedPersonId: String = "",
     val visitDate: Long = 0L,
     val visitTime: Long = 0L,
@@ -245,7 +245,7 @@ data class Visit(
  */
 @kotlinx.serialization.Serializable
 data class ForwardRequest(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val interestedPersonId: String = "",
     val personNameSnapshot: String = "",
     val fromCongregationId: String = "",
@@ -284,7 +284,7 @@ data class ForwardRequest(
  */
 @kotlinx.serialization.Serializable
 data class PublisherForwardRequest(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val interestedPersonId: String = "",
     val personNameSnapshot: String = "",
     /** Unchanged by this flow (both publishers are always in the same
@@ -342,7 +342,7 @@ enum class HouseholderAssignmentStatus { PENDING, ACCEPTED, REJECTED, CANCELLED,
  */
 @kotlinx.serialization.Serializable
 data class HouseholderAssignment(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val interestedPersonId: String = "",
     val personNameSnapshot: String = "",
     val recordType: PipelineStage = PipelineStage.SEARCHING,

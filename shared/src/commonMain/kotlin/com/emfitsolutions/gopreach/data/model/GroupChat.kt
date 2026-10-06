@@ -25,7 +25,7 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  */
 @kotlinx.serialization.Serializable
 data class GroupChat(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val congregationId: String = "",
     val groupName: String = "",
     val description: String = "",
@@ -63,7 +63,7 @@ enum class GroupChatAttachmentType { IMAGE, PDF, WORD, EXCEL }
  */
 @kotlinx.serialization.Serializable
 data class GroupChatMessage(
-    @DocumentId val id: String = "",
+    @field:DocumentId val id: String = "",
     val senderId: String = "",
     val senderName: String = "",
     /** [AdminRole.displayLabel]/"Publisher" at send time — a label, not a
