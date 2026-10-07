@@ -1,4 +1,5 @@
 import { congregationOf } from '../store.js';
+import { authorizeRulesWrite, canReadDoc, loadGrant } from './rules.js';
 import { authorizeDrawingWrite, authorizeAuditWrite, authorizeBoundsWrite } from './drawings.js';
 
 /** Roles that may manage a congregation's territory (same set as firestore.rules `canManageTerritoryAssignmentsFor`). */
@@ -33,61 +34,40 @@ export async function isSlotHolder(actor, groupId, congregationId, get) {
     (congregationId === undefined || d.congregationId === congregationId);
 }
 
-/**
- * READ: what a signed-in user may receive in a pull. Super Admin sees everything; everyone else only records of their own
- * active congregation (or records that belong to no congregation, like shared lookup tables). This is stricter than the
- * Firestore rules, which let any signed-in user read many collections — see CROSS_CONGREGATION below for the exceptions.
- */
-const CROSS_CONGREGATION = new Set(['forwardRequests']); // sent between congregations: visible to both ends
-// Reference data with no congregation that every signed-in user needs.
-const GLOBAL_READ = new Set(['elderTitles', 'appSettings', 'creditHourCategories', 'bibleTextCategories']);
+const DRAWING_COLLECTIONS = new Set(['territoryDrawings', 'territoryDrawingAudits', 'territoryBounds']);
 
-export function canRead(actor, collection, data) {
+/**
+ * READ: may [actor] receive this stored row in a pull? The three drawing collections keep their own (stricter, tested)
+ * read rules; every other collection follows firestore.rules via rules.js. `grant` comes from loadGrant().
+ */
+export async function canReadRow(actor, grant, row, get) {
   if (!actor.known) return false;
+  if (DRAWING_COLLECTIONS.has(row.collection)) return canReadDrawing(actor, row.collection, row.data);
+  return canReadDoc(actor, grant, row.collection, row.id, row.data ?? {}, get);
+}
+
+function canReadDrawing(actor, collection, data) {
   if (actor.isSuperAdmin) return true;
   if (collection === 'territoryDrawingAudits') return isWide(actor, data?.congregationId);
-  if (CROSS_CONGREGATION.has(collection)) {
-    return [data?.congregationId, data?.fromCongregationId, data?.toCongregationId].includes(actor.congregationId);
-  }
   const owner = congregationOf(collection, data);
-  // A record with no congregation is readable only if it is shared reference data or is the caller's own — never by default.
-  if (owner == null) return GLOBAL_READ.has(collection) || data?.publisherPersonId === actor.personId || data?.personId === actor.personId;
-  return owner === actor.congregationId;
+  return owner != null && owner === actor.congregationId;
 }
 
 /**
- * WRITE: returns { ok: true } or { ok: false, reason }. `existing` is the stored document (or null).
- *
- * Fully ported from firestore.rules: territoryDrawings, territoryDrawingAudits, territoryBounds.
- * Every other collection currently gets the SAFE DEFAULT below (own congregation only, no cross-congregation writes,
- * no self-promotion of people/roleAssignments). The remaining per-collection rules still need to be ported one by one
- * before Firebase is switched off — see backend/README.md "Policy porting checklist".
+ * WRITE: returns { ok: true } or { ok: false, reason }. `existing` is the stored row (tombstones included) or null.
+ * Drawings use drawings.js; every other collection is the port of firestore.rules in rules.js.
  */
 export async function authorizeWrite(actor, op, collection, id, data, existing, get) {
   if (!actor.known) return deny('Unknown user');
   if (collection === 'territoryDrawings') return authorizeDrawingWrite(actor, op, id, data, existing, get);
   if (collection === 'territoryDrawingAudits') return authorizeAuditWrite(actor, op, data, existing, get);
   if (collection === 'territoryBounds') return authorizeBoundsWrite(actor, op, id, data, existing, get);
-  return authorizeDefault(actor, op, collection, data, existing);
+  if (op === 'delete' && (!existing || existing.deleted)) return ok(); // deleting something already gone is harmless
+  const grant = await loadGrant(actor.personId, get);
+  return authorizeRulesWrite(actor, grant, op, collection, id, data, existing, get);
 }
 
 export const ok = () => ({ ok: true });
 export const deny = (reason) => ({ ok: false, reason });
 
-function authorizeDefault(actor, op, collection, data, existing) {
-  if (actor.isSuperAdmin) return ok();
-  const target = op === 'delete' ? existing?.data : data;
-  const owner = congregationOf(collection, target ?? existing?.data);
-  if (op === 'delete' && !existing) return ok(); // deleting something already gone is harmless
-  if (owner != null && owner !== actor.congregationId) return deny('Other congregation');
-  if (existing && owner != null && congregationOf(collection, existing.data) !== actor.congregationId) return deny('Other congregation');
-  // Never let a non-super-admin mint a Super Admin or move a person into another congregation.
-  if (collection === 'people') {
-    if (data?.isSuperAdmin === true && existing?.data?.isSuperAdmin !== true) return deny('Cannot grant Super Admin');
-    if (existing && data?.id && data.id !== id) return deny('Id mismatch');
-  }
-  if (collection === 'roleAssignments' && /SUPER_ADMIN|CIRCUIT_OVERSEER/.test(String(data?.roleType ?? '')) && !actor.isSuperAdmin) {
-    return deny('Only the Super Admin assigns that role');
-  }
-  return ok();
-}
+export { loadGrant };

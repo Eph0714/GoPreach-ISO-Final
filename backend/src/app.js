@@ -1,7 +1,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import { authenticate } from './auth.js';
-import { loadActor, authorizeWrite, canRead } from './policy/index.js';
+import { loadActor, authorizeWrite, canReadRow, loadGrant } from './policy/index.js';
 
 const MAX_OPS = 200;
 const MAX_PULL = 1000;
@@ -75,14 +75,23 @@ export function createApp(store, { devAuth = false, health = () => ({}) } = {}) 
     const collections = req.query.collections ? String(req.query.collections).split(',').filter((c) => COLLECTION_RE.test(c)) : null;
     if (!Number.isFinite(since) || since < 0) return res.status(400).json({ error: 'since must be >= 0' });
     try {
-      const actor = await loadActor(req.personId, (c, i) => store.get(c, i));
+      // Lookups made while judging one pull are cached for that pull (the same group or chat is checked for many rows).
+      const cache = new Map();
+      const get = (c, i) => {
+        const key = c + '/' + i;
+        if (!cache.has(key)) cache.set(key, store.get(c, i));
+        return cache.get(key);
+      };
+      const actor = await loadActor(req.personId, get);
       if (!actor.known) return res.status(403).json({ error: 'Unknown user' });
+      const grant = await loadGrant(req.personId, get);
       // Over-fetch a little so filtering rarely returns a short page; the cursor always advances past what was examined.
       const rows = await store.changesSince(since, { collections, limit: limit + 1 });
       const hasMore = rows.length > limit;
       const page = hasMore ? rows.slice(0, limit) : rows;
+      const readable = await Promise.all(page.map((r) => canReadRow(actor, grant, r, get)));
       const changes = page
-        .filter((r) => canRead(actor, r.collection, r.data))
+        .filter((_, i) => readable[i])
         .map((r) => ({ collection: r.collection, id: r.id, data: r.deleted ? null : r.data, deleted: r.deleted, version: r.version, seq: r.seq }));
       const cursor = page.length ? page[page.length - 1].seq : since;
       res.json({ changes, cursor, hasMore });

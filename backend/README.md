@@ -24,32 +24,31 @@ public keys (`FIREBASE_PROJECT_ID`), so no secret is needed. The person id is th
 
 `src/policy/` is the server-side port of `firestore.rules`.
 
-* **Ported exactly (and tested):** `territoryDrawings`, `territoryDrawingAudits`, `territoryBounds` — role → congregation →
-  FS Group → territory, bounding box for group-level users, status/color match, append-only audits.
-* **Safe default for everything else:** writes only inside the caller's own congregation, no cross-congregation writes, no
-  minting Super Admins, no assigning Super Admin/Circuit Overseer roles unless you are the Super Admin.
-  Reads are limited to the caller's own congregation (Super Admin: all).
+* **Drawings** (`territoryDrawings`, `territoryDrawingAudits`, `territoryBounds`): `drawings.js`, role → congregation → FS Group → territory, bounding box for group-level users, append-only audits.
+* **Every other collection**: `rules.js`, a faithful port of each `allow` in `firestore.rules` (people, userAccessGrants, congregations, groups,
+  roleAssignments, monthlyReports, owner-only planner / Bible text / credit hours / timer records, groupChats and messages,
+  interestedPeople and visits, presence, dashboardModuleLayouts, deletedRecords, mapPins, territory assignments,
+  creditHourCategories, appSettings, preachingTimeRecords, and the plain signed-in collections). `test/rules.test.js` has a test per rule.
+* **Reads** follow the rules, then ONE addition: sensitive collections that carry a congregation (`CONGREGATION_SCOPED_READS` in
+  `rules.js`) are filtered to the caller's own congregation (or a grant's scope). Firestore could not do this (it rejects a whole
+  query instead of filtering rows); this server can. Remove a name from that set to loosen it.
 
-### Policy porting checklist (do before Firebase is switched off)
+### Not ported / still open
 
-The default is deliberately stricter than the old "any signed-in user" rules, but it is not yet the per-collection logic:
-
-- [ ] `roleAssignments` / `people` / `groups`: who may edit whom (Coordinator, Secretary, Service Overseer, group slots)
-- [ ] `monthlyReports`: publisher edits only their own; locks after submission
-- [ ] `interestedPeople` + `…/visits`: owner / assigned-publisher / forward-request rules
-- [ ] `forwardRequests`, `publisherForwardRequests`, `houseHolderAssignments`: cross-congregation visibility fields
-- [ ] `userAccessGrants` and Circuit Overseer scoping
-- [ ] subcollections (`interestedPeople/{id}/visits`, chats): derive the congregation from the parent document
-- [ ] private per-publisher collections (planner, credit hours, timers, Bible texts): only the owner
-
-Add tests next to `test/api.test.js` for each port.
+- [ ] Public (no login) endpoints the app needs: username → sign-in email lookup (Firestore allowed unauthenticated reads of `people`),
+      and `passwordResetRequests` creation. Today every call needs a Firebase ID token.
+- [ ] Territory barangay claims (`territoryAssignmentBarangays` is a Firestore transaction in the app today): needs a server "claim" endpoint so two people cannot claim the same barangay.
+- [ ] Image / file upload and download endpoints (`files` table exists).
+- [ ] Group chat unread counters were atomic increments in Firestore; here they are plain document updates.
+- [ ] Hardening the rules file itself documents as deliberately coarse (e.g. any signed-in user can edit `schedules`, `territories`, `forwardRequests`).
+- [ ] Testing the MySQL store against a real MySQL under load (tests use the in-memory store with the same contract).
 
 ## Run locally (no database needed)
 
 ```
 cd backend
 npm install
-npm test                              # 13 tests, in-memory store
+npm test                              # in-memory store
 set STORE=memory&& set AUTH_MODE=dev&& npm start
 ```
 
