@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.meetingassignments
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -159,7 +161,7 @@ class MeetingAssignmentsViewModel(
         actorPersonId: String,
     ) {
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
+            val now = nowMillis()
             val base = existing ?: MidweekMeetingSchedule(
                 congregationId = congregationId,
                 weekStartDate = weekStartDate,
@@ -196,7 +198,7 @@ class MeetingAssignmentsViewModel(
     ): String? {
         val duplicate = existingRows.any { it.id != row.id && it.congregationId == row.congregationId && it.date == row.date }
         if (duplicate) return "A schedule already exists for this date. Edit that one instead, or pick a different date."
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         val isNew = row.id.isBlank()
         val saved = publicTalkRepository.save(
             row.copy(
@@ -255,7 +257,7 @@ class MeetingAssignmentsViewModel(
      * assignment[s]" for the same date, by design. */
     fun saveCartAssignment(row: CartAssignmentRow, actorPersonId: String) {
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
+            val now = nowMillis()
             val isNew = row.id.isBlank()
             val saved = cartAssignmentRepository.save(
                 row.copy(

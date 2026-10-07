@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.users
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.AccountStatus
@@ -130,7 +132,7 @@ class AddEditUserViewModel(
 
     private fun buildGrant(personId: String, actingPersonId: String, previous: UserAccessGrant?): UserAccessGrant {
         val state = _uiState.value
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         return UserAccessGrant(
             personId = personId,
             permissions = state.selectedPermissions.map { it.name },
@@ -178,7 +180,7 @@ class AddEditUserViewModel(
                             personId = personId,
                             roleType = RoleType.serialize(RoleType.Admin(AdminRole.CIRCUIT_OVERSEER)),
                             status = RoleAssignmentStatus.ACTIVE,
-                            dateAssigned = System.currentTimeMillis(),
+                            dateAssigned = nowMillis(),
                             assignedByPersonId = enrollingPersonId,
                         )
                     },
@@ -195,7 +197,7 @@ class AddEditUserViewModel(
                 _uiState.update { it.copy(isSaving = false, savedResult = credentials, saveCompleted = true) }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isSaving = false, errorMessage = e.localizedMessage ?: "Couldn't create this user. Please try again.")
+                    it.copy(isSaving = false, errorMessage = e.message ?: "Couldn't create this user. Please try again.")
                 }
             }
         }
@@ -252,7 +254,7 @@ class AddEditUserViewModel(
                 _uiState.update { it.copy(isSaving = false, saveCompleted = true) }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isSaving = false, errorMessage = e.localizedMessage ?: "Couldn't save changes. Please try again.")
+                    it.copy(isSaving = false, errorMessage = e.message ?: "Couldn't save changes. Please try again.")
                 }
             }
         }

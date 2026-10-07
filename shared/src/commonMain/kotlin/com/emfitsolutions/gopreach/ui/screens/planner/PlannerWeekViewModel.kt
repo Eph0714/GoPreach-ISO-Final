@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.CreditHourRecord
@@ -72,7 +74,7 @@ class PlannerWeekViewModel(
     private val weeklyGoalRepository: WeeklyPlannerGoalRepository,
 ) : ViewModel() {
 
-    private val _weekStart = MutableStateFlow(WeekBounds.of(System.currentTimeMillis()).startInclusive)
+    private val _weekStart = MutableStateFlow(WeekBounds.of(nowMillis()).startInclusive)
     val weekStart: StateFlow<Long> = _weekStart
 
     fun goToPreviousWeek() = shiftWeek(-1)
@@ -107,7 +109,7 @@ class PlannerWeekViewModel(
             val bounds = WeekBounds.of(weekStart)
             val weekDays = allDays.filter { bounds.contains(it.dayStart) }
             val weekCredits = creditRecords.inPeriod(bounds)
-            val todayStart = DayBounds.of(System.currentTimeMillis()).startInclusive
+            val todayStart = DayBounds.of(nowMillis()).startInclusive
 
             val dayRows = (0..6).map { offset ->
                 val dayStart = Calendar.getInstance().apply {
@@ -151,7 +153,7 @@ class PlannerWeekViewModel(
                     publisherPersonId = publisherPersonId,
                     weekStart = weekStart,
                     goalHours = goalHours.coerceAtLeast(0),
-                    createdAt = System.currentTimeMillis(),
+                    createdAt = nowMillis(),
                 ),
             )
         }

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.CreditHourCategory
@@ -109,7 +111,7 @@ class CreditHourEntryViewModel(
     ) {
         val alignedDay = DayBounds.of(dayStart).startInclusive
         val normalizedTotal = (hours.coerceAtLeast(0) * 60) + minutes.coerceAtLeast(0)
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         val base = existing ?: CreditHourRecord(
             publisherPersonId = publisherPersonId,
             createdAt = now,

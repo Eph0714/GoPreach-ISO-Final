@@ -1,9 +1,10 @@
 package com.emfitsolutions.gopreach.domain
 
-import java.security.MessageDigest
-import java.security.SecureRandom
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.PBEKeySpec
+import com.emfitsolutions.gopreach.platform.bestPbkdf2Algorithm
+import com.emfitsolutions.gopreach.platform.constantTimeEquals
+import com.emfitsolutions.gopreach.platform.pbkdf2
+import com.emfitsolutions.gopreach.platform.secureRandomBytes
+
 
 /**
  * Rules for the on-device PIN and Pattern logins. They are convenience unlocks for the account's
@@ -66,11 +67,10 @@ object QuickLoginPolicy {
 object SecretHasher {
     private const val ITERATIONS = 150_000
     private const val KEY_BITS = 256
-    private val random = SecureRandom()
 
     fun hash(secret: String): String {
-        val salt = ByteArray(16).also(random::nextBytes)
-        val algorithm = bestAlgorithm()
+        val salt = secureRandomBytes(16)
+        val algorithm = bestPbkdf2Algorithm()
         return listOf(algorithm, toHex(salt), toHex(derive(secret, salt, algorithm))).joinToString("$")
     }
 
@@ -79,17 +79,13 @@ object SecretHasher {
         if (parts.size != 3) return false
         val actual = runCatching { derive(secret, fromHex(parts[1]), parts[0]) }.getOrNull() ?: return false
         // Constant-time comparison, so the timing never reveals how much of a guess was right.
-        return MessageDigest.isEqual(actual, fromHex(parts[2]))
+        return constantTimeEquals(actual, fromHex(parts[2]))
     }
 
-    private fun bestAlgorithm(): String = runCatching {
-        SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
-        "PBKDF2WithHmacSHA256"
-    }.getOrDefault("PBKDF2WithHmacSHA1")
 
     private fun derive(secret: String, salt: ByteArray, algorithm: String): ByteArray =
-        SecretKeyFactory.getInstance(algorithm).generateSecret(PBEKeySpec(secret.toCharArray(), salt, ITERATIONS, KEY_BITS)).encoded
+        pbkdf2(secret, salt, ITERATIONS, KEY_BITS, algorithm)
 
-    private fun toHex(bytes: ByteArray) = bytes.joinToString("") { "%02x".format(it) }
+    private fun toHex(bytes: ByteArray) = bytes.joinToString("") { it.toUByte().toString(16).padStart(2, '0') }
     private fun fromHex(s: String) = ByteArray(s.length / 2) { s.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
 }

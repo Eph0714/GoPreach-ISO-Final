@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.data.repository
 
+import com.emfitsolutions.gopreach.platform.formatDate
+
 import com.emfitsolutions.gopreach.data.sync.saveNow
 import com.emfitsolutions.gopreach.data.model.MonthlyReport
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
@@ -67,7 +69,7 @@ class MonthlyReportRepository(
      * instead of storing a second report. Falls back to a random id if either part is missing. */
     private fun reportIdFor(report: MonthlyReport): String {
         if (report.publisherPersonId.isBlank() || report.periodMonth <= 0L) return remote.newId(COLLECTION)
-        val month = java.text.SimpleDateFormat("yyyyMM", java.util.Locale.US).format(java.util.Date(report.periodMonth))
+        val month = formatDate(report.periodMonth, "yyyyMM")
         return "${report.publisherPersonId}_$month"
     }
 

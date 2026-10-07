@@ -160,7 +160,7 @@ class RecycleBinRepository(
                 details = "${record.module}: ${record.label}",
             )
             RestoreResult.Restored
-        }.getOrElse { RestoreResult.Failed(it.localizedMessage ?: "Couldn't restore this record. Please try again.") }
+        }.getOrElse { RestoreResult.Failed(it.message ?: "Couldn't restore this record. Please try again.") }
     }
 
     /** Removes the record for good — only ever from Deleted Records, by an explicit action or the retention timer. */

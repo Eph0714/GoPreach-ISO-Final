@@ -1,7 +1,8 @@
 package com.emfitsolutions.gopreach.data.repository
 
-import android.content.Context
-import androidx.core.content.edit
+import com.emfitsolutions.gopreach.platform.KeyValueStores
+import com.emfitsolutions.gopreach.platform.edit
+
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -14,9 +15,9 @@ private const val KEY_SHOW_DASHBOARD = "publisher_show_dashboard"
  * synced or shared). Defaults to shown, so a fresh install/device/login
  * starts with the Dashboard (and, driven by it, My Planner) visible. */
 class PublisherDashboardVisibilityRepository(
-    context: Context,
+    stores: KeyValueStores,
 ) {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = stores.open(PREFS_NAME)
 
     private val _showDashboard = MutableStateFlow(prefs.getBoolean(KEY_SHOW_DASHBOARD, true))
     val showDashboard: StateFlow<Boolean> = _showDashboard

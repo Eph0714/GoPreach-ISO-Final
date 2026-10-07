@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.monthlyreport
 
+import kotlin.math.roundToLong
+
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.MonthlyReport
@@ -150,7 +154,7 @@ data class MonthlyReportUiState(
         if (!isPioneer) return false
         val system = systemCalculatedHours ?: return false
         // Both sides are converted hours, so 15:28 vs a system 15:28 never reads as "differs".
-        return Math.round(reportedHoursDecimal * 60) != Math.round(system * 60)
+        return (reportedHoursDecimal * 60).roundToLong() != (system * 60).roundToLong()
     }
 
     /** Spec §12 — non-negative, valid numbers; shown beside the relevant
@@ -343,7 +347,7 @@ class MonthlyReportViewModel(
                 // they're the historical record of what was wrong last time,
                 // not a live "currently returned" flag once status moves on.
                 status = if (state.existingReport?.status == ReportStatus.RETURNED) ReportStatus.CORRECTED else ReportStatus.SUBMITTED,
-                submittedAt = System.currentTimeMillis(),
+                submittedAt = nowMillis(),
                 returnedByPersonId = state.existingReport?.returnedByPersonId,
                 returnedAt = state.existingReport?.returnedAt,
                 correctionReason = state.existingReport?.correctionReason,

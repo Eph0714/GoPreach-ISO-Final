@@ -119,7 +119,7 @@ object Destinations {
     const val MANAGE_TERRITORIES_BASE = "manage_territories"
     const val MANAGE_TERRITORIES = "$MANAGE_TERRITORIES_BASE?focusLat={focusLat}&focusLng={focusLng}&focusName={focusName}"
     fun territoryMapFocusedOn(lat: Double, lng: Double, name: String): String {
-        val encodedName = java.net.URLEncoder.encode(name, "UTF-8")
+        val encodedName = percentEncode(name)
         return "$MANAGE_TERRITORIES_BASE?focusLat=$lat&focusLng=$lng&focusName=$encodedName"
     }
     // "Group Chat Setting" module — replaces the old Chat Schedule (which was
@@ -245,4 +245,18 @@ object Destinations {
     // (their own congregation) accounts. See HouseholderVisitHistoryScreen's
     // own doc comment.
     const val HOUSEHOLDER_VISIT_HISTORY = "householder_visit_history"
+}
+
+/** URL-encodes [s] like `java.net.URLEncoder` (UTF-8; space becomes `+`; letters, digits and `.-*_` are kept). */
+private fun percentEncode(s: String): String {
+    val out = StringBuilder()
+    for (b in s.encodeToByteArray()) {
+        val c = b.toInt().toChar()
+        when {
+            b >= 0 && (c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c in ".-*_") -> out.append(c)
+            b.toInt() == ' '.code -> out.append('+')
+            else -> out.append('%').append(b.toUByte().toString(16).uppercase().padStart(2, '0'))
+        }
+    }
+    return out.toString()
 }

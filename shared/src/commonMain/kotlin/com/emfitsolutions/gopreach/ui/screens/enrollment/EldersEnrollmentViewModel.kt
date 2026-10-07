@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.enrollment
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.AdminRole
@@ -155,7 +157,7 @@ class EldersEnrollmentViewModel(
                 }
             }
 
-            val now = System.currentTimeMillis()
+            val now = nowMillis()
             // Every checked primary role becomes its own RoleAssignment doc
             // (spec §8: one person, several simultaneous role assignments).
             // Order doesn't matter functionally — whichever comes first is
@@ -234,7 +236,7 @@ class EldersEnrollmentViewModel(
             _uiState.update { it.copy(isSaving = false, result = credentials) }
           } catch (e: Exception) {
             _uiState.update {
-                it.copy(isSaving = false, errorMessage = e.localizedMessage ?: "Couldn't enroll this person. Please try again.")
+                it.copy(isSaving = false, errorMessage = e.message ?: "Couldn't enroll this person. Please try again.")
             }
           }
         }

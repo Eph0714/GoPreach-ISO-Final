@@ -1,14 +1,12 @@
 package com.emfitsolutions.gopreach.data.repository
 
-import android.content.Context
-import android.util.Base64
-import androidx.core.content.edit
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
-import java.security.SecureRandom
-import java.security.spec.KeySpec
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.PBEKeySpec
+import com.emfitsolutions.gopreach.platform.KeyValueStores
+import com.emfitsolutions.gopreach.platform.edit
+import com.emfitsolutions.gopreach.platform.pbkdf2
+import com.emfitsolutions.gopreach.platform.secureRandomBytes
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
+
 
 private const val PREFS_NAME = "gopreach_offline_auth"
 private const val KEY_USERNAME = "username"
@@ -38,29 +36,18 @@ private const val KEY_LENGTH_BITS = 256
  * device, not a security hole (each person can still only unlock their own
  * cached data, never someone else's, while online).
  */
-class OfflineAuthStore(context: Context) {
-
-    private val prefs by lazy {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        EncryptedSharedPreferences.create(
-            context,
-            PREFS_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
-    }
+@OptIn(ExperimentalEncodingApi::class)
+class OfflineAuthStore(stores: KeyValueStores) {
+    private val prefs by lazy { stores.openSecure(PREFS_NAME) }
 
     /** Called after every successful *online* sign-in (see [AuthRepository.signIn]). */
     fun saveVerifier(username: String, password: String, personId: String) {
-        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val salt = secureRandomBytes(16)
         val hash = pbkdf2(password, salt)
         prefs.edit {
             putString(KEY_USERNAME, username)
-            putString(KEY_SALT, Base64.encodeToString(salt, Base64.NO_WRAP))
-            putString(KEY_HASH, Base64.encodeToString(hash, Base64.NO_WRAP))
+            putString(KEY_SALT, Base64.encode(salt))
+            putString(KEY_HASH, Base64.encode(hash))
             putString(KEY_PERSON_ID, personId)
         }
     }
@@ -81,8 +68,8 @@ class OfflineAuthStore(context: Context) {
         val saltBase64 = prefs.getString(KEY_SALT, null) ?: return null
         val hashBase64 = prefs.getString(KEY_HASH, null) ?: return null
         val personId = prefs.getString(KEY_PERSON_ID, null) ?: return null
-        val salt = Base64.decode(saltBase64, Base64.NO_WRAP)
-        val expectedHash = Base64.decode(hashBase64, Base64.NO_WRAP)
+        val salt = Base64.decode(saltBase64)
+        val expectedHash = Base64.decode(hashBase64)
         val actualHash = pbkdf2(password, salt)
         return if (actualHash.contentEquals(expectedHash)) personId else null
     }
@@ -93,11 +80,11 @@ class OfflineAuthStore(context: Context) {
      * different account's verifier (see this class's own doc comment on why
      * that single-slot replacement is an accepted limit, not a bug). */
     fun clear() {
-        prefs.edit { clear() }
+        prefs.edit {
+            remove(KEY_USERNAME); remove(KEY_SALT); remove(KEY_HASH); remove(KEY_PERSON_ID)
+        }
     }
 
-    private fun pbkdf2(password: String, salt: ByteArray): ByteArray {
-        val spec: KeySpec = PBEKeySpec(password.toCharArray(), salt, PBKDF2_ITERATIONS, KEY_LENGTH_BITS)
-        return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-    }
+    private fun pbkdf2(password: String, salt: ByteArray): ByteArray =
+        pbkdf2(password, salt, PBKDF2_ITERATIONS, KEY_LENGTH_BITS, "PBKDF2WithHmacSHA256")
 }

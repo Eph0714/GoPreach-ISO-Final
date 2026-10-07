@@ -93,7 +93,8 @@ object GroupColorPalette {
             else -> Triple(c, 0f, x)
         }
         fun channel(v: Float) = ((v + m) * 255f).roundToInt().coerceIn(0, 255)
-        return "#%02X%02X%02X".format(channel(r1), channel(g1), channel(b1))
+        fun hex(v: Int) = v.toString(16).uppercase().padStart(2, '0')
+        return "#" + hex(channel(r1)) + hex(channel(g1)) + hex(channel(b1))
     }
 
     /** Parses a "#RRGGBB" string (as produced by [colorForGroupId]/

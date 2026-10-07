@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.ForwardRequestStatus
@@ -68,7 +70,7 @@ class PublisherForwardRequestsViewModel(
             // "Accepted" status against the record.
             interestedPersonRepository.save(person.copy(publisherPersonId = request.toPublisherPersonId))
             publisherForwardRequestRepository.save(
-                request.copy(status = ForwardRequestStatus.ACCEPTED, respondedAt = System.currentTimeMillis())
+                request.copy(status = ForwardRequestStatus.ACCEPTED, respondedAt = nowMillis())
             )
             auditLogRepository.log(
                 actorPersonId = actorPersonId,
@@ -83,7 +85,7 @@ class PublisherForwardRequestsViewModel(
     fun decline(request: PublisherForwardRequest, actorPersonId: String) {
         viewModelScope.launch {
             publisherForwardRequestRepository.save(
-                request.copy(status = ForwardRequestStatus.DECLINED, respondedAt = System.currentTimeMillis())
+                request.copy(status = ForwardRequestStatus.DECLINED, respondedAt = nowMillis())
             )
             auditLogRepository.log(
                 actorPersonId = actorPersonId,

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.enrollment
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.AdminRole
@@ -109,7 +111,7 @@ class MinisterialServantEnrollmentViewModel(
                     _uiState.update { it.copy(isSaving = false, errorMessage = "Select a congregation.") }
                     return@launch
                 }
-                val now = System.currentTimeMillis()
+                val now = nowMillis()
                 val credentials = authRepository.createAccountWithTempCredentials(
                     person = Person(
                         firstName = state.firstName.trim(),
@@ -163,7 +165,7 @@ class MinisterialServantEnrollmentViewModel(
                 _uiState.update { it.copy(isSaving = false, result = credentials) }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isSaving = false, errorMessage = e.localizedMessage ?: "Couldn't enroll this ministerial servant. Please try again.")
+                    it.copy(isSaving = false, errorMessage = e.message ?: "Couldn't enroll this ministerial servant. Please try again.")
                 }
             }
         }

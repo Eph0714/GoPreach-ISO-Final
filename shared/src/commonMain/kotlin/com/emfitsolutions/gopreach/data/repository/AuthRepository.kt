@@ -288,7 +288,7 @@ class AuthRepository(
             auth.signOut()
             AuthResult.Success(updated, requiresPasswordChange = false)
         } catch (e: Exception) {
-            AuthResult.Error(e.localizedMessage ?: "Couldn't update your credentials.")
+            AuthResult.Error(e.message ?: "Couldn't update your credentials.")
         }
     }
 
@@ -312,7 +312,7 @@ class AuthRepository(
             personRepository.cacheFromServer(updated)
             AuthResult.Success(updated, requiresPasswordChange = true)
         } catch (e: Exception) {
-            AuthResult.Error(e.localizedMessage ?: "Couldn't update your credentials.")
+            AuthResult.Error(e.message ?: "Couldn't update your credentials.")
         }
     }
 
@@ -327,7 +327,7 @@ class AuthRepository(
             personRepository.cacheFromServer(confirmed)
             AuthResult.Success(confirmed, requiresPasswordChange = true)
         } catch (e: Exception) {
-            AuthResult.Error(e.localizedMessage ?: "Couldn't save your information. Check your connection and try again.")
+            AuthResult.Error(e.message ?: "Couldn't save your information. Check your connection and try again.")
         }
     }
 
@@ -347,7 +347,7 @@ class AuthRepository(
             auditLogRepository.log(actorPersonId = personId, action = "COMPLETE_FIRST_LOGIN_SETUP")
             AuthResult.Success(done, requiresPasswordChange = false)
         } catch (e: Exception) {
-            AuthResult.Error(e.localizedMessage ?: "Couldn't finish setup. Check your connection and try again.")
+            AuthResult.Error(e.message ?: "Couldn't finish setup. Check your connection and try again.")
         }
     }
 
@@ -380,7 +380,7 @@ class AuthRepository(
         } catch (e: AuthFailure.TooManyRequests) {
             Result.failure(IllegalStateException("Too many attempts. Please wait a moment and try again."))
         } catch (e: Exception) {
-            Result.failure(IllegalStateException(e.localizedMessage ?: "Couldn't verify your current password. Please try again."))
+            Result.failure(IllegalStateException(e.message ?: "Couldn't verify your current password. Please try again."))
         }
     }
 
@@ -410,7 +410,7 @@ class AuthRepository(
             )
             AuthResult.Success(updated, requiresPasswordChange = false)
         } catch (e: Exception) {
-            AuthResult.Error(e.localizedMessage ?: "Couldn't update your username.")
+            AuthResult.Error(e.message ?: "Couldn't update your username.")
         }
     }
 
@@ -430,7 +430,7 @@ class AuthRepository(
             auth.signOut()
             AuthResult.Success(personRepository.get(personId) ?: Person(id = personId), requiresPasswordChange = false)
         } catch (e: Exception) {
-            AuthResult.Error(e.localizedMessage ?: "Couldn't update your password.")
+            AuthResult.Error(e.message ?: "Couldn't update your password.")
         }
     }
 
@@ -468,7 +468,7 @@ class AuthRepository(
             )
             AuthResult.Success(updated, requiresPasswordChange = false)
         } catch (e: Exception) {
-            AuthResult.Error(e.localizedMessage ?: "Couldn't update that account's username.")
+            AuthResult.Error(e.message ?: "Couldn't update that account's username.")
         }
     }
 

@@ -1,7 +1,8 @@
 package com.emfitsolutions.gopreach.data.repository
 
-import android.content.Context
-import androidx.core.content.edit
+import com.emfitsolutions.gopreach.platform.KeyValueStores
+import com.emfitsolutions.gopreach.platform.edit
+
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -19,8 +20,8 @@ private const val KEY_PERSON_ID = "personId"
  * both exist (see [UserSession.state]). Plain (unencrypted) SharedPreferences
  * is fine here: this only ever holds a personId, never a credential.
  */
-class OfflineSessionMarker(context: Context) {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+class OfflineSessionMarker(stores: KeyValueStores) {
+    private val prefs = stores.open(PREFS_NAME)
 
     private val _personId = MutableStateFlow(prefs.getString(KEY_PERSON_ID, null))
     val personId: StateFlow<String?> = _personId

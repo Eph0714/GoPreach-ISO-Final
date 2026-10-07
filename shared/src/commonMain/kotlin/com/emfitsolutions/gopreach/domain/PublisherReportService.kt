@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.domain
 
+import kotlin.math.roundToLong
+
 import com.emfitsolutions.gopreach.data.model.CreditHourCategory
 import com.emfitsolutions.gopreach.data.model.CreditHourRecord
 import com.emfitsolutions.gopreach.data.model.InterestedPerson
@@ -123,7 +125,7 @@ class PublisherReportService(
         val plannerMinutes = plannerDays.filter { bounds.contains(it.dayStart) }.sumOf { it.totalMinutes }
         // A Pioneer's official hours are the Preaching Time Records; if none were
         // recorded for the month, the Planner's logged time is the Monthly Report's hours.
-        val preachingMinutes = if (isPioneer) Math.round((calc.systemCalculatedHours ?: 0.0) * 60).toInt() else 0
+        val preachingMinutes = if (isPioneer) (((calc.systemCalculatedHours ?: 0.0) * 60)).roundToLong().toInt() else 0
 
         // A Pioneer's Credit Hours count toward their total hours.
         val monthCreditRecords = creditRecords.filter { it.publisherPersonId == publisherPersonId && bounds.contains(it.resolvedDayStart()) }
@@ -132,7 +134,7 @@ class PublisherReportService(
         val systemMinutes = if (isPioneer) freshMinutes else null
 
         val keepStored = existing != null && (useStoredValues || existing.status == ReportStatus.POSTED)
-        val totalMinutes = if (keepStored) Math.round((existing!!.hoursRendered ?: 0.0) * 60).toInt() else freshMinutes
+        val totalMinutes = if (keepStored) (((existing!!.hoursRendered ?: 0.0) * 60)).roundToLong().toInt() else freshMinutes
 
         // The Credit Hour names go into the Remarks.
         val creditNames = monthCreditRecords

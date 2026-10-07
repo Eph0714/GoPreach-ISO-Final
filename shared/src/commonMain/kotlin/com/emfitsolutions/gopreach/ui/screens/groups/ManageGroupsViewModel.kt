@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.groups
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.AdminRole
@@ -207,7 +209,7 @@ class ManageGroupsViewModel(
                     current.copy(
                         groupId = newGroupId,
                         lastEditedByPersonId = actorPersonId,
-                        lastEditedAt = System.currentTimeMillis(),
+                        lastEditedAt = nowMillis(),
                     )
                 )
                 auditLogRepository.log(

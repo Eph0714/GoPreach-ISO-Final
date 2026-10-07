@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.CreditHourRecord
@@ -66,7 +68,7 @@ class PlannerDayViewModel(
     private val monthlyReportRepository: com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository,
 ) : ViewModel() {
 
-    private val _dayStart = MutableStateFlow(DayBounds.of(System.currentTimeMillis()).startInclusive)
+    private val _dayStart = MutableStateFlow(DayBounds.of(nowMillis()).startInclusive)
     val dayStart: StateFlow<Long> = _dayStart
 
     fun goToPreviousDay() = shiftDay(-1)
@@ -138,7 +140,7 @@ class PlannerDayViewModel(
                     year = year,
                     month = month,
                     goalHours = goalHours.coerceAtLeast(0),
-                    createdAt = System.currentTimeMillis(),
+                    createdAt = nowMillis(),
                 ),
             )
         }
@@ -207,7 +209,7 @@ class PlannerDayViewModel(
             id = PlannerDay.idFor(publisherPersonId, dayStart),
             publisherPersonId = publisherPersonId,
             dayStart = dayStart,
-            createdAt = System.currentTimeMillis(),
+            createdAt = nowMillis(),
         )
         plannerDayRepository.save(transform(base))
     }

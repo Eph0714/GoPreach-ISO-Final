@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.findlocation
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.location.LatLng
@@ -55,7 +57,7 @@ class FindLocationViewModel(
                     lat = lat,
                     lng = lng,
                     remarks = remarks.trim(),
-                    createdAt = System.currentTimeMillis(),
+                    createdAt = nowMillis(),
                 )
             )
         }
@@ -86,7 +88,7 @@ class FindLocationViewModel(
      * record. */
     fun assignToRecord(person: InterestedPerson, lat: Double, lng: Double, actorPersonId: String) {
         viewModelScope.launch {
-            val now = System.currentTimeMillis()
+            val now = nowMillis()
             interestedPersonRepository.save(
                 person.copy(gpsLat = lat, gpsLng = lng, gpsAccuracy = null, gpsCapturedAt = now, gpsCapturedBy = actorPersonId, gpsUpdatedAt = now),
             )

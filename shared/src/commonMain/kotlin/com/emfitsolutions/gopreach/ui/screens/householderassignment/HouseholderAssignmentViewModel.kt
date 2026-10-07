@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.householderassignment
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.location.GeocodedAddress
@@ -109,7 +111,7 @@ class HouseholderAssignmentViewModel(
         gpsLat: Double? = null,
         gpsLng: Double? = null,
     ): InterestedPerson {
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         return interestedPersonRepository.save(
             InterestedPerson(
                 name = name,
@@ -179,7 +181,7 @@ class HouseholderAssignmentViewModel(
                     toPublisherPersonId = toPublisher.id,
                     toPublisherNameSnapshot = toPublisher.fullName,
                     status = HouseholderAssignmentStatus.PENDING,
-                    assignedAt = System.currentTimeMillis(),
+                    assignedAt = nowMillis(),
                 )
             )
             interestedPersonRepository.save(person.copy(pendingHouseholderAssignmentId = assignment.id))
@@ -210,7 +212,7 @@ class HouseholderAssignmentViewModel(
     fun cancel(assignment: HouseholderAssignment, actorPersonId: String) {
         viewModelScope.launch {
             assignmentRepository.save(
-                assignment.copy(status = HouseholderAssignmentStatus.CANCELLED, cancelledAt = System.currentTimeMillis(), cancelledByPersonId = actorPersonId)
+                assignment.copy(status = HouseholderAssignmentStatus.CANCELLED, cancelledAt = nowMillis(), cancelledByPersonId = actorPersonId)
             )
             val person = interestedPersonRepository.observeAll().first().firstOrNull { it.id == assignment.interestedPersonId }
             if (person != null && person.pendingHouseholderAssignmentId == assignment.id) {
@@ -262,7 +264,7 @@ class HouseholderAssignmentViewModel(
             assignmentRepository.save(
                 assignment.copy(
                     status = HouseholderAssignmentStatus.ACCEPTED,
-                    respondedAt = System.currentTimeMillis(),
+                    respondedAt = nowMillis(),
                     respondedByPersonId = actorPersonId,
                     respondedByNameSnapshot = actorNameSnapshot,
                 )
@@ -294,7 +296,7 @@ class HouseholderAssignmentViewModel(
             assignmentRepository.save(
                 assignment.copy(
                     status = HouseholderAssignmentStatus.REJECTED,
-                    respondedAt = System.currentTimeMillis(),
+                    respondedAt = nowMillis(),
                     respondedByPersonId = actorPersonId,
                     respondedByNameSnapshot = actorNameSnapshot,
                     rejectionReason = reason,

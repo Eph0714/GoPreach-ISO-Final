@@ -11,7 +11,7 @@ enum class NameOrder(val label: String) {
  * [com.emfitsolutions.gopreach.data.repository.NameOrderPreference] owns the stored value and keeps this in step.
  */
 object NameOrderState {
-    @Volatile var current: NameOrder = NameOrder.LAST_FIRST
+    @kotlin.concurrent.Volatile var current: NameOrder = NameOrder.LAST_FIRST
 }
 
 /** "FERNANDEZ, EPHRAIM M. JR." (last first) or "EPHRAIM M. FERNANDEZ JR." (first first). Blank parts are skipped. */

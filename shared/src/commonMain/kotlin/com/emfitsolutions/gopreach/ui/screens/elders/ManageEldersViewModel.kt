@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.elders
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.AdminRole
@@ -195,7 +197,7 @@ class ManageEldersViewModel(
     ) {
         viewModelScope.launch {
             personRepository.save(updatedPerson)
-            val now = System.currentTimeMillis()
+            val now = nowMillis()
 
             // Reconcile the primary admin-role checkboxes: an existing
             // assignment for a role that's still checked gets its

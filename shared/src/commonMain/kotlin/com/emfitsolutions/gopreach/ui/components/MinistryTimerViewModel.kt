@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.MinistryTimerSession
@@ -42,7 +44,7 @@ class MinistryTimerViewModel(
     fun start(publisherPersonId: String) {
         viewModelScope.launch {
             if (sessionRepository.observeRunning(publisherPersonId).first() != null) return@launch
-            val now = System.currentTimeMillis()
+            val now = nowMillis()
             sessionRepository.save(
                 MinistryTimerSession(
                     publisherPersonId = publisherPersonId,
@@ -63,7 +65,7 @@ class MinistryTimerViewModel(
         viewModelScope.launch {
             val session = sessionRepository.observeRunning(publisherPersonId).first() ?: return@launch
             if (session.status != TimerSessionStatus.RUNNING) return@launch
-            val now = System.currentTimeMillis()
+            val now = nowMillis()
             val segmentSeconds = ((now - session.startTime) / 1000).coerceAtLeast(0)
             sessionRepository.save(
                 session.copy(accumulatedSeconds = session.accumulatedSeconds + segmentSeconds, status = TimerSessionStatus.PAUSED),
@@ -78,7 +80,7 @@ class MinistryTimerViewModel(
         viewModelScope.launch {
             val session = sessionRepository.observeRunning(publisherPersonId).first() ?: return@launch
             if (session.status != TimerSessionStatus.PAUSED) return@launch
-            sessionRepository.save(session.copy(startTime = System.currentTimeMillis(), status = TimerSessionStatus.RUNNING))
+            sessionRepository.save(session.copy(startTime = nowMillis(), status = TimerSessionStatus.RUNNING))
         }
     }
 
@@ -94,7 +96,7 @@ class MinistryTimerViewModel(
      * PAUSED; `null` if nothing was active. */
     suspend fun stopAndFinalize(publisherPersonId: String, targetDayMillis: Long): MinistryTimerStopResult? {
         val session = sessionRepository.observeRunning(publisherPersonId).first() ?: return null
-        val now = System.currentTimeMillis()
+        val now = nowMillis()
         val runningSegmentSeconds = if (session.status == TimerSessionStatus.RUNNING) {
             ((now - session.startTime) / 1000).coerceAtLeast(0)
         } else {

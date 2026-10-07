@@ -8,7 +8,7 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 
-/** Current time in epoch milliseconds (replaces `System.currentTimeMillis()` in shared code). */
+/** Current time in epoch milliseconds (replaces `nowMillis()` in shared code). */
 fun nowMillis(): Long = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
 
 /** Start of the given local day (device time zone) in epoch millis. */

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,7 +77,7 @@ fun MinistryTimerCard(
      * day than today still saves to the day on screen. Every other call site
      * (Publisher Main Form) has no such date picker, so it defaults to
      * today. */
-    targetDayMillis: Long = DayBounds.of(System.currentTimeMillis()).startInclusive,
+    targetDayMillis: Long = DayBounds.of(nowMillis()).startInclusive,
     viewModel: MinistryTimerViewModel = koinViewModel(),
 ) {
     // remember(publisherPersonId): without this, the 1-second ticking effect
@@ -84,7 +86,7 @@ fun MinistryTimerCard(
     // "no session" before it re-emits) instead of the same live one.
     val session by remember(publisherPersonId) { viewModel.runningSessionFor(publisherPersonId) }
         .collectAsStateWithLifecycle(initialValue = null)
-    var nowMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var nowMillis by remember { mutableLongStateOf(nowMillis()) }
     val isRunning = session?.status == TimerSessionStatus.RUNNING
     val coroutineScope = rememberCoroutineScope()
 
@@ -99,7 +101,7 @@ fun MinistryTimerCard(
 
     LaunchedEffect(session?.id, isRunning) {
         while (isRunning) {
-            nowMillis = System.currentTimeMillis()
+            nowMillis = nowMillis()
             delay(1000)
         }
     }
@@ -110,7 +112,8 @@ fun MinistryTimerCard(
     val hours = elapsedSeconds / 3600
     val minutes = (elapsedSeconds % 3600) / 60
     val seconds = elapsedSeconds % 60
-    val timeText = if (hours > 0) "%02d:%02d:%02d".format(hours, minutes, seconds) else "%02d:%02d".format(minutes, seconds)
+    fun two(v: Number) = v.toString().padStart(2, '0')
+    val timeText = if (hours > 0) "${two(hours)}:${two(minutes)}:${two(seconds)}" else "${two(minutes)}:${two(seconds)}"
     // Cosmetic sweep marker (not a real progress bar — there's no fixed
     // duration to complete) showing the dial is live: one full revolution
     // per minute of elapsed ministry time. Frozen (last position) while
@@ -174,7 +177,7 @@ fun MinistryTimerCard(
                         val radius = size.minDimension / 2 - strokeWidthPx
                         drawCircle(color = ringColor, radius = radius, style = Stroke(width = strokeWidthPx))
                         if (session != null) {
-                            val angleRad = Math.toRadians(sweepAngleDegrees.toDouble())
+                            val angleRad = (sweepAngleDegrees.toDouble() * kotlin.math.PI / 180.0)
                             val markerCenter = Offset(
                                 x = center.x + radius * cos(angleRad).toFloat(),
                                 y = center.y + radius * sin(angleRad).toFloat(),

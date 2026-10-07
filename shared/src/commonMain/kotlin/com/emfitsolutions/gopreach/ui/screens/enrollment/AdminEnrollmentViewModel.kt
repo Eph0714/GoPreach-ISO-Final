@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.enrollment
 
+import com.emfitsolutions.gopreach.platform.nowMillis
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.AdminRole
@@ -72,7 +74,7 @@ class AdminEnrollmentViewModel(
                             roleType = RoleType.serialize(RoleType.Admin(AdminRole.ADMIN_PER_CONGREGATION)),
                             congregationId = state.selectedCongregationId,
                             status = RoleAssignmentStatus.ACTIVE,
-                            dateAssigned = System.currentTimeMillis(),
+                            dateAssigned = nowMillis(),
                             assignedByPersonId = enrollingPersonId,
                         )
                     },
@@ -81,7 +83,7 @@ class AdminEnrollmentViewModel(
                 _uiState.update { it.copy(isSaving = false, result = credentials) }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isSaving = false, errorMessage = e.localizedMessage ?: "Couldn't enroll this admin. Please try again.")
+                    it.copy(isSaving = false, errorMessage = e.message ?: "Couldn't enroll this admin. Please try again.")
                 }
             }
         }

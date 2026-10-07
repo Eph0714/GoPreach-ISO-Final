@@ -1,9 +1,9 @@
 package com.emfitsolutions.gopreach.domain
 
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.platform.Date
+import com.emfitsolutions.gopreach.platform.Locale
 
 /**
  * The one finished report for a Publisher and month — what Send Report (Open My
