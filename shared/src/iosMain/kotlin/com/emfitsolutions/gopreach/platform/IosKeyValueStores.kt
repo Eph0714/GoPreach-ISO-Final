@@ -2,7 +2,9 @@ package com.emfitsolutions.gopreach.platform
 
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.alloc
-import kotlinx.cinterop.allocArrayOf
+import kotlinx.cinterop.COpaquePointerVar
+import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.set
 import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.nativeHeap
@@ -82,8 +84,12 @@ private class UserDefaultsStore(private val defaults: NSUserDefaults) : KeyValue
 private class KeychainStore(private val service: String) : KeyValueStore {
 
     private fun dictionary(entries: List<Pair<CFStringRef?, CFTypeRef?>>): CFDictionaryRef? {
-        val keys = nativeHeap.allocArrayOf(*entries.map { it.first }.toTypedArray())
-        val values = nativeHeap.allocArrayOf(*entries.map { it.second }.toTypedArray())
+        val keys = nativeHeap.allocArray<COpaquePointerVar>(entries.size)
+        val values = nativeHeap.allocArray<COpaquePointerVar>(entries.size)
+        entries.forEachIndexed { i, (k, v) ->
+            keys[i] = k
+            values[i] = v
+        }
         return CFDictionaryCreate(kCFAllocatorDefault, keys.reinterpret(), values.reinterpret(), entries.size.convert(), null, null)
             .also {
                 nativeHeap.free(keys)
