@@ -24,6 +24,6 @@ fun buildIosAppDatabase(): AppDatabase {
         .setDriver(BundledSQLiteDriver())
         .addMigrations(AppDatabase.MIGRATION_1_2)
         .fallbackToDestructiveMigration(dropAllTables = true)
-        .setQueryCoroutineContext(Dispatchers.IO)
+        .setQueryCoroutineContext(Dispatchers.Default)
         .build()
 }

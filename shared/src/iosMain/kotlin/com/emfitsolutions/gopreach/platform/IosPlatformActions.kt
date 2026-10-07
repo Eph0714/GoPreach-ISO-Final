@@ -13,10 +13,8 @@ import platform.Foundation.writeToURL
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIMarkupTextPrintFormatter
 import platform.UIKit.UIPrintInfo
-import platform.UIKit.UIPrintInfoOrientationLandscape
-import platform.UIKit.UIPrintInfoOrientationPortrait
-import platform.UIKit.UIPrintInfoOutputGeneral
 import platform.UIKit.UIPrintInteractionController
+import platform.UIKit.popoverPresentationController
 
 /**
  * Print, CSV export and "open file" on iOS. Printing uses the system print sheet (AirPrint, with its own preview and
@@ -29,9 +27,9 @@ class IosPlatformActions : PlatformActions {
 
     override fun printHtml(title: String, html: String, options: PrintOptions) {
         val info = UIPrintInfo.printInfo()
-        info.outputType = UIPrintInfoOutputGeneral
         info.jobName = title
-        info.orientation = if (options.orientation == OrientationMode.LANDSCAPE) UIPrintInfoOrientationLandscape else UIPrintInfoOrientationPortrait
+        // UIPrintInfoOrientation: portrait = 0, landscape = 1 (the typed constants are not exposed to Kotlin).
+        info.setValue(if (options.orientation == OrientationMode.LANDSCAPE) 1L else 0L, forKey = "orientation")
         val controller = UIPrintInteractionController.sharedPrintController
         controller.printInfo = info
         controller.printFormatter = UIMarkupTextPrintFormatter(markupText = html)

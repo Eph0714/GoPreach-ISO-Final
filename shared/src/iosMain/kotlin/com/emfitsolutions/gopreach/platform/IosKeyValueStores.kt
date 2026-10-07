@@ -82,8 +82,8 @@ private class UserDefaultsStore(private val defaults: NSUserDefaults) : KeyValue
 private class KeychainStore(private val service: String) : KeyValueStore {
 
     private fun dictionary(entries: List<Pair<CFStringRef?, CFTypeRef?>>): CFDictionaryRef? {
-        val keys = nativeHeap.allocArrayOf(entries.map { it.first })
-        val values = nativeHeap.allocArrayOf(entries.map { it.second })
+        val keys = nativeHeap.allocArrayOf(*entries.map { it.first }.toTypedArray())
+        val values = nativeHeap.allocArrayOf(*entries.map { it.second }.toTypedArray())
         return CFDictionaryCreate(kCFAllocatorDefault, keys.reinterpret(), values.reinterpret(), entries.size.convert(), null, null)
             .also {
                 nativeHeap.free(keys)
