@@ -25,15 +25,13 @@ actual fun pbkdf2(secret: String, salt: ByteArray, iterations: Int, keyBits: Int
     val password = secret.encodeToByteArray()
     val key = ByteArray(keyBits / 8)
     val prf = if (algorithm == "PBKDF2WithHmacSHA1") kCCPRFHmacAlgSHA1 else kCCPRFHmacAlgSHA256
-    // addressOf(0) needs a non-empty array, so pin one spare byte for an empty password or salt.
-    val pw = if (password.isEmpty()) ByteArray(1) else password
+    // addressOf(0) needs a non-empty array, so pin one spare byte for an empty salt. The password goes in as a String (UTF-8 C string).
     val sl = if (salt.isEmpty()) ByteArray(1) else salt
-    pw.usePinned { p ->
-        sl.usePinned { s ->
+    sl.usePinned { s ->
             key.usePinned { k ->
                 CCKeyDerivationPBKDF(
                     kCCPBKDF2,
-                    p.addressOf(0),
+                    secret,
                     password.size.convert(),
                     s.addressOf(0).reinterpret(),
                     salt.size.convert(),
@@ -43,7 +41,6 @@ actual fun pbkdf2(secret: String, salt: ByteArray, iterations: Int, keyBits: Int
                     key.size.convert(),
                 )
             }
-        }
     }
     return key
 }
