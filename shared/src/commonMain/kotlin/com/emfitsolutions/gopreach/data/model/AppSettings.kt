@@ -23,6 +23,8 @@ data class AppSettings(
      * Records until someone restores or permanently deletes them. */
     val trashAutoDeleteEnabled: Boolean = false,
     val trashRetentionDays: Int = DEFAULT_TRASH_RETENTION_DAYS,
+    /** Consolidated report: when on, the congregation cannot submit a month to the Circuit Overseer until every publisher has submitted (off = only a warning). */
+    val requireAllPublishersSubmitted: Boolean = false,
     val updatedAt: Long = 0L,
     val updatedByPersonId: String? = null,
 ) {

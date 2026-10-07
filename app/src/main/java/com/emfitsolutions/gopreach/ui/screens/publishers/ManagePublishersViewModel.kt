@@ -288,7 +288,7 @@ class ManagePublishersViewModel(
                     details = "${owned.size} record(s) of ${row.person.fullName} are now unassigned",
                 )
             }
-            reports.forEach { monthlyReportRepository.delete(it.id) }
+            reports.forEach { monthlyReportRepository.deleteIgnoringLock(it.id) }
             roleAssignmentRepository.delete(row.assignment.id)
             if (remaining == 0) personRepository.delete(row.person.id)
         }

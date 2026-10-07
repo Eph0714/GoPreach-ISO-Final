@@ -87,6 +87,8 @@ fun ManualFieldServiceScreen(
     currentPersonId: String,
     currentRole: AdminRole?,
     onBack: () -> Unit,
+    /** Set for a Group Coordinator / Servant / Assistant: only this FS Group's publishers are offered and writable. */
+    scopeGroupId: String? = null,
     viewModel: ManualFieldServiceViewModel = koinViewModel(),
 ) {
     val showToast = rememberActionToast()
@@ -98,7 +100,8 @@ fun ManualFieldServiceScreen(
     var selectedId by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(congregationId) { selectedId = null }
     androidx.activity.compose.BackHandler(enabled = selectedId != null) { selectedId = null }
-    val allowed = currentRole != null && currentRole in ManualEntryRoles
+    val groupRole = scopeGroupId != null && currentRole == AdminRole.REGULAR_ELDER
+    val allowed = currentRole != null && (currentRole in ManualEntryRoles || groupRole)
     val monthFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
     val dateTimeFormat = remember { SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault()) }
 
@@ -128,8 +131,9 @@ fun ManualFieldServiceScreen(
                 return@Column
             }
 
-            val publishers by remember(congregationId) { viewModel.publishersIn(congregationId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+            val publishers by remember(congregationId, scopeGroupId) { viewModel.publishersIn(congregationId, if (groupRole) scopeGroupId else null) }.collectAsStateWithLifecycle(initialValue = emptyList())
             val reports by remember(congregationId) { viewModel.reportsIn(congregationId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+            val lockStatuses by remember { viewModel.lockStatuses() }.collectAsStateWithLifecycle(initialValue = emptyList())
             val names by viewModel.names.collectAsStateWithLifecycle(initialValue = emptyMap())
             val months = remember { pickableMonths() }
 
@@ -176,7 +180,7 @@ fun ManualFieldServiceScreen(
 
             fun doSave() {
                 scope.launch {
-                    val message = viewModel.save(buildInput(), congregationId, currentRole, currentPersonId)
+                    val message = viewModel.save(buildInput(), congregationId, currentRole, currentPersonId, if (groupRole) scopeGroupId else null)
                     if (message != null) error = message else {
                         error = null
                         showToast(if (existing != null) "Record updated." else "Record saved.")
@@ -277,6 +281,15 @@ fun ManualFieldServiceScreen(
                 Text("Month", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 MonthDropdown(selected = month, months = months, format = monthFormat) { month = it }
 
+                val monthLocked = com.emfitsolutions.gopreach.data.model.isMonthLocked(lockStatuses, congregationId, MonthBounds.of(month).startInclusive)
+                if (monthLocked) {
+                    Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Status: Submitted to Circuit Overseer", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
+                            Text(com.emfitsolutions.gopreach.data.model.MONTH_LOCKED_MESSAGE, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                        }
+                    }
+                }
                 if (existing != null) {
                     Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.tertiaryContainer, modifier = Modifier.fillMaxWidth()) {
                         Text(
@@ -326,6 +339,7 @@ fun ManualFieldServiceScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = { if (existing != null) confirmUpdate = true else doSave() },
+                        enabled = !monthLocked,
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
                         modifier = Modifier.height(38.dp),
                     ) { Text(if (existing != null) "Update Record" else "Save Record", fontSize = 13.sp) }
@@ -395,7 +409,7 @@ fun ManualFieldServiceScreen(
                     text = { Text("Delete the manual field service record for $label? The publisher's account is not affected.") },
                     confirmButton = {
                         TextButton(onClick = {
-                            viewModel.delete(r, congregationId, currentRole, currentPersonId)
+                            viewModel.delete(r, congregationId, currentRole, currentPersonId, if (groupRole) scopeGroupId else null)
                             showToast("Record deleted.")
                             deleting = null
                         }) { Text("Delete") }

@@ -378,6 +378,7 @@ private fun EventListScreen(
                     items(filtered, key = { it.event.id }) { item ->
                         EventCard(item = item, onClick = { onOpenEvent(item.event.id) }, onDelete = { pendingDeleteEvent = item })
                     }
+                item(key = "end-summary") { com.emfitsolutions.gopreach.ui.components.EndSummary(listOf("Total Records" to filtered.size.toString()), Modifier.padding(top = 8.dp)) }
                 }
             }
         }

@@ -12,6 +12,20 @@ import com.emfitsolutions.gopreach.data.repository.BibleTextCategoryRepository
 import com.emfitsolutions.gopreach.data.repository.BibleTextRecordRepository
 import com.emfitsolutions.gopreach.data.repository.BibleVerseTextRepository
 import com.emfitsolutions.gopreach.data.repository.CartAssignmentRepository
+import com.emfitsolutions.gopreach.data.repository.CircuitAssignmentService
+import com.emfitsolutions.gopreach.data.repository.CircuitCodeRepository
+import com.emfitsolutions.gopreach.data.repository.CircuitOverseerDirectory
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitAssignmentMigrationViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitCodesViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitDashboardViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitOverviewViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitOverseerAccountsViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitOverseerFormViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitPeopleViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitManagementViewModel
+import com.emfitsolutions.gopreach.data.sync.FirestoreCircuitAssignmentService
+import com.emfitsolutions.gopreach.data.sync.RestrictedSessionSync
+import com.emfitsolutions.gopreach.data.sync.ServerSyncClock
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.CredentialStore
 import com.emfitsolutions.gopreach.data.repository.CreditHourCategoryRepository
@@ -30,6 +44,13 @@ import com.emfitsolutions.gopreach.data.repository.MapPinRepository
 import com.emfitsolutions.gopreach.data.repository.MidweekMeetingScheduleRepository
 import com.emfitsolutions.gopreach.data.repository.MinistryTimerSessionRepository
 import com.emfitsolutions.gopreach.data.repository.MonthlyPlannerGoalRepository
+import com.emfitsolutions.gopreach.data.repository.CongregationStatisticsBuilder
+import com.emfitsolutions.gopreach.data.repository.ComparativeReportRepository
+import com.emfitsolutions.gopreach.data.repository.MeetingAttendanceRepository
+import com.emfitsolutions.gopreach.ui.screens.attendance.ComparativeReportsViewModel
+import com.emfitsolutions.gopreach.ui.screens.attendance.ReportSubmissionViewModel
+import com.emfitsolutions.gopreach.ui.screens.attendance.MeetingAttendanceViewModel
+import com.emfitsolutions.gopreach.data.repository.MonthLockGuard
 import com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository
 import com.emfitsolutions.gopreach.data.repository.NameOrderPreference
 import com.emfitsolutions.gopreach.data.repository.NotificationDismissedStore
@@ -280,6 +301,11 @@ val appModule = module {
     singleOf(::MinistryTimerSessionRepository)
     singleOf(::MonthlyPlannerGoalRepository)
     singleOf(::MonthlyReportRepository)
+    singleOf(::MonthLockGuard)
+    singleOf(::MeetingAttendanceRepository)
+    singleOf(::ComparativeReportRepository)
+    single { com.emfitsolutions.gopreach.data.repository.ReportSubmissionPreferences(androidContext()) }
+    singleOf(::CongregationStatisticsBuilder)
     singleOf(::NameOrderPreference)
     singleOf(::NotificationDismissedStore)
     singleOf(::NotificationSeenStore)
@@ -310,6 +336,14 @@ val appModule = module {
     singleOf(::TerritoryRepository)
     singleOf(::ThemePreferenceRepository)
     singleOf(::UserAccessGrantRepository)
+    singleOf(::CircuitCodeRepository)
+    single { com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository(get(), get()) }
+    single<com.emfitsolutions.gopreach.data.repository.ComparativeReportService> { com.emfitsolutions.gopreach.data.sync.FirestoreComparativeReportService(get(), get()) }
+    single<com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportService> { com.emfitsolutions.gopreach.data.sync.FirestoreCoFieldServiceReportService(get(), get()) }
+    singleOf(::RestrictedSessionSync)
+    singleOf(::CircuitOverseerDirectory)
+    singleOf(::ServerSyncClock)
+    single<CircuitAssignmentService> { FirestoreCircuitAssignmentService(get(), get(), get()) }
     singleOf(::VisitRepository)
     singleOf(::WeeklyPlannerGoalRepository)
     singleOf(::YearlyPlannerGoalRepository)
@@ -318,7 +352,7 @@ val appModule = module {
     singleOf(::OfflineFirestoreRepository)
     singleOf(::PresenceHeartbeat)
     singleOf(::ReminderScheduler)
-    single { RemoteSyncCoordinator(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { RemoteSyncCoordinator(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::SyncScheduler)
     singleOf(::SyncStatusCenter)
     singleOf(::ApkDownloader)
@@ -430,4 +464,15 @@ val appModule = module {
     viewModelOf(::UserLogsViewModel)
     viewModelOf(::AddEditUserViewModel)
     viewModelOf(::ManageUsersViewModel)
+    viewModelOf(::CircuitCodesViewModel)
+    viewModelOf(::CircuitOverseerAccountsViewModel)
+    viewModelOf(::CircuitOverseerFormViewModel)
+    viewModelOf(::CircuitDashboardViewModel)
+    viewModelOf(::CircuitOverviewViewModel)
+    viewModelOf(::CircuitPeopleViewModel)
+    viewModelOf(::MeetingAttendanceViewModel)
+    viewModelOf(::ComparativeReportsViewModel)
+    viewModelOf(::ReportSubmissionViewModel)
+    viewModelOf(::CircuitManagementViewModel)
+    viewModelOf(::CircuitAssignmentMigrationViewModel)
 }

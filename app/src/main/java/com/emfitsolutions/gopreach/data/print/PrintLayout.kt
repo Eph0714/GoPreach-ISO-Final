@@ -141,10 +141,13 @@ object PrintLayout {
                 append("</tr>")
             }
             append("</tbody></table>")
-            if (table.totals.isNotEmpty()) {
-                append("<div class=\"totals keep\">")
-                table.totals.forEach { (label, value) -> append("<span>").append(e(label)).append(": ").append(e(value)).append("</span>") }
-                append("</div>")
+            // The mandatory end-of-report Summary: the record count first, then the report's own totals; always after the last row.
+            val summary = listOf(table.countLabel to (table.count ?: table.rows.size).toString()) + table.totals
+            if (summary.isNotEmpty()) {
+                append("<div class=\"keep\" style=\"margin-top:10px\"><b>Summary</b>")
+                append("<table style=\"width:auto;margin-top:2px\">")
+                summary.forEach { (label, value) -> append("<tr><td>").append(e(label)).append("</td><td class=\"n\"><b>").append(e(value)).append("</b></td></tr>") }
+                append("</table></div>")
             }
             if (table.signatureLabels.isNotEmpty()) {
                 // The whole signature block stays together; if it doesn't fit, all of it moves to the next page.

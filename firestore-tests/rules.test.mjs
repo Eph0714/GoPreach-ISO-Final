@@ -8,7 +8,8 @@ import {
   doc, getDoc, setDoc, updateDoc, deleteDoc, collection,
 } from "firebase/firestore";
 
-const RULES_PATH = new URL("../firestore.rules", import.meta.url).pathname.replace(/^\/([A-Za-z]):/, "$1:");
+import { fileURLToPath } from "url";
+const RULES_PATH = fileURLToPath(new URL("../firestore.rules", import.meta.url));
 
 let testEnv;
 let results = [];
@@ -118,9 +119,9 @@ async function run() {
   // This is the exact bug that was fixed (activeCongregationId now populated).
   await (async () => {
     const ref = doc(asElderRegA, "monthlyReports", "report1");
-    const ok = await assertSucceeds(updateDoc(ref, { bibleStudiesCount: 5 }));
-    record("Regular Elder (fixed) can edit another publisher's Monthly Report in own congregation", true);
-  })().catch((e) => record("Regular Elder (fixed) can edit another publisher's Monthly Report in own congregation", false, e.message));
+    const ok = await assertFails(updateDoc(ref, { bibleStudiesCount: 5 }));
+    record("Regular Elder without a group role CANNOT edit another publisher's Monthly Report (group roles are FS Group scoped; see circuit.rules.test.mjs)", true);
+  })().catch((e) => record("Regular Elder without a group role CANNOT edit another publisher's Monthly Report (group roles are FS Group scoped; see circuit.rules.test.mjs)", false, e.message));
 
   // Same scenario but with the STALE (pre-fix) null activeCongregationId — should FAIL,
   // proving this really was the root cause and the rule itself is otherwise correct.

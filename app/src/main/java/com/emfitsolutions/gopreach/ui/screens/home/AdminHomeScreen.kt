@@ -66,6 +66,7 @@ import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Password
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.SwapHoriz
@@ -77,6 +78,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -503,7 +506,9 @@ fun AdminHomeScreen(
                 canEnrollServiceOverseer = canEnrollServiceOverseer,
                 canEnrollMinisterialServant = canEnrollMinisterialServant,
                 canManageAnnouncements = canManageAnnouncements,
-                canViewFieldServiceReport = canViewFieldServiceGroupReport,
+                canViewFieldServiceReport = canViewFieldServiceGroupReport || role == AdminRole.CIRCUIT_OVERSEER,
+                canManageCircuits = isSuperAdmin,
+                isCircuitOverseer = role == AdminRole.CIRCUIT_OVERSEER,
                 // Deleted Records: Super-Admin and the roles that can manage their congregation's records.
                 canViewDeletedRecords = isSuperAdmin || canEnrollPublisher,
                 canViewForwardRequests = canViewForwardRequests,
@@ -513,7 +518,7 @@ fun AdminHomeScreen(
                 canManagePublishersAndGroups = canManagePublishersAndGroups,
                 canManageGroups = canManageGroups,
                 canManageTerritoryAssignments = canManageTerritoryAssignments,
-                canManageTerritories = canViewTerritoryMap,
+                canManageTerritories = canViewTerritoryMap || role == AdminRole.CIRCUIT_OVERSEER,
                 canEditMeetingAssignments = canEditMeetingAssignments,
                 canAccessControlPanel = canAccessControlPanel,
                 isSuperAdmin = isSuperAdmin,
@@ -524,7 +529,9 @@ fun AdminHomeScreen(
                 // Same role set: Super-Admin, Admin, Coordinator Elder, Regular
                 // Elder, Service Overseer, Secretary.
                 canManageSessionTimeout = canViewContactRecord,
-                canEnterManualFieldService = role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles,
+                canEnterManualFieldService = role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles || session.isGroupRole,
+                // Meeting Attendance and the Congregation Comparative Report: the congregation-wide roles and the Super-Admin (not a group role).
+                canManageMeetingAttendance = role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles && !session.isGroupRole,
                 canViewInterestedPeopleScope = canViewInterestedPeopleScope,
                 onSwitchToPublisher = onSwitchToPublisher?.let { switchAction ->
                     { coroutineScope.launch { drawerState.close() }; switchAction() }
@@ -567,9 +574,10 @@ fun AdminHomeScreen(
                 com.emfitsolutions.gopreach.ui.components.OfflineSessionBanner()
                 DashboardHero(
                     greetingName = session.person?.firstName?.takeIf { it.isNotBlank() } ?: stringResource(Res.string.greeting_fallback_name),
-                    roleLabel = role?.name?.replace('_', ' ') ?: stringResource(Res.string.role_label_admin_fallback),
+                    roleLabel = "Active Role: " + (session.activeRoleLabel ?: role?.name?.replace('_', ' ') ?: stringResource(Res.string.role_label_admin_fallback)),
                     isOnline = isOnline,
                     pendingSyncCount = pendingSyncCount,
+                    compact = role == AdminRole.CIRCUIT_OVERSEER,
                     leadingAction = {
                         IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
                             Icon(Icons.Rounded.Menu, contentDescription = "Menu", tint = Color.White)
@@ -592,7 +600,7 @@ fun AdminHomeScreen(
                                 onClearAll = { notificationCenterViewModel.dismissAll(notificationItems, currentPersonId) },
                             )
                         }
-                        com.emfitsolutions.gopreach.ui.components.ChatBoxIcon(
+                        if (role != AdminRole.CIRCUIT_OVERSEER) com.emfitsolutions.gopreach.ui.components.ChatBoxIcon(
                             entries = chatBoxEntries,
                             onOpenGroupChat = { chatId -> onNavigate(Destinations.groupChatDetail(chatId)) },
                             onViewAll = { onNavigate(Destinations.GROUP_CHAT_SETTING) },
@@ -601,9 +609,13 @@ fun AdminHomeScreen(
                         // re-fetch from the server, separate from the full
                         // "Sync to Server" button below.
                         com.emfitsolutions.gopreach.ui.components.RefreshButton()
+                        // The Circuit Overseer's Sync to Server is a small icon up here instead of a full-width button below.
+                        if (role == AdminRole.CIRCUIT_OVERSEER) SyncToServerButton(compact = true)
                         ProfileMenuButton(
                             fullName = session.person?.fullName ?: "—",
-                            roleLabel = role?.name?.replace('_', ' ') ?: stringResource(Res.string.role_label_admin_fallback),
+                            roleLabel = session.activeRoleLabel ?: role?.name?.replace('_', ' ') ?: stringResource(Res.string.role_label_admin_fallback),
+                            onSwitchRole = if (session.roleOptions.size > 1) viewModel::switchRole else null,
+                            online = if (role == AdminRole.CIRCUIT_OVERSEER) isOnline else null,
                             profileImageUrl = session.person?.profileImageUrl,
                             onImagePicked = { uri ->
                                 viewModel.updateProfileImage(uri, onImageUploadFailed = {
@@ -626,10 +638,29 @@ fun AdminHomeScreen(
                     },
                 )
                 Column(
-                    modifier = Modifier.fillMaxSize().padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                    modifier = Modifier.fillMaxSize().padding(if (role == AdminRole.CIRCUIT_OVERSEER) 12.dp else 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (role == AdminRole.CIRCUIT_OVERSEER) 8.dp else 20.dp),
                 ) {
-                    SyncToServerButton()
+                    if (role != AdminRole.CIRCUIT_OVERSEER) SyncToServerButton()
+
+                    // Circuit Overseer: circuit, name, assigned congregations — and the way into their dashboard.
+                    if (role == AdminRole.CIRCUIT_OVERSEER) {
+                        // The Circuit Overseer's Main Form IS the Circuit Dashboard — no administrative statistics here.
+                        com.emfitsolutions.gopreach.ui.screens.circuit.CircuitDashboardBody(
+                            currentPersonId = currentPersonId,
+                            modifier = Modifier,
+                            onOpenReport = { onNavigate(Destinations.CIRCUIT_FS_REPORTS) },
+                            onOpenPublishers = { onNavigate(Destinations.circuitPublishers()) },
+                            onOpenCongregations = { onNavigate(Destinations.CIRCUIT_CONGREGATIONS) },
+                            onOpenTerritory = { onNavigate(Destinations.MANAGE_TERRITORIES_BASE) },
+                            onOpenCircuitReport = { onNavigate(Destinations.CIRCUIT_REPORT) },
+                            onOpenAttendance = { onNavigate(Destinations.MEETING_ATTENDANCE) },
+                            onOpenComparative = { onNavigate(Destinations.CONGREGATION_COMPARATIVE) },
+                            onOpenReportSubmission = { onNavigate(Destinations.REPORT_SUBMISSION) },
+                            onOpenCongregation = { onNavigate(Destinations.circuitCongregation(it)) },
+                            onOpenLeaders = { onNavigate(Destinations.circuitLeaders()) },
+                        )
+                    }
 
                     // "My Group / My Congregation" summary card — an Elder's own
                     // scope (already enforced everywhere via visibleCongregationIds)
@@ -646,7 +677,7 @@ fun AdminHomeScreen(
                     // *navigation* button (Publishers, Groups, Enrollment, Control
                     // Panel, Sign Out, ...) moved to the Side Panel, but the
                     // dashboard's own reporting content stays front and center here.
-                    if (hideMainFormButtons) {
+                    if (hideMainFormButtons && role != AdminRole.CIRCUIT_OVERSEER) {
                         DashboardStatsContent(
                             visibleCongregationIds = visibleCongregationIds,
                             recentlyVisited = if (!showRecentlyVisited) null else { stats ->
@@ -775,13 +806,22 @@ fun AdminHomeScreen(
                         }
 
                         DashboardSection(stringResource(Res.string.dashboard_section_account)) {
-                            DashboardTile(stringResource(Res.string.side_account_settings), Icons.Rounded.Password, { onNavigate(Destinations.ACCOUNT_SETTINGS) })
+                            DashboardTile("Settings", Icons.Rounded.Settings, { onNavigate(Destinations.SETTINGS) })
                             if (onSwitchToPublisher != null) {
                                 DashboardTile(stringResource(Res.string.side_ministry_report_app), Icons.Rounded.SwapHoriz, onSwitchToPublisher)
                             }
                             DashboardTile(stringResource(Res.string.side_sign_out), Icons.AutoMirrored.Rounded.Logout, viewModel::signOut)
                         }
                     }
+                }
+            }
+            // Circuit Overseer: bottom navigation (Home | Congregations | Reports | More); Home is this dashboard.
+            if (role == AdminRole.CIRCUIT_OVERSEER) {
+                androidx.compose.material3.NavigationBar(modifier = Modifier.align(Alignment.BottomCenter), containerColor = MaterialTheme.colorScheme.surface) {
+                    NavigationBarItem(selected = true, onClick = {}, icon = { Icon(androidx.compose.material.icons.Icons.Rounded.Home, contentDescription = null) }, label = { Text("Home") })
+                    NavigationBarItem(selected = false, onClick = { onNavigate(Destinations.CIRCUIT_CONGREGATIONS) }, icon = { Icon(androidx.compose.material.icons.Icons.Rounded.AccountBalance, contentDescription = null) }, label = { Text("Congregations") })
+                    NavigationBarItem(selected = false, onClick = { onNavigate(Destinations.REPORT_SUBMISSION) }, icon = { Icon(androidx.compose.material.icons.Icons.Rounded.Assessment, contentDescription = null) }, label = { Text("Reports") })
+                    NavigationBarItem(selected = false, onClick = { coroutineScope.launch { drawerState.open() } }, icon = { Icon(Icons.Rounded.Menu, contentDescription = null) }, label = { Text("More") })
                 }
             }
         }

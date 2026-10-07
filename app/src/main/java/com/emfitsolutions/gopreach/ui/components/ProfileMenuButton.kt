@@ -74,6 +74,10 @@ fun ProfileMenuButton(
     // show) — without this, name/username/password changes and "Add Module:
     // Preaching Availability" would be unreachable for a Publisher account.
     onOpenAccountSettings: (() -> Unit)? = null,
+    // Non-null only for an account holding more than one role: re-opens the role selector without signing out.
+    onSwitchRole: (() -> Unit)? = null,
+    // Non-null: a small presence dot on the avatar — green while this device is online, grey while offline.
+    online: Boolean? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     var showViewImage by remember { mutableStateOf(false) }
@@ -84,11 +88,30 @@ fun ProfileMenuButton(
 
     Box(modifier = modifier) {
         IconButton(onClick = { expanded = true }) {
-            ProfileAvatar(profileImageUrl, size = 32.dp, tint = tint)
+            Box {
+                ProfileAvatar(profileImageUrl, size = 32.dp, tint = tint)
+                if (online != null) {
+                    Box(
+                        modifier = Modifier
+                            .align(androidx.compose.ui.Alignment.BottomEnd)
+                            .size(11.dp)
+                            .background(MaterialTheme.colorScheme.surface, CircleShape)
+                            .padding(1.5.dp)
+                            .background(if (online) Color(0xFF2E7D32) else Color(0xFF9E9E9E), CircleShape),
+                    )
+                }
+            }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Text(fullName.uppercase(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                if (online != null) {
+                    Text(
+                        if (online) "● Online" else "● Offline",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (online) Color(0xFF2E7D32) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Text(
                     roleLabel.uppercase(),
                     style = MaterialTheme.typography.bodySmall,
@@ -106,10 +129,11 @@ fun ProfileMenuButton(
                 leadingIcon = { Icon(Icons.Rounded.PhotoCamera, contentDescription = null) },
                 onClick = { expanded = false; pickImage.launch("image/*") },
             )
-            if (onOpenAccountSettings != null) {
+            // Settings and Account Settings are one screen now: a single entry (it opens on the Account tab).
+            if (onOpenSettings == null && onOpenAccountSettings != null) {
                 DropdownMenuItem(
-                    text = { Text("Account Settings") },
-                    leadingIcon = { Icon(Icons.Rounded.Password, contentDescription = null) },
+                    text = { Text("Settings") },
+                    leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
                     onClick = { expanded = false; onOpenAccountSettings() },
                 )
             }
@@ -118,6 +142,13 @@ fun ProfileMenuButton(
                     text = { Text("Settings") },
                     leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
                     onClick = { expanded = false; onOpenSettings() },
+                )
+            }
+            if (onSwitchRole != null) {
+                DropdownMenuItem(
+                    text = { Text("Switch Role") },
+                    leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
+                    onClick = { expanded = false; onSwitchRole() },
                 )
             }
             HorizontalDivider()

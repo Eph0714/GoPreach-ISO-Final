@@ -27,7 +27,7 @@ class FirestoreRemoteCollections(
     }
 
     override fun <T : Any> mirror(collectionPath: String, kClass: KClass<T>, equalTo: Pair<String, String>?, idOf: (T) -> String): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, collectionPath, kClass.java, query(collectionPath, equalTo), idOf)
+        mirrorFirestoreCollection(firestore, offline, appScope, collectionPath, kClass.java, query(collectionPath, equalTo), idOf = idOf)
 
     override suspend fun pushNow(collectionPath: String, documentId: String, data: Any) {
         firestore.collection(collectionPath).document(documentId).set(data).await()

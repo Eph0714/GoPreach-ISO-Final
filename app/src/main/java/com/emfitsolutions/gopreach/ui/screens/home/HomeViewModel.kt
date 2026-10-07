@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 private const val TAG = "HomeViewModel"
 
 class HomeViewModel(
-    userSession: UserSession,
+    private val userSession: UserSession,
     private val authRepository: AuthRepository,
     private val personRepository: PersonRepository,
     private val connectivityObserver: ConnectivityObserver,
@@ -33,6 +33,9 @@ class HomeViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     fun signOut() = authRepository.signOut()
+
+    /** "Switch Role": back to the role selector (no sign-out); permissions and data are re-derived from the role chosen next. */
+    fun switchRole() = userSession.switchRole()
 
     /** "Update Profile Image" — the top-right profile menu, every role. Reads
      * the signed-in session's own current [state] rather than taking a

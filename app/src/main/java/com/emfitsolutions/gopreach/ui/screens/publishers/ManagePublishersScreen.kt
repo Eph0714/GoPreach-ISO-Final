@@ -395,6 +395,8 @@ fun ManagePublishersScreen(
                         }
                     }
                 }
+                // The mandatory end-of-report Summary: only the publishers listed above (after the congregation, search and filters).
+                item(key = "end-summary") { PublisherSummaryCard(PublisherSummary.rows(rows), Modifier.padding(top = 8.dp)) }
             }
         }
         }

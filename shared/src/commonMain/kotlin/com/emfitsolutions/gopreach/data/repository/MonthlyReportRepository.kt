@@ -4,6 +4,8 @@ import com.emfitsolutions.gopreach.platform.formatDate
 
 import com.emfitsolutions.gopreach.data.sync.saveNow
 import com.emfitsolutions.gopreach.data.model.MonthlyReport
+import com.emfitsolutions.gopreach.data.model.MonthLockedException
+import com.emfitsolutions.gopreach.data.model.isMonthLocked
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import com.emfitsolutions.gopreach.data.model.ReportStatus
@@ -14,13 +16,14 @@ import kotlinx.coroutines.flow.map
 
 private const val COLLECTION = "monthlyReports"
 
-private val SUBMITTED_STATUSES = setOf(ReportStatus.SUBMITTED, ReportStatus.CORRECTED, ReportStatus.POSTED)
+private val SUBMITTED_STATUSES = setOf(ReportStatus.SUBMITTED, ReportStatus.CORRECTED, ReportStatus.POSTED, ReportStatus.ACCESS_REQUESTED)
 
 /** Spec §5.2 — publisher monthly ministry reports; also the source for the
  * Admin-side Bible-study/hours report views (spec §5.1). */
 class MonthlyReportRepository(
     private val offline: OfflineFirestoreRepository,
     private val remote: RemoteCollections,
+    private val coReports: CoFieldServiceReportRepository,
 ) {
     fun observeAll(): Flow<List<MonthlyReport>> = offline.observeCollection(COLLECTION)
 
@@ -36,7 +39,13 @@ class MonthlyReportRepository(
     suspend fun isMonthSubmitted(publisherPersonId: String, anyMillis: Long): Boolean =
         MonthBounds.of(anyMillis).startInclusive in observeSubmittedMonths(publisherPersonId).first()
 
+    /** The Circuit Overseer's approval locks the service month: nothing is written for it (the server rules refuse it too). */
+    suspend fun requireMonthOpen(congregationId: String, periodMonth: Long) {
+        if (isMonthLocked(coReports.observeStatuses().first(), congregationId.ifBlank { null }, periodMonth)) throw MonthLockedException()
+    }
+
     suspend fun save(report: MonthlyReport): MonthlyReport {
+        requireMonthOpen(report.congregationId, report.periodMonth)
         val id = report.id.ifBlank { reportIdFor(report) }
         val withId = report.copy(id = id)
         offline.save(COLLECTION, id, withId)
@@ -58,6 +67,7 @@ class MonthlyReportRepository(
      * Firestore immediately when online, so the lock actually takes effect
      * right away instead of whenever someone next happens to sync. */
     suspend fun saveNow(report: MonthlyReport): MonthlyReport {
+        requireMonthOpen(report.congregationId, report.periodMonth)
         val id = report.id.ifBlank { reportIdFor(report) }
         val withId = report.copy(id = id)
         offline.saveNow(remote, COLLECTION, id, withId)
@@ -73,7 +83,14 @@ class MonthlyReportRepository(
         return "${report.publisherPersonId}_$month"
     }
 
-    suspend fun delete(reportId: String) = offline.delete(COLLECTION, reportId)
+    suspend fun delete(reportId: String) {
+        // Deleting a record of a locked month is refused like any other change to it.
+        observeAll().first().firstOrNull { it.id == reportId }?.let { requireMonthOpen(it.congregationId, it.periodMonth) }
+        offline.delete(COLLECTION, reportId)
+    }
+
+    /** For removing a whole publisher or congregation: not an edit of a month's record, so the month lock does not stop it. */
+    suspend fun deleteIgnoringLock(reportId: String) = offline.delete(COLLECTION, reportId)
 
     fun startRemoteSync(): Flow<Unit> =
         remote.mirror(COLLECTION, MonthlyReport::class) { it.id }

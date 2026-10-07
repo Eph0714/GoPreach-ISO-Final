@@ -16,6 +16,7 @@ import com.emfitsolutions.gopreach.domain.PublisherReportCalculator
 import com.emfitsolutions.gopreach.domain.PublisherReportService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import com.emfitsolutions.gopreach.platform.Calendar
@@ -107,6 +108,9 @@ data class MonthlyReportUiState(
      * only ever actually fires from there. Editing returns here without
      * losing any entered value (spec §5). */
     val showingPreview: Boolean = false,
+
+    /** The congregation submitted the selected month to the Circuit Overseer (Submitted or Received): its records are locked for everyone. */
+    val monthApproved: Boolean = false,
 ) {
     /** "Allow the publisher to edit the record until the service overseer
      * will mark it as 'Posted'" — the Publisher may keep editing their own
@@ -115,7 +119,20 @@ data class MonthlyReportUiState(
      * who marks it and why Submit itself no longer does). [MonthlyReportScreen]
      * passes `allowEditWhenLocked = true` for the separate Service Overseer/
      * Admin/Super-Admin edit-anytime entry point. */
-    val isLocked: Boolean get() = existingReport?.status == ReportStatus.POSTED
+    val isLocked: Boolean get() = existingReport?.status?.lockedForPublisher == true || monthApproved
+
+    /** The publisher's own submitted report is locked; they ask the person in charge to reopen it instead of editing it. */
+    val canRequestAccess: Boolean
+        get() = !monthApproved && when (existingReport?.status) {
+            ReportStatus.SUBMITTED, ReportStatus.CORRECTED, ReportStatus.POSTED -> true
+            else -> false
+        }
+
+    /** Why the publisher asked, once they have (shown while the request waits). */
+    val accessRequested: Boolean get() = existingReport?.status == ReportStatus.ACCESS_REQUESTED
+
+    /** The person in charge approved the request: the publisher may correct the report, then must submit it again. */
+    val accessGranted: Boolean get() = existingReport?.status == ReportStatus.ACCESS_GRANTED
 
     /** "Submission of report is done each month... available 2 days before
      * the end of each month" spec — this restriction only makes sense for
@@ -197,6 +214,8 @@ data class MonthlyReportUiState(
 class MonthlyReportViewModel(
     private val monthlyReportRepository: MonthlyReportRepository,
     private val publisherReportService: PublisherReportService,
+    private val coReports: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository,
+    private val auditLogRepository: com.emfitsolutions.gopreach.data.repository.AuditLogRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MonthlyReportUiState())
@@ -221,6 +240,14 @@ class MonthlyReportViewModel(
      * other entry recalculates from the latest records each time (see
      * [PublisherReportService]), so a stale figure can never be submitted. */
     fun load(publisherPersonId: String, useStoredValues: Boolean = false) {
+        viewModelScope.launch {
+            kotlinx.coroutines.flow.combine(
+                coReports.observeStatuses(),
+                _uiState.map { it.congregationId to it.selectedPeriodMonth }.distinctUntilChanged(),
+            ) { statuses, key -> com.emfitsolutions.gopreach.data.model.isMonthLocked(statuses, key.first, key.second) }
+                .distinctUntilChanged()
+                .collect { locked -> _uiState.value = _uiState.value.copy(monthApproved = locked) }
+        }
         viewModelScope.launch {
             publisherReportService.observe(publisherPersonId, _selectedPeriodMonth, useStoredValues).map { source ->
                 MonthlyReportUiState(
@@ -250,6 +277,7 @@ class MonthlyReportViewModel(
                     bibleStudiesRendered = if ("bibleStudies" in touchedFields) current.bibleStudiesRendered else fresh.bibleStudiesRendered,
                     remarks = if ("remarks" in touchedFields) current.remarks else fresh.remarks,
                     showingPreview = current.showingPreview,
+                    monthApproved = current.monthApproved,
                 )
             }
         }
@@ -312,9 +340,41 @@ class MonthlyReportViewModel(
      * below is read straight from [state], the exact same values the
      * Preview step (and the form before it) displayed; nothing here
      * recalculates or substitutes a fresh value at Submit time. */
+    /**
+     * "Request Edit Access": a submitted report is locked for its publisher, so a correction starts with a request (with the
+     * reason) to the person in charge — Submitted → Access Requested. The report stays locked until they decide.
+     */
+    fun requestAccess(publisherPersonId: String, reason: String) {
+        val state = _uiState.value
+        val report = state.existingReport ?: return
+        if (!state.canRequestAccess) return
+        viewModelScope.launch {
+            val now = nowMillis()
+            val updated = report.copy(
+                status = ReportStatus.ACCESS_REQUESTED,
+                accessRequestReason = reason.trim().ifBlank { null },
+                accessRequestedAt = now,
+                lastEditedAt = now,
+            )
+            try {
+                monthlyReportRepository.saveNow(updated)
+                _uiState.value = _uiState.value.copy(existingReport = updated, errorMessage = null)
+                runCatching {
+                    auditLogRepository.log(
+                        actorPersonId = publisherPersonId, action = "PUBLISHER_REPORT_ACCESS_REQUESTED", targetType = "MonthlyReport",
+                        targetId = report.id, congregationId = report.congregationId, details = reason.trim(),
+                    )
+                }
+            } catch (e: com.emfitsolutions.gopreach.data.model.MonthLockedException) {
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
+        }
+    }
+
     fun submit(publisherPersonId: String, allowEditWhenLocked: Boolean = false) {
         val state = _uiState.value
         if (state.isLocked && !allowEditWhenLocked) return
+        if (state.monthApproved) return // a month submitted to the Circuit Overseer is locked for everyone, Elders and Admins included
         _uiState.value = state.copy(isSaving = true, errorMessage = null)
         viewModelScope.launch {
             val report = MonthlyReport(
@@ -346,14 +406,28 @@ class MonthlyReportViewModel(
                 // returnedBy/returnedAt are carried forward, never cleared —
                 // they're the historical record of what was wrong last time,
                 // not a live "currently returned" flag once status moves on.
-                status = if (state.existingReport?.status == ReportStatus.RETURNED) ReportStatus.CORRECTED else ReportStatus.SUBMITTED,
+                // A report corrected after a return (Reversed) or after edit access was granted is a correction, not a first submission.
+                status = if (state.existingReport?.status == ReportStatus.RETURNED || state.existingReport?.status == ReportStatus.ACCESS_GRANTED) ReportStatus.CORRECTED else ReportStatus.SUBMITTED,
                 submittedAt = nowMillis(),
                 returnedByPersonId = state.existingReport?.returnedByPersonId,
                 returnedAt = state.existingReport?.returnedAt,
                 correctionReason = state.existingReport?.correctionReason,
                 remarks = state.remarks.trim().ifBlank { null },
             )
-            monthlyReportRepository.save(report)
+            try {
+                monthlyReportRepository.save(report)
+                runCatching {
+                    auditLogRepository.log(
+                        actorPersonId = publisherPersonId,
+                        action = if (report.status == ReportStatus.CORRECTED) "PUBLISHER_REPORT_RESUBMITTED" else "PUBLISHER_REPORT_SUBMITTED",
+                        targetType = "MonthlyReport", targetId = report.id, congregationId = report.congregationId,
+                        details = "Month ${report.periodMonth}: ${state.existingReport?.status?.publisherLabel ?: "Open"} → Submitted",
+                    )
+                }
+            } catch (e: com.emfitsolutions.gopreach.data.model.MonthLockedException) {
+                _uiState.value = _uiState.value.copy(isSaving = false, showingPreview = false, errorMessage = e.message)
+                return@launch
+            }
             _uiState.value = _uiState.value.copy(isSaving = false, saved = true, showingPreview = false, existingReport = report)
         }
     }

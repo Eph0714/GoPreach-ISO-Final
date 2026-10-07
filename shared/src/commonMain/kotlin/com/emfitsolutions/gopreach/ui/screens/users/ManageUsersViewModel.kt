@@ -52,6 +52,9 @@ class ManageUsersViewModel(
                 val person = people.firstOrNull { it.id == assignment.personId } ?: return@mapNotNull null
                 RestrictedUserRow(person, assignment, grants.firstOrNull { it.personId == person.id })
             }
+            // Circuit Overseers that belong to a circuit are managed under Circuit Overseer Accounts, where their Circuit Code
+            // and congregations stay in step; editing them here would rewrite their scope without the ownership checks.
+            .filter { it.grant?.circuitCode.isNullOrBlank() }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** Spec §9 — account-level status, independent of the RoleAssignment itself

@@ -6,6 +6,7 @@ import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
 import com.emfitsolutions.gopreach.data.repository.BibleTextCategoryRepository
 import com.emfitsolutions.gopreach.data.repository.BibleTextRecordRepository
 import com.emfitsolutions.gopreach.data.repository.CartAssignmentRepository
+import com.emfitsolutions.gopreach.data.repository.CircuitCodeRepository
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.CreditHourCategoryRepository
 import com.emfitsolutions.gopreach.data.repository.DashboardModuleLayoutRepository
@@ -49,7 +50,10 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -106,6 +110,11 @@ class RemoteSyncCoordinator(
     private val appSettingsRepository: AppSettingsRepository,
     private val sharedLocationRepository: SharedLocationRepository,
     private val userAccessGrantRepository: UserAccessGrantRepository,
+    private val circuitCodeRepository: CircuitCodeRepository,
+    private val coFieldServiceReportRepository: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository,
+    private val meetingAttendanceRepository: com.emfitsolutions.gopreach.data.repository.MeetingAttendanceRepository,
+    private val comparativeReportRepository: com.emfitsolutions.gopreach.data.repository.ComparativeReportRepository,
+    private val restrictedSessionSync: RestrictedSessionSync,
     private val preachingTimeRecordRepository: PreachingTimeRecordRepository,
     private val announcementRepository: AnnouncementRepository,
     private val locationSharingSettingsRepository: LocationSharingSettingsRepository,
@@ -218,11 +227,33 @@ class RemoteSyncCoordinator(
      * an actual sign-out/sign-in to trigger it. */
     private val retryGeneration = MutableStateFlow(0)
 
+    /**
+     * Whether the signed-in account holds a `userAccessGrants` document (a Circuit Overseer): null until the server
+     * answers, then true/false (false also if the read fails, e.g. offline, so an ordinary account is never held back).
+     * A grant account's rules refuse list queries over whole collections — it only ever downloads the collections
+     * [startGrantAwareSync] scopes for it — so [startTracked] must not even open the whole-collection listeners for it
+     * (each would just fail with PERMISSION_DENIED and retry forever).
+     */
+    private val isGrantAccount: StateFlow<Boolean?> = combine(uidChanged, retryGeneration) { uid, _ -> uid }
+        .mapLatest { uid ->
+            val personId = personIdFromAuthEmail(firebaseAuth.currentUser?.email)
+            if (uid == null || personId == null) null
+            else runCatching { restrictedSessionSync.resolve(personId) != null }.getOrDefault(false)
+        }
+        .stateIn(appScope, SharingStarted.Eagerly, null)
+
+    /** Like [startTracked] but also for a grant account (collections every signed-in account may read whole: people, circuit codes/links). */
+    private fun Flow<Unit>.startTrackedForEveryone(uidChanged: Flow<String?>): Unit {
+        combine(uidChanged, retryGeneration) { uid, _ -> uid }.flatMapLatest { this }.launchIn(appScope)
+    }
+
     /** Wires one collection's listener into [appScope], re-subscribing fresh
      * on every auth-state change (see the class doc for why that matters) or
      * [retryIfNeeded] call. */
     private fun Flow<Unit>.startTracked(uidChanged: Flow<String?>): Unit {
-        combine(uidChanged, retryGeneration) { uid, _ -> uid }.flatMapLatest { this }.launchIn(appScope)
+        combine(uidChanged, retryGeneration, isGrantAccount) { uid, _, grantAccount -> uid to grantAccount }
+            .flatMapLatest { (uid, grantAccount) -> if (uid == null || grantAccount != false) kotlinx.coroutines.flow.emptyFlow() else this }
+            .launchIn(appScope)
     }
 
     /** [startTracked]'s counterpart for a collection whose `startRemoteSync`
@@ -235,6 +266,62 @@ class RemoteSyncCoordinator(
     private fun startTrackedForPublisher(flowFor: (String) -> Flow<Unit>) {
         combine(personIdChanged, retryGeneration) { personId, _ -> personId }
             .flatMapLatest { personId -> if (personId != null) flowFor(personId) else kotlinx.coroutines.flow.emptyFlow() }
+            .launchIn(appScope)
+    }
+
+    /**
+     * Mirrors the five collections a grant-based account's security rules are *scoped* on —
+     * `roleAssignments`, `congregations`, `groups`, `monthlyReports` and `userAccessGrants`.
+     *
+     * An ordinary account listens to each whole collection, exactly as before. A Circuit Overseer (any
+     * account that holds a `userAccessGrants/{me}` document) cannot: Firestore refuses a list query its
+     * rules can't prove for every possible result, so each collection is asked for only its own document /
+     * its assigned congregations instead (see [RestrictedSessionSync]). The assigned list is re-read from
+     * the locally mirrored grant, so when a Super-Admin adds or removes a congregation the listeners follow.
+     * Whether the account has a grant is decided by one server read per (re)subscription; if that read
+     * fails (offline) the ordinary listeners are used, and [retryIfNeeded] re-decides on the next attempt.
+     */
+    private fun startGrantAwareSync() {
+        combine(uidChanged, retryGeneration) { uid, _ -> uid }
+            .flatMapLatest { uid ->
+                val personId = personIdFromAuthEmail(firebaseAuth.currentUser?.email)
+                if (uid == null || personId == null) {
+                    kotlinx.coroutines.flow.emptyFlow()
+                } else {
+                    kotlinx.coroutines.flow.flow { emit(runCatching { restrictedSessionSync.resolve(personId) }.getOrNull()) }
+                        .flatMapLatest { scope ->
+                            if (scope == null) {
+                                kotlinx.coroutines.flow.merge(
+                                    roleAssignmentRepository.startRemoteSync(),
+                                    congregationRepository.startRemoteSync(),
+                                    groupRepository.startRemoteSync(),
+                                    monthlyReportRepository.startRemoteSync(),
+                                    userAccessGrantRepository.startRemoteSync(),
+                                )
+                            } else {
+                                kotlinx.coroutines.flow.merge(
+                                    restrictedSessionSync.ownGrant(personId),
+                                    restrictedSessionSync.ownRoleAssignments(personId),
+                                    if (scope.allCongregations) {
+                                        kotlinx.coroutines.flow.merge(
+                                            congregationRepository.startRemoteSync(),
+                                            groupRepository.startRemoteSync(),
+                                            roleAssignmentRepository.startRemoteSync(),
+                                            monthlyReportRepository.startRemoteSync(),
+                                            if (scope.circuit) coFieldServiceReportRepository.startRemoteSync() else kotlinx.coroutines.flow.emptyFlow(),
+                                        )
+                                    } else {
+                                        userAccessGrantRepository.observeForPerson(personId)
+                                            .map { it?.scopeCongregationIds.orEmpty().sorted() }
+                                            .onStart { emit(scope.congregationIds.sorted()) }
+                                            .distinctUntilChanged()
+                                            .flatMapLatest { ids -> restrictedSessionSync.forCongregations(ids, scope.circuit) }
+                                    },
+                                )
+                            }
+                        }
+                }
+            }
             .launchIn(appScope)
     }
 
@@ -283,10 +370,8 @@ class RemoteSyncCoordinator(
                 if (online && previouslyOffline) retryIfNeeded()
             }
             .launchIn(appScope)
-        personRepository.startRemoteSync().startTracked(uidChanged)
-        roleAssignmentRepository.startRemoteSync().startTracked(uidChanged)
-        congregationRepository.startRemoteSync().startTracked(uidChanged)
-        groupRepository.startRemoteSync().startTracked(uidChanged)
+        personRepository.startRemoteSync().startTrackedForEveryone(uidChanged)
+        startGrantAwareSync()
         elderTitleRepository.startRemoteSync().startTracked(uidChanged)
         territoryRepository.startRemoteSync().startTracked(uidChanged)
         territoryAssignmentRepository.startRemoteSync().startTracked(uidChanged)
@@ -296,12 +381,44 @@ class RemoteSyncCoordinator(
         forwardRequestRepository.startRemoteSync().startTracked(uidChanged)
         publisherForwardRequestRepository.startRemoteSync().startTracked(uidChanged)
         householderAssignmentRepository.startRemoteSync().startTracked(uidChanged)
-        monthlyReportRepository.startRemoteSync().startTracked(uidChanged)
         recycleBinRepository.startRemoteSync().startTracked(uidChanged)
         auditLogRepository.startRemoteSync().startTracked(uidChanged)
         appSettingsRepository.startRemoteSync().startTracked(uidChanged)
         sharedLocationRepository.startRemoteSync().startTracked(uidChanged)
-        userAccessGrantRepository.startRemoteSync().startTracked(uidChanged)
+        circuitCodeRepository.startRemoteSync().startTrackedForEveryone(uidChanged)
+        coFieldServiceReportRepository.startStatusSync().startTrackedForEveryone(uidChanged)
+        // Attendance settings and the historical monthly statistics are open to every signed-in account (no personal data).
+        meetingAttendanceRepository.startSharedSync().startTrackedForEveryone(uidChanged)
+        // Weekly attendance: the Super-Admin gets every congregation; everyone else (not a grant account — a Circuit Overseer's are mirrored
+        // per assigned congregation) gets their own active congregation's, and the audit trail too when their active role manages attendance.
+        combine(personIdChanged, retryGeneration, isGrantAccount) { pid, _, grantAccount -> pid to grantAccount }
+            .flatMapLatest { (pid, grantAccount) ->
+                if (pid == null || grantAccount != false) kotlinx.coroutines.flow.emptyFlow()
+                else personRepository.observeAll().map { list -> list.firstOrNull { it.id == pid } }
+                    .map { p -> Triple(p?.isSuperAdmin == true, p?.activeCongregationId, p?.activeAdminRole) }
+                    .distinctUntilChanged()
+                    .flatMapLatest { (superAdmin, cong, role) ->
+                        when {
+                            superAdmin -> kotlinx.coroutines.flow.merge(meetingAttendanceRepository.startRemoteSyncAll(), comparativeReportRepository.startSyncAll())
+                            cong == null -> kotlinx.coroutines.flow.emptyFlow()
+                            role in setOf("ADMIN_PER_CONGREGATION", "COORDINATOR_ELDER", "SERVICE_OVERSEER", "SECRETARY") ->
+                                kotlinx.coroutines.flow.merge(
+                                    meetingAttendanceRepository.startAttendanceSync(cong), meetingAttendanceRepository.startEventsSync(cong),
+                                    comparativeReportRepository.startSyncFor(cong),
+                                )
+                            else -> meetingAttendanceRepository.startAttendanceSync(cong)
+                        }
+                    }
+            }
+            .launchIn(appScope)
+        // The full report copies are for the Super-Admin only (a Circuit Overseer gets theirs per congregation, see [startGrantAwareSync]).
+        combine(personIdChanged, retryGeneration) { pid, _ -> pid }
+            .flatMapLatest { pid ->
+                if (pid == null) kotlinx.coroutines.flow.flowOf(false)
+                else personRepository.observeAll().map { list -> list.firstOrNull { it.id == pid }?.isSuperAdmin == true }.distinctUntilChanged()
+            }
+            .flatMapLatest { superAdmin -> if (superAdmin) coFieldServiceReportRepository.startRemoteSync() else kotlinx.coroutines.flow.emptyFlow() }
+            .launchIn(appScope)
         preachingTimeRecordRepository.startRemoteSync().startTracked(uidChanged)
         announcementRepository.startRemoteSync().startTracked(uidChanged)
         locationSharingSettingsRepository.startRemoteSync().startTracked(uidChanged)

@@ -92,6 +92,13 @@ class AppSettingsRepository(
         )
     }
 
+    /** Whether sending the consolidated congregation report to the Circuit Overseer is blocked while some publishers have not submitted. */
+    suspend fun saveRequireAllPublishersSubmitted(required: Boolean, updatedByPersonId: String) {
+        val current = observe().first()
+        offline.save(COLLECTION, AppSettings.GLOBAL_ID, current.copy(requireAllPublishersSubmitted = required, updatedAt = nowMillis(), updatedByPersonId = updatedByPersonId))
+        auditLogRepository.log(actorPersonId = updatedByPersonId, action = "UPDATE_CONSOLIDATED_SUBMISSION_REQUIREMENT", details = "requireAllPublishersSubmitted=$required")
+    }
+
     fun startRemoteSync(): Flow<Unit> =
         remote.mirror(COLLECTION, AppSettings::class) { it.id }
 }

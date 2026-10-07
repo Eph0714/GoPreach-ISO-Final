@@ -58,13 +58,15 @@ object ComparativeReportPdfExporter {
         FileOutputStream(file).use { document.writeTo(it) }
         document.close()
 
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/pdf"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        com.emfitsolutions.gopreach.data.print.PdfPreviewDialog.showOrShare(context, file, "Comparative Report") {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share or Print Comparative Report"))
         }
-        context.startActivity(Intent.createChooser(intent, "Share or Print Comparative Report"))
     }
 
     /** Two-range comparison: one page per range (titled with the actual dates and its totals), same layout as [export]. */
@@ -90,13 +92,15 @@ object ComparativeReportPdfExporter {
         val file = File(dir, "gopreach-comparative-periods-${System.currentTimeMillis()}.pdf")
         FileOutputStream(file).use { document.writeTo(it) }
         document.close()
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/pdf"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        com.emfitsolutions.gopreach.data.print.PdfPreviewDialog.showOrShare(context, file, "Comparative Report") {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share or Print Comparative Report"))
         }
-        context.startActivity(Intent.createChooser(intent, "Share or Print Comparative Report"))
     }
 
     private fun drawLegend(canvas: android.graphics.Canvas, left: Float, top: Float) {
@@ -168,5 +172,13 @@ object ComparativeReportPdfExporter {
             val cells = listOf(monthFormat.format(Date(row.monthStart)), "${hours}h ${minutes}m", row.returnVisitCount.toString(), row.bibleStudyCount.toString())
             cells.forEachIndexed { colIndex, cell -> canvas.drawText(cell, left + columnWidth * colIndex, y, cellPaint) }
         }
+        // The mandatory end-of-report Summary, always after the last row.
+        val sy = (top + rowHeight * (rows.size + 2)).coerceAtMost(PAGE_HEIGHT - 16f)
+        val totalMinutes = rows.sumOf { it.totalMinutes }
+        canvas.drawText("Summary", left, sy, headerPaint)
+        canvas.drawText(
+            "Months ${rows.size}  ·  Total Hours ${totalMinutes / 60}h ${totalMinutes % 60}m  ·  Return Visits ${rows.sumOf { it.returnVisitCount }}  ·  Bible Studies ${rows.sumOf { it.bibleStudyCount }}",
+            left + 70f, sy, headerPaint,
+        )
     }
 }

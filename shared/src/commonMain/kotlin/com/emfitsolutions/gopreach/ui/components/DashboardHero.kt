@@ -44,12 +44,14 @@ fun DashboardHero(
      * icons like sync status/settings. Null renders nothing here, same
      * layout as before this existed. */
     leadingAction: (@Composable () -> Unit)? = null,
+    /** A slimmer header (smaller greeting and role line, tighter spacing) — the Circuit Overseer's. */
+    compact: Boolean = false,
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.primary)
-            .padding(bottom = 16.dp),
+            .padding(bottom = if (compact) 8.dp else 16.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
             Row(
@@ -77,12 +79,12 @@ fun DashboardHero(
                 }
             }
 
-            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = if (compact) 16.dp else 20.dp, vertical = if (compact) 2.dp else 8.dp)) {
                 Text(
                     "Welcome, $greetingName!",
                     color = Color.White,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = if (compact) MaterialTheme.typography.titleMedium else MaterialTheme.typography.headlineSmall,
+                    fontWeight = if (compact) FontWeight.SemiBold else FontWeight.Bold,
                 )
                 // "Remove All Synced and Online Users" — only the role label
                 // remains under the greeting.
@@ -90,7 +92,7 @@ fun DashboardHero(
                     Text(
                         roleLabel,
                         color = Color.White.copy(alpha = 0.85f),
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
                     )
                 }
             }

@@ -427,6 +427,7 @@ fun TerritoryAssignmentsScreen(
                             }
                         }
                     }
+                item(key = "end-summary") { com.emfitsolutions.gopreach.ui.components.EndSummary(listOf("Total Assignments" to rows.size.toString()), Modifier.padding(top = 8.dp)) }
             }
         }
     }

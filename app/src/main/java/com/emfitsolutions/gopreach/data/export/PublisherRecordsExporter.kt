@@ -114,6 +114,8 @@ object PublisherRecordsExporter {
                     append("</div>")
                 }
             }
+            append(com.emfitsolutions.gopreach.ui.screens.publishers.PublisherSummary.html(com.emfitsolutions.gopreach.ui.screens.publishers.PublisherSummary.rows(rows)))
+            append("<div style=\"margin-top:6px;color:#444\">Generated: ").append(e(reportDate())).append("</div>")
             append("</body></html>")
         }
         ReportPrinter.printHtml(
@@ -235,6 +237,22 @@ object PublisherRecordsExporter {
             }
         }
 
+        run {
+            val sum = com.emfitsolutions.gopreach.ui.screens.publishers.PublisherSummary.rows(rows)
+            val blockH = 30f + (sum.size - 1) * 13f
+            if (y + blockH > pageH - margin - 14f) newPage()
+            y += 12f
+            val top = y
+            page.actions += { c ->
+                c.drawText("Summary", margin, top + 12f, boldPaint)
+                sum.drop(1).forEachIndexed { i, r ->
+                    c.drawText(r[0] + ":", margin, top + 28f + i * 13f, textPaint)
+                    c.drawText(r[1], margin + 150f, top + 28f + i * 13f, boldPaint)
+                }
+            }
+            y += blockH
+        }
+
         val document = PdfDocument()
         pages.forEachIndexed { index, p ->
             val pdfPage = document.startPage(PdfDocument.PageInfo.Builder(pageW, pageH, index + 1).create())
@@ -245,7 +263,7 @@ object PublisherRecordsExporter {
         val file = File(File(context.cacheDir, "exports").apply { mkdirs() }, "PublisherRecords_${safe(congregationName)}_${System.currentTimeMillis()}.pdf")
         FileOutputStream(file).use { document.writeTo(it) }
         document.close()
-        share(context, file, "application/pdf", "Share Publisher Records")
+        com.emfitsolutions.gopreach.data.print.PdfPreviewDialog.showOrShare(context, file, "Publisher Records — $congregationName") { share(context, file, "application/pdf", "Share Publisher Records") }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -284,6 +302,13 @@ object PublisherRecordsExporter {
                 l.baptismalAge?.let { append(num("J$r", it)) }
                 append(str("K$r", l.group)); append(str("L$r", l.status)); append(str("M$r", l.contact)); append(str("N$r", l.address, 3)); append(str("O$r", l.remarks, 3))
                 append("</row>")
+            }
+            val sum = com.emfitsolutions.gopreach.ui.screens.publishers.PublisherSummary.rows(rows)
+            var sr = data.size + 3
+            append("<row r=\"$sr\">"); append(str("B$sr", "Summary", 1)); append("</row>")
+            sum.drop(1).forEach { r ->
+                sr++
+                append("<row r=\"$sr\">"); append(str("B$sr", r[0])); append(str("C$sr", r[1])); append("</row>")
             }
             append("</sheetData></worksheet>")
         }

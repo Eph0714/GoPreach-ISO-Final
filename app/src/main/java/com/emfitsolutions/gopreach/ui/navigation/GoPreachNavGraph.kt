@@ -69,6 +69,19 @@ import com.emfitsolutions.gopreach.ui.screens.settings.SettingsScreen
 import com.emfitsolutions.gopreach.ui.screens.sharelocation.ShareLocationScreen
 import com.emfitsolutions.gopreach.ui.screens.territories.TerritoryMapScreen
 import com.emfitsolutions.gopreach.ui.screens.userlogs.UserLogsScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitAssignmentMigrationScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitCodesScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitCongregationOverviewScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitCongregationsScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitDashboardScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitLeadersScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitPublishersScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitReportScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitScopeStore
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitManagementScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitOverseerAccountsScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitOverseerFormScreen
+import com.emfitsolutions.gopreach.ui.screens.circuit.NoAccessScreen
 import com.emfitsolutions.gopreach.ui.screens.users.AddEditUserScreen
 import com.emfitsolutions.gopreach.ui.screens.users.ManageUsersScreen
 import com.emfitsolutions.gopreach.data.model.Permission
@@ -216,6 +229,9 @@ fun GoPreachNavGraph(
     // Circuit Overseer / custom users (spec §5-§8) carry no built-in scope —
     // everything they may see comes from their UserAccessGrant instead.
     val grant = session.grant
+    // Circuit screens: a Circuit Overseer sees their own circuit; the Super-Admin sees the circuit chosen in Circuit Overseer Management.
+    val isCircuitViewer = currentRole == AdminRole.CIRCUIT_OVERSEER || currentRole == AdminRole.SUPER_ADMIN
+    val circuitScope = CircuitScopeStore.scopeFor(currentRole == AdminRole.SUPER_ADMIN, currentPersonId)
     val canManageUsers = currentRole == AdminRole.SUPER_ADMIN ||
         (grant?.resolvedPermissions?.contains(Permission.MANAGE_USERS) == true)
     // Account Management spec §5 permission matrix — same four (well, five,
@@ -567,6 +583,11 @@ fun GoPreachNavGraph(
                 focusLat = focusLat,
                 focusLng = focusLng,
                 focusName = focusName,
+                // Circuit Overseer: view-only, and only the congregations on their own grant.
+                allowedCongregationIds = if (currentRole == AdminRole.CIRCUIT_OVERSEER && grant?.resolvedScopeType != ScopeType.ALL_CONGREGATIONS) {
+                    grant?.scopeCongregationIds?.toSet().orEmpty()
+                } else null,
+                readOnly = currentRole == AdminRole.CIRCUIT_OVERSEER,
                 onBack = { navController.popBackStack() },
             )
         }
@@ -616,14 +637,28 @@ fun GoPreachNavGraph(
             )
         }
         composable(Destinations.FIELD_SERVICE_REPORT) {
+            if (currentRole == AdminRole.CIRCUIT_OVERSEER) { NoAccessScreen(onBack = { navController.popBackStack() }); return@composable }
             com.emfitsolutions.gopreach.ui.screens.fieldservicereport.FieldServiceReportScreen(
+                // What the ACTIVE role may do with publishers' records here: the whole congregation, one FS Group, or nothing (view only).
+                recordScope = com.emfitsolutions.gopreach.domain.recordScopeOf(session),
+                activeRoleLabel = session.activeRoleLabel,
+                currentRole = currentRole,
+                canSendToCircuit = currentRole in setOf(
+                    AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY,
+                ),
                 fixedCongregationId = if (currentRole == AdminRole.SUPER_ADMIN) null else (ownCongregationId ?: ownGroupAssignment?.congregationId),
+                // Circuit Overseer: the picker lists only the congregations on their own grant (an ALL_CONGREGATIONS
+                // grant has no list, so no restriction). Any other role keeps exactly the behavior it always had.
+                allowedCongregationIds = if (currentRole == AdminRole.CIRCUIT_OVERSEER && grant?.resolvedScopeType != ScopeType.ALL_CONGREGATIONS) {
+                    grant?.scopeCongregationIds?.toSet().orEmpty()
+                } else null,
                 currentPersonId = currentPersonId,
                 // Lock / Unlock a publisher's report: same role set the old Publisher Reports module allowed.
+                // Congregation-wide roles, or a group role (limited to its own FS Group). A Regular Elder with no group role manages nothing here.
                 canManageLocks = currentRole in setOf(
                     AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER,
-                    AdminRole.REGULAR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY,
-                ),
+                    AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY,
+                ) || session.isGroupRole,
                 onBack = { navController.popBackStack() },
             )
         }
@@ -824,6 +859,7 @@ fun GoPreachNavGraph(
                 fixedCongregationId = if (currentRole == AdminRole.SUPER_ADMIN) null else (ownCongregationId ?: ownGroupAssignment?.congregationId),
                 currentPersonId = currentPersonId,
                 currentRole = currentRole,
+                scopeGroupId = session.activeGroupId,
                 onBack = { navController.popBackStack() },
             )
         }
@@ -964,9 +1000,15 @@ fun GoPreachNavGraph(
                 onBack = { navController.popBackStack() },
             )
         }
+        // Settings and Account Settings are ONE screen (Account | Preferences tabs) for every user; both routes open it.
         composable(Destinations.SETTINGS) {
-            SettingsScreen(
+            com.emfitsolutions.gopreach.ui.screens.settings.SettingsHubScreen(
+                initialTab = 0,
                 onBack = { navController.popBackStack() },
+                // A changed password signs the session out (spec §1); routing back to Login happens reactively above.
+                onSignedOutForPasswordChange = { },
+                isPublisher = ownPublisherAssignment != null,
+                onViewPublisherSchedules = if (ownPublisherAssignment != null) { { navController.navigate(Destinations.PUBLISHER_SCHEDULES) } } else null,
                 onNavigateToThemeColorSettings = { navController.navigate(Destinations.THEME_COLOR_SETTINGS) },
                 // Settings → Data Management → Deleted Records: the roles that manage deleted records.
                 currentPersonId = currentPersonId,
@@ -999,19 +1041,19 @@ fun GoPreachNavGraph(
             )
         }
         composable(Destinations.ACCOUNT_SETTINGS) {
-            AccountSettingsScreen(
+            // Kept as a route for existing links; it is the same combined screen.
+            com.emfitsolutions.gopreach.ui.screens.settings.SettingsHubScreen(
+                initialTab = 0,
                 onBack = { navController.popBackStack() },
-                // A changed password signs the session out (spec §1); routing
-                // back to Login happens reactively above, same as everywhere else.
                 onSignedOutForPasswordChange = { },
-                // "Add a module to the Publisher Account/Profile" — only
-                // shown for a plain Publisher's own active role, same
-                // signal every other Publisher-only feature in this file
-                // already checks.
                 isPublisher = ownPublisherAssignment != null,
-                onViewPublisherSchedules = if (ownPublisherAssignment != null) {
-                    { navController.navigate(Destinations.PUBLISHER_SCHEDULES) }
-                } else null,
+                onViewPublisherSchedules = if (ownPublisherAssignment != null) { { navController.navigate(Destinations.PUBLISHER_SCHEDULES) } } else null,
+                onNavigateToThemeColorSettings = { navController.navigate(Destinations.THEME_COLOR_SETTINGS) },
+                currentPersonId = currentPersonId,
+                showDeletedRecordsSettings = currentRole in setOf(
+                    AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY,
+                ),
+                onOpenDeletedRecords = { navController.navigate(Destinations.DELETED_RECORDS) },
             )
         }
         composable(Destinations.PUBLISHER_SCHEDULES) {
@@ -1023,6 +1065,228 @@ fun GoPreachNavGraph(
                 currentPersonId = currentPersonId,
                 onBack = { navController.popBackStack() },
             )
+        }
+        // ---- Circuit Overseer module ----
+        // Super-Admin only: every one of these also re-checks the role here, so a stale back-stack entry or a
+        // hand-typed route can't open a management screen for any other role (the server rules are the real gate).
+        composable(Destinations.MANAGE_CIRCUIT_CODES) {
+            if (currentRole == AdminRole.SUPER_ADMIN) {
+                CircuitCodesScreen(currentPersonId = currentPersonId, onBack = { navController.popBackStack() })
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.MANAGE_CIRCUIT_OVERSEERS) {
+            if (currentRole == AdminRole.SUPER_ADMIN) {
+                CircuitOverseerAccountsScreen(
+                    currentPersonId = currentPersonId,
+                    onBack = { navController.popBackStack() },
+                    onAdd = { navController.navigate(Destinations.ADD_CIRCUIT_OVERSEER) },
+                    onView = { navController.navigate(Destinations.viewCircuitOverseer(it)) },
+                    onEdit = { navController.navigate(Destinations.editCircuitOverseer(it)) },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.ADD_CIRCUIT_OVERSEER) {
+            if (currentRole == AdminRole.SUPER_ADMIN) {
+                CircuitOverseerFormScreen(personId = null, readOnly = false, currentPersonId = currentPersonId, onBack = { navController.popBackStack() })
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(
+            route = Destinations.EDIT_CIRCUIT_OVERSEER,
+            arguments = listOf(navArgument("personId") { type = NavType.StringType }),
+        ) { entry ->
+            if (currentRole == AdminRole.SUPER_ADMIN) {
+                CircuitOverseerFormScreen(
+                    personId = entry.arguments?.getString("personId"), readOnly = false,
+                    currentPersonId = currentPersonId, onBack = { navController.popBackStack() },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(
+            route = Destinations.VIEW_CIRCUIT_OVERSEER,
+            arguments = listOf(navArgument("personId") { type = NavType.StringType }),
+        ) { entry ->
+            if (currentRole == AdminRole.SUPER_ADMIN) {
+                CircuitOverseerFormScreen(
+                    personId = entry.arguments?.getString("personId"), readOnly = true,
+                    currentPersonId = currentPersonId, onBack = { navController.popBackStack() },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.CIRCUIT_ASSIGNMENT) {
+            if (currentRole == AdminRole.SUPER_ADMIN) {
+                CircuitAssignmentMigrationScreen(currentPersonId = currentPersonId, onBack = { navController.popBackStack() })
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.CIRCUIT_DASHBOARD) {
+            if (isCircuitViewer) {
+                CircuitDashboardScreen(
+                    currentPersonId = circuitScope,
+                    onBack = { navController.popBackStack() },
+                    onOpenReport = { navController.navigate(Destinations.CIRCUIT_FS_REPORTS) },
+                    onOpenPublishers = { navController.navigate(Destinations.circuitPublishers()) },
+                    onOpenCongregations = { navController.navigate(Destinations.CIRCUIT_CONGREGATIONS) },
+                    onOpenTerritory = { navController.navigate(Destinations.MANAGE_TERRITORIES_BASE) },
+                    onOpenCircuitReport = { navController.navigate(Destinations.CIRCUIT_REPORT) },
+                    onOpenAttendance = { navController.navigate(Destinations.MEETING_ATTENDANCE) },
+                    onOpenComparative = { navController.navigate(Destinations.CONGREGATION_COMPARATIVE) },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(
+            route = Destinations.CIRCUIT_PUBLISHERS,
+            arguments = listOf(
+                navArgument("category") { type = NavType.StringType; defaultValue = "" },
+                navArgument("congregationId") { type = NavType.StringType; defaultValue = "" },
+            ),
+        ) { entry ->
+            if (isCircuitViewer) {
+                CircuitPublishersScreen(
+                    currentPersonId = circuitScope,
+                    initialCategory = entry.arguments?.getString("category"),
+                    initialCongregationId = entry.arguments?.getString("congregationId"),
+                    onBack = { navController.popBackStack() },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(
+            route = Destinations.CIRCUIT_LEADERS,
+            arguments = listOf(navArgument("congregationId") { type = NavType.StringType; defaultValue = "" }),
+        ) { entry ->
+            if (isCircuitViewer) {
+                CircuitLeadersScreen(
+                    currentPersonId = circuitScope,
+                    initialCongregationId = entry.arguments?.getString("congregationId"),
+                    onBack = { navController.popBackStack() },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.CIRCUIT_REPORT) {
+            if (isCircuitViewer) {
+                CircuitReportScreen(
+                    currentPersonId = circuitScope,
+                    onBack = { navController.popBackStack() },
+                    onOpenCongregation = { navController.navigate(Destinations.circuitCongregation(it)) },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.CIRCUIT_FS_REPORTS) {
+            if (isCircuitViewer) {
+                // The Circuit Overseer reads the congregation's ACTUAL Field Service Report, only for submitted months, and
+                // receives / returns them. The Super-Admin opens the same report read-only through the normal screen.
+                com.emfitsolutions.gopreach.ui.screens.fieldservicereport.FieldServiceReportScreen(
+                    fixedCongregationId = null,
+                    allowedCongregationIds = if (currentRole == AdminRole.CIRCUIT_OVERSEER && grant?.resolvedScopeType != ScopeType.ALL_CONGREGATIONS) {
+                        grant?.scopeCongregationIds?.toSet().orEmpty()
+                    } else null,
+                    currentPersonId = currentPersonId,
+                    coMode = currentRole == AdminRole.CIRCUIT_OVERSEER,
+                    onBack = { navController.popBackStack() },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        // Meeting Attendance: the congregation-wide roles and the Super-Admin manage it; the Circuit Overseer reads their circuit's.
+        composable(Destinations.MEETING_ATTENDANCE) {
+            val manages = currentRole in setOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY)
+            val overseer = currentRole == AdminRole.CIRCUIT_OVERSEER
+            if (manages || overseer) {
+                com.emfitsolutions.gopreach.ui.screens.attendance.MeetingAttendanceScreen(
+                    fixedCongregationId = if (currentRole == AdminRole.SUPER_ADMIN || overseer) null else ownCongregationId,
+                    circuitScope = if (overseer) circuitScope else null,
+                    currentPersonId = currentPersonId,
+                    roleName = currentRole?.name.orEmpty(),
+                    canEdit = manages,
+                    onBack = { navController.popBackStack() },
+                    onOpenComparative = { navController.navigate(Destinations.CONGREGATION_COMPARATIVE) },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        // Report Submission: the reports the active role has to prepare / follow, for a saved month range.
+        composable(Destinations.REPORT_SUBMISSION) {
+            val manages = currentRole in setOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY)
+            val overseer = currentRole == AdminRole.CIRCUIT_OVERSEER
+            if (manages || overseer) {
+                com.emfitsolutions.gopreach.ui.screens.attendance.ReportSubmissionScreen(
+                    fixedCongregationId = if (currentRole == AdminRole.SUPER_ADMIN || overseer) null else ownCongregationId,
+                    circuitScope = if (overseer) circuitScope else null,
+                    userId = currentPersonId,
+                    roleName = currentRole?.name.orEmpty(),
+                    canPrepare = manages,
+                    onBack = { navController.popBackStack() },
+                    onOpen = { item ->
+                        navController.navigate(
+                            when (item.kind) {
+                                com.emfitsolutions.gopreach.domain.SubmissionKind.FIELD_SERVICE -> if (overseer) Destinations.CIRCUIT_FS_REPORTS else Destinations.manageReportsForMonth(item.periodStart)
+                                com.emfitsolutions.gopreach.domain.SubmissionKind.ATTENDANCE -> Destinations.MEETING_ATTENDANCE
+                                com.emfitsolutions.gopreach.domain.SubmissionKind.COMPARATIVE -> Destinations.CONGREGATION_COMPARATIVE
+                            },
+                        )
+                    },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.CONGREGATION_COMPARATIVE) {
+            val manages = currentRole in setOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY)
+            val overseer = currentRole == AdminRole.CIRCUIT_OVERSEER
+            if (manages || overseer) {
+                com.emfitsolutions.gopreach.ui.screens.attendance.ComparativeReportsScreen(
+                    fixedCongregationId = if (currentRole == AdminRole.SUPER_ADMIN || overseer) null else ownCongregationId,
+                    circuitScope = if (overseer) circuitScope else null,
+                    currentPersonId = currentPersonId,
+                    roleName = currentRole?.name.orEmpty(),
+                    canEdit = manages,
+                    onBack = { navController.popBackStack() },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.CIRCUIT_CONGREGATIONS) {
+            if (isCircuitViewer) {
+                CircuitCongregationsScreen(
+                    currentPersonId = circuitScope,
+                    onBack = { navController.popBackStack() },
+                    onOpenCongregation = { navController.navigate(Destinations.circuitCongregation(it)) },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(
+            route = Destinations.CIRCUIT_CONGREGATION,
+            arguments = listOf(navArgument("congregationId") { type = NavType.StringType }),
+        ) { entry ->
+            val congregationId = entry.arguments?.getString("congregationId").orEmpty()
+            if (isCircuitViewer) {
+                com.emfitsolutions.gopreach.ui.screens.circuit.CongregationOverviewDashboard(
+                    currentPersonId = circuitScope,
+                    congregationId = congregationId,
+                    onBack = { navController.popBackStack() },
+                    onOpenPublishers = { navController.navigate(Destinations.circuitPublishers(null, congregationId)) },
+                    onOpenLeaders = { navController.navigate(Destinations.circuitLeaders(congregationId)) },
+                    onOpenFieldService = { com.emfitsolutions.gopreach.ui.screens.circuit.CircuitScopeStore.selectCongregation(congregationId); navController.navigate(Destinations.CIRCUIT_FS_REPORTS) },
+                    onOpenAttendance = { com.emfitsolutions.gopreach.ui.screens.circuit.CircuitScopeStore.selectCongregation(congregationId); navController.navigate(Destinations.MEETING_ATTENDANCE) },
+                    onOpenComparative = { com.emfitsolutions.gopreach.ui.screens.circuit.CircuitScopeStore.selectCongregation(congregationId); navController.navigate(Destinations.CONGREGATION_COMPARATIVE) },
+                    onOpenTerritory = {
+                        com.emfitsolutions.gopreach.ui.components.CongregationContextStore.set("territory_map", congregationId)
+                        navController.navigate(Destinations.MANAGE_TERRITORIES_BASE)
+                    },
+                    onOpenReports = { com.emfitsolutions.gopreach.ui.screens.circuit.CircuitScopeStore.selectCongregation(congregationId); navController.navigate(Destinations.REPORT_SUBMISSION) },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.CIRCUIT_MANAGEMENT) {
+            if (currentRole == AdminRole.SUPER_ADMIN) {
+                CircuitManagementScreen(
+                    onBack = { navController.popBackStack() },
+                    onOpenCongregations = { navController.navigate(Destinations.CIRCUIT_CONGREGATIONS) },
+                    onOpenPublishers = { category, congregationId -> navController.navigate(Destinations.circuitPublishers(category, congregationId)) },
+                    onOpenLeaders = { navController.navigate(Destinations.circuitLeaders()) },
+                    onOpenTerritory = { congregationId ->
+                        com.emfitsolutions.gopreach.ui.components.CongregationContextStore.set("territory_map", congregationId)
+                        navController.navigate(Destinations.MANAGE_TERRITORIES_BASE)
+                    },
+                    onOpenReports = { navController.navigate(Destinations.CIRCUIT_FS_REPORTS) },
+                    onOpenCircuitReport = { navController.navigate(Destinations.CIRCUIT_REPORT) },
+                    onOpenAccounts = { navController.navigate(Destinations.MANAGE_CIRCUIT_OVERSEERS) },
+                    onOpenAccount = { navController.navigate(Destinations.viewCircuitOverseer(it)) },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
         }
         composable(Destinations.MANAGE_USERS) {
             ManageUsersScreen(

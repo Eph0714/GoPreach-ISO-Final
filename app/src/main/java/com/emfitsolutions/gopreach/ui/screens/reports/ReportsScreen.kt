@@ -415,6 +415,19 @@ fun ReportsScreen(
                 items(sections, key = { it.groupId ?: "unassigned" }) { section ->
                     GroupReportCard(section, dateRange, canEditReports, onEditPublisher)
                 }
+                item(key = "end-summary") {
+                    val rows = sections.flatMap { it.rows }
+                    com.emfitsolutions.gopreach.ui.components.EndSummary(
+                        listOf(
+                            "Groups" to sections.size.toString(),
+                            "Total Publishers" to rows.size.toString(),
+                            "Total Hours" to rows.sumOf { it.totalHours }.let { h -> if (h % 1.0 == 0.0) h.toLong().toString() else "%.1f".format(h) },
+                            "Total Bible Studies" to rows.sumOf { it.totalBibleStudies }.toString(),
+                            "Total Interested People" to rows.sumOf { it.totalInterestedPeople }.toString(),
+                        ),
+                        Modifier.padding(top = 8.dp),
+                    )
+                }
             }
         }
         }

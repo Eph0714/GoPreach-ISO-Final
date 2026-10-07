@@ -198,15 +198,6 @@ private fun ManageEldersContent(
                     )
                 }
                 RoleFilterDropdown(selected = roleFilter, onSelected = { roleFilter = it })
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text("Search Name / Contact / Email / Congregation / Role") },
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                    visualTransformation = VisualTransformation.None,
-                    modifier = Modifier.fillMaxWidth(),
-                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
                     Text("Show Inactive")
@@ -220,13 +211,35 @@ private fun ManageEldersContent(
                     Text("None enrolled yet. Tap + to enroll one.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    item { RecordFound(visibleRows.size) }
-                    items(visibleRows, key = { it.person.id }) { row ->
+                com.emfitsolutions.gopreach.ui.components.UniversalReport(
+                    title = "Elders",
+                    details = emptyList(),
+                    items = visibleRows,
+                    key = { it.person.id },
+                    columns = listOf(
+                        com.emfitsolutions.gopreach.ui.components.UniversalColumn<EldersRow>("Name", 200.dp) { it.person.fullName },
+                        com.emfitsolutions.gopreach.ui.components.UniversalColumn<EldersRow>("Congregation", 170.dp) { it.congregationName },
+                        com.emfitsolutions.gopreach.ui.components.UniversalColumn<EldersRow>("Roles", 240.dp) { r -> r.adminRoles.joinToString(", ") { it.displayLabel() } },
+                        com.emfitsolutions.gopreach.ui.components.UniversalColumn<EldersRow>("Contact", 130.dp) { it.person.contact },
+                        com.emfitsolutions.gopreach.ui.components.UniversalColumn<EldersRow>("Status", 90.dp) { if (it.isActive) "Active" else "Inactive" },
+                    ),
+                    searchText = { r -> listOf(r.person.fullName, r.person.contact, r.person.email.orEmpty(), r.congregationName) + r.adminRoles.map { it.displayLabel() } },
+                    filters = listOf(
+                        com.emfitsolutions.gopreach.ui.components.UniversalFilter<EldersRow>("congregation", "Congregations", visibleRows.map { it.congregationName }.distinct().sorted().map { it to it }) { r, v -> r.congregationName == v },
+                    ),
+                    sorts = listOf(
+                        com.emfitsolutions.gopreach.ui.components.UniversalSort<EldersRow>("az", "Name A–Z", compareBy { it.person.fullName.lowercase() }),
+                        com.emfitsolutions.gopreach.ui.components.UniversalSort<EldersRow>("za", "Name Z–A", compareByDescending { it.person.fullName.lowercase() }),
+                    ),
+                    summary = { shown ->
+                        listOf(
+                            "Total Elders" to shown.size.toString(),
+                            "Active" to shown.count { it.isActive }.toString(),
+                            "Inactive" to shown.count { !it.isActive }.toString(),
+                        ) + shown.flatMap { it.adminRoles }.groupingBy { it }.eachCount().entries.sortedBy { it.key.displayLabel() }.map { (role, n) -> role.displayLabel() to n.toString() }
+                    },
+                    generatedBy = "Administrator",
+                    card = { row ->
                         Card(
                             modifier = Modifier.fillMaxWidth().clickable(enabled = row.person.isTemporaryCredential) { lookupTarget = row.person },
                         ) {
@@ -269,8 +282,9 @@ private fun ManageEldersContent(
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
     }

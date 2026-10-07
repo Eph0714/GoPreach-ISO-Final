@@ -158,8 +158,119 @@ test('monthlyReports: publishers write only their own, and posted / submitted re
   assert.equal(await set('pubA', 'monthlyReports', 'rep-submitted', { ...submitted, note: 'changed' }), false, 'locked after submitting');
   assert.equal(await set('pubA', 'monthlyReports', 'rep-submitted', { ...submitted }), true, 'an identical retry is accepted');
   assert.equal(await set('soA', 'monthlyReports', 'rep-submitted', { ...submitted, status: 'DRAFT' }), true, 'an admin-track role returns it');
-  assert.equal(await del('soA', 'monthlyReports', 'rep-pubA'), false, 'only the Super Admin deletes');
-  assert.equal(await del('sa', 'monthlyReports', 'rep-pubA'), true);
+  assert.equal(await del('pubA', 'monthlyReports', 'rep-pubA'), false, 'a publisher cannot delete a record');
+  assert.equal(await del('elderA', 'monthlyReports', 'rep-pubA'), false, 'a Regular Elder without a group cannot');
+  assert.equal(await del('adminB', 'monthlyReports', 'rep-pubA'), false, 'another congregation cannot');
+  assert.equal(await del('soA', 'monthlyReports', 'rep-pubA'), true, 'a congregation-wide role deletes within its own congregation');
+  assert.equal(await del('sa', 'monthlyReports', 'rep-posted'), true, 'the Super Admin deletes anywhere');
+});
+
+test('publisher submission: submitted reports lock; access request, grant, reverse and resubmit', async () => {
+  const own = (status, extra = {}) => ({ congregationId: 'congA', publisherPersonId: 'pubA', periodMonth: 1650000000000, status, bibleStudiesCount: 1, ...extra });
+  await put('monthlyReports', 'lv1-sub', own('SUBMITTED'));
+  await put('monthlyReports', 'lv1-req', own('ACCESS_REQUESTED', { accessRequestReason: 'typo' }));
+  await put('monthlyReports', 'lv1-grant', own('ACCESS_GRANTED'));
+  assert.equal(await set('pubA', 'monthlyReports', 'lv1-sub', own('SUBMITTED', { bibleStudiesCount: 9 })), false, 'a submitted report is locked for its publisher');
+  assert.equal(await set('pubA', 'monthlyReports', 'lv1-sub', own('ACCESS_REQUESTED', { accessRequestReason: 'typo', accessRequestedAt: 5 })), true, 'the publisher may request access');
+  assert.equal(await set('pubA', 'monthlyReports', 'lv1-sub', own('ACCESS_REQUESTED', { accessRequestReason: 'x', bibleStudiesCount: 50 })), false, 'the request cannot carry other changes');
+  assert.equal(await set('pubA', 'monthlyReports', 'lv1-req', own('ACCESS_REQUESTED', { accessRequestReason: 'typo', bibleStudiesCount: 7 })), false, 'locked while the request is pending');
+  assert.equal(await set('pubA', 'monthlyReports', 'lv1-req', own('ACCESS_GRANTED')), false, 'a publisher cannot grant themselves access');
+  assert.equal(await set('soA', 'monthlyReports', 'lv1-req', own('ACCESS_GRANTED', { accessRequestReason: 'typo' })), true, 'the person in charge approves');
+  assert.equal(await set('pubA', 'monthlyReports', 'lv1-grant', own('ACCESS_GRANTED', { bibleStudiesCount: 4 })), true, 'with access granted the publisher corrects');
+  assert.equal(await set('pubA', 'monthlyReports', 'lv1-grant', own('CORRECTED', { bibleStudiesCount: 4 })), true, 'and submits again');
+  assert.equal(await set('adminB', 'monthlyReports', 'lv1-sub', own('RETURNED')), false, 'another congregation cannot reverse');
+  assert.equal(await set('adminA', 'monthlyReports', 'lv1-sub', own('RETURNED', { correctionReason: 'recount' })), true, 'the person in charge reverses a submission');
+});
+
+test('meeting attendance: managers write valid records, nobody else; frozen months are history', async () => {
+  const SEP = 1788192000000; const DAY = 86400000;
+  const date = SEP + 2 * DAY;
+  const mid = (parts, extra = {}) => { const avg = (parts[0] + parts[1] + parts[2]) / 3; return { congregationId: 'congA', meetingType: 'MIDWEEK', meetingDate: date, serviceMonth: SEP, treasuresAttendance: parts[0], applyYourselfAttendance: parts[1], livingAsChristiansAttendance: parts[2], publicMeetingAttendance: null, watchtowerStudyAttendance: null, calculatedAverage: avg, officialAttendance: Math.floor(avg + 0.5), roundingMode: 'ROUNDED', deleted: false, updatedBy: '', ...extra }; };
+  const id = `congA_MIDWEEK_${date}`;
+  assert.equal(await set('soA', 'meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'soA' })), true, 'a Service Overseer adds 79/80/85 → 81');
+  assert.equal(await set('soA', 'meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'soA', officialAttendance: 82 })), false, 'a wrong official figure');
+  assert.equal(await set('soA', 'meetingAttendance', id, mid([79, -1, 85], { updatedBy: 'soA' })), false, 'a negative count');
+  assert.equal(await set('soA', 'meetingAttendance', 'congA_dup', mid([70, 70, 70], { updatedBy: 'soA' })), false, 'a record under another id');
+  assert.equal(await set('pubA', 'meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'pubA' })), false, 'a publisher');
+  assert.equal(await set('adminB', 'meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'adminB' })), false, 'another congregation');
+  await put('meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'soA' }));
+  assert.equal(await del('soA', 'meetingAttendance', id), false, 'never hard-deleted');
+  assert.equal(await set('soA', 'meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'soA', deleted: true })), true, 'a soft delete');
+  await put('congregationMonthlyStatistics', `congA_${SEP}`, { congregationId: 'congA', serviceMonth: SEP, snapshotStatus: 'RECEIVED' });
+  assert.equal(await set('soA', 'meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'soA', remarks: 'late' })), false, 'a received month is frozen');
+  assert.equal(await set('sa', 'meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'sa', remarks: 'late' })), true, 'the Super Admin is not bound');
+  assert.equal(await set('adminA', 'meetingAttendanceSettings', 'congA', { congregationId: 'congA', roundingMode: 'EXACT', updatedBy: 'adminA' }), true, 'a manager sets the rounding');
+  assert.equal(await set('adminA', 'meetingAttendanceSettings', 'congA', { congregationId: 'congA', roundingMode: 'CEIL', updatedBy: 'adminA' }), false, 'an unknown mode');
+  assert.equal(await set('pubA', 'meetingAttendanceSettings', 'congA', { congregationId: 'congA', roundingMode: 'EXACT', updatedBy: 'pubA' }), false, 'a publisher');
+});
+
+test('comparative reports: congregation drafts and sends, the overseer receives or returns, a received report is locked', async () => {
+  await put('people', 'coC', person('CIRCUIT_OVERSEER', null));
+  await put('userAccessGrants', 'coC', { permissions: ['VIEW_CONGREGATIONS'], scopeType: 'SELECTED_CONGREGATIONS', scopeCongregationIds: ['congA'], circuitCode: 'NT01' });
+  const jan = 1735689600000, mar = 1740787200000, apr = 1743465600000, jun = 1748736000000, far = 4070908800000;
+  const id = `congA_${jan}_${mar}_${apr}_${jun}`;
+  const draft = { congregationId: 'congA', reportNumber: 'CR-2026-0001', periodAStart: jan, periodAEnd: mar, periodBStart: apr, periodBEnd: jun, status: 'DRAFT', version: 1, reportSnapshot: '{}', createdBy: 'adminA', updatedAt: 1 };
+  assert.equal(await set('pubA', 'congregationComparativeReports', id, { ...draft, createdBy: 'pubA' }), false, 'a publisher');
+  assert.equal(await set('coC', 'congregationComparativeReports', id, { ...draft, createdBy: 'coC' }), false, 'the overseer');
+  assert.equal(await set('adminB', 'congregationComparativeReports', id, { ...draft, createdBy: 'adminB' }), false, 'another congregation');
+  assert.equal(await set('adminA', 'congregationComparativeReports', 'other', draft), false, 'the id is the periods');
+  assert.equal(await set('adminA', 'congregationComparativeReports', `congA_${jan}_${mar}_${apr}_${far}`, { ...draft, periodBEnd: far }), false, 'a future month');
+  assert.equal(await set('adminA', 'congregationComparativeReports', `congA_${jan}_${apr}_${mar}_${jun}`, { ...draft, periodAEnd: apr, periodBStart: mar }), false, 'overlapping periods');
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, draft), true, 'a manager drafts');
+  await put('congregationComparativeReports', id, draft);
+  assert.equal(await reads('coC', 'congregationComparativeReports', id), false, 'the overseer never sees a draft');
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, { ...draft, reportSnapshot: '{"x":1}', updatedAt: 2 }), true, 'a draft is editable');
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, { ...draft, status: 'RECEIVED', receivedBy: 'adminA', receivedAt: 3 }), false, 'a draft cannot jump to received');
+  const sent = { ...draft, status: 'SUBMITTED', submittedBy: 'adminA', submittedByName: 'A', submittedAt: 3, updatedAt: 3 };
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, sent), true, 'send');
+  await put('congregationComparativeReports', id, sent);
+  assert.equal(await reads('coC', 'congregationComparativeReports', id), true, 'the overseer sees a sent report');
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, { ...sent, reportSnapshot: '{"x":2}' }), false, 'a sent report is read-only');
+  assert.equal(await del('adminA', 'congregationComparativeReports', id), false, 'a sent report is not deletable');
+  assert.equal(await set('coC', 'congregationComparativeReports', id, { ...sent, reportSnapshot: '{"x":2}', currentCoRemarks: 'x' }), false, 'the overseer never alters the snapshot');
+  assert.equal(await set('coC', 'comparativeReportRemarks', 'r1', { comparativeReportId: id, congregationId: 'congA', authorUserId: 'coC', remark: 'Check July', createdAt: 4 }), true, 'a remark');
+  assert.equal(await set('adminA', 'comparativeReportRemarks', 'r2', { comparativeReportId: id, congregationId: 'congA', authorUserId: 'adminA', remark: 'x', createdAt: 4 }), false, 'the congregation cannot remark');
+  assert.equal(await set('coC', 'congregationComparativeReports', id, { ...sent, status: 'RETURNED', returnReason: '', returnedAt: 5 }), false, 'a return needs a reason');
+  const returned = { ...sent, status: 'RETURNED', returnReason: 'July missing', returnedBy: 'coC', returnedAt: 5, updatedAt: 5 };
+  assert.equal(await set('coC', 'congregationComparativeReports', id, returned), true, 'return');
+  await put('congregationComparativeReports', id, returned);
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, { ...returned, reportSnapshot: '{"x":3}', updatedAt: 6 }), true, 'a returned report is corrected');
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, { ...returned, periodAStart: mar }), false, 'periods cannot change');
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, { ...returned, status: 'SUBMITTED', version: 1, submittedBy: 'adminA', submittedAt: 7 }), false, 'resubmitting bumps the version');
+  const again = { ...returned, status: 'SUBMITTED', version: 2, submittedBy: 'adminA', submittedByName: 'A', submittedAt: 7, updatedAt: 7 };
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, again), true, 'resubmit');
+  await put('congregationComparativeReports', id, again);
+  const received = { ...again, status: 'RECEIVED', receivedBy: 'coC', receivedAt: 8, updatedAt: 8 };
+  assert.equal(await set('coC', 'congregationComparativeReports', id, received), true, 'receive');
+  await put('congregationComparativeReports', id, received);
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, { ...received, reportSnapshot: '{"x":4}' }), false, 'received: no edit');
+  assert.equal(await set('adminA', 'congregationComparativeReports', id, { ...received, status: 'SUBMITTED', version: 3, submittedBy: 'adminA' }), false, 'received: no resubmit');
+  assert.equal(await del('adminA', 'congregationComparativeReports', id), false, 'received: no delete');
+  assert.equal(await set('coC', 'congregationComparativeReports', id, { ...received, status: 'RETURNED', returnReason: 'again' }), false, 'received: not returned again');
+  assert.equal(await set('coC', 'comparativeReportRemarks', 'r3', { comparativeReportId: id, congregationId: 'congA', authorUserId: 'coC', remark: 'late', createdAt: 9 }), false, 'received: no remarks');
+  assert.equal(await set('adminA', 'comparativeReportHistory', 'h1', { reportId: id, congregationId: 'congA', action: 'x', userId: 'adminA', at: 1 }), true, 'history as yourself');
+  assert.equal(await set('adminA', 'comparativeReportHistory', 'h2', { reportId: id, congregationId: 'congA', action: 'x', userId: 'coC', at: 1 }), false, 'history as someone else');
+});
+
+test('active role scope: a Group Coordinator / Servant / Assistant writes only publishers of its own FS group', async () => {
+  await put('people', 'grpElder', person('REGULAR_ELDER', 'congA', { activeGroupId: 'gG' }));
+  await put('people', 'fakeGrp', person('REGULAR_ELDER', 'congA', { activeGroupId: 'gG' })); // claims the group but fills no slot
+  await put('people', 'ceActing', person('COORDINATOR_ELDER', 'congA'));
+  await put('groups', 'gG', { congregationId: 'congA', overseerPersonId: 'grpElder', status: 'ACTIVE' });
+  await put('groups', 'gH', { congregationId: 'congA', overseerPersonId: 'someoneElse', status: 'ACTIVE' });
+  await put('roleAssignments', 'raG', { personId: 'pubA', congregationId: 'congA', groupId: 'gG', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
+  await put('roleAssignments', 'raH', { personId: 'pubA2', congregationId: 'congA', groupId: 'gH', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
+  const rec = (who, ra, extra = {}) => ({ congregationId: 'congA', publisherPersonId: who, periodMonth: 1700000000000, status: 'SUBMITTED', source: 'MANUAL', groupRoleAssignmentId: ra, ...extra });
+
+  assert.equal(await set('grpElder', 'monthlyReports', 'g1', rec('pubA', 'raG')), true, 'a publisher of its own group');
+  assert.equal(await set('grpElder', 'monthlyReports', 'g2', rec('pubA2', 'raH')), false, 'a publisher of another group');
+  assert.equal(await set('grpElder', 'monthlyReports', 'g3', rec('pubA2', 'raG')), false, 'forging the assignment of another publisher');
+  assert.equal(await set('grpElder', 'monthlyReports', 'g4', rec('pubA', null)), false, 'without the publisher assignment');
+  assert.equal(await set('fakeGrp', 'monthlyReports', 'g5', rec('pubA', 'raG')), false, 'a person who fills no slot of the group');
+  assert.equal(await set('elderA', 'monthlyReports', 'g6', rec('pubA', 'raG')), false, 'a Regular Elder without a group');
+  assert.equal(await set('ceActing', 'monthlyReports', 'g7', rec('pubA2', null)), true, 'acting as Coordinator Elder: any publisher of the congregation');
+  assert.equal(await del('grpElder', 'monthlyReports', 'g1'), true, 'deletes a stamped record of its own group');
+  assert.equal(await del('ceActing', 'monthlyReports', 'g7'), true, 'a congregation-wide role deletes');
 });
 
 test('monthlyReports: a Pioneer\'s adjusted hours need confirmation and remarks; restricted accounts are view-only', async () => {
@@ -292,4 +403,116 @@ test('reads: sensitive collections stay inside the caller\'s congregation, with 
   assert.equal(await reads('restricted', 'groups', 'g1'), false);
   assert.equal(await reads('pubB', 'people', 'pubA'), true, 'people are readable by any signed-in user, like the rules');
   assert.equal(await reads('pubA', 'schedules', 's1'), true);
+});
+
+// ---- Circuit Overseer module ---------------------------------------------------------------------------------------
+
+test('circuit codes and congregation links: Super Admin writes, everyone signed-in reads, nobody else writes', async () => {
+  assert.equal(await set('sa', 'circuitCodes', 'NT01', { code: 'NT01', status: 'ACTIVE', overseerPersonId: null }), true);
+  // set() only evaluates the rule; store the rows so the delete checks below act on real documents.
+  await put('circuitCodes', 'NT01', { code: 'NT01', status: 'ACTIVE', overseerPersonId: null });
+  await put('congregationCircuits', 'congA', { congregationId: 'congA', circuitOverseerPersonId: 'restricted', circuitCode: 'NT01' });
+  assert.equal(await set('sa', 'congregationCircuits', 'congA', { congregationId: 'congA', circuitOverseerPersonId: 'restricted', circuitCode: 'NT01' }), true);
+  for (const who of ['adminA', 'pubA', 'restricted', 'coordA']) {
+    assert.equal(await set(who, 'circuitCodes', 'NT09', { code: 'NT09' }), false, `${who} cannot create a code`);
+    assert.equal(await set(who, 'circuitCodes', 'NT01', { overseerPersonId: who }), false, `${who} cannot take over a code`);
+    assert.equal(await del(who, 'circuitCodes', 'NT01'), false, `${who} cannot delete a code`);
+    assert.equal(await set(who, 'congregationCircuits', 'congA', { circuitOverseerPersonId: who }), false, `${who} cannot move a congregation`);
+    assert.equal(await del(who, 'congregationCircuits', 'congA'), false, `${who} cannot unassign a congregation`);
+  }
+  assert.equal(await reads('pubA', 'circuitCodes', 'NT01'), true);
+  assert.equal(await reads('restricted', 'congregationCircuits', 'congA'), true);
+});
+
+test('roleAssignments: a grant-based account can always read its own role assignment, and only its own', async () => {
+  await put('roleAssignments', 'ra-restricted', { personId: 'restricted', congregationId: null, roleType: 'ADMIN:CIRCUIT_OVERSEER' });
+  assert.equal(await reads('restricted', 'roleAssignments', 'ra-restricted'), true);
+  assert.equal(await reads('restricted', 'roleAssignments', 'ra1'), false, 'someone else\'s assignment outside its scope');
+});
+
+test('territory data: a grant-based account (Circuit Overseer) reads only its congregations; everyone else is unchanged', async () => {
+  for (const [c, cong] of [['tB', 'congB'], ['tA', 'congA']]) {
+    await put('territoryAssignments', `ta_${c}`, { congregationId: cong });
+    await put('territoryAssignmentBarangays', `${cong}_1`, { congregationId: cong });
+    await put('mapPins', `p_${c}`, { congregationId: cong, createdByPersonId: 'x' });
+    await put('territoryDrawings', `d_${c}`, { congregationId: cong, userId: 'x', status: 'ACTIVE' });
+    await put('territoryBounds', `${cong}_1`, { congregationId: cong });
+  }
+  for (const [col, idB, idA] of [
+    ['territoryAssignments', 'ta_tB', 'ta_tA'], ['territoryAssignmentBarangays', 'congB_1', 'congA_1'], ['mapPins', 'p_tB', 'p_tA'],
+    ['territoryDrawings', 'd_tB', 'd_tA'], ['territoryBounds', 'congB_1', 'congA_1'],
+  ]) {
+    assert.equal(await reads('restricted', col, idB), true, `${col}: inside the grant scope`);
+    assert.equal(await reads('restricted', col, idA), false, `${col}: outside the grant scope`);
+    assert.equal(await reads('pubA', col, idA), true, `${col}: a member of congA still reads it`);
+  }
+  assert.equal(await set('restricted', 'territoryDrawings', 'dNew', { congregationId: 'congB', userId: 'restricted', status: 'ACTIVE' }), false, 'a Circuit Overseer never draws');
+  assert.equal(await set('restricted', 'mapPins', 'pNew', { congregationId: 'congB', createdByPersonId: 'restricted' }), false, 'nor pins');
+});
+
+// ---- Field Service Report workflow on the actual report ------------------------------------------------------------
+
+test('month status: senders submit past months only, undo before receipt; the overseer receives / returns; nobody deletes', async () => {
+  await put('people', 'coB', person('CIRCUIT_OVERSEER', null));
+  await put('userAccessGrants', 'coB', { permissions: ['VIEW_CONGREGATIONS'], scopeType: 'SELECTED_CONGREGATIONS', scopeCongregationIds: ['congB'], circuitCode: 'NT01' });
+  await put('people', 'soB', person('SERVICE_OVERSEER', 'congB'));
+  await put('people', 'secB', person('SECRETARY', 'congB'));
+  const month = 1790784000000;
+  const FUTURE = 4102444800000;
+  const id = `congB_${month}`;
+  const fresh = { congregationId: 'congB', periodMonth: month, status: 'SUBMITTED', version: 1, submittedAt: 1 };
+
+  assert.equal(await set('pubB', 'coFieldServiceMonthStatus', id, fresh), false, 'a plain publisher cannot send');
+  assert.equal(await set('adminA', 'coFieldServiceMonthStatus', id, fresh), false, 'another congregation cannot send');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, fresh), false, 'the overseer cannot send');
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', 'wrong', fresh), false, 'the id must be congregation_month');
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, { ...fresh, status: 'RECEIVED' }), false, 'a first send is SUBMITTED');
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', `congB_${FUTURE}`, { ...fresh, periodMonth: FUTURE }), false, 'a future month cannot be sent');
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, fresh), true, 'an Admin sends a past month');
+  await put('coFieldServiceMonthStatus', id, fresh);
+
+  assert.equal(await set('secB', 'coFieldServiceMonthStatus', id, { ...fresh, status: 'NOT_SUBMITTED', coRemarks: null, undoneAt: 2 }), true, 'a sender undoes a SUBMITTED month');
+  assert.equal(await set('pubB', 'coFieldServiceMonthStatus', id, { ...fresh, status: 'NOT_SUBMITTED', coRemarks: null }), false, 'a publisher cannot undo');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...fresh, status: 'RECEIVED', receivedAt: 3, coRemarks: 'Complete' }), true, 'the overseer receives it');
+  const received = { ...fresh, status: 'RECEIVED', receivedAt: 3, coRemarks: 'Complete' };
+  await put('coFieldServiceMonthStatus', id, received);
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, { ...received, status: 'NOT_SUBMITTED', coRemarks: null }), false, 'the congregation cannot undo a RECEIVED month');
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, { ...received, status: 'RETURNED' }), false, 'the congregation cannot return a RECEIVED month');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...received, coRemarks: 'Reviewed' }), true, 'the overseer edits the remarks');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...received, submittedByName: 'forged' }), false, 'the overseer cannot touch submission fields');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...received, status: 'RETURNED', returnedAt: 4, coRemarks: 'Check RV' }), true, 'the overseer returns it');
+  const returned = { ...received, status: 'RETURNED', returnedAt: 4, coRemarks: 'Check RV' };
+  await put('coFieldServiceMonthStatus', id, returned);
+  assert.equal(await set('secB', 'coFieldServiceMonthStatus', id, { ...returned, status: 'SUBMITTED', version: 2, submittedAt: 5, coRemarks: 'forged' }), false, 'a re-send cannot forge remarks');
+  assert.equal(await set('secB', 'coFieldServiceMonthStatus', id, { ...returned, status: 'SUBMITTED', version: 2, submittedAt: 5 }), true, 'the Secretary sends it again after a return');
+  assert.equal(await del('adminB', 'coFieldServiceMonthStatus', id), false, 'never deleted');
+  assert.equal(await set('coB', 'coFieldServiceReportEvents', 'e1', { reportId: id, congregationId: 'congB', userId: 'coB' }), true, 'the overseer logs its own action');
+  assert.equal(await set('coB', 'coFieldServiceReportEvents', 'e2', { reportId: id, congregationId: 'congB', userId: 'adminB' }), false, 'events are written as yourself');
+});
+
+test('month lock and overseer visibility: Submitted / Received lock the records; the overseer sees only submitted months', async () => {
+  const month = 1790784000000; // 1 Oct 2026 (UTC+8)
+  const day = month + 5 * 86400000;
+  const open = month + 40 * 86400000;
+  const rec = { congregationId: 'congB', publisherPersonId: 'pubB', periodMonth: month, status: 'DRAFT' };
+  await put('coFieldServiceMonthStatus', `congB_${month}`, { congregationId: 'congB', periodMonth: month, status: 'NOT_SUBMITTED', version: 1 });
+  assert.equal(await set('pubB', 'monthlyReports', 'pubB_open', rec), true, 'a NOT_SUBMITTED month accepts the publisher');
+  await put('coFieldServiceMonthStatus', `congB_${month}`, { congregationId: 'congB', periodMonth: month, status: 'SUBMITTED', version: 1 });
+  assert.equal(await set('pubB', 'monthlyReports', 'pubB_sub', rec), false, 'a SUBMITTED month is locked for the publisher');
+  assert.equal(await set('adminB', 'monthlyReports', 'pubB_man', { ...rec, source: 'MANUAL' }), false, 'and for the Secretary / Admin');
+  assert.equal(await set('adminB', 'monthlyReports', 'pubB_other', { ...rec, periodMonth: open }), true, 'another month stays open');
+  assert.equal(await set('sa', 'monthlyReports', 'pubB_sa', rec), true, 'the Super Admin is not bound');
+  assert.equal(await set('pubB', 'preachingTimeRecords', 'pt1', { publisherPersonId: 'pubB', congregationId: 'congB', date: day, hoursConsumed: 1 }), false, 'hours of a locked month');
+  assert.equal(await set('pubB', 'preachingTimeRecords', 'pt2', { publisherPersonId: 'pubB', congregationId: 'congB', date: open, hoursConsumed: 1 }), true, 'hours of an open month');
+  assert.equal(await set('pubB', 'creditHourRecords', 'ch1', { publisherPersonId: 'pubB', dayStart: day, hours: 1 }), false, 'credit hours of a locked month');
+  assert.equal(await set('pubB', 'plannerDays', 'pd1', { publisherPersonId: 'pubB', dayStart: day, totalMinutes: 30 }), false, 'a planner day of a locked month');
+  await put('coFieldServiceMonthStatus', `congB_${month}`, { congregationId: 'congB', periodMonth: month, status: 'RETURNED', version: 1 });
+  assert.equal(await set('pubB', 'monthlyReports', 'pubB_back', rec), true, 'a RETURNED month is open again');
+
+  // visibility for the Circuit Overseer (RETURNED is still visible)
+  await put('monthlyReports', 'act_1', { congregationId: 'congB', publisherPersonId: 'pubB', periodMonth: month, status: 'SUBMITTED' });
+  await put('monthlyReports', 'act_2', { congregationId: 'congB', publisherPersonId: 'pubB', periodMonth: open, status: 'SUBMITTED' });
+  assert.equal(await reads('coB', 'monthlyReports', 'act_1'), true, 'the overseer reads a submitted / returned month');
+  assert.equal(await reads('coB', 'monthlyReports', 'act_2'), false, 'but not a month with no status');
+  assert.equal(await reads('restricted', 'monthlyReports', 'act_1'), false, 'a grant outside the circuit does not');
 });

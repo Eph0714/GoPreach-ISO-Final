@@ -79,6 +79,37 @@ object Destinations {
     // Phase 3
     const val CONTROL_PANEL = "control_panel"
     const val MANAGE_CONGREGATIONS = "manage_congregations"
+    // Circuit Overseer module (Super-Admin): Circuit Codes, Circuit Overseer Accounts (list / add / edit / view),
+    // bulk "Circuit Assignment" of older congregations, and the Circuit Overseer's own dashboard.
+    const val MANAGE_CIRCUIT_CODES = "manage_circuit_codes"
+    const val MANAGE_CIRCUIT_OVERSEERS = "manage_circuit_overseers"
+    const val ADD_CIRCUIT_OVERSEER = "add_circuit_overseer"
+    const val EDIT_CIRCUIT_OVERSEER = "edit_circuit_overseer/{personId}"
+    const val VIEW_CIRCUIT_OVERSEER = "view_circuit_overseer/{personId}"
+    fun editCircuitOverseer(personId: String) = "edit_circuit_overseer/$personId"
+    fun viewCircuitOverseer(personId: String) = "view_circuit_overseer/$personId"
+    const val CIRCUIT_ASSIGNMENT = "circuit_assignment"
+    const val CIRCUIT_DASHBOARD = "circuit_dashboard"
+    // Super-Admin hub over every circuit (and the picker that drives the Circuit screens above).
+    const val CIRCUIT_MANAGEMENT = "circuit_management"
+    // Circuit Overseer people views. `category` is a PublisherCategory name, `congregationId` an assigned congregation; both optional.
+    const val CIRCUIT_PUBLISHERS = "circuit_publishers?category={category}&congregationId={congregationId}"
+    fun circuitPublishers(category: String? = null, congregationId: String? = null) =
+        "circuit_publishers?category=${category.orEmpty()}&congregationId=${congregationId.orEmpty()}"
+    const val CIRCUIT_LEADERS = "circuit_leaders?congregationId={congregationId}"
+    fun circuitLeaders(congregationId: String? = null) = "circuit_leaders?congregationId=${congregationId.orEmpty()}"
+    const val CIRCUIT_CONGREGATIONS = "circuit_congregations"
+    // Consolidated summary of every congregation in one circuit.
+    const val CIRCUIT_REPORT = "circuit_report"
+    // Weekly meeting attendance, and the congregation's two-period comparison (reports, headcounts, attendance) built from monthly snapshots.
+    const val MEETING_ATTENDANCE = "meeting_attendance"
+    // The user's workspace of every report they have to prepare / follow for a saved month range.
+    const val REPORT_SUBMISSION = "report_submission"
+    const val CONGREGATION_COMPARATIVE = "congregation_comparative"
+    // Field Service Reports the congregations sent to the Circuit Overseer (submitted copies) and one report's detail.
+    const val CIRCUIT_FS_REPORTS = "circuit_fs_reports"
+    const val CIRCUIT_CONGREGATION = "circuit_congregation/{congregationId}"
+    fun circuitCongregation(congregationId: String) = "circuit_congregation/$congregationId"
     const val MANAGE_ADMINS = "manage_admins"
     const val BACKUP_RESTORE = "backup_restore"
     const val USER_LOGS = "user_logs"

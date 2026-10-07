@@ -302,6 +302,17 @@ fun PublisherAssignmentScreen(
                             }
                         }
                     }
+                item(key = "end-summary") {
+                    com.emfitsolutions.gopreach.ui.components.EndSummary(
+                        listOf(
+                            "Total Records" to shown.size.toString(),
+                            "Searching" to shown.count { it.pipelineStage == com.emfitsolutions.gopreach.data.model.PipelineStage.SEARCHING }.toString(),
+                            "Return Visits" to shown.count { it.pipelineStage == com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT }.toString(),
+                            "Bible Studies" to shown.count { it.pipelineStage == com.emfitsolutions.gopreach.data.model.PipelineStage.BIBLE_STUDY }.toString(),
+                        ),
+                        Modifier.padding(top = 8.dp),
+                    )
+                }
                 }
             }
         }

@@ -2,6 +2,7 @@ package com.emfitsolutions.gopreach.ui.screens.settings
 
 import com.emfitsolutions.gopreach.platform.rememberToaster
 import android.os.SystemClock
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -61,15 +62,40 @@ import kotlinx.coroutines.launch
 /** When the user last touched the app, on the monotonic clock (which keeps
  * counting while the device sleeps, unlike uptime). Fed by
  * `MainActivity.onUserInteraction()`. */
-class InactivityTracker() {
+class InactivityTracker(context: android.content.Context) {
+    private val prefs = context.applicationContext.getSharedPreferences("session_activity", android.content.Context.MODE_PRIVATE)
+
+    // Seeded from the LAST activity of the previous run (wall clock), so closing / killing the app, rebooting or reinstalling never
+    // gives a signed-in session a fresh idle window: a session idle past the limit has to log in again, strictly. With no record at
+    // all (or a clock set back) the idle time is treated as "expired".
     @Volatile
-    private var lastInteraction: Long = SystemClock.elapsedRealtime()
+    private var lastInteraction: Long = SystemClock.elapsedRealtime() - idleSince(prefs.getLong(KEY_LAST_ACTIVE, 0L), System.currentTimeMillis())
+    private var lastWrite = 0L
 
     fun touch() {
-        lastInteraction = SystemClock.elapsedRealtime()
+        val now = SystemClock.elapsedRealtime()
+        lastInteraction = now
+        // Persist at most every 5 seconds; the stored time is at most that stale.
+        if (now - lastWrite >= 5_000L) {
+            lastWrite = now
+            prefs.edit().putLong(KEY_LAST_ACTIVE, System.currentTimeMillis()).apply()
+        }
     }
 
     fun idleMillis(): Long = SystemClock.elapsedRealtime() - lastInteraction
+
+    /** Forgets the last activity (on sign-out) so the next session starts from a real sign-in. */
+    fun clear() {
+        prefs.edit().remove(KEY_LAST_ACTIVE).apply()
+    }
+
+    companion object {
+        private const val KEY_LAST_ACTIVE = "lastActiveWallClock"
+
+        /** How long ago the stored activity was; unknown or from the future (clock tampering) counts as a very long time. */
+        fun idleSince(storedWall: Long, nowWall: Long): Long =
+            if (storedWall <= 0L || nowWall < storedWall) Long.MAX_VALUE / 4 else nowWall - storedWall
+    }
 }
 
 /** Roles that may open Session Timeout Setting — Super-Admin, every Admin and
@@ -99,7 +125,7 @@ class SessionTimeoutViewModel(
 
     fun idleMillis(): Long = inactivityTracker.idleMillis()
     fun resetIdle() = inactivityTracker.touch()
-    fun signOut() = authRepository.signOut()
+    fun signOut() { inactivityTracker.clear(); authRepository.signOut() }
 
     /** [onResult] gets null on success, or a message to show the user. */
     fun save(enabled: Boolean, minutes: Int, actorPersonId: String, onResult: (String?) -> Unit) {
@@ -129,8 +155,7 @@ fun SessionTimeoutHost(viewModel: SessionTimeoutViewModel = koinViewModel()) {
     val limitMillis = settings.sessionTimeoutMinutes.coerceAtLeast(AppSettings.MIN_SESSION_TIMEOUT_MINUTES) * 60_000L
     val active = signedIn && settings.sessionTimeoutEnabled
 
-    // A fresh sign-in (or a settings change) starts a fresh idle window.
-    LaunchedEffect(signedIn) { if (signedIn) viewModel.resetIdle() }
+    // NOTE: no idle reset here. A restored session must keep its real idle time (a sign-in resets it through the touches it takes).
 
     // Shown first; the sign-out (back to the login screen) only happens once the user acknowledges it.
     var showExpiredDialog by remember { mutableStateOf(false) }
@@ -138,6 +163,10 @@ fun SessionTimeoutHost(viewModel: SessionTimeoutViewModel = koinViewModel()) {
         showExpiredDialog = true
     }
     if (showExpiredDialog) {
+        // Hides whatever was open: an expired session must not show any data behind the dialog.
+        androidx.compose.foundation.layout.Box(
+            Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        )
         androidx.compose.material3.AlertDialog(
             properties = androidx.compose.ui.window.DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false),
             onDismissRequest = {},

@@ -43,6 +43,7 @@ class OfflineFirestoreRepository(
     @PublishedApi internal val cacheDao: CacheDao,
     private val syncQueueDao: SyncQueueDao,
     private val writeQueued: WriteQueuedListener,
+    private val serverSyncClock: ServerSyncClock,
 ) {
     @PublishedApi internal inline fun <reified T> decodeOrNull(row: CachedDocumentEntity): T? =
         try { DocJson.decode<T>(row.payloadJson) } catch (e: Exception) { null } // one malformed row must never break a whole list
@@ -180,6 +181,9 @@ class OfflineFirestoreRepository(
             )
         )
     }
+
+    /** The live listener just received a snapshot from the server (not from the local cache). */
+    fun noteServerSync() = serverSyncClock.mark()
 
     /** Cache-only delete — the [mirrorFirestoreCollection] counterpart to
      * [cacheFromServer] for a document removed on the server. Never enqueues a

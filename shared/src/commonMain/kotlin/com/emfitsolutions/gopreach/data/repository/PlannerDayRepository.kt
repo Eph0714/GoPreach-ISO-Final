@@ -17,6 +17,7 @@ class PlannerDayRepository(
     private val offline: OfflineFirestoreRepository,
     private val remote: RemoteCollections,
     private val monthlyReportRepository: MonthlyReportRepository,
+    private val monthLock: MonthLockGuard,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<PlannerDay>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
@@ -32,6 +33,7 @@ class PlannerDayRepository(
     fun observeAll(): Flow<List<PlannerDay>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(day: PlannerDay): PlannerDay {
+        monthLock.requireOpenForPublisher(day.publisherPersonId, day.dayStart) // a month submitted to the Circuit Overseer is locked
         val id = day.id.ifBlank { PlannerDay.idFor(day.publisherPersonId, day.dayStart) }
         val withId = day.copy(id = id, updatedAt = nowMillis())
         offline.save(COLLECTION, id, withId)

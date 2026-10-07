@@ -49,7 +49,16 @@ object ReportPrinter {
         handOff(context, title, PrintLayout.withPageRules(html), PrintLayout.isLandscape(context, options))
     }
 
+    /** Every report opens the zoomable print preview first (when there is an Activity to show it in); Print then goes to the system dialog. */
     private fun handOff(context: Context, title: String, html: String, landscape: Boolean) {
+        var c: Context? = context
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+        val activity = c as? android.app.Activity
+        if (activity == null || activity.isFinishing) sendToPrinter(context, title, html, landscape)
+        else PrintPreviewDialog.show(activity, title, html) { sendToPrinter(context, title, html, landscape) }
+    }
+
+    private fun sendToPrinter(context: Context, title: String, html: String, landscape: Boolean) {
         val webView = WebView(context)
         inFlightWebViews += webView
         webView.webViewClient = object : WebViewClient() {

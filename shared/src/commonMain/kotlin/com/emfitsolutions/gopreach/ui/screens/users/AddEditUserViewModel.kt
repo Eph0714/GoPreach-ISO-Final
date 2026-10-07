@@ -139,6 +139,7 @@ class AddEditUserViewModel(
             scopeType = state.scopeType.name,
             scopeCongregationIds = if (state.scopeType == ScopeType.SELECTED_CONGREGATIONS) state.selectedCongregationIds.toList() else emptyList(),
             scopeGroupIds = if (state.scopeType == ScopeType.SELECTED_GROUPS) state.selectedGroupIds.toList() else emptyList(),
+            circuitCode = previous?.circuitCode,
             createdByPersonId = previous?.createdByPersonId ?: actingPersonId,
             createdAt = previous?.createdAt ?: now,
             lastEditedByPersonId = actingPersonId,
@@ -212,6 +213,10 @@ class AddEditUserViewModel(
         viewModelScope.launch {
             try {
                 val previousGrant = userAccessGrantRepository.get(personId)
+                if (!previousGrant?.circuitCode.isNullOrBlank()) {
+                    _uiState.update { it.copy(isSaving = false, errorMessage = "This Circuit Overseer belongs to circuit ${previousGrant?.circuitCode}. Edit it under Circuit Overseer Accounts.") }
+                    return@launch
+                }
                 val newGrant = buildGrant(personId, actingPersonId, previousGrant)
                 userAccessGrantRepository.save(newGrant)
                 if (previousGrant?.resolvedPermissions != newGrant.resolvedPermissions ||

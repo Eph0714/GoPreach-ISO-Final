@@ -1,5 +1,5 @@
 import { congregationOf } from '../store.js';
-import { authorizeRulesWrite, canReadDoc, loadGrant } from './rules.js';
+import { authorizeRulesWrite, canReadDoc, loadGrant, grantAllows } from './rules.js';
 import { authorizeDrawingWrite, authorizeAuditWrite, authorizeBoundsWrite } from './drawings.js';
 
 /** Roles that may manage a congregation's territory (same set as firestore.rules `canManageTerritoryAssignmentsFor`). */
@@ -18,6 +18,8 @@ export async function loadActor(personId, get) {
     isSuperAdmin: p?.isSuperAdmin === true,
     congregationId: p?.activeCongregationId ?? null,
     adminRole: p?.activeAdminRole ?? null,
+    /** The FS Group of an active Group Coordinator / Servant / Assistant role (never trusted alone: see rules.js groupRoleMayWriteReport). */
+    groupId: p?.activeGroupId ?? null,
   };
 }
 
@@ -42,12 +44,14 @@ const DRAWING_COLLECTIONS = new Set(['territoryDrawings', 'territoryDrawingAudit
  */
 export async function canReadRow(actor, grant, row, get) {
   if (!actor.known) return false;
-  if (DRAWING_COLLECTIONS.has(row.collection)) return canReadDrawing(actor, row.collection, row.data);
+  if (DRAWING_COLLECTIONS.has(row.collection)) return canReadDrawing(actor, grant, row.collection, row.data);
   return canReadDoc(actor, grant, row.collection, row.id, row.data ?? {}, get);
 }
 
-function canReadDrawing(actor, collection, data) {
+function canReadDrawing(actor, grant, collection, data) {
   if (actor.isSuperAdmin) return true;
+  // A Circuit Overseer reads the territory drawings and bounds of the congregations on their grant (never the audit trail).
+  if (grant?.has) return collection !== 'territoryDrawingAudits' && grantAllows(grant, 'VIEW_CONGREGATIONS', data?.congregationId ?? null);
   if (collection === 'territoryDrawingAudits') return isWide(actor, data?.congregationId);
   const owner = congregationOf(collection, data);
   return owner != null && owner === actor.congregationId;

@@ -103,37 +103,41 @@ fun CreditHourCategoriesScreen(
                 Text("No Credit Hour categories available.", style = MaterialTheme.typography.titleSmall)
                 Text("Tap Add Category to create the first one.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            else -> LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
-            ) {
-                item {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp)) {
-                        Text("Category", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
-                        Text("Active", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Box(Modifier.size(width = 96.dp, height = 1.dp))
+            else -> com.emfitsolutions.gopreach.ui.components.UniversalReport(
+                title = "Credit Hour Categories",
+                details = emptyList(),
+                items = list,
+                key = { it.id },
+                columns = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<CreditHourCategory>("Category", 220.dp) { it.name },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<CreditHourCategory>("Status", 100.dp) { if (it.active) "Active" else "Inactive" },
+                ),
+                searchText = { listOf(it.name, it.description.orEmpty(), if (it.active) "active" else "inactive") },
+                filters = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalFilter<CreditHourCategory>("status", "Statuses", listOf("active" to "Active", "inactive" to "Inactive")) { c, v -> (v == "active") == c.active },
+                ),
+                sorts = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalSort<CreditHourCategory>("az", "Name A–Z", compareBy { it.name.lowercase() }),
+                    com.emfitsolutions.gopreach.ui.components.UniversalSort<CreditHourCategory>("za", "Name Z–A", compareByDescending { it.name.lowercase() }),
+                ),
+                summary = { shown ->
+                    listOf("Total Categories" to shown.size.toString(), "Active" to shown.count { it.active }.toString(), "Inactive" to shown.count { !it.active }.toString())
+                },
+                generatedBy = "Administrator",
+                card = { category ->
+                    Column {
+                        CategoryRow(
+                            category = category,
+                            onToggleActive = { viewModel.setActive(category, it) },
+                            onEdit = { editing = category },
+                            onDelete = { viewModel.requestDelete(category) },
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     }
-                    HorizontalDivider()
-                }
-                item { RecordFound(list.size) }
-                items(list, key = { it.id }) { category ->
-                    CategoryRow(
-                        category = category,
-                        onToggleActive = { viewModel.setActive(category, it) },
-                        onEdit = { editing = category },
-                        onDelete = { viewModel.requestDelete(category) },
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                }
-                item {
-                    Text(
-                        "Inactive categories are hidden from new Credit Hour entries but stay on existing ones.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
-                    )
-                }
-            }
+                },
+                modifier = Modifier.padding(padding),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
+            )
         }
     }
 

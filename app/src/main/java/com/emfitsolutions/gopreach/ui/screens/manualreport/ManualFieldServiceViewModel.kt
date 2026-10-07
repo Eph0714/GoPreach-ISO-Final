@@ -32,7 +32,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /** A publisher (or pioneer) in the selected congregation who a manual field service record can be entered for. */
-data class ManualPublisher(val person: Person, val category: PublisherCategory, val congregationId: String) {
+data class ManualPublisher(
+    val person: Person,
+    val category: PublisherCategory,
+    val congregationId: String,
+    /** The publisher's own RoleAssignment and FS Group — what proves, on the server, that a group role may touch them. */
+    val assignmentId: String = "",
+    val groupId: String? = null,
+) {
     val isPioneer: Boolean get() = isPioneerCategory(category)
 }
 
@@ -45,6 +52,8 @@ data class ManualRecordInput(
     val participated: Boolean?,
     val bibleStudies: Int,
     val remarks: String,
+    /** Null keeps whatever the record already holds (the Manual form has no such field). */
+    val returnVisits: Int? = null,
 )
 
 /** Roles that may enter field service records on a publisher's behalf. */
@@ -62,22 +71,28 @@ class ManualFieldServiceViewModel(
     private val personRepository: PersonRepository,
     private val auditLogRepository: AuditLogRepository,
     congregationRepository: CongregationRepository,
+    private val coReports: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository,
 ) : ViewModel() {
+
+    /** Which of the congregation's service months the Circuit Overseer approved (those are locked for manual entry too). */
+    fun lockStatuses(): Flow<List<com.emfitsolutions.gopreach.data.model.CoMonthStatus>> = coReports.observeStatuses()
 
     val congregations: StateFlow<List<Congregation>> = congregationRepository.observeAll()
         .map { list -> list.filter { it.status == RecordStatus.ACTIVE }.sortedBy { it.name } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     /** Active, non-removed publishers of exactly [congregationId] — the only people the form offers. */
-    fun publishersIn(congregationId: String): Flow<List<ManualPublisher>> =
+    fun publishersIn(congregationId: String, groupId: String? = null): Flow<List<ManualPublisher>> =
         combine(roleAssignmentRepository.observeAll(), personRepository.observeAll()) { assignments, people ->
             val byId = people.associateBy { it.id }
             assignments
                 .filter { it.status == RoleAssignmentStatus.ACTIVE && it.congregationId == congregationId }
+                // A group role sees only the publishers of its own FS Group — whatever the screen's filters say.
+                .filter { groupId == null || it.groupId == groupId }
                 .mapNotNull { a ->
                     val category = (a.resolvedRoleTypeOrNull() as? RoleType.Publisher)?.category ?: return@mapNotNull null
                     if (category == PublisherCategory.REMOVED_PUBLISHER) return@mapNotNull null
-                    byId[a.personId]?.let { ManualPublisher(it, category, congregationId) }
+                    byId[a.personId]?.let { ManualPublisher(it, category, congregationId, a.id, a.groupId) }
                 }
                 .distinctBy { it.person.id }
                 .sortedBy { it.person.fullName }
@@ -94,12 +109,18 @@ class ManualFieldServiceViewModel(
      * error message, or null on success. The checks here are the backend side of the rules: the actor's role, and that
      * the publisher really belongs to [scopeCongregationId] (re-read from the data, not trusted from the form).
      */
-    suspend fun save(input: ManualRecordInput, scopeCongregationId: String, actorRole: AdminRole?, actorPersonId: String): String? {
-        if (actorRole == null || actorRole !in ManualEntryRoles) return "You are not allowed to enter field service records."
-        val publisher = publishersIn(scopeCongregationId).first().firstOrNull { it.person.id == input.publisherPersonId }
-            ?: return "That publisher is not in this congregation."
+    suspend fun save(
+        input: ManualRecordInput, scopeCongregationId: String, actorRole: AdminRole?, actorPersonId: String,
+        /** Set for a Group Coordinator / Servant / Assistant: the only FS Group whose publishers they may manage. */
+        scopeGroupId: String? = null,
+    ): String? {
+        val groupRole = scopeGroupId != null && actorRole == AdminRole.REGULAR_ELDER
+        if (actorRole == null || (actorRole !in ManualEntryRoles && !groupRole)) return "You are not allowed to enter field service records."
+        val publisher = publishersIn(scopeCongregationId, if (groupRole) scopeGroupId else null).first().firstOrNull { it.person.id == input.publisherPersonId }
+            ?: return if (groupRole) "That publisher is not in your FS Group." else "That publisher is not in this congregation."
         if (input.month <= 0L) return "Choose the reporting month."
         val monthStart = MonthBounds.of(input.month).startInclusive
+        try { monthlyReportRepository.requireMonthOpen(scopeCongregationId, monthStart) } catch (e: com.emfitsolutions.gopreach.data.model.MonthLockedException) { return e.message }
         if (input.bibleStudies < 0) return "Bible Studies cannot be negative."
         if (publisher.isPioneer) {
             if (input.hours < 0 || input.minutes !in 0..59) return "Enter hours of 0 or more and minutes from 0 to 59."
@@ -127,6 +148,7 @@ class ManualFieldServiceViewModel(
         val saved = base.copy(
             source = SOURCE_MANUAL,
             bibleStudiesCount = input.bibleStudies,
+            returnVisitsCount = input.returnVisits ?: base.returnVisitsCount,
             hoursRendered = if (publisher.isPioneer) totalHours else null,
             // Same value as hoursRendered: a manual entry is not an adjustment of calculated hours.
             systemCalculatedHours = if (publisher.isPioneer) totalHours else null,
@@ -139,8 +161,10 @@ class ManualFieldServiceViewModel(
             remarks = remarks,
             lastEditedByPersonId = actorPersonId,
             lastEditedAt = now,
+            // A group role proves the publisher belongs to its FS Group through that publisher's own role assignment.
+            groupRoleAssignmentId = if (groupRole) publisher.assignmentId else base.groupRoleAssignmentId,
         )
-        val persisted = monthlyReportRepository.save(saved)
+        val persisted = try { monthlyReportRepository.save(saved) } catch (e: com.emfitsolutions.gopreach.data.model.MonthLockedException) { return e.message }
         auditLogRepository.log(
             actorPersonId = actorPersonId,
             action = if (existing == null) "MANUAL_FIELD_SERVICE_RECORD_ADD" else "MANUAL_FIELD_SERVICE_RECORD_EDIT",
@@ -152,9 +176,15 @@ class ManualFieldServiceViewModel(
         return null
     }
 
-    fun delete(report: MonthlyReport, scopeCongregationId: String, actorRole: AdminRole?, actorPersonId: String) {
-        if (actorRole == null || actorRole !in ManualEntryRoles || report.congregationId != scopeCongregationId) return
+    fun delete(report: MonthlyReport, scopeCongregationId: String, actorRole: AdminRole?, actorPersonId: String, scopeGroupId: String? = null) {
+        val groupRole = scopeGroupId != null && actorRole == AdminRole.REGULAR_ELDER
+        if (actorRole == null || (actorRole !in ManualEntryRoles && !groupRole) || report.congregationId != scopeCongregationId) return
         viewModelScope.launch {
+            if (groupRole) {
+                // Only a publisher of the group's own FS Group may be touched; the record is stamped with that publisher's role assignment first so the server can verify it.
+                val publisher = publishersIn(scopeCongregationId, scopeGroupId).first().firstOrNull { it.person.id == report.publisherPersonId } ?: return@launch
+                if (report.groupRoleAssignmentId != publisher.assignmentId) monthlyReportRepository.saveNow(report.copy(groupRoleAssignmentId = publisher.assignmentId))
+            }
             monthlyReportRepository.delete(report.id)
             auditLogRepository.log(
                 actorPersonId = actorPersonId,

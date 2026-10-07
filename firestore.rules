@@ -97,6 +97,160 @@ function canManagePublisherReportsFor(db, congregationId) {
   );
 }
 
+// ---- Active role scope for Field Service Records ----
+//
+// The role a person acts as in the current session is mirrored on their Person document (activeAdminRole,
+// activeCongregationId, activeGroupId). Congregation-wide roles (Admin, Coordinator Elder, Service Overseer, Secretary) may
+// write any publisher's report of their congregation. A GROUP role (Group Coordinator / Servant / Assistant = a Regular Elder
+// assignment with a group) may write only reports of publishers of THAT FS Group, and the rules verify it independently of the
+// client: the person must really fill a slot of activeGroupId (isSlotHolderOfGroup), and the report must name a real, active
+// roleAssignment (groupRoleAssignmentId) belonging to that very publisher, in that group and congregation.
+function canManageReportsAsCongregationRole(db, congregationId) {
+  return isSignedIn() && exists(/databases/$(db)/documents/people/$(personIdFromToken())) && (
+    isSuperAdmin(db) || (
+      myPerson(db).get('activeCongregationId', null) == congregationId &&
+      myPerson(db).get('activeAdminRole', null) in ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY']
+    )
+  );
+}
+
+// Level 1 of the two-level submission — the PUBLISHER's own report to the congregation:
+//   Open (DRAFT) -> Submitted (SUBMITTED / CORRECTED) -> [publisher asks] Access Requested -> [person in charge approves] Access Granted
+//   -> [publisher corrects and submits again] Submitted;   Submitted -> Reversed (RETURNED) by the person in charge, no request needed.
+// A submitted report is locked for its publisher. The ONE thing the publisher may still write to it is the access request below;
+// the person in charge (congregation-wide role, or the group role of that publisher's FS Group) makes every other move. A publisher
+// can only ever write the statuses Open / Submitted / Corrected — never Access Granted, Reversed or Posted for themselves.
+function publisherAccessRequestOnly(old, next) {
+  return old.get('status', '') in ['SUBMITTED', 'CORRECTED', 'POSTED'] && next.get('status', '') == 'ACCESS_REQUESTED' &&
+    next.diff(old).affectedKeys().hasOnly(['status', 'accessRequestReason', 'accessRequestedAt', 'lastEditedAt']);
+}
+
+function groupRoleMayWriteReport(db, data) {
+  return isSignedIn() && exists(/databases/$(db)/documents/people/$(personIdFromToken())) &&
+    myPerson(db).get('activeAdminRole', null) == 'REGULAR_ELDER' &&
+    myPerson(db).get('activeGroupId', null) != null &&
+    data.get('groupRoleAssignmentId', null) != null &&
+    isSlotHolderOfGroup(db, myPerson(db).get('activeGroupId', null)) &&
+    exists(/databases/$(db)/documents/roleAssignments/$(data.get('groupRoleAssignmentId', ''))) &&
+    get(/databases/$(db)/documents/roleAssignments/$(data.get('groupRoleAssignmentId', ''))).data.get('personId', '') == data.get('publisherPersonId', '') &&
+    get(/databases/$(db)/documents/roleAssignments/$(data.get('groupRoleAssignmentId', ''))).data.get('groupId', null) == myPerson(db).get('activeGroupId', null) &&
+    get(/databases/$(db)/documents/roleAssignments/$(data.get('groupRoleAssignmentId', ''))).data.get('congregationId', null) == data.get('congregationId', null) &&
+    get(/databases/$(db)/documents/roleAssignments/$(data.get('groupRoleAssignmentId', ''))).data.get('status', '') == 'ACTIVE';
+}
+
+// ---- Congregation Comparative Reports ----
+//
+// A congregation's formal comparison of two month ranges, submitted to the Circuit Overseer (congregationComparativeReports/{id}, the id
+// being congregation + the four period months, so an identical report cannot exist twice). Workflow: DRAFT -> SUBMITTED -> RECEIVED, or
+// SUBMITTED -> RETURNED -> SUBMITTED. The congregation-wide roles of that congregation (and the Super-Admin) edit a draft or a returned
+// report; once SUBMITTED it is read-only for them (the saved snapshot cannot change), and once RECEIVED it is an official historical record
+// nobody but the Super-Admin override can touch. The Circuit Overseer only moves SUBMITTED to RECEIVED / RETURNED and never alters the snapshot.
+function cmpPeriodsValid(d) {
+  return d.get('periodAStart', 0) <= d.get('periodAEnd', 0) && d.get('periodBStart', 0) <= d.get('periodBEnd', 0) &&
+    d.get('periodAEnd', 0) <= request.time.toMillis() && d.get('periodBEnd', 0) <= request.time.toMillis() &&
+    !(d.get('periodAStart', 0) <= d.get('periodBEnd', 0) && d.get('periodBStart', 0) <= d.get('periodAEnd', 0));
+}
+
+// ---- Meeting Attendance ----
+//
+// Weekly meeting attendance (meetingAttendance/{congregationId}_{MIDWEEK|WEEKEND}_{meetingDate}: one record per congregation, meeting
+// type and date by construction of the id). Congregation-wide roles of that congregation (Admin, Coordinator Elder, Service Overseer,
+// Secretary) and the Super-Admin write; the Circuit Overseer only reads, for the congregations of the circuit. The rules also check
+// the record is what the app would have calculated: counts are whole numbers >= 0 for the parts of that meeting type only, the mean
+// is the real mean of them, and the official figure is that mean rounded half-up (ROUNDED) or kept (EXACT). A month whose statistics
+// snapshot was Received is history and frozen. Deleting is a soft delete (an update setting deleted = true) so the audit trail stays.
+function attStatsPath(db, congregationId, serviceMonth) {
+  return /databases/$(db)/documents/congregationMonthlyStatistics/$(congregationId + '_' + string(int(serviceMonth)));
+}
+
+function attMonthFrozen(db, congregationId, serviceMonth) {
+  return congregationId != null && serviceMonth != null &&
+    exists(attStatsPath(db, congregationId, serviceMonth)) &&
+    get(attStatsPath(db, congregationId, serviceMonth)).data.get('snapshotStatus', '') == 'RECEIVED';
+}
+
+function attCount(v) {
+  return v is int && v >= 0 && v <= 999999;
+}
+
+function attValid(d) {
+  let type = d.get('meetingType', '');
+  let mode = d.get('roundingMode', '');
+  let avg = d.get('calculatedAverage', -1.0);
+  let official = d.get('officialAttendance', -1.0);
+  let mean = type == 'MIDWEEK' ?
+    (d.get('treasuresAttendance', 0) + d.get('applyYourselfAttendance', 0) + d.get('livingAsChristiansAttendance', 0)) / 3.0 :
+    (d.get('publicMeetingAttendance', 0) + d.get('watchtowerStudyAttendance', 0)) / 2.0;
+  return (
+    (type == 'MIDWEEK' &&
+      attCount(d.get('treasuresAttendance', null)) && attCount(d.get('applyYourselfAttendance', null)) && attCount(d.get('livingAsChristiansAttendance', null)) &&
+      d.get('publicMeetingAttendance', null) == null && d.get('watchtowerStudyAttendance', null) == null) ||
+    (type == 'WEEKEND' &&
+      attCount(d.get('publicMeetingAttendance', null)) && attCount(d.get('watchtowerStudyAttendance', null)) &&
+      d.get('treasuresAttendance', null) == null && d.get('applyYourselfAttendance', null) == null && d.get('livingAsChristiansAttendance', null) == null)
+  ) &&
+    mode in ['ROUNDED', 'EXACT'] &&
+    math.abs(avg - mean) < 0.0001 &&
+    (mode == 'ROUNDED' ? math.abs(official - math.floor(mean + 0.5)) < 0.0001 : math.abs(official - mean) <= 0.0051);
+}
+
+// ---- Field Service Report workflow (status of a congregation's service month) ----
+//
+// The congregation's own Field Service Report (the publishers' monthlyReports) is the ONE report — nothing is copied for the
+// Circuit Overseer. What the workflow adds is a tiny status document per congregation and month,
+// coFieldServiceMonthStatus/{congregationId}_{periodMonth}: NOT_SUBMITTED -> SUBMITTED -> RECEIVED, or RETURNED -> SUBMITTED.
+//   * SUBMITTED and RECEIVED lock that month's records for everyone but the Super-Admin (fsMonthLocked below).
+//   * The Circuit Overseer sees a month's records only while its status is SUBMITTED, RECEIVED or RETURNED.
+// Philippine service months are used for dates (UTC+8, no daylight saving), which is how the app stores periodMonth.
+
+function fsStatusPath(db, congregationId, periodMonth) {
+  return /databases/$(db)/documents/coFieldServiceMonthStatus/$(congregationId + '_' + string(int(periodMonth)));
+}
+
+// Congregation-side senders: Admin, Coordinator Elder, Service Overseer and Secretary of that congregation.
+function canSubmitFieldServiceFor(db, congregationId) {
+  return isSignedIn() && !hasGrant(db) && exists(/databases/$(db)/documents/people/$(personIdFromToken())) &&
+    myPerson(db).get('activeCongregationId', null) == congregationId &&
+    myPerson(db).get('activeAdminRole', null) in ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY'];
+}
+
+// A service month is LOCKED while its report is Submitted or Received: nobody but the Super-Admin adds, edits or deletes
+// that month's records. Returned (or Not Submitted) opens it again.
+function fsMonthLocked(db, congregationId, periodMonth) {
+  return congregationId != null && periodMonth != null &&
+    exists(fsStatusPath(db, congregationId, periodMonth)) &&
+    get(fsStatusPath(db, congregationId, periodMonth)).data.status in ['SUBMITTED', 'RECEIVED'];
+}
+
+// The Circuit Overseer may read a month's records only once the congregation has submitted it.
+function fsMonthVisibleToCo(db, congregationId, periodMonth) {
+  return congregationId != null && periodMonth != null &&
+    exists(fsStatusPath(db, congregationId, periodMonth)) &&
+    get(fsStatusPath(db, congregationId, periodMonth)).data.status in ['SUBMITTED', 'RECEIVED', 'RETURNED'];
+}
+
+// First instant of the (UTC+8) service month containing [ms].
+function fsMonthStartOf(ms) {
+  return timestamp.date(timestamp.value(ms + 28800000).year(), timestamp.value(ms + 28800000).month(), 1).toMillis() - 28800000;
+}
+
+// Is the service month containing the day [dayMillis] locked for [congregationId]?
+function fsDayLocked(db, congregationId, dayMillis) {
+  return congregationId != null && dayMillis != null && fsMonthLocked(db, congregationId, fsMonthStartOf(dayMillis));
+}
+
+// The congregation a publisher currently belongs to (records without their own congregationId use this).
+function fsPersonCongregation(db, personId) {
+  return exists(/databases/$(db)/documents/people/$(personId)) ?
+    get(/databases/$(db)/documents/people/$(personId)).data.get('activeCongregationId', null) : null;
+}
+
+// A Circuit Overseer, identified by the Super-Admin-written grant (it carries a Circuit Code) and the congregation being
+// inside its scope — never by a field the account could write itself.
+function isCircuitOverseerFor(db, congregationId) {
+  return hasGrant(db) && myGrant(db).get('circuitCode', null) != null && grantScopeIncludesCongregation(db, congregationId);
+}
+
 // "Role assignment security" (Elders consolidation spec §33/§34) — the exact
 // admin-track role set that ever *enrolls* someone or edits their roles
 // anywhere in this app (Manage Admins/Congregations/Elders/Ministerial
@@ -378,6 +532,212 @@ service cloud.firestore {
       allow write: if isSignedIn() && (isSuperAdmin(database) || 'MANAGE_USERS' in myGrantPermissions(database));
     }
 
+    // Field Service Report status per congregation and month (see the helper block near the top of this file). Every
+    // signed-in account reads it (it carries no report data: only the status, who moved it and the Circuit Overseer's
+    // remarks); the moves below are the only writes, each limited to the fields that move touches. The Super-Admin
+    // override at the top of this file is not bound by them.
+    match /coFieldServiceMonthStatus/{statusId} {
+      allow read: if isSignedIn();
+      // First send. A service month that has not started yet can never be sent.
+      allow create: if statusId == request.resource.data.congregationId + '_' + string(int(request.resource.data.periodMonth)) &&
+        request.resource.data.periodMonth <= request.time.toMillis() &&
+        request.resource.data.status == 'SUBMITTED' &&
+        request.resource.data.get('coRemarks', null) == null &&
+        canSubmitFieldServiceFor(database, request.resource.data.congregationId);
+      allow update: if request.resource.data.congregationId == resource.data.congregationId &&
+        request.resource.data.periodMonth == resource.data.periodMonth && (
+          (
+            // The congregation: send (again), or undo a send the overseer has not received yet.
+            canSubmitFieldServiceFor(database, resource.data.congregationId) && (
+              (
+                resource.data.status in ['NOT_SUBMITTED', 'RETURNED'] && request.resource.data.status == 'SUBMITTED' &&
+                request.resource.data.periodMonth <= request.time.toMillis() &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                  ['status', 'version', 'submittedAt', 'submittedByPersonId', 'submittedByName', 'updatedAt'])
+              ) || (
+                resource.data.status == 'SUBMITTED' && request.resource.data.status == 'NOT_SUBMITTED' &&
+                request.resource.data.get('coRemarks', null) == null &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                  ['status', 'coRemarks', 'coRemarksAt', 'coRemarksByName', 'undoneAt', 'undoneByPersonId', 'undoneByName', 'updatedAt'])
+              )
+            )
+          ) || (
+            // The Circuit Overseer: receive, return, add or change remarks (and undo, like the congregation).
+            isCircuitOverseerFor(database, resource.data.congregationId) && (
+              (
+                (
+                  (resource.data.status == 'SUBMITTED' && request.resource.data.status in ['RECEIVED', 'RETURNED']) ||
+                  (resource.data.status == 'RECEIVED' && request.resource.data.status == 'RETURNED') ||
+                  (resource.data.status in ['SUBMITTED', 'RECEIVED', 'RETURNED'] && request.resource.data.status == resource.data.status)
+                ) &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                  ['status', 'receivedAt', 'receivedByPersonId', 'receivedByName', 'returnedAt', 'returnedByPersonId', 'returnedByName',
+                   'returnReason', 'coRemarks', 'coRemarksAt', 'coRemarksByName', 'updatedAt'])
+              ) || (
+                resource.data.status == 'SUBMITTED' && request.resource.data.status == 'NOT_SUBMITTED' &&
+                request.resource.data.get('coRemarks', null) == null &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                  ['status', 'coRemarks', 'coRemarksAt', 'coRemarksByName', 'undoneAt', 'undoneByPersonId', 'undoneByName', 'updatedAt'])
+              )
+            )
+          )
+        );
+    }
+    // Weekly meeting attendance — see the Meeting Attendance block of helpers above.
+    match /meetingAttendance/{attId} {
+      allow read: if isSuperAdmin(database) || isCircuitOverseerFor(database, resource.data.get('congregationId', null)) ||
+        (!hasGrant(database) && exists(/databases/$(database)/documents/people/$(personIdFromToken())) &&
+          myPerson(database).get('activeCongregationId', null) == resource.data.get('congregationId', null));
+      allow create: if canManageReportsAsCongregationRole(database, request.resource.data.get('congregationId', null)) &&
+        attId == request.resource.data.congregationId + '_' + request.resource.data.meetingType + '_' + string(int(request.resource.data.meetingDate)) &&
+        request.resource.data.get('serviceMonth', null) == fsMonthStartOf(request.resource.data.meetingDate) &&
+        request.resource.data.get('updatedBy', '') == personIdFromToken() &&
+        attValid(request.resource.data) &&
+        !attMonthFrozen(database, request.resource.data.congregationId, request.resource.data.serviceMonth);
+      allow update: if canManageReportsAsCongregationRole(database, resource.data.get('congregationId', null)) &&
+        request.resource.data.congregationId == resource.data.congregationId &&
+        request.resource.data.meetingType == resource.data.meetingType &&
+        request.resource.data.meetingDate == resource.data.meetingDate &&
+        request.resource.data.serviceMonth == resource.data.serviceMonth &&
+        request.resource.data.get('updatedBy', '') == personIdFromToken() &&
+        attValid(request.resource.data) &&
+        !attMonthFrozen(database, resource.data.congregationId, resource.data.serviceMonth);
+      // Records are never hard-deleted (only the Super-Admin override at the top of this file can): a delete is deleted = true.
+    }
+    // A congregation's attendance setting (rounding). Anyone signed in may read it; the congregation-wide roles of that congregation write it.
+    match /meetingAttendanceSettings/{settingId} {
+      allow read: if isSignedIn();
+      allow create, update: if settingId == request.resource.data.get('congregationId', '-') &&
+        canManageReportsAsCongregationRole(database, request.resource.data.get('congregationId', null)) &&
+        request.resource.data.get('roundingMode', '') in ['ROUNDED', 'EXACT'] &&
+        request.resource.data.get('updatedBy', '') == personIdFromToken();
+    }
+    // Permanent attendance audit trail (who changed what, from what to what): append-only, written as yourself.
+    match /meetingAttendanceEvents/{evId} {
+      allow read: if isSuperAdmin(database) || isCircuitOverseerFor(database, resource.data.get('congregationId', null)) ||
+        canManageReportsAsCongregationRole(database, resource.data.get('congregationId', null));
+      allow create: if request.resource.data.get('userId', null) == personIdFromToken() &&
+        canManageReportsAsCongregationRole(database, request.resource.data.get('congregationId', null));
+    }
+    // The historical monthly statistics of a congregation (one per congregation and service month): written together with the month's
+    // report submission, tied to the report's status (so it can only be as submitted / received / returned as the report really is),
+    // refreshed while Submitted or Returned, and FROZEN once the Circuit Overseer received it.
+    match /congregationMonthlyStatistics/{statId} {
+      allow read: if isSignedIn();
+      allow create: if statId == request.resource.data.get('congregationId', '-') + '_' + string(int(request.resource.data.get('serviceMonth', 0))) &&
+        canSubmitFieldServiceFor(database, request.resource.data.get('congregationId', null)) &&
+        getAfter(fsStatusPath(database, request.resource.data.congregationId, request.resource.data.serviceMonth)).data.status == 'SUBMITTED' &&
+        request.resource.data.get('snapshotStatus', '') == 'SUBMITTED';
+      allow update: if request.resource.data.congregationId == resource.data.congregationId &&
+        request.resource.data.serviceMonth == resource.data.serviceMonth &&
+        request.resource.data.get('snapshotStatus', '') ==
+          getAfter(fsStatusPath(database, resource.data.congregationId, resource.data.serviceMonth)).data.status && (
+          (
+            // The congregation refreshing it as the report is sent (again) — never once it was received.
+            canSubmitFieldServiceFor(database, resource.data.congregationId) &&
+            resource.data.get('snapshotStatus', '') != 'RECEIVED' &&
+            request.resource.data.get('snapshotStatus', '') in ['SUBMITTED', 'NOT_SUBMITTED']
+          ) || (
+            // The Circuit Overseer only moves its status: received (frozen) or returned.
+            isCircuitOverseerFor(database, resource.data.congregationId) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['snapshotStatus', 'receivedDate', 'updatedAt'])
+          )
+        );
+    }
+    match /congregationComparativeReports/{reportId} {
+      allow read: if isSuperAdmin(database) ||
+        canManageReportsAsCongregationRole(database, resource.data.get('congregationId', null)) ||
+        (isCircuitOverseerFor(database, resource.data.get('congregationId', null)) && resource.data.get('status', '') in ['SUBMITTED', 'RETURNED', 'RECEIVED']);
+      allow create: if canManageReportsAsCongregationRole(database, request.resource.data.get('congregationId', null)) &&
+        reportId == request.resource.data.congregationId + '_' + string(int(request.resource.data.periodAStart)) + '_' + string(int(request.resource.data.periodAEnd)) +
+          '_' + string(int(request.resource.data.periodBStart)) + '_' + string(int(request.resource.data.periodBEnd)) &&
+        cmpPeriodsValid(request.resource.data) &&
+        request.resource.data.get('createdBy', '') == personIdFromToken() &&
+        request.resource.data.get('reportSnapshot', '') != '' &&
+        request.resource.data.get('version', 0) == 1 &&
+        (request.resource.data.get('status', '') == 'DRAFT' ||
+          (request.resource.data.get('status', '') == 'SUBMITTED' && request.resource.data.get('submittedBy', '') == personIdFromToken()));
+      allow update: if request.resource.data.congregationId == resource.data.congregationId &&
+        request.resource.data.periodAStart == resource.data.periodAStart && request.resource.data.periodAEnd == resource.data.periodAEnd &&
+        request.resource.data.periodBStart == resource.data.periodBStart && request.resource.data.periodBEnd == resource.data.periodBEnd &&
+        request.resource.data.createdBy == resource.data.createdBy && (
+          (
+            // The congregation: edit / regenerate a draft or a returned report, or send it (again). Never once Submitted or Received.
+            canManageReportsAsCongregationRole(database, resource.data.congregationId) &&
+            resource.data.status in ['DRAFT', 'RETURNED'] && (
+              (
+                request.resource.data.status == resource.data.status && request.resource.data.version == resource.data.version &&
+                request.resource.data.get('reportSnapshot', '') != '' &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reportSnapshot', 'sourceSnapshotIds', 'attendanceRoundingMode', 'updatedAt'])
+              ) || (
+                request.resource.data.status == 'SUBMITTED' &&
+                request.resource.data.version == (resource.data.status == 'RETURNED' ? resource.data.version + 1 : resource.data.version) &&
+                request.resource.data.get('submittedBy', '') == personIdFromToken() &&
+                request.resource.data.get('reportSnapshot', '') != '' &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                  ['status', 'version', 'reportSnapshot', 'sourceSnapshotIds', 'attendanceRoundingMode', 'submittedBy', 'submittedByName',
+                   'submittedByRole', 'submittedAt', 'updatedAt'])
+              )
+            )
+          ) || (
+            // The Circuit Overseer: receive or return a submitted report, or add a remark; the snapshot is never touched.
+            isCircuitOverseerFor(database, resource.data.congregationId) && request.resource.data.version == resource.data.version && (
+              (
+                resource.data.status == 'SUBMITTED' && request.resource.data.status in ['RECEIVED', 'RETURNED'] &&
+                (request.resource.data.status == 'RECEIVED' || request.resource.data.get('returnReason', '') != '') &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                  ['status', 'receivedBy', 'receivedByName', 'receivedAt', 'returnedBy', 'returnedByName', 'returnedAt', 'returnReason', 'currentCoRemarks', 'updatedAt'])
+              ) || (
+                resource.data.status in ['SUBMITTED', 'RETURNED'] && request.resource.data.status == resource.data.status &&
+                request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentCoRemarks', 'updatedAt'])
+              )
+            )
+          )
+        );
+      // Only a draft can be deleted (its history stays).
+      allow delete: if canManageReportsAsCongregationRole(database, resource.data.get('congregationId', null)) && resource.data.get('status', '') == 'DRAFT';
+    }
+    // Every status move and edit of a Comparative Report: append-only, written as yourself.
+    match /comparativeReportHistory/{histId} {
+      allow read: if isSuperAdmin(database) || isCircuitOverseerFor(database, resource.data.get('congregationId', null)) ||
+        canManageReportsAsCongregationRole(database, resource.data.get('congregationId', null));
+      allow create: if request.resource.data.get('userId', null) == personIdFromToken() &&
+        (canManageReportsAsCongregationRole(database, request.resource.data.get('congregationId', null)) ||
+         isCircuitOverseerFor(database, request.resource.data.get('congregationId', null)));
+    }
+    // The Circuit Overseer's remarks: only ever added (never overwritten), as yourself, on a report that was submitted.
+    match /comparativeReportRemarks/{remarkId} {
+      allow read: if isSuperAdmin(database) || isCircuitOverseerFor(database, resource.data.get('congregationId', null)) ||
+        canManageReportsAsCongregationRole(database, resource.data.get('congregationId', null));
+      allow create: if request.resource.data.get('authorUserId', null) == personIdFromToken() &&
+        isCircuitOverseerFor(database, request.resource.data.get('congregationId', null)) &&
+        request.resource.data.get('remark', '') != '' &&
+        exists(/databases/$(database)/documents/congregationComparativeReports/$(request.resource.data.get('comparativeReportId', '-'))) &&
+        get(/databases/$(database)/documents/congregationComparativeReports/$(request.resource.data.get('comparativeReportId', '-'))).data.get('status', '') in ['SUBMITTED', 'RETURNED'];
+    }
+    // Permanent audit trail of every status move and remark: append-only (userId must be the caller).
+    match /coFieldServiceReportEvents/{eventId} {
+      allow read: if isSuperAdmin(database) || isCircuitOverseerFor(database, resource.data.get('congregationId', null)) ||
+        canSubmitFieldServiceFor(database, resource.data.get('congregationId', null));
+      allow create: if request.resource.data.get('userId', null) == personIdFromToken() &&
+        (canSubmitFieldServiceFor(database, request.resource.data.get('congregationId', null)) ||
+         isCircuitOverseerFor(database, request.resource.data.get('congregationId', null)));
+    }
+
+    // Circuit Overseer module. Every signed-in account may READ these (a Circuit Overseer
+    // needs their own code and links; neither holds anything secret). Nobody but the
+    // Super-Admin (the `{document=**}` override at the top of this file) may WRITE them —
+    // so the one-code-per-overseer and one-overseer-per-congregation rules can't be bypassed
+    // by an ordinary account's direct request, and the app's own writes are transactions
+    // (see FirestoreCircuitAssignmentService). They are also listed in the catch-all's
+    // exclusion list at the bottom: otherwise that clause would hand everyone write access.
+    match /circuitCodes/{code} {
+      allow read: if isSignedIn();
+    }
+    match /congregationCircuits/{congregationId} {
+      allow read: if isSignedIn();
+    }
+
     match /congregations/{congregationId} {
       allow read: if restrictedAllows(database, 'VIEW_CONGREGATIONS', congregationId);
       allow create: if restrictedAllowsPermission(database, 'ADD_CONGREGATIONS');
@@ -411,7 +771,8 @@ service cloud.firestore {
     // Congregations) already reads at; only claiming/releasing a barangay
     // needed the tighter write check.
     match /territoryAssignments/{assignmentId} {
-      allow read: if isSignedIn();
+      // A Circuit Overseer (grant) reads only the congregations on their grant; everyone else is unchanged.
+      allow read: if isSignedIn() && (!hasGrant(database) || restrictedAllows(database, 'VIEW_CONGREGATIONS', resource.data.get('congregationId', null)));
       allow create: if canManageTerritoryAssignmentsFor(database, request.resource.data.get('congregationId', null));
       // congregationId is immutable on edit — a congregation is a fixed
       // scope for this record, never reassignable.
@@ -454,7 +815,8 @@ service cloud.firestore {
     }
 
     match /mapPins/{pinId} {
-      allow read: if isSignedIn();
+      // A Circuit Overseer (grant) reads only the congregations on their grant; everyone else is unchanged.
+      allow read: if isSignedIn() && (!hasGrant(database) || restrictedAllows(database, 'VIEW_CONGREGATIONS', resource.data.get('congregationId', null)));
       allow create: if isSignedIn() &&
         request.resource.data.get('createdByPersonId', null) == personIdFromToken() &&
         inMyActiveCongregation(database, request.resource.data.get('congregationId', null));
@@ -544,7 +906,8 @@ service cloud.firestore {
     }
 
     match /territoryDrawings/{drawingId} {
-      allow read: if isSignedIn();
+      // A Circuit Overseer (grant) reads only the congregations on their grant; everyone else is unchanged.
+      allow read: if isSignedIn() && (!hasGrant(database) || restrictedAllows(database, 'VIEW_CONGREGATIONS', resource.data.get('congregationId', null)));
       allow create: if drawingWriteOk(database, request.resource.data) &&
         request.resource.data.get('userId', null) == personIdFromToken();
       // The app saves with set(), so an edit of an existing drawing arrives here. The caller must be
@@ -573,7 +936,8 @@ service cloud.firestore {
 
     // Territory bounding boxes the drawing rules compare against. Only congregation-wide roles write them.
     match /territoryBounds/{territoryId} {
-      allow read: if isSignedIn();
+      // A Circuit Overseer (grant) reads only the congregations on their grant; everyone else is unchanged.
+      allow read: if isSignedIn() && (!hasGrant(database) || restrictedAllows(database, 'VIEW_CONGREGATIONS', resource.data.get('congregationId', null)));
       allow create, update: if canManageTerritoryAssignmentsFor(database, request.resource.data.get('congregationId', null)) &&
         exists(/databases/$(database)/documents/territoryAssignmentBarangays/$(territoryId)) &&
         get(/databases/$(database)/documents/territoryAssignmentBarangays/$(territoryId)).data.get('congregationId', null) == request.resource.data.get('congregationId', null) &&
@@ -595,7 +959,8 @@ service cloud.firestore {
     // delete + create under a different deterministic id, never a rewrite of
     // the fields that make the id meaningful.
     match /territoryAssignmentBarangays/{claimId} {
-      allow read: if isSignedIn();
+      // A Circuit Overseer (grant) reads only the congregations on their grant; everyone else is unchanged.
+      allow read: if isSignedIn() && (!hasGrant(database) || restrictedAllows(database, 'VIEW_CONGREGATIONS', resource.data.get('congregationId', null)));
       allow create: if canManageTerritoryAssignmentsFor(database, request.resource.data.get('congregationId', null));
       allow update: if canManageTerritoryAssignmentsFor(database, resource.data.get('congregationId', null)) &&
         request.resource.data.get('congregationId', null) == resource.data.get('congregationId', null) &&
@@ -612,7 +977,11 @@ service cloud.firestore {
     match /roleAssignments/{assignmentId} {
       allow read: if !hasGrant(database) ||
         restrictedAllows(database, 'VIEW_ELDERS', resource.data.get('congregationId', null)) ||
-        restrictedAllows(database, 'VIEW_PUBLISHERS', resource.data.get('congregationId', null));
+        restrictedAllows(database, 'VIEW_PUBLISHERS', resource.data.get('congregationId', null)) ||
+        // Circuit Overseer module: a grant-based account must always be able to read its OWN role
+        // assignment (its congregationId is null, which no congregation scope can include) — without
+        // this its session never finds its role. Own record only; nothing about anyone else's.
+        (isSignedIn() && resource.data.get('personId', null) == personIdFromToken());
       // Bug fix ("Role assignment security" — spec §33/§34): this used to be
       // `!hasGrant(database) || ...`, meaning ANY signed-in, non-restricted
       // account — a plain Publisher included — could write an arbitrary
@@ -671,9 +1040,16 @@ service cloud.firestore {
     }
 
     match /monthlyReports/{reportId} {
-      allow read: if restrictedAllows(database, 'VIEW_PUBLISHER_REPORTS', resource.data.get('congregationId', null)) ||
+      // A Circuit Overseer (a grant that carries a Circuit Code) reads the ACTUAL records, but only of a service month the
+      // congregation has submitted (status Submitted / Received / Returned); an unsubmitted month stays invisible.
+      // Other grant holders are unchanged.
+      allow read: if !hasGrant(database) ||
+        (isCircuitOverseerFor(database, resource.data.get('congregationId', null)) &&
+          fsMonthVisibleToCo(database, resource.data.get('congregationId', null), resource.data.get('periodMonth', null))) ||
+        (myGrant(database).get('circuitCode', null) == null && (
+        restrictedAllows(database, 'VIEW_PUBLISHER_REPORTS', resource.data.get('congregationId', null)) ||
         restrictedAllows(database, 'VIEW_GROUP_REPORTS', resource.data.get('congregationId', null)) ||
-        restrictedAllows(database, 'VIEW_CONGREGATION_REPORTS', resource.data.get('congregationId', null));
+        restrictedAllows(database, 'VIEW_CONGREGATION_REPORTS', resource.data.get('congregationId', null))));
       // A restricted user's report access is view-only in every one of the
       // spec's own worked examples — none of them grant report edits.
       //
@@ -728,18 +1104,35 @@ service cloud.firestore {
       // and month, so a second submission for the same month lands on this same
       // document and is rejected here. A write identical to what is already stored
       // is still accepted, so a retried sync never turns into a permanent error.
-      allow write: if !hasGrant(database) &&
-        !(resource != null && resource.data.status == 'POSTED' && resource.data.publisherPersonId == personIdFromToken()) &&
-        !(resource != null && request.resource != null &&
-          resource.data.status in ['SUBMITTED', 'CORRECTED'] &&
+      allow create, update: if !hasGrant(database) &&
+        !(resource != null && fsMonthLocked(database, resource.data.get('congregationId', null), resource.data.get('periodMonth', null))) &&
+        !fsMonthLocked(database, request.resource.data.get('congregationId', null), request.resource.data.get('periodMonth', null)) &&
+        !(resource != null && resource.data.status == 'POSTED' && resource.data.publisherPersonId == personIdFromToken() &&
+          !publisherAccessRequestOnly(resource.data, request.resource.data)) &&
+        !(resource != null &&
+          resource.data.status in ['SUBMITTED', 'CORRECTED', 'ACCESS_REQUESTED'] &&
           resource.data.publisherPersonId == personIdFromToken() &&
           !canManagePublisherReportsFor(database, resource.data.congregationId) &&
-          request.resource.data != resource.data) &&
+          request.resource.data != resource.data &&
+          !publisherAccessRequestOnly(resource.data, request.resource.data)) &&
         (
-          request.resource == null ? isSuperAdmin(database) : (
-            (request.resource.data.publisherPersonId == personIdFromToken() && hoursAdjustmentValid(request.resource.data)) ||
-            canManagePublisherReportsFor(database, request.resource.data.congregationId)
-          )
+          (request.resource.data.publisherPersonId == personIdFromToken() && hoursAdjustmentValid(request.resource.data) &&
+            (request.resource.data.get('status', '') in ['DRAFT', 'SUBMITTED', 'CORRECTED'] ||
+              (resource != null && resource.data.get('status', '') in ['ACCESS_GRANTED', 'RETURNED'] && request.resource.data.get('status', '') == resource.data.get('status', '')) ||
+              (resource != null && publisherAccessRequestOnly(resource.data, request.resource.data)))) ||
+          canManageReportsAsCongregationRole(database, request.resource.data.congregationId) ||
+          (groupRoleMayWriteReport(database, request.resource.data) &&
+            (resource == null || resource.data.get('publisherPersonId', null) == request.resource.data.publisherPersonId))
+        );
+      // Deleting a record: the Super-Admin, a congregation-wide role of that congregation, or the group role of that
+      // publisher's FS Group — never inside a locked month, and never a posted record by its own publisher.
+      allow delete: if !hasGrant(database) &&
+        !fsMonthLocked(database, resource.data.get('congregationId', null), resource.data.get('periodMonth', null)) &&
+        !(resource.data.status == 'POSTED' && resource.data.publisherPersonId == personIdFromToken()) &&
+        (
+          isSuperAdmin(database) ||
+          canManageReportsAsCongregationRole(database, resource.data.get('congregationId', null)) ||
+          groupRoleMayWriteReport(database, resource.data)
         );
     }
 
@@ -760,7 +1153,11 @@ service cloud.firestore {
     // to execute a delete on this collection no matter what the app would
     // otherwise let through or how the request is crafted.
     match /preachingTimeRecords/{recordId} {
-      allow read, create, update: if isSignedIn();
+      allow read: if isSignedIn();
+      // A month whose Field Service Report is Submitted / Received is locked (see fsMonthLocked): no hours or minutes are added, edited or moved.
+      allow create, update: if isSignedIn() &&
+        !fsDayLocked(database, request.resource.data.get('congregationId', null), request.resource.data.get('date', null)) &&
+        !(resource != null && fsDayLocked(database, resource.data.get('congregationId', null), resource.data.get('date', null)));
       allow delete: if isSuperAdmin(database);
     }
 
@@ -794,8 +1191,11 @@ service cloud.firestore {
     // .startRemoteSync's doc comment) — an unconstrained list() query is
     // what a resource.data-based rule like this can never satisfy.
     match /plannerDays/{id} {
-      allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
-      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
+      allow read: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
+      allow update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken() &&
+        !fsDayLocked(database, fsPersonCongregation(database, personIdFromToken()), resource.data.get('dayStart', null));
+      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken() &&
+        !fsDayLocked(database, fsPersonCongregation(database, personIdFromToken()), request.resource.data.get('dayStart', null));
     }
     match /monthlyPlannerGoals/{id} {
       allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
@@ -810,8 +1210,11 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
     }
     match /creditHourRecords/{id} {
-      allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
-      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken();
+      allow read: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
+      allow update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken() &&
+        !fsDayLocked(database, fsPersonCongregation(database, personIdFromToken()), resource.data.get('dayStart', null));
+      allow create: if isSignedIn() && request.resource.data.publisherPersonId == personIdFromToken() &&
+        !fsDayLocked(database, fsPersonCongregation(database, personIdFromToken()), request.resource.data.get('dayStart', null));
     }
     match /ministryTimerSessions/{id} {
       allow read, update, delete: if isSignedIn() && resource.data.publisherPersonId == personIdFromToken();
@@ -1013,7 +1416,9 @@ service cloud.firestore {
         // Super-Admin may add one. A Return Visit (or Searching) record has
         // no such extra check — any same-congregation Publisher may add
         // their own visit to it, same as before.
-        allow create: if inMyActiveCongregationByNameOrId(database, interestedPersonCongregationId(database, personId)) &&
+        // A visit (searching, return visit, Bible study) dated in a month whose Field Service Report is Submitted / Received is locked.
+        allow create: if !fsDayLocked(database, interestedPersonCongregationId(database, personId), request.resource.data.get('visitDate', null)) &&
+          inMyActiveCongregationByNameOrId(database, interestedPersonCongregationId(database, personId)) &&
           request.resource.data.get('createdByPersonId', null) == personIdFromToken() &&
           (interestedPersonPipelineStage(database, personId) != 'BIBLE_STUDY' ||
             isSuperAdmin(database) ||
@@ -1030,7 +1435,9 @@ service cloud.firestore {
         // Admin is the one explicitly authorized override this app's role
         // system actually has today (mirrors [canManageAllVisitHistory] in
         // PipelineScreen/PipelineViewModel).
-        allow update: if inMyActiveCongregationByNameOrId(database, interestedPersonCongregationId(database, personId)) &&
+        allow update: if !fsDayLocked(database, interestedPersonCongregationId(database, personId), resource.data.get('visitDate', null)) &&
+          !fsDayLocked(database, interestedPersonCongregationId(database, personId), request.resource.data.get('visitDate', null)) &&
+          inMyActiveCongregationByNameOrId(database, interestedPersonCongregationId(database, personId)) &&
           (isSuperAdmin(database) ||
             (interestedPersonPipelineStage(database, personId) == 'BIBLE_STUDY' &&
               interestedPersonOwnerId(database, personId) == personIdFromToken()) ||
@@ -1051,7 +1458,8 @@ service cloud.firestore {
         // exception and the plain owner-delete case collapse into the same
         // "enrolled Publisher only" check anyway, so no separate branch is
         // needed there.
-        allow delete: if inMyActiveCongregationByNameOrId(database, interestedPersonCongregationId(database, personId)) &&
+        allow delete: if !fsDayLocked(database, interestedPersonCongregationId(database, personId), resource.data.get('visitDate', null)) &&
+          inMyActiveCongregationByNameOrId(database, interestedPersonCongregationId(database, personId)) &&
           (isSuperAdmin(database) ||
             interestedPersonOwnerId(database, personId) == personIdFromToken() ||
             (interestedPersonPipelineStage(database, personId) != 'BIBLE_STUDY' &&
@@ -1226,7 +1634,10 @@ service cloud.firestore {
         'creditHourCategories', 'publisherTerritoryAssignments', 'mapPins', 'plannerDays', 'monthlyPlannerGoals', 'weeklyPlannerGoals',
         'yearlyPlannerGoals', 'creditHourRecords', 'ministryTimerSessions',
         'territoryAssignments', 'territoryAssignmentBarangays', 'deletedRecords',
-        'territoryDrawings', 'territoryDrawingAudits', 'territoryBounds'
+        'territoryDrawings', 'territoryDrawingAudits', 'territoryBounds',
+        'circuitCodes', 'congregationCircuits', 'coFieldServiceReports', 'coFieldServiceReportVersions', 'coFieldServiceReportEvents', 'coFieldServiceMonthStatus',
+        'meetingAttendance', 'meetingAttendanceSettings', 'meetingAttendanceEvents', 'congregationMonthlyStatistics',
+        'congregationComparativeReports', 'comparativeReportHistory', 'comparativeReportRemarks'
       ]);
     }
   }

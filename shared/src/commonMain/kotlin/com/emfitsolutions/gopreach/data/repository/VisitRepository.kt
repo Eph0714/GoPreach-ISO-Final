@@ -13,6 +13,7 @@ private fun visitsPath(interestedPersonId: String) = "interestedPeople/$interest
 class VisitRepository(
     private val offline: OfflineFirestoreRepository,
     private val remote: RemoteCollections,
+    private val monthLock: MonthLockGuard,
 ) {
     fun observeForInterestedPerson(interestedPersonId: String): Flow<List<Visit>> =
         offline.observeCollection(visitsPath(interestedPersonId))
@@ -69,6 +70,7 @@ class VisitRepository(
         remote.mirrorGroup("visits", Visit::class, equalTo, pathOf = { visitsPath(it.interestedPersonId) }, idOf = { it.id })
 
     suspend fun save(visit: Visit): Visit {
+        monthLock.requireOpenForPublisher(visit.publisherPersonId, visit.visitDate) // a month submitted to the Circuit Overseer is locked
         val path = visitsPath(visit.interestedPersonId)
         val id = visit.id.ifBlank { remote.newId(path) }
         val withId = visit.copy(id = id)

@@ -125,13 +125,35 @@ fun CalendarScreen(
                 Text("Nothing on the calendar yet.", style = MaterialTheme.typography.bodyMedium)
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                item { RecordFound(events.size) }
-                items(events, key = { it.id }) { event ->
+            com.emfitsolutions.gopreach.ui.components.UniversalReport(
+                title = if (isPublisherScope) "My Notes & Schedule" else "Calendar Events",
+                details = emptyList(),
+                items = events,
+                key = { it.id },
+                columns = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<Schedule>("Title", 200.dp) { it.title },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<Schedule>("Type", 110.dp) { if (it.kind == ScheduleKind.PERSONAL_NOTE) "Personal note" else "Event" },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<Schedule>("Starts", 170.dp) { dateFormat.format(Date(it.startTime)) },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<Schedule>("Ends", 170.dp) { dateFormat.format(Date(it.endTime)) },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<Schedule>("Details", 220.dp) { it.description.orEmpty() },
+                ),
+                searchText = { listOf(it.title, it.description.orEmpty(), dateFormat.format(Date(it.startTime))) },
+                filters = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalFilter<Schedule>("kind", "Types", listOf("note" to "Personal notes", "event" to "Events")) { e, v -> (v == "note") == (e.kind == ScheduleKind.PERSONAL_NOTE) },
+                ),
+                sorts = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalSort<Schedule>("soonest", "Soonest First", compareBy { it.startTime }),
+                    com.emfitsolutions.gopreach.ui.components.UniversalSort<Schedule>("latest", "Latest First", compareByDescending { it.startTime }),
+                ),
+                summary = { shown ->
+                    listOf(
+                        "Total Events" to shown.size.toString(),
+                        "Personal Notes" to shown.count { it.kind == ScheduleKind.PERSONAL_NOTE }.toString(),
+                        "Events" to shown.count { it.kind != ScheduleKind.PERSONAL_NOTE }.toString(),
+                    )
+                },
+                generatedBy = "Calendar",
+                card = { event ->
                     val editable = viewModel.canEdit(scope, event, currentPersonId)
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
@@ -164,8 +186,8 @@ fun CalendarScreen(
                             }
                         }
                     }
-                }
-            }
+                },
+            )
         }
       }
     }

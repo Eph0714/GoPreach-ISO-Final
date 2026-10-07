@@ -280,6 +280,7 @@ fun HouseholderVisitHistoryScreen(
                     items(uiState.rows, key = { it.person.id }) { row ->
                         HouseholderCard(row, onClick = { selectedRow = row })
                     }
+                item(key = "end-summary") { com.emfitsolutions.gopreach.ui.components.EndSummary(listOf("Total Householders" to uiState.rows.size.toString()), Modifier.padding(top = 8.dp)) }
                 }
             }
         }
@@ -433,6 +434,13 @@ private fun buildHouseholderVisitHistoryPrintHtml(rows: List<HouseholderRow>, pe
             }
             append("</div>")
         }
+        // The mandatory end-of-report Summary: only the households printed above.
+        append("<div class=\"household\"><p class=\"visitTitle\">Summary</p>")
+        append("<p class=\"field\"><b>Total Householders:</b> ").append(rows.size).append("</p>")
+        append("<p class=\"field\"><b>Searching:</b> ").append(rows.count { it.person.pipelineStage == PipelineStage.SEARCHING }).append("</p>")
+        append("<p class=\"field\"><b>Return Visits:</b> ").append(rows.count { it.person.pipelineStage == PipelineStage.RETURN_VISIT }).append("</p>")
+        append("<p class=\"field\"><b>Bible Studies:</b> ").append(rows.count { it.person.pipelineStage == PipelineStage.BIBLE_STUDY }).append("</p>")
+        append("<p class=\"field\"><b>Total Visits Recorded:</b> ").append(rows.sumOf { it.visits.size }).append("</p></div>")
         append("</body></html>")
     }
 }

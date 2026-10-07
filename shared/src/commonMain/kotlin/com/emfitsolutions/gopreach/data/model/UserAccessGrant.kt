@@ -26,6 +26,12 @@ data class UserAccessGrant(
     val scopeCongregationIds: List<String> = emptyList(),
     val scopeGroupIds: List<String> = emptyList(),
 
+    /** Circuit Overseer module — the [CircuitCode.code] this overseer holds;
+     * null for any other grant-based account. [scopeCongregationIds] is kept
+     * equal to the congregations whose `circuitOverseerPersonId` is this
+     * person, by the same transaction that assigns them. */
+    val circuitCode: String? = null,
+
     // Audit trail — who configured this access, and when it last changed.
     val createdByPersonId: String = "",
     val createdAt: Long = 0L,

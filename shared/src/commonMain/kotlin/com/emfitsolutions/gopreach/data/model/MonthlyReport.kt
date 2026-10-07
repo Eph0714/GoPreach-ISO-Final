@@ -27,8 +27,36 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  * — new — is what the Publisher's own resubmission from RETURNED becomes
  * (instead of a plain SUBMITTED), so the audit trail shows this was a
  * correction, not an original submission. */
+/**
+ * Two-level submission, level 1 — the PUBLISHER's own report to the congregation (level 2 is the congregation's consolidated report
+ * to the Circuit Overseer, see CoFieldServiceReport.kt). Spec vocabulary → stored status:
+ *  Open = [DRAFT] (or no report yet) · Submitted = [SUBMITTED] / [CORRECTED] / [POSTED] · Access Requested = [ACCESS_REQUESTED] ·
+ *  Access Granted = [ACCESS_GRANTED] · Reversed = [RETURNED].
+ *
+ * [ACCESS_REQUESTED]: the publisher found an error in a submitted report and asked the person in charge to reopen it (still locked).
+ * [ACCESS_GRANTED]: that person approved — the publisher may correct the report and must submit it again (→ [CORRECTED]).
+ */
 @kotlinx.serialization.Serializable
-enum class ReportStatus { DRAFT, SUBMITTED, POSTED, RETURNED, CORRECTED }
+enum class ReportStatus {
+    DRAFT, SUBMITTED, POSTED, RETURNED, CORRECTED, ACCESS_REQUESTED, ACCESS_GRANTED;
+
+    /** The status as the publisher-level workflow names it. */
+    val publisherLabel: String
+        get() = when (this) {
+            DRAFT -> "Open"
+            SUBMITTED, CORRECTED -> "Submitted"
+            POSTED -> "Submitted (posted)"
+            ACCESS_REQUESTED -> "Access Requested"
+            ACCESS_GRANTED -> "Access Granted"
+            RETURNED -> "Reversed"
+        }
+
+    /** The publisher cannot add, edit or delete this month's records (nor submit again). */
+    val lockedForPublisher: Boolean get() = this == SUBMITTED || this == CORRECTED || this == POSTED || this == ACCESS_REQUESTED
+
+    /** Counts as handed in to the congregation — what the consolidated report is built from and what the overview counts as Submitted. */
+    val countsAsSubmitted: Boolean get() = this == SUBMITTED || this == CORRECTED || this == POSTED || this == ACCESS_REQUESTED
+}
 
 const val SOURCE_PUBLISHER = "PUBLISHER"
 const val SOURCE_MANUAL = "MANUAL"
@@ -160,6 +188,15 @@ data class MonthlyReport(
     val lastEditedAt: Long? = null,
     /** Where this report came from: "PUBLISHER" (entered by the publisher, the default) or "MANUAL" (entered on their behalf by an authorized admin-track user). */
     val source: String = SOURCE_PUBLISHER,
+    /** Set when a Group Coordinator / Servant / Assistant writes this record: the publisher's own RoleAssignment in that FS Group, which the security rules check to prove the publisher really belongs to the group. */
+    val groupRoleAssignmentId: String? = null,
+    /** Publisher-level access workflow: why the publisher asked to edit a submitted report, and when. */
+    val accessRequestReason: String? = null,
+    val accessRequestedAt: Long? = null,
+    /** Who approved the request (or reopened the report), when, and the optional note / rejection reason. */
+    val accessGrantedByPersonId: String? = null,
+    val accessGrantedAt: Long? = null,
+    val accessDecisionNote: String? = null,
     /** Who first created the report and when — set for manual entries so an administrator can see who entered them. */
     val createdByPersonId: String? = null,
     val createdAt: Long? = null,
@@ -182,7 +219,7 @@ data class MonthlyReport(
      * of those now reads this property instead of comparing `status`
      * directly. */
     val isSubmittedOrPosted: Boolean
-        get() = status == ReportStatus.SUBMITTED || status == ReportStatus.POSTED || status == ReportStatus.CORRECTED
+        get() = status.countsAsSubmitted
 
     /** Entered on the publisher's behalf by an authorized user rather than by the publisher. */
     val isManualEntry: Boolean get() = source == SOURCE_MANUAL

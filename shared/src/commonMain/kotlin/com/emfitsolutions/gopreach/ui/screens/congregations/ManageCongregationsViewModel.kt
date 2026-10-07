@@ -5,7 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.RecordStatus
 import com.emfitsolutions.gopreach.data.model.RoleType
+import com.emfitsolutions.gopreach.data.model.CongregationCircuit
 import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
+import com.emfitsolutions.gopreach.data.repository.CircuitAssignmentService
+import com.emfitsolutions.gopreach.data.repository.CircuitCodeRepository
+import com.emfitsolutions.gopreach.data.repository.CircuitOverseerDirectory
+import com.emfitsolutions.gopreach.data.repository.OverseerOption
+import com.emfitsolutions.gopreach.data.repository.messageOrNull
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.GroupRepository
 import com.emfitsolutions.gopreach.data.repository.InterestedPersonRepository
@@ -38,13 +46,57 @@ class ManageCongregationsViewModel(
     private val monthlyReportRepository: MonthlyReportRepository,
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,
+    circuitOverseerDirectory: CircuitOverseerDirectory,
+    private val circuitCodeRepository: CircuitCodeRepository,
+    private val circuitAssignmentService: CircuitAssignmentService,
 ) : ViewModel() {
 
     val congregations: StateFlow<List<Congregation>> = congregationRepository.observeAll()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun update(congregation: Congregation, updatedByPersonId: String) {
+    /** Circuit Overseer module — every congregation's overseer link, by congregation id. */
+    val circuitLinks: StateFlow<Map<String, CongregationCircuit>> = circuitCodeRepository.observeLinks()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    /** Active Circuit Overseers with an active Circuit Code — what the "Circuit Overseer Assigned" dropdown offers. */
+    val overseers: StateFlow<List<OverseerOption>> = circuitOverseerDirectory.activeOverseers
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Display name for any overseer id on a link, including one no longer assignable. */
+    val overseerNames: StateFlow<Map<String, String>> = personRepository.observeAll()
+        .map { people -> people.associate { it.id to it.fullName } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    /**
+     * "Provide a migration/update process so all existing congregation records can be assigned … before the new
+     * validation becomes mandatory": until every congregation has an overseer, editing an older, still-unassigned
+     * congregation does not require one (so its other fields stay editable). Once the last one is assigned this
+     * turns true and "Circuit Overseer Assigned" is required on every save. A new congregation always requires it.
+     */
+    val circuitAssignmentMandatory: StateFlow<Boolean> = combine(congregations, circuitLinks) { all, links ->
+        all.filter { it.status == RecordStatus.ACTIVE }.all { links[it.id] != null }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    /**
+     * Saves the congregation's own fields, and — if [overseerPersonId] is a change — its Circuit Overseer. A
+     * congregation that already belongs to an overseer can't be handed to a different one here ("already
+     * assigned … remove it from the current overseer first"); the assignment itself is a server transaction.
+     * [onResult] gets null on success, or the message to show (nothing is saved in that case).
+     */
+    fun update(congregation: Congregation, overseerPersonId: String?, updatedByPersonId: String, onResult: (String?) -> Unit) {
         viewModelScope.launch {
+            val link = circuitLinks.value[congregation.id]
+            val currentOwner = link?.circuitOverseerPersonId?.takeIf { it.isNotBlank() }
+            if (overseerPersonId == null && circuitAssignmentMandatory.value) {
+                onResult("Circuit Overseer Assigned is required.")
+                return@launch
+            }
+            // Changing the overseer (or clearing it) is one server transaction: the congregation leaves the old
+            // overseer's list and joins the new one's together, and the new overseer's own rules are re-checked.
+            if (overseerPersonId != currentOwner) {
+                val changed = circuitAssignmentService.setCongregationOverseer(congregation.id, overseerPersonId, updatedByPersonId, allowMove = true)
+                changed.messageOrNull()?.let { onResult(it); return@launch }
+            }
             congregationRepository.save(congregation)
             auditLogRepository.log(
                 actorPersonId = updatedByPersonId,
@@ -53,6 +105,7 @@ class ManageCongregationsViewModel(
                 targetId = congregation.id,
                 congregationId = congregation.id,
             )
+            onResult(null)
         }
     }
 
@@ -110,7 +163,7 @@ class ManageCongregationsViewModel(
                 if (assignment.resolvedRoleTypeOrNull() is RoleType.Publisher) {
                     monthlyReportRepository.observeAll().first()
                         .filter { it.publisherPersonId == assignment.personId && it.congregationId == congregationId }
-                        .forEach { monthlyReportRepository.delete(it.id) }
+                        .forEach { monthlyReportRepository.deleteIgnoringLock(it.id) }
                     interestedPersonRepository.observeAll().first()
                         .filter { it.publisherPersonId == assignment.personId && it.congregationId == congregationId }
                         .forEach { interestedPerson ->
@@ -127,6 +180,8 @@ class ManageCongregationsViewModel(
                 if (remaining == 0) personRepository.delete(personId)
             }
 
+            // Free the congregation from its Circuit Overseer (drops the link and the overseer's grant entry).
+            runCatching { circuitAssignmentService.setCongregationOverseer(congregationId, null, actorPersonId) }
             congregationRepository.delete(congregationId)
             auditLogRepository.log(
                 actorPersonId = actorPersonId,

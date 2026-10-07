@@ -252,6 +252,19 @@ fun ConsolidatedReportScreen(
                     }
                 }
             }
+            item(key = "end-summary") {
+                val e = uiState.visibleEntries
+                com.emfitsolutions.gopreach.ui.components.EndSummary(
+                    listOf(
+                        "Total Publishers" to e.size.toString(),
+                        "Total Hours" to e.sumOf { it.preachingHours }.let { h -> if (h % 1.0 == 0.0) h.toLong().toString() else "%.1f".format(h) },
+                        "Total Return Visits" to e.sumOf { it.returnVisitsCount }.toString(),
+                        "Total Bible Studies" to e.sumOf { it.bibleStudiesCount }.toString(),
+                        "Participated in the Ministry" to e.count { it.participatedInMinistry == true }.toString(),
+                    ),
+                    Modifier.padding(top = 8.dp),
+                )
+            }
         }
     }
 
@@ -288,6 +301,7 @@ private fun consolidatedReportTableFor(uiState: ConsolidatedReportUiState): Repo
             )
         },
         totals = listOf(
+            "Total Return Visits" to uiState.visibleEntries.sumOf { it.returnVisitsCount }.toString(),
             "Total Bible Studies" to uiState.totalBibleStudies.toString(),
             "Total Preaching Hours" to "%.1f".format(Locale.US, uiState.totalPreachingHours),
             "Participated in Ministry" to "${uiState.participatedYesCount} / ${uiState.regularPublisherEntries.size}",

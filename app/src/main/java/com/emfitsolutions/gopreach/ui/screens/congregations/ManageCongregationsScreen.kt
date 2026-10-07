@@ -49,6 +49,8 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.RecordStatus
+import com.emfitsolutions.gopreach.data.repository.OverseerOption
+import com.emfitsolutions.gopreach.ui.screens.territoryassignments.SimpleDropdown
 import com.emfitsolutions.gopreach.ui.components.PhilippineAddressPicker
 import com.emfitsolutions.gopreach.ui.components.DeleteChoiceDialog
 import com.emfitsolutions.gopreach.ui.components.EditSectionHeader
@@ -84,6 +86,11 @@ fun ManageCongregationsScreen(
     val congregations = allCongregations.filter { showInactive || it.status == RecordStatus.ACTIVE }
     var pendingDelete by remember { mutableStateOf<Congregation?>(null) }
     var pendingEdit by remember { mutableStateOf<Congregation?>(null) }
+    var editError by remember { mutableStateOf<String?>(null) }
+    val circuitLinks by viewModel.circuitLinks.collectAsStateWithLifecycle()
+    val overseers by viewModel.overseers.collectAsStateWithLifecycle()
+    val overseerNames by viewModel.overseerNames.collectAsStateWithLifecycle()
+    val circuitMandatory by viewModel.circuitAssignmentMandatory.collectAsStateWithLifecycle()
     var permanentDeleteImpactSummary by remember { mutableStateOf<String?>(null) }
     var permanentDeleteChecked by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -138,10 +145,19 @@ fun ManageCongregationsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(congregation.name, style = MaterialTheme.typography.titleMedium)
                                     Text(congregation.address, style = MaterialTheme.typography.bodySmall)
                                     Text("Code: ${congregation.code}", style = MaterialTheme.typography.bodySmall)
+                                    val link = circuitLinks[congregation.id]
+                                    if (link != null) {
+                                        Text(
+                                            "Circuit Overseer: ${overseerNames[link.circuitOverseerPersonId] ?: "—"}\nCircuit Code: ${link.circuitCode}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    } else {
+                                        Text("Circuit Overseer: not assigned", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                    }
                                     if (congregation.languages.isNotEmpty()) {
                                         Text("Languages: ${congregation.languages.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
                                     }
@@ -193,14 +209,27 @@ fun ManageCongregationsScreen(
 
     val toEdit = pendingEdit
     if (toEdit != null) {
+        val link = circuitLinks[toEdit.id]
         EditCongregationDialog(
             congregation = toEdit,
-            onSave = { updated ->
-                viewModel.update(updated, currentPersonId)
-                showToast("\"${updated.name}\" saved.")
-                pendingEdit = null
+            overseers = overseers,
+            currentOwnerId = link?.circuitOverseerPersonId,
+            currentOwnerName = link?.circuitOverseerPersonId?.let { overseerNames[it] },
+            currentCode = link?.circuitCode,
+            circuitMandatory = circuitMandatory,
+            externalError = editError,
+            onSave = { updated, overseerId ->
+                editError = null
+                viewModel.update(updated, overseerId, currentPersonId) { problem ->
+                    if (problem == null) {
+                        showToast("\"${updated.name}\" saved.")
+                        pendingEdit = null
+                    } else {
+                        editError = problem
+                    }
+                }
             },
-            onDismiss = { pendingEdit = null },
+            onDismiss = { pendingEdit = null; editError = null },
         )
     }
 }
@@ -212,9 +241,16 @@ fun ManageCongregationsScreen(
 @Composable
 private fun EditCongregationDialog(
     congregation: Congregation,
-    onSave: (Congregation) -> Unit,
+    overseers: List<OverseerOption>,
+    currentOwnerId: String?,
+    currentOwnerName: String?,
+    currentCode: String?,
+    circuitMandatory: Boolean,
+    externalError: String?,
+    onSave: (Congregation, String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var pickedOverseerId by remember { mutableStateOf(currentOwnerId) }
     var name by remember { mutableStateOf(congregation.name) }
     var province by remember { mutableStateOf(congregation.province) }
     var cityMunicipality by remember { mutableStateOf(congregation.cityMunicipality) }
@@ -246,7 +282,8 @@ private fun EditCongregationDialog(
                 barangay = barangay,
                 code = code.trim(),
                 languages = languages,
-            )
+            ),
+            pickedOverseerId,
         )
     }
 
@@ -255,9 +292,9 @@ private fun EditCongregationDialog(
         title = "Edit Congregation",
         onConfirm = ::submit,
         confirmLabel = "Save Changes",
-        errorMessage = errorMessage,
+        errorMessage = errorMessage ?: externalError,
         maxContentHeight = 480.dp,
-        hasUnsavedChanges = name != congregation.name || province != congregation.province ||
+        hasUnsavedChanges = pickedOverseerId != currentOwnerId || name != congregation.name || province != congregation.province ||
             cityMunicipality != congregation.cityMunicipality || barangay != congregation.barangay ||
             code != congregation.code || languages != congregation.languages,
     ) {
@@ -295,6 +332,32 @@ private fun EditCongregationDialog(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
+                EditSectionHeader("Circuit")
+                // Editable at any time: pick a different Circuit Overseer (the congregation moves from the old overseer's
+                // list to the new one's in a single server step) or, while not yet mandatory, clear it.
+                val options = buildList {
+                    if (!circuitMandatory) add("" to "— None —")
+                    // Keep the current overseer selectable even if they are no longer assignable (inactive account / code).
+                    if (currentOwnerId != null && overseers.none { it.personId == currentOwnerId }) add(currentOwnerId to (currentOwnerName ?: "Current overseer"))
+                    addAll(overseers.map { it.personId to it.name })
+                }
+                val picked = overseers.firstOrNull { it.personId == pickedOverseerId }
+                SimpleDropdown(
+                    label = if (circuitMandatory) "Circuit Overseer Assigned *" else "Circuit Overseer Assigned",
+                    selectedLabel = picked?.name ?: if (pickedOverseerId == currentOwnerId) currentOwnerName.orEmpty() else if (pickedOverseerId == null) "— None —" else "",
+                    options = options,
+                    onSelected = { pickedOverseerId = it.ifEmpty { null } },
+                )
+                ReadOnlyField(
+                    "Circuit Code",
+                    picked?.circuitCode ?: if (pickedOverseerId != null && pickedOverseerId == currentOwnerId) currentCode ?: "—" else "Select a Circuit Overseer",
+                )
+                if (pickedOverseerId != currentOwnerId && currentOwnerId != null) {
+                    Text(
+                        "On save, this congregation moves from ${currentOwnerName ?: "its current Circuit Overseer"} to ${picked?.name ?: "no one"}.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 EditSectionHeader("System Information")
                 ReadOnlyField("Record ID", congregation.id)
                 ReadOnlyField("Status", congregation.status.name)

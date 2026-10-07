@@ -154,7 +154,8 @@ fun MonthlyReportScreen(
     }
 
     val isPioneer = uiState.isPioneer
-    val effectivelyLocked = uiState.isLocked && !allowEditWhenLocked
+    // An approved month is final for everyone (Elders and Admins included); a Posted one still lets them correct it.
+    val effectivelyLocked = uiState.monthApproved || (uiState.isLocked && !allowEditWhenLocked)
     val monthFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
     val selectedMonthLabel = remember(uiState.selectedPeriodMonth) { monthFormat.format(Date(uiState.selectedPeriodMonth)) }
     // The submission-window gate only applies to a publisher's own normal
@@ -227,6 +228,7 @@ fun MonthlyReportScreen(
                     submitBlockedByWindow = submitBlockedByWindow,
                     selectedMonthLabel = selectedMonthLabel,
                     allowEditWhenLocked = allowEditWhenLocked,
+                    publisherPersonId = publisherPersonId,
                 )
             }
         }
@@ -265,15 +267,20 @@ private val SolidOrange = Color(0xFFEF6C00)
 private fun statusColor(status: ReportStatus?): Color = when (status) {
     null, ReportStatus.DRAFT -> SolidGray
     ReportStatus.SUBMITTED, ReportStatus.POSTED, ReportStatus.CORRECTED -> SolidGreen
+    ReportStatus.ACCESS_REQUESTED -> SolidOrange
+    ReportStatus.ACCESS_GRANTED -> SolidBlue
     ReportStatus.RETURNED -> SolidRed
 }
 
-private fun statusLabel(status: ReportStatus?): org.jetbrains.compose.resources.StringResource = when (status) {
-    null, ReportStatus.DRAFT -> Res.string.monthly_report_status_draft
-    ReportStatus.SUBMITTED -> Res.string.monthly_report_status_submitted
-    ReportStatus.POSTED -> Res.string.monthly_report_status_posted
-    ReportStatus.RETURNED -> Res.string.monthly_report_status_returned
-    ReportStatus.CORRECTED -> Res.string.monthly_report_status_corrected
+@Composable
+private fun statusLabel(status: ReportStatus?): String = when (status) {
+    null, ReportStatus.DRAFT -> stringResource(Res.string.monthly_report_status_draft)
+    ReportStatus.SUBMITTED -> stringResource(Res.string.monthly_report_status_submitted)
+    ReportStatus.POSTED -> stringResource(Res.string.monthly_report_status_posted)
+    ReportStatus.RETURNED -> stringResource(Res.string.monthly_report_status_returned)
+    ReportStatus.CORRECTED -> stringResource(Res.string.monthly_report_status_corrected)
+    ReportStatus.ACCESS_REQUESTED -> "Access Requested"
+    ReportStatus.ACCESS_GRANTED -> "Edit Access Granted"
 }
 
 /** Solid-color status chip — spec §13: "always display the status as text
@@ -283,7 +290,7 @@ private fun ReportStatusChip(status: ReportStatus?) {
     val color = statusColor(status)
     Surface(shape = RoundedCornerShape(50), color = color) {
         Text(
-            stringResource(statusLabel(status)),
+            statusLabel(status),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
             color = Color.White,
@@ -302,6 +309,7 @@ private fun MonthlyReportForm(
     uiState: MonthlyReportUiState,
     viewModel: MonthlyReportViewModel,
     isPioneer: Boolean,
+    publisherPersonId: String,
     effectivelyLocked: Boolean,
     submitBlockedByWindow: Boolean,
     selectedMonthLabel: String,
@@ -339,7 +347,14 @@ private fun MonthlyReportForm(
             )
         }
 
-        if (effectivelyLocked) {
+        if (uiState.monthApproved) {
+            Card(modifier = Modifier.fillMaxWidth(), colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = SolidRed.copy(alpha = 0.10f))) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Status: Submitted to Circuit Overseer", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = SolidRed)
+                    Text(com.emfitsolutions.gopreach.data.model.MONTH_LOCKED_MESSAGE, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        } else if (effectivelyLocked) {
             Text(
                 stringResource(Res.string.monthly_report_posted_locked),
                 color = SolidRed,
@@ -460,9 +475,49 @@ private fun MonthlyReportForm(
 
         // A Publisher's own report that is already submitted can't be sent again (an
         // Elder correcting it, or a Returned/Draft report, still can).
-        val alreadySubmitted = !allowEditWhenLocked && when (uiState.existingReport?.status) {
-            ReportStatus.SUBMITTED, ReportStatus.CORRECTED, ReportStatus.POSTED -> true
-            else -> false
+        val alreadySubmitted = !allowEditWhenLocked && uiState.existingReport?.status?.lockedForPublisher == true
+        var askingAccess by remember { mutableStateOf(false) }
+        var accessReason by remember { mutableStateOf("") }
+        if (uiState.accessGranted && !allowEditWhenLocked) {
+            Text(
+                "Edit Access Granted — correct your report for this month, then submit it again. It locks again once submitted.",
+                color = SolidBlue, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold,
+            )
+        }
+        if (alreadySubmitted && !uiState.monthApproved) {
+            if (uiState.accessRequested) {
+                Text(
+                    "Access requested" + (uiState.existingReport?.accessRequestReason?.let { " — " + it } ?: "") + ". Waiting for the person in charge to approve or reject it.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text(
+                    "Your Field Service Report for this month has already been submitted and is currently locked. Please request access from the person in charge if you need to make a correction.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (uiState.canRequestAccess) {
+                    OutlinedButton(onClick = { accessReason = ""; askingAccess = true }, modifier = Modifier.fillMaxWidth()) { Text("Request Edit Access") }
+                }
+            }
+        }
+        if (askingAccess) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { askingAccess = false },
+                title = { Text("Request Edit Access") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Tell the person in charge what needs to be corrected.")
+                        OutlinedTextField(value = accessReason, onValueChange = { accessReason = it }, label = { Text("Reason") }, minLines = 2, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
+                    }
+                },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(
+                        enabled = accessReason.isNotBlank(),
+                        onClick = { askingAccess = false; viewModel.requestAccess(publisherPersonId, accessReason) },
+                    ) { Text("Send Request") }
+                },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { askingAccess = false }) { Text("Cancel") } },
+            )
         }
         Button(
             onClick = viewModel::showPreview,

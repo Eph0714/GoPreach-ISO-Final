@@ -71,7 +71,7 @@ object MapImageExporter {
         val file = File(dir, "${safeFileName(title)}-map.pdf")
         FileOutputStream(file).use { out -> document.writeTo(out) }
         document.close()
-        share(context, file, "application/pdf")
+        com.emfitsolutions.gopreach.data.print.PdfPreviewDialog.showOrShare(context, file, title) { share(context, file, "application/pdf") }
     }
 
     private fun share(context: Context, file: File, mimeType: String) {

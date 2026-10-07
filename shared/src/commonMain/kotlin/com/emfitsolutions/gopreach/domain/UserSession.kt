@@ -2,6 +2,8 @@ package com.emfitsolutions.gopreach.domain
 
 import com.emfitsolutions.gopreach.platform.Log
 import com.emfitsolutions.gopreach.data.model.AdminRole
+import com.emfitsolutions.gopreach.data.model.Group
+import com.emfitsolutions.gopreach.data.model.RegularElderRole
 import com.emfitsolutions.gopreach.data.model.Person
 import com.emfitsolutions.gopreach.data.model.RoleAssignment
 import com.emfitsolutions.gopreach.data.model.RoleAssignmentStatus
@@ -9,6 +11,7 @@ import com.emfitsolutions.gopreach.data.model.RoleType
 import com.emfitsolutions.gopreach.data.model.UserAccessGrant
 import com.emfitsolutions.gopreach.data.model.displayLabel
 import com.emfitsolutions.gopreach.data.repository.AuthService
+import com.emfitsolutions.gopreach.data.repository.GroupRepository
 import com.emfitsolutions.gopreach.data.repository.OfflineSessionMarker
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
@@ -45,6 +48,8 @@ data class SessionState(
     /** Non-null only for a restricted (Circuit Overseer / custom) user — see
      * [UserAccessGrant] and [PermissionChecker.hasPermission]. */
     val grant: UserAccessGrant? = null,
+    /** The congregation's FS Groups, only to name a group role ("Group Coordinator — FS Group 5"). */
+    val groups: List<Group> = emptyList(),
     /** Spec §7 — set by [UserSession.selectRole] once the user picks an
      * account off the role-selection screen; cleared automatically on sign
      * out (see [UserSession]'s own flow chain). Only ever matters when
@@ -108,7 +113,7 @@ data class SessionState(
             val active = roleAssignments.filter { it.status == RoleAssignmentStatus.ACTIVE }
             val adminOptions = AdminRole.entries.mapNotNull { role ->
                 active.firstOrNull { (it.resolvedRoleTypeOrNull() as? RoleType.Admin)?.role == role }
-                    ?.let { RoleOption(it, role.displayLabel()) }
+                    ?.let { RoleOption(it, roleLabelFor(it, role, groups)) }
             }
             val publisherOption = active.firstOrNull { it.resolvedRoleTypeOrNull() is RoleType.Publisher }
                 ?.let { RoleOption(it, "Publisher") }
@@ -145,6 +150,33 @@ data class SessionState(
 
     val isActivePublisherRole: Boolean
         get() = activeRoleAssignment?.resolvedRoleTypeOrNull() is RoleType.Publisher
+
+    /** The role this session acts as, in words ("Coordinator Elder", "Group Coordinator — FS Group 5"), shown throughout the app. */
+    val activeRoleLabel: String?
+        get() = roleOptions.firstOrNull { it.assignment.id == activeRoleAssignment?.id }?.label
+
+    /** The FS Group of an active Group Coordinator / Servant / Assistant role; null for every other role (congregation-wide or none). */
+    val activeGroupId: String?
+        get() = activeRoleAssignment?.takeIf { groupRoleOf(it) != null }?.groupId
+
+    /** Whether the active role is a group role — scoped to ONE FS Group, never the whole congregation. */
+    val isGroupRole: Boolean get() = activeGroupId != null
+}
+
+/** The group slot an Elder / Ministerial-Servant assignment fills (Group Coordinator = overseer, Servant, Assistant), or null. */
+fun groupRoleOf(assignment: RoleAssignment): RegularElderRole? =
+    if ((assignment.resolvedRoleTypeOrNull() as? RoleType.Admin)?.role == AdminRole.REGULAR_ELDER && assignment.groupId != null) assignment.regularElderRole else null
+
+/** "Group Coordinator — FS Group 5" for a group role; the plain role name for everything else. */
+fun roleLabelFor(assignment: RoleAssignment, role: AdminRole, groups: List<Group>): String {
+    val slot = groupRoleOf(assignment) ?: return role.displayLabel()
+    val title = when (slot) {
+        RegularElderRole.GROUP_OVERSEER -> "Group Coordinator"
+        RegularElderRole.GROUP_SERVANT -> "Group Servant"
+        RegularElderRole.GROUP_ASSISTANT -> "Group Assistant"
+    }
+    val name = groups.firstOrNull { it.id == assignment.groupId }?.name
+    return if (name.isNullOrBlank()) title else "$title — $name"
 }
 
 /**
@@ -153,11 +185,15 @@ data class SessionState(
  * Person's [RoleAssignment]s, which drive every permission check via
  * [PermissionChecker].
  */
+/** What the signed-in Person is acting as right now — mirrored onto their Person document so the security rules can see it. */
+private data class ActiveContext(val person: Person, val congregationId: String?, val roleName: String?, val groupId: String?)
+
 class UserSession(
     private val auth: AuthService,
     private val personRepository: PersonRepository,
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val userAccessGrantRepository: UserAccessGrantRepository,
+    private val groupRepository: GroupRepository,
     private val offlineSessionMarker: OfflineSessionMarker,
     appScope: CoroutineScope,
 ) {
@@ -184,6 +220,11 @@ class UserSession(
 
     fun selectRole(assignmentId: String) {
         _selectedRoleAssignmentId.value = assignmentId
+    }
+
+    /** "Switch Role": back to the role selector without signing out. Everything the session shows and allows is then re-derived from the newly chosen role. */
+    fun switchRole() {
+        _selectedRoleAssignmentId.value = null
     }
 
     /** Group Chat Setting's security-rules trick (see [Person
@@ -242,14 +283,16 @@ class UserSession(
                         resolvedRole is RoleType.Publisher -> s.activeRoleAssignment?.congregationId
                         else -> null
                     }
-                    Triple(person, congregationId, role?.name)
+                    ActiveContext(person, congregationId, role?.name, s.activeGroupId)
                 }
-                .distinctUntilChanged { old, new -> old?.second == new?.second && old?.third == new?.third && old?.first?.id == new?.first?.id }
-                .collect { triple ->
-                    val (person, congregationId, roleName) = triple ?: return@collect
-                    if (person.activeCongregationId != congregationId || person.activeAdminRole != roleName) {
+                .distinctUntilChanged { old, new ->
+                    old?.congregationId == new?.congregationId && old?.roleName == new?.roleName && old?.groupId == new?.groupId && old?.person?.id == new?.person?.id
+                }
+                .collect { ctx ->
+                    val (person, congregationId, roleName, groupId) = ctx ?: return@collect
+                    if (person.activeCongregationId != congregationId || person.activeAdminRole != roleName || person.activeGroupId != groupId) {
                         runCatching {
-                            personRepository.saveNow(person.copy(activeCongregationId = congregationId, activeAdminRole = roleName))
+                            personRepository.saveNow(person.copy(activeCongregationId = congregationId, activeAdminRole = roleName, activeGroupId = groupId))
                         }.onFailure { Log.w("UserSession", "Failed to sync active role context: ${it.message}") }
                     }
                 }
@@ -272,12 +315,14 @@ class UserSession(
                         roleAssignmentRepository.observeForPerson(personId),
                         userAccessGrantRepository.observeForPerson(personId),
                         _selectedRoleAssignmentId,
-                    ) { person, roles, grant, selectedRoleAssignmentId ->
+                        groupRepository.observeAll(),
+                    ) { person, roles, grant, selectedRoleAssignmentId, groups ->
                         SessionState(
                             isLoading = false,
                             person = person,
                             roleAssignments = roles,
                             grant = grant,
+                            groups = groups,
                             selectedRoleAssignmentId = selectedRoleAssignmentId,
                             // See this field's own doc comment — re-checked on
                             // every emission (not just once at sign-in) so a

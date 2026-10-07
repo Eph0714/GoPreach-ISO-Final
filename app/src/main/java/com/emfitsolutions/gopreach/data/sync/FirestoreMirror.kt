@@ -85,6 +85,9 @@ fun <T : Any> mirrorFirestoreCollection(
     collectionPath: String,
     clazz: Class<T>,
     query: Query = firestore.collection(collectionPath),
+    /** Identifies this listener in [activeRegistrations]. Defaults to [collectionPath]; a caller that mirrors one
+     * collection through several queries at once (a Circuit Overseer's per-congregation chunks) gives each its own key. */
+    registrationKey: String = collectionPath,
     idOf: (T) -> String,
 ): Flow<Unit> = callbackFlow {
     @Suppress("UNCHECKED_CAST") val serializer = kotlinx.serialization.serializer(clazz) as kotlinx.serialization.KSerializer<T>
@@ -93,8 +96,8 @@ fun <T : Any> mirrorFirestoreCollection(
     fun attach() {
         // Synchronously supersede any prior registration for this exact
         // collection path — see this file's own top-of-file doc comment.
-        activeRegistrations.remove(collectionPath)?.remove()
-        val registration = query.addSnapshotListener { snapshot, error ->
+        activeRegistrations.remove(registrationKey)?.remove()
+        val registration = query.addSnapshotListener(com.google.firebase.firestore.MetadataChanges.INCLUDE) { snapshot, error ->
             if (error != null || snapshot == null) {
                 if (error != null) {
                     Log.w(TAG, "Listener for '$collectionPath' failed (attempt ${retryCount + 1}): ${error.message}")
@@ -112,6 +115,7 @@ fun <T : Any> mirrorFirestoreCollection(
                 return@addSnapshotListener
             }
             retryCount = 0
+            if (!snapshot.metadata.isFromCache) offline.noteServerSync()
             appScope.launch {
                 for (change in snapshot.documentChanges) {
                     try {
@@ -143,10 +147,10 @@ fun <T : Any> mirrorFirestoreCollection(
             }
             trySend(Unit)
         }
-        activeRegistrations[collectionPath] = registration
+        activeRegistrations[registrationKey] = registration
     }
     attach()
-    awaitClose { activeRegistrations.remove(collectionPath)?.remove() }
+    awaitClose { activeRegistrations.remove(registrationKey)?.remove() }
 }
 
 /**

@@ -101,7 +101,7 @@ object FieldServiceReportExporter {
         )
 
     /** [styles] and [theme] are the sample workbook's own parts (bundled under assets/fsr). */
-    private fun worksheetXml(sheet: FieldServiceReportSheet): String {
+    private fun worksheetXml(sheet: FieldServiceReportSheet, summary: List<List<String>> = emptyList()): String {
         val rc = sheet.reportColumns
         val hc = sheet.hourColumns
         val r = rc.size
@@ -210,6 +210,18 @@ object FieldServiceReportExporter {
             rows.append("<row r=\"").append(totalRow).append("\" ht=\"16.5\" thickTop=\"1\" thickBot=\"1\">").append(c.sb).append("</row>")
         }
 
+        var lastRow = totalRow
+        if (summary.isNotEmpty()) {
+            var n = totalRow + 2
+            run { val c = Cells(); c.str("D$n", "Summary", S_TOTAL_LABEL); rows.append("<row r=\"").append(n).append("\">").append(c.sb).append("</row>") }
+            summary.drop(1).forEach { r ->
+                n++
+                val c = Cells(); c.str("D$n", r[0]); c.str("E$n", r[1])
+                rows.append("<row r=\"").append(n).append("\">").append(c.sb).append("</row>")
+            }
+            lastRow = n
+        }
+
         val merges = buildList {
             add("B1:C1")
             if (r > 1) add(col(reportsStart) + "7:" + col(reportsStart + r - 1) + "7")
@@ -220,7 +232,7 @@ object FieldServiceReportExporter {
         val sheetXml = buildString {
             append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
             append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">")
-            append("<dimension ref=\"B1:").append(col(remarksCol)).append(totalRow).append("\"/>")
+            append("<dimension ref=\"B1:").append(col(remarksCol)).append(lastRow).append("\"/>")
             append("<sheetViews><sheetView tabSelected=\"1\" workbookViewId=\"0\"/></sheetViews>")
             append("<sheetFormatPr defaultRowHeight=\"15\"/>")
             append("<cols><col min=\"4\" max=\"4\" width=\"30.140625\" customWidth=\"1\"/>")
@@ -291,7 +303,7 @@ object FieldServiceReportExporter {
             put("_rels/.rels", rootRels.toByteArray())
             put("xl/workbook.xml", workbook.toByteArray())
             put("xl/_rels/workbook.xml.rels", workbookRels.toByteArray())
-            sheets.forEachIndexed { i, s -> put("xl/worksheets/sheet${i + 1}.xml", worksheetXml(s).toByteArray()) }
+            sheets.forEachIndexed { i, s -> put("xl/worksheets/sheet${i + 1}.xml", worksheetXml(s, if (i == sheets.indexOfLast { it.periodTag == s.periodTag }) FieldServiceSummary.ofSheets(sheets.filter { it.periodTag == s.periodTag }) else emptyList()).toByteArray()) }
             put("xl/styles.xml", styles)
             put("xl/theme/theme1.xml", theme)
         }
@@ -321,11 +333,11 @@ object FieldServiceReportExporter {
     }
 
     /** Print / Save as PDF through the system print dialog, in the same layout (a page per group). */
-    fun printPdf(context: Context, sheets: List<FieldServiceReportSheet>, graphHtml: String? = null) =
+    fun printPdf(context: Context, sheets: List<FieldServiceReportSheet>, graphHtml: String? = null, footerHtml: String? = null) =
         ReportPrinter.printHtml(
             context,
             "Field Service Report - " + (if (sheets.size == 1) sheets[0].groupName else "All FS Groups") + " - " + sheets.firstOrNull()?.monthLabel.orEmpty(),
-            buildHtml(sheets, graphHtml),
+            buildHtml(sheets, graphHtml, footerHtml),
             PrintOptions(OrientationMode.LANDSCAPE),
         )
 
@@ -337,7 +349,7 @@ object FieldServiceReportExporter {
 
     fun buildHtml(sheet: FieldServiceReportSheet): String = buildHtml(listOf(sheet))
 
-    fun buildHtml(sheets: List<FieldServiceReportSheet>, graphHtml: String? = null): String = buildString {
+    fun buildHtml(sheets: List<FieldServiceReportSheet>, graphHtml: String? = null, footerHtml: String? = null): String = buildString {
         append("<html><head><meta charset=\"utf-8\"><style>")
         append("@page{size:landscape;margin:12mm} body{font-family:sans-serif;font-size:12px;} ")
         append("table{border-collapse:collapse;} td,th{border:1px solid #000;padding:3px 6px;text-align:center;} ")
@@ -350,6 +362,8 @@ object FieldServiceReportExporter {
             appendSheet(sheet)
             append("</div>")
         }
+        if (sheets.isNotEmpty()) append(FieldServiceSummary.groupedHtml(sheets))
+        footerHtml?.let { append(it) }
         append("</body></html>")
     }
 

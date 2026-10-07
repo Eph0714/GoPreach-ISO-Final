@@ -18,6 +18,7 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -51,6 +52,11 @@ enum class StatusColumn(val label: String, val category: PublisherCategory, val 
 /** One publisher's line. [reportsCount] is the "No. of Reports" figure: 1 for every publisher in the group, under
  * their status — it counts the publisher, whether or not they have hours or Bible Studies (or any report at
  * all that period; [remarks] stays blank in that case — only entered text is ever shown). */
+/** Level 1 vs level 2: how many of a congregation's publishers have submitted their own month to the congregation. */
+data class PublisherOverview(val total: Int, val submitted: Int) {
+    val notSubmitted: Int get() = (total - submitted).coerceAtLeast(0)
+}
+
 data class FieldServiceReportRow(
     val number: Int,
     val status: StatusColumn,
@@ -59,6 +65,8 @@ data class FieldServiceReportRow(
     val hours: Double?,
     val bibleStudies: Int?,
     val remarks: String,
+    /** The publisher this line belongs to (for the Table View's Edit / Delete). */
+    val personId: String = "",
 ) {
     val reported: Boolean get() = reportsCount > 0
 }
@@ -136,6 +144,12 @@ class FieldServiceReportViewModel(
     private val auditLogRepository: AuditLogRepository,
     private val creditHourRecordRepository: com.emfitsolutions.gopreach.data.repository.CreditHourRecordRepository,
     congregationRepository: CongregationRepository,
+    private val coReportRepository: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository,
+    private val coReportService: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportService,
+    private val restrictedSessionSync: com.emfitsolutions.gopreach.data.sync.RestrictedSessionSync,
+    private val appSettingsRepository: com.emfitsolutions.gopreach.data.repository.AppSettingsRepository,
+    private val statisticsBuilder: com.emfitsolutions.gopreach.data.repository.CongregationStatisticsBuilder,
+    private val attendanceRepository: com.emfitsolutions.gopreach.data.repository.MeetingAttendanceRepository,
 ) : ViewModel() {
 
     val congregations: Flow<List<Congregation>> = congregationRepository.observeAll()
@@ -146,10 +160,77 @@ class FieldServiceReportViewModel(
         else list.filter { it.status == RecordStatus.ACTIVE && it.congregationId == congregationId }.sortedWith(com.emfitsolutions.gopreach.domain.GroupNameOrder)
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Submitting the month's report to the Circuit Overseer. The report stays the congregation's own records — nothing is
+    // copied; only the month's status moves (Not Submitted → Submitted → Received, or Returned → Submitted).
+
+    /** The workflow status of [congregationId]'s [month]; null = never submitted (Not Submitted). */
+    fun submissionFor(congregationId: String?, month: Long): Flow<com.emfitsolutions.gopreach.data.model.CoMonthStatus?> =
+        coReportRepository.observeStatuses().map { list -> if (congregationId == null) null else list.firstOrNull { it.id == com.emfitsolutions.gopreach.data.model.coReportId(congregationId, month) } }
+
+    /** Every month of [congregationId] the Circuit Overseer may see (Submitted / Received / Returned), newest first. */
+    fun visibleMonthsFor(congregationId: String?): Flow<List<com.emfitsolutions.gopreach.data.model.CoMonthStatus>> =
+        coReportRepository.observeStatuses().map { list ->
+            list.filter { it.congregationId == congregationId && it.status.visibleToCircuitOverseer }.sortedByDescending { it.periodMonth }
+        }
+
+    /** The audit history of one month (Super-Admin / Circuit Overseer / senders may read it). */
+    fun historyFor(reportId: String): Flow<List<com.emfitsolutions.gopreach.data.model.CoReportEvent>> =
+        coReportRepository.observeEvents().map { list -> list.filter { it.reportId == reportId } }
+
+    /** How many publishers of [congregationId] have handed in [month]'s report to the congregation — shown before the consolidated report goes to the Circuit Overseer. */
+    fun publisherOverview(congregationId: String?, month: Long): Flow<PublisherOverview> =
+        combine(roleAssignmentRepository.observeAll(), monthlyReportRepository.observeAll()) { assignments, reports ->
+            if (congregationId == null) return@combine PublisherOverview(0, 0)
+            val publishers = assignments
+                .filter { it.status == RoleAssignmentStatus.ACTIVE && it.congregationId == congregationId }
+                .filter { (it.resolvedRoleTypeOrNull() as? RoleType.Publisher)?.category.let { c -> c != null && c != PublisherCategory.REMOVED_PUBLISHER } }
+                .map { it.personId }.toSet()
+            val submitted = reports.filter { it.congregationId == congregationId && it.periodMonth == month && it.status.countsAsSubmitted }.map { it.publisherPersonId }.toSet()
+            PublisherOverview(total = publishers.size, submitted = publishers.count { it in submitted })
+        }
+
+    /** Configurable: whether the consolidated report is blocked until every publisher has submitted (off = only a warning). */
+    val requireAllPublishersSubmitted: Flow<Boolean> = appSettingsRepository.observe().map { it.requireAllPublishersSubmitted }
+
+    suspend fun setRequireAllPublishersSubmitted(required: Boolean, actorPersonId: String) =
+        appSettingsRepository.saveRequireAllPublishersSubmitted(required, actorPersonId)
+
+    /** Keeps a submitted month's actual records mirrored for the Circuit Overseer while its screen is open. */
+    fun overseerMonthRecords(congregationId: String, month: Long): Flow<Unit> = restrictedSessionSync.monthRecords(congregationId, month)
+
+    private suspend fun actorFor(personId: String): com.emfitsolutions.gopreach.data.repository.SubmissionActor {
+        val person = personRepository.get(personId)
+        return com.emfitsolutions.gopreach.data.repository.SubmissionActor(
+            personId, person?.fullName ?: personId,
+            if (person?.isSuperAdmin == true) "SUPER_ADMIN" else person?.activeAdminRole.orEmpty(),
+        )
+    }
+
+    suspend fun submitMonth(congregationId: String, month: Long, actorPersonId: String): com.emfitsolutions.gopreach.data.repository.CircuitResult {
+        // The month's historical statistics (publishers, pioneers, elders, reports, meeting attendance) are saved with the submission.
+        val existing = attendanceRepository.observeStatistics().first().firstOrNull { it.id == attendanceRepository.statisticsIdFor(congregationId, month) }
+        val stats = runCatching { statisticsBuilder.build(congregationId, month, actorPersonId, existing) }.getOrNull()
+        return coReportService.submit(congregationId, month, actorFor(actorPersonId), stats)
+    }
+
+    suspend fun undoSubmission(congregationId: String, month: Long, actorPersonId: String) =
+        coReportService.undoSubmission(congregationId, month, actorFor(actorPersonId))
+
+    suspend fun receiveMonth(reportId: String, remarks: String?, actorPersonId: String) =
+        coReportService.receive(reportId, remarks, actorFor(actorPersonId))
+
+    suspend fun returnMonth(reportId: String, reason: String, actorPersonId: String) =
+        coReportService.returnForCorrection(reportId, reason, actorFor(actorPersonId))
+
+    suspend fun saveCoRemarks(reportId: String, remarks: String, actorPersonId: String) =
+        coReportService.saveRemarks(reportId, remarks, actorFor(actorPersonId))
+
     /** The FS Group [personId] belongs to, if any (to pre-select it). */
     fun myGroupId(personId: String): Flow<String?> = roleAssignmentRepository.observeForPerson(personId).map { list ->
         list.firstOrNull { it.status == RoleAssignmentStatus.ACTIVE && it.groupId != null }?.groupId
     }
+
 
     // ---------------------------------------------------------------------------------------------
     // List View: every publisher report in the period, with Lock / Unlock.
@@ -193,30 +274,103 @@ class FieldServiceReportViewModel(
         }
 
     /** "Lock" — marks a submitted report Posted: the publisher can no longer edit it. */
-    fun lock(report: MonthlyReport, actorPersonId: String) {
+    /**
+     * A group role (Group Coordinator / Servant / Assistant, [scopeGroupId]) may only touch publishers of its own FS Group, and the
+     * server verifies that through the publisher's own role assignment — so the record is stamped with it, and nothing is written
+     * for a publisher outside the group.
+     */
+    private suspend fun stampedForGroup(report: MonthlyReport, scopeGroupId: String?): MonthlyReport? {
+        if (scopeGroupId == null) return report
+        val assignment = roleAssignmentRepository.observeAll().first().firstOrNull {
+            it.personId == report.publisherPersonId && it.groupId == scopeGroupId && it.status == RoleAssignmentStatus.ACTIVE &&
+                it.resolvedRoleTypeOrNull() is RoleType.Publisher
+        } ?: return null
+        return report.copy(groupRoleAssignmentId = assignment.id)
+    }
+
+    fun lock(report: MonthlyReport, actorPersonId: String, scopeGroupId: String? = null) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
+            val target = stampedForGroup(report, scopeGroupId) ?: return@launch
             // saveNow, not save: a lock change has to reach the publisher's device promptly.
             monthlyReportRepository.saveNow(
-                report.copy(status = ReportStatus.POSTED, reviewedByPersonId = actorPersonId, reviewedAt = now, lastEditedByPersonId = actorPersonId, lastEditedAt = now),
+                target.copy(status = ReportStatus.POSTED, reviewedByPersonId = actorPersonId, reviewedAt = now, lastEditedByPersonId = actorPersonId, lastEditedAt = now),
             )
             auditLogRepository.log(actorPersonId = actorPersonId, action = "MARK_PUBLISHER_REPORT_POSTED", targetType = "MonthlyReport", targetId = report.id, congregationId = report.congregationId)
         }
     }
 
     /** "Unlock" — puts the report back to Draft so the publisher can edit it and submit it again. */
-    fun unlock(report: MonthlyReport, actorPersonId: String) {
+    fun unlock(report: MonthlyReport, actorPersonId: String, scopeGroupId: String? = null) {
         viewModelScope.launch {
+            val target = stampedForGroup(report, scopeGroupId) ?: return@launch
             monthlyReportRepository.saveNow(
-                report.copy(status = ReportStatus.DRAFT, lastEditedByPersonId = actorPersonId, lastEditedAt = System.currentTimeMillis()),
+                target.copy(status = ReportStatus.DRAFT, lastEditedByPersonId = actorPersonId, lastEditedAt = System.currentTimeMillis()),
             )
             auditLogRepository.log(actorPersonId = actorPersonId, action = "UNLOCK_PUBLISHER_REPORT", targetType = "MonthlyReport", targetId = report.id, congregationId = report.congregationId)
         }
     }
 
+    /**
+     * Publisher-level access decisions, by the person in charge (congregation-wide roles, or the group role of that publisher's FS Group):
+     *  Access Requested → Access Granted (the publisher may correct, then must submit again), or back to Submitted (rejected);
+     *  Submitted → Reversed (reopened outright, no request needed). Each one is audited.
+     */
+    fun approveAccess(report: MonthlyReport, actorPersonId: String, scopeGroupId: String? = null) {
+        viewModelScope.launch {
+            val target = stampedForGroup(report, scopeGroupId) ?: return@launch
+            val now = System.currentTimeMillis()
+            monthlyReportRepository.saveNow(
+                target.copy(
+                    status = ReportStatus.ACCESS_GRANTED, accessGrantedByPersonId = actorPersonId, accessGrantedAt = now,
+                    lastEditedByPersonId = actorPersonId, lastEditedAt = now,
+                ),
+            )
+            auditLogRepository.log(
+                actorPersonId = actorPersonId, action = "PUBLISHER_REPORT_ACCESS_GRANTED", targetType = "MonthlyReport", targetId = report.id,
+                congregationId = report.congregationId, details = report.accessRequestReason,
+            )
+        }
+    }
+
+    fun rejectAccess(report: MonthlyReport, reason: String, actorPersonId: String, scopeGroupId: String? = null) {
+        viewModelScope.launch {
+            val target = stampedForGroup(report, scopeGroupId) ?: return@launch
+            val now = System.currentTimeMillis()
+            monthlyReportRepository.saveNow(
+                target.copy(
+                    status = ReportStatus.SUBMITTED, accessDecisionNote = reason.trim().ifBlank { null },
+                    lastEditedByPersonId = actorPersonId, lastEditedAt = now,
+                ),
+            )
+            auditLogRepository.log(
+                actorPersonId = actorPersonId, action = "PUBLISHER_REPORT_ACCESS_REJECTED", targetType = "MonthlyReport", targetId = report.id,
+                congregationId = report.congregationId, details = reason.trim(),
+            )
+        }
+    }
+
+    fun reverseSubmission(report: MonthlyReport, reason: String, actorPersonId: String, scopeGroupId: String? = null) {
+        if (reason.isBlank()) return
+        viewModelScope.launch {
+            val target = stampedForGroup(report, scopeGroupId) ?: return@launch
+            val now = System.currentTimeMillis()
+            monthlyReportRepository.saveNow(
+                target.copy(
+                    status = ReportStatus.RETURNED, returnedByPersonId = actorPersonId, returnedAt = now, correctionReason = reason.trim(),
+                    lastEditedByPersonId = actorPersonId, lastEditedAt = now,
+                ),
+            )
+            auditLogRepository.log(
+                actorPersonId = actorPersonId, action = "PUBLISHER_REPORT_REVERSED", targetType = "MonthlyReport", targetId = report.id,
+                congregationId = report.congregationId, details = reason.trim(),
+            )
+        }
+    }
+
     /** Locks every submitted/corrected report in [items] at once. */
-    fun lockAll(items: List<FieldServiceReportListItem>, actorPersonId: String) {
-        items.mapNotNull { it.report }.filter { it.status == ReportStatus.SUBMITTED || it.status == ReportStatus.CORRECTED }.forEach { lock(it, actorPersonId) }
+    fun lockAll(items: List<FieldServiceReportListItem>, actorPersonId: String, scopeGroupId: String? = null) {
+        items.mapNotNull { it.report }.filter { it.status == ReportStatus.SUBMITTED || it.status == ReportStatus.CORRECTED }.forEach { lock(it, actorPersonId, scopeGroupId) }
     }
 
     /**
@@ -331,6 +485,7 @@ class FieldServiceReportViewModel(
                             own.mapNotNull { it.remarks?.trim()?.takeIf { r -> r.isNotEmpty() } }.distinct().forEach { add(it) }
                         }.joinToString("; ")
                         FieldServiceReportRow(
+                            personId = person.id,
                             number = index + 1,
                             status = status,
                             name = person.lastName.trim() + ", " + person.firstName.trim(),

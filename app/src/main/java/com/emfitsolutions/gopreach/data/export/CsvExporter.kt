@@ -42,6 +42,7 @@ object CsvExporter {
         columns: List<String>,
         rows: List<List<String>>,
         totals: List<Pair<String, String>> = emptyList(),
+        recordCount: Pair<String, Int>? = null,
     ): Boolean {
         val csv = buildString {
             append(escapeCsvCell(title)).append('\n')
@@ -49,8 +50,10 @@ object CsvExporter {
             append('\n')
             append(columns.joinToString(",") { escapeCsvCell(it) }).append('\n')
             rows.forEach { row -> append(row.joinToString(",") { escapeCsvCell(it) }).append('\n') }
-            if (totals.isNotEmpty()) {
+            if (totals.isNotEmpty() || recordCount != null) {
                 append('\n')
+                append("Summary").append('\n')
+                recordCount?.let { (label, n) -> append(escapeCsvCell(label)).append(',').append(n).append('\n') }
                 totals.forEach { (label, value) -> append(escapeCsvCell(label)).append(',').append(escapeCsvCell(value)).append('\n') }
             }
         }

@@ -310,6 +310,9 @@ private fun buildAllTerritoriesListHtml(
         }
         append("</div></div>")
     }
+    // The mandatory end-of-report Summary.
+    append("<div style=\"margin-top:10px;font-size:12px\"><b>Summary</b><br>Total Municipalities: ${blocks.size}<br>Total Barangays: $barangayTotal<br>")
+    append("Assigned Groups: ${blocks.flatMap { it.cells }.map { it.groupName }.distinct().size}</div>")
     append("</body></html>")
 }
 

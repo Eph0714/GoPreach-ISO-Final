@@ -130,6 +130,8 @@ fun SettingsScreen(
     currentPersonId: String = "",
     showDeletedRecordsSettings: Boolean = false,
     onOpenDeletedRecords: () -> Unit = {},
+    /** Shown as a tab inside the combined Settings screen: no top bar of its own. */
+    embedded: Boolean = false,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val theme by viewModel.theme.collectAsStateWithLifecycle()
@@ -141,18 +143,7 @@ fun SettingsScreen(
     // nothing on screen is actually observing.
     val updateViewModel: UpdateViewModel = koinViewModel(viewModelStoreOwner = LocalContext.current as ComponentActivity)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(Res.string.settings_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(Res.string.dashboard_back_cd))
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    com.emfitsolutions.gopreach.ui.components.SettingsFrame(title = stringResource(Res.string.settings_title), onBack = onBack, embedded = embedded) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

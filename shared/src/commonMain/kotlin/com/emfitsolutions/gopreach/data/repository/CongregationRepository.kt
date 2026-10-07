@@ -6,6 +6,7 @@ import com.emfitsolutions.gopreach.data.model.Group
 import com.emfitsolutions.gopreach.data.model.Territory
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.RemoteCollections
+import com.emfitsolutions.gopreach.data.sync.saveNow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -33,6 +34,21 @@ class CongregationRepository(
     }
 
     suspend fun delete(congregationId: String) = offline.delete(collection, congregationId)
+
+    /** Saves and pushes to the server right now — the Circuit Overseer assignment transaction reads the server copy,
+     * so a brand-new congregation must exist there before it can be assigned. */
+    suspend fun saveNow(congregation: Congregation): Congregation {
+        val id = congregation.id.ifBlank { remote.newId(collection) }
+        val withId = congregation.copy(id = id)
+        offline.saveNow(remote, collection, id, withId)
+        return withId
+    }
+
+    /** Removes a congregation locally and on the server right now (used to undo a [saveNow] whose assignment failed). */
+    suspend fun deleteNow(congregationId: String) {
+        offline.delete(collection, congregationId)
+        runCatching { remote.deleteNow(collection, congregationId) }
+    }
 
     fun startRemoteSync(): Flow<Unit> =
         remote.mirror(collection, Congregation::class) { it.id }

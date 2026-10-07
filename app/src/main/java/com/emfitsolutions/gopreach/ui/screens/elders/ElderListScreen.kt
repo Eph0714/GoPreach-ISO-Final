@@ -164,13 +164,34 @@ fun ElderListScreen(
                 Text("None enrolled yet. Tap + to enroll one.", style = MaterialTheme.typography.bodyMedium)
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                item { RecordFound(visibleRows.size) }
-                items(visibleRows, key = { it.person.id }) { row ->
+            com.emfitsolutions.gopreach.ui.components.UniversalReport(
+                title = title,
+                details = listOf("Scope" to scopeLabel),
+                items = visibleRows,
+                key = { it.person.id },
+                columns = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<ElderRow>("Name", 200.dp) { it.person.fullName },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<ElderRow>(scopeLabel, 170.dp) { it.scopeName },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<ElderRow>("Contact", 130.dp) { it.person.contact },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<ElderRow>("Status", 90.dp) { if (it.isActive) "Active" else "Inactive" },
+                ),
+                searchText = { listOf(it.person.fullName, it.scopeName, it.person.contact, it.person.email.orEmpty()) },
+                filters = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalFilter<ElderRow>("scope", scopeLabel, visibleRows.map { it.scopeName }.distinct().sorted().map { it to it }) { r, v -> r.scopeName == v },
+                ),
+                sorts = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalSort<ElderRow>("az", "Name A–Z", compareBy { it.person.fullName.lowercase() }),
+                    com.emfitsolutions.gopreach.ui.components.UniversalSort<ElderRow>("za", "Name Z–A", compareByDescending { it.person.fullName.lowercase() }),
+                ),
+                summary = { shown ->
+                    listOf(
+                        "Total Records" to shown.size.toString(),
+                        "Active" to shown.count { it.isActive }.toString(),
+                        "Inactive" to shown.count { !it.isActive }.toString(),
+                    ) + shown.groupingBy { it.scopeName }.eachCount().entries.sortedBy { it.key }.map { (scope, n) -> scope to n.toString() }
+                },
+                generatedBy = "Administrator",
+                card = { row ->
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -213,8 +234,9 @@ fun ElderListScreen(
                             }
                         }
                     }
-                }
-            }
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
         }
         }
     }

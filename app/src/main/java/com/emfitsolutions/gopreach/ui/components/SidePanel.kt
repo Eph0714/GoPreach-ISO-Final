@@ -67,6 +67,7 @@ import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Password
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Schedule
@@ -152,6 +153,10 @@ fun GoPreachSidePanelContent(
     isSuperAdmin: Boolean,
     canViewUserLogs: Boolean,
     canManageUsers: Boolean,
+    /** Circuit Overseer module — Super-Admin only: Circuit Codes, Circuit Overseer Accounts, Circuit Assignment. */
+    canManageCircuits: Boolean = false,
+    /** The signed-in account is a Circuit Overseer: adds its Circuit Dashboard to REPORTS. */
+    isCircuitOverseer: Boolean = false,
     /** Account Management spec §5 — Super-Admin, Admin, Coordinator Elder,
      * Service Overseer (+ Secretary). See AdminHomeScreen's own derivation. */
     canManageAccountCredentials: Boolean,
@@ -178,6 +183,7 @@ fun GoPreachSidePanelContent(
     onSignOut: () -> Unit,
     /** Super-Admin, Admin, Service Overseer, Secretary and Coordinator Elder may enter a field service record on a publisher's behalf. */
     canEnterManualFieldService: Boolean = false,
+    canManageMeetingAttendance: Boolean = false,
     /** Reports every module this session may open, so Quick Access can resolve (and permission-check) cards copied from here. */
     onItemsAvailable: (List<SideItem>) -> Unit = {},
     /** Long-press-and-drag a module toward Quick Access; null disables dragging. */
@@ -213,6 +219,12 @@ fun GoPreachSidePanelContent(
             if (canEnrollRegularElderOrPublisher) add(SideItem(stringResource(Res.string.side_elders), Icons.Rounded.PersonAdd, Destinations.MANAGE_ELDERS))
             if (canEnrollMinisterialServant) add(SideItem(stringResource(Res.string.side_ministerial_servant), Icons.Rounded.PersonAdd, Destinations.MANAGE_MINISTERIAL_SERVANTS))
             if (canManageGroups) add(SideItem(stringResource(Res.string.side_groups), Icons.Rounded.Groups, Destinations.MANAGE_GROUPS))
+            if (canManageCircuits) {
+                add(SideItem("Circuit Overseer Management", Icons.Rounded.Groups, Destinations.CIRCUIT_MANAGEMENT))
+                add(SideItem("Circuit Codes", Icons.Rounded.Tune, Destinations.MANAGE_CIRCUIT_CODES))
+                add(SideItem("Circuit Overseer Accounts", Icons.Rounded.ManageAccounts, Destinations.MANAGE_CIRCUIT_OVERSEERS))
+                add(SideItem("Circuit Assignment", Icons.Rounded.Assignment, Destinations.CIRCUIT_ASSIGNMENT))
+            }
             if (canManageTerritoryAssignments) add(SideItem(stringResource(Res.string.side_territory_assignments), Icons.Rounded.Assignment, Destinations.MANAGE_TERRITORY_ASSIGNMENTS))
             // Routes to the Manage Publishers *list* screen (which has its own
             // onAddNew FAB into ENROLL_PUBLISHER), matching every other entry
@@ -244,8 +256,23 @@ fun GoPreachSidePanelContent(
             // boolean is needed here — this restores the same reach the tile
             // grid used to give everyone, rather than stranding whoever's
             // tile grid gets hidden next.
-            add(SideItem(stringResource(Res.string.home_dashboard_header), Icons.Rounded.BarChart, Destinations.DASHBOARD_REPORTS))
-            if (canViewFieldServiceReport) add(SideItem("Field Service Report", Icons.Rounded.Assessment, Destinations.FIELD_SERVICE_REPORT))
+            if (isCircuitOverseer) {
+                add(SideItem("Congregations", Icons.Rounded.AccountBalance, Destinations.CIRCUIT_CONGREGATIONS))
+                add(SideItem("Circuit Report", Icons.Rounded.BarChart, Destinations.CIRCUIT_REPORT))
+                add(SideItem("Publishers", Icons.Rounded.People, Destinations.circuitPublishers()))
+                add(SideItem("Elders & Ministerial Servants", Icons.Rounded.PersonAdd, Destinations.circuitLeaders()))
+                add(SideItem("Report Submission", Icons.Rounded.Assessment, Destinations.REPORT_SUBMISSION))
+                add(SideItem("Meeting Attendance", Icons.Rounded.Groups, Destinations.MEETING_ATTENDANCE))
+                add(SideItem("Comparative Report", Icons.Rounded.Assessment, Destinations.CONGREGATION_COMPARATIVE))
+            }
+            if (canManageMeetingAttendance) {
+                add(SideItem("Report Submission", Icons.Rounded.Assessment, Destinations.REPORT_SUBMISSION))
+                add(SideItem("Meeting Attendance", Icons.Rounded.Groups, Destinations.MEETING_ATTENDANCE))
+                add(SideItem("Congregation Comparative", Icons.Rounded.Assessment, Destinations.CONGREGATION_COMPARATIVE))
+            }
+            // The Circuit Overseer's dashboard is their Main Form (and the Circuit Dashboard above) — the general Dashboard is not offered to them.
+            if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_dashboard_header), Icons.Rounded.BarChart, Destinations.DASHBOARD_REPORTS))
+            if (canViewFieldServiceReport) add(SideItem("Field Service Report", Icons.Rounded.Assessment, if (isCircuitOverseer) Destinations.CIRCUIT_FS_REPORTS else Destinations.FIELD_SERVICE_REPORT))
             if (canEnterManualFieldService) add(SideItem("Manual Field Service Record", Icons.Rounded.EditNote, Destinations.MANUAL_FIELD_SERVICE))
             if (canViewDeletedRecords) add(SideItem("Deleted Records", Icons.Rounded.RestoreFromTrash, Destinations.DELETED_RECORDS))
             // "Consolidate 'Forward Request' Modules for Super Admin" — one
@@ -284,13 +311,14 @@ fun GoPreachSidePanelContent(
         val controlPanelItems = buildList {
             if (isSuperAdmin) add(SideItem(stringResource(Res.string.side_backup_restore), Icons.Rounded.Backup, Destinations.BACKUP_RESTORE))
             if (canAccessControlPanel) add(SideItem(stringResource(Res.string.side_appearance_app_logo), Icons.Rounded.Tune, Destinations.CONTROL_PANEL))
-            add(SideItem(stringResource(Res.string.side_group_chat_setting), Icons.AutoMirrored.Rounded.Chat, Destinations.GROUP_CHAT_SETTING))
+            // Circuit Overseer: no Group Chat, Calendar, Share Location or Find Location.
+            if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.side_group_chat_setting), Icons.AutoMirrored.Rounded.Chat, Destinations.GROUP_CHAT_SETTING))
             if (canManageAnnouncements) add(SideItem(stringResource(Res.string.side_announcements), Icons.Rounded.Campaign, Destinations.MANAGE_ANNOUNCEMENTS))
-            add(SideItem(stringResource(Res.string.home_nav_calendar), Icons.Rounded.CalendarMonth, Destinations.CALENDAR))
+            if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_nav_calendar), Icons.Rounded.CalendarMonth, Destinations.CALENDAR))
             if (canEditMeetingAssignments) add(SideItem(stringResource(Res.string.home_tile_meeting_cart_assignment_title), Icons.Rounded.Event, Destinations.MEETING_ASSIGNMENTS))
             if (canManageTerritories) add(SideItem(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
-            add(SideItem(stringResource(Res.string.side_share_location_settings), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
-            add(SideItem(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
+            if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.side_share_location_settings), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
+            if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
             if (canViewUserLogs) add(SideItem(stringResource(Res.string.side_user_logs), Icons.Rounded.History, Destinations.USER_LOGS))
             if (canViewContactRecord) add(SideItem(stringResource(Res.string.side_contact_record), Icons.Rounded.Contacts, Destinations.CONTACT_RECORD))
             // "Theme Color Settings — Simplified User Experience" (spec §16/
@@ -324,10 +352,10 @@ fun GoPreachSidePanelContent(
             item {
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
                 NavigationDrawerItem(
-                    label = { SideItemLabel(stringResource(Res.string.side_account_settings)) },
-                    icon = { Icon(Icons.Rounded.Password, contentDescription = null) },
-                    selected = activeRoute == Destinations.ACCOUNT_SETTINGS,
-                    onClick = { onNavigate(Destinations.ACCOUNT_SETTINGS) },
+                    label = { SideItemLabel("Settings") },
+                    icon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
+                    selected = activeRoute == Destinations.SETTINGS || activeRoute == Destinations.ACCOUNT_SETTINGS,
+                    onClick = { onNavigate(Destinations.SETTINGS) },
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
                 )
                 if (onSwitchToPublisher != null) {

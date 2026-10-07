@@ -33,6 +33,8 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.ui.components.LanguagesTagInput
 import com.emfitsolutions.gopreach.ui.components.PhilippineAddressPicker
+import com.emfitsolutions.gopreach.ui.components.ReadOnlyField
+import com.emfitsolutions.gopreach.ui.screens.territoryassignments.SimpleDropdown
 import com.emfitsolutions.gopreach.ui.components.rememberUnsavedChangesBackHandler
 
 /** Spec §4.1 — Congregation Master File, Super-Admin only. */
@@ -52,7 +54,7 @@ fun CongregationEnrollmentScreen(
 
     val hasUnsavedChanges = !uiState.saved && (
         uiState.name.isNotBlank() || !uiState.province.isNullOrBlank() || !uiState.cityMunicipality.isNullOrBlank() ||
-            !uiState.barangay.isNullOrBlank() || uiState.code.isNotBlank() || uiState.languages.isNotEmpty()
+            !uiState.barangay.isNullOrBlank() || uiState.code.isNotBlank() || uiState.languages.isNotEmpty() || uiState.circuitOverseerPersonId != null
         )
     val guardedBack = rememberUnsavedChangesBackHandler(
         hasUnsavedChanges,
@@ -127,6 +129,24 @@ fun CongregationEnrollmentScreen(
                 visualTransformation = VisualTransformation.None,
                 modifier = Modifier.fillMaxWidth(),
             )
+            // Circuit Overseer module: required. Only active Circuit Overseers holding an active Circuit Code
+            // are offered; the Circuit Code follows the overseer and can't be edited on its own.
+            val overseers by viewModel.overseers.collectAsStateWithLifecycle()
+            val pickedOverseer = overseers.firstOrNull { it.personId == uiState.circuitOverseerPersonId }
+            SimpleDropdown(
+                label = "Circuit Overseer Assigned *",
+                selectedLabel = pickedOverseer?.name.orEmpty(),
+                options = overseers.map { it.personId to it.name },
+                onSelected = viewModel::onOverseerSelected,
+            )
+            ReadOnlyField("Circuit Code", pickedOverseer?.circuitCode ?: "Select a Circuit Overseer")
+            if (overseers.isEmpty()) {
+                Text(
+                    "No active Circuit Overseer with an active Circuit Code exists yet. Create the Circuit Code and Circuit Overseer account first.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
             LanguagesTagInput(
                 languages = uiState.languages,
                 onAdd = viewModel::onAddLanguage,

@@ -6,6 +6,7 @@ import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.platform.nowMillis
 import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -91,6 +92,7 @@ class CreditHourCategoryRepository(
 class CreditHourRecordRepository(
     private val offline: OfflineFirestoreRepository,
     private val remote: RemoteCollections,
+    private val monthLock: MonthLockGuard,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<CreditHourRecord>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
@@ -101,13 +103,17 @@ class CreditHourRecordRepository(
     fun observeAll(): Flow<List<CreditHourRecord>> = offline.observeCollection(RECORDS_COLLECTION)
 
     suspend fun save(record: CreditHourRecord): CreditHourRecord {
+        monthLock.requireOpenForPublisher(record.publisherPersonId, record.dayStart) // a month submitted to the Circuit Overseer is locked
         val id = record.id.ifBlank { remote.newId(RECORDS_COLLECTION) }
         val withId = record.copy(id = id)
         offline.save(RECORDS_COLLECTION, id, withId)
         return withId
     }
 
-    suspend fun delete(recordId: String) = offline.delete(RECORDS_COLLECTION, recordId)
+    suspend fun delete(recordId: String) {
+        observeAll().first().firstOrNull { it.id == recordId }?.let { monthLock.requireOpenForPublisher(it.publisherPersonId, it.dayStart) }
+        offline.delete(RECORDS_COLLECTION, recordId)
+    }
 
     fun startRemoteSync(publisherPersonId: String): Flow<Unit> =
         remote.mirror(RECORDS_COLLECTION, CreditHourRecord::class, equalTo = "publisherPersonId" to publisherPersonId) { it.id }

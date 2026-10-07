@@ -429,6 +429,7 @@ fun PublisherHomeScreen(
                     })
                 },
                 onSignOut = viewModel::signOut,
+                onSwitchRole = if (session.roleOptions.size > 1) viewModel::switchRole else null,
             )
 
             Column(
@@ -763,6 +764,7 @@ private fun PublisherWelcomeHeader(
     onOpenSidePanel: () -> Unit,
     onImagePicked: (android.net.Uri) -> Unit,
     onSignOut: () -> Unit,
+    onSwitchRole: (() -> Unit)? = null,
     // "Add Module: Preaching Availability" — a Publisher's only path to
     // AccountSettingsScreen (name/username/password, and now Preaching
     // Availability); see ProfileMenuButton's own doc comment on why this
@@ -824,6 +826,7 @@ private fun PublisherWelcomeHeader(
                     profileImageUrl = profileImageUrl,
                     onImagePicked = onImagePicked,
                     onSignOut = onSignOut,
+                    onSwitchRole = onSwitchRole,
                     onOpenAccountSettings = onOpenAccountSettings,
                     onOpenSettings = onOpenSettings,
                 )

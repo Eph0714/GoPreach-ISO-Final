@@ -5,6 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.location.LocationTracker
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
+import com.emfitsolutions.gopreach.data.repository.CircuitAssignmentService
+import com.emfitsolutions.gopreach.data.repository.CircuitOverseerDirectory
+import com.emfitsolutions.gopreach.data.repository.OverseerOption
+import com.emfitsolutions.gopreach.data.repository.messageOrNull
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.PhilippineLocationRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,6 +34,8 @@ data class CongregationEnrollmentUiState(
     val code: String = "",
     /** "Language(s) Used" — optional, multiple, free-form (e.g. "Iloko", "Ibanag"). */
     val languages: List<String> = emptyList(),
+    /** "Circuit Overseer Assigned" — required; the Circuit Code shown beside it comes from this overseer. */
+    val circuitOverseerPersonId: String? = null,
     val isSaving: Boolean = false,
     val errorMessage: String? = null,
     val saved: Boolean = false,
@@ -39,10 +47,18 @@ class CongregationEnrollmentViewModel(
     private val auditLogRepository: AuditLogRepository,
     private val locationTracker: LocationTracker,
     private val philippineLocationRepository: PhilippineLocationRepository,
+    circuitOverseerDirectory: CircuitOverseerDirectory,
+    private val circuitAssignmentService: CircuitAssignmentService,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CongregationEnrollmentUiState())
     val uiState: StateFlow<CongregationEnrollmentUiState> = _uiState.asStateFlow()
+
+    /** Active Circuit Overseers that hold an active Circuit Code — the only ones a congregation may be given to. */
+    val overseers: StateFlow<List<OverseerOption>> = circuitOverseerDirectory.activeOverseers
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun onOverseerSelected(personId: String) = _uiState.update { it.copy(circuitOverseerPersonId = personId, errorMessage = null) }
 
     fun onNameChange(value: String) = _uiState.update { it.copy(name = value.uppercase(), errorMessage = null) }
 
@@ -94,6 +110,12 @@ class CongregationEnrollmentViewModel(
             _uiState.update { it.copy(errorMessage = "Name, Province, Municipality/City, Barangay, and code are required.") }
             return
         }
+        val overseerId = state.circuitOverseerPersonId
+        val overseer = overseers.value.firstOrNull { it.personId == overseerId }
+        if (overseer == null) {
+            _uiState.update { it.copy(errorMessage = "Circuit Overseer Assigned is required — pick an active Circuit Overseer that has an active Circuit Code.") }
+            return
+        }
         _uiState.update { it.copy(isSaving = true, errorMessage = null) }
         viewModelScope.launch {
             try {
@@ -101,7 +123,8 @@ class CongregationEnrollmentViewModel(
                     _uiState.update { it.copy(isSaving = false, errorMessage = "That congregation code is already in use.") }
                     return@launch
                 }
-                val congregation = congregationRepository.save(
+                // saveNow: the assignment below is a server transaction that reads this congregation.
+                val congregation = congregationRepository.saveNow(
                     Congregation(
                         name = state.name.trim(),
                         // Derived, human-readable fallback — see Congregation
@@ -116,6 +139,12 @@ class CongregationEnrollmentViewModel(
                         createdByPersonId = createdByPersonId,
                     )
                 )
+                val assigned = circuitAssignmentService.setCongregationOverseer(congregation.id, overseer.personId, createdByPersonId)
+                assigned.messageOrNull()?.let { problem ->
+                    congregationRepository.deleteNow(congregation.id)
+                    _uiState.update { it.copy(isSaving = false, errorMessage = problem) }
+                    return@launch
+                }
                 auditLogRepository.log(
                     actorPersonId = createdByPersonId,
                     action = "CREATE_CONGREGATION",

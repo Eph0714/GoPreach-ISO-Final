@@ -40,4 +40,6 @@ fun ReportStatus.label(): String = when (this) {
     ReportStatus.POSTED -> "Posted"
     ReportStatus.RETURNED -> "Returned for Correction"
     ReportStatus.CORRECTED -> "Corrected"
+    ReportStatus.ACCESS_REQUESTED -> "Access Requested"
+    ReportStatus.ACCESS_GRANTED -> "Edit Access Granted"
 }

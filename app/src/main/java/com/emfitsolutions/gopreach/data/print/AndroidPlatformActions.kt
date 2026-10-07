@@ -15,7 +15,7 @@ class AndroidPlatformActions(private val context: Context) : PlatformActions {
     override fun printHtml(title: String, html: String, options: PrintOptions) = ReportPrinter.printHtml(context, title, html, options)
 
     override fun writeCsv(uri: String, table: ReportTable): Boolean =
-        CsvExporter.write(context, Uri.parse(uri), table.title, subtitle = null, columns = table.columns, rows = table.rows, totals = table.totals)
+        CsvExporter.write(context, Uri.parse(uri), table.title, subtitle = null, columns = table.columns, rows = table.rows, totals = table.totals, recordCount = table.countLabel to (table.count ?: table.rows.size))
 
     override fun openFile(uri: String, mimeType: String) = CsvExporter.openWithChooser(context, Uri.parse(uri), mimeType)
 }

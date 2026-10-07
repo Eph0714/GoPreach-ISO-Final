@@ -391,12 +391,31 @@ fun ManagePublisherReportsScreen(
                                         ReportStatus.RETURNED -> stringResource(R.string.manage_reports_returned_status, row.report.correctionReason.orEmpty())
                                         ReportStatus.CORRECTED -> stringResource(R.string.manage_reports_corrected_status)
                                         ReportStatus.DRAFT -> stringResource(R.string.manage_reports_draft_editable)
+                                        ReportStatus.ACCESS_REQUESTED -> "Access requested"
+                                        ReportStatus.ACCESS_GRANTED -> "Edit access granted"
                                     },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (row.isPosted) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.secondary,
                                 )
                             }
                         }
+                    }
+                    item(key = "end-summary") {
+                        val r = uiState.rows
+                        com.emfitsolutions.gopreach.ui.components.EndSummary(
+                            listOf(
+                                "Total Records" to r.size.toString(),
+                                "Draft" to r.count { it.report.status == ReportStatus.DRAFT }.toString(),
+                                "Submitted" to r.count { it.report.status == ReportStatus.SUBMITTED }.toString(),
+                                "Returned" to r.count { it.report.status == ReportStatus.RETURNED }.toString(),
+                                "Corrected" to r.count { it.report.status == ReportStatus.CORRECTED }.toString(),
+                                "Posted (locked)" to r.count { it.report.status == ReportStatus.POSTED }.toString(),
+                                "Total Hours" to r.sumOf { it.report.hoursRendered ?: 0.0 }.let { h -> if (h % 1.0 == 0.0) h.toLong().toString() else "%.1f".format(h) },
+                                "Total Return Visits" to r.sumOf { it.report.returnVisitsCount }.toString(),
+                                "Total Bible Studies" to r.sumOf { it.report.bibleStudiesCount }.toString(),
+                            ),
+                            Modifier.padding(top = 8.dp),
+                        )
                     }
                     item {
                         Card(modifier = Modifier.fillMaxWidth()) {

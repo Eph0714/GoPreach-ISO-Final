@@ -92,16 +92,43 @@ fun MySubmittedReportsScreen(
                 )
             }
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(padding),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                item { RecordFound(reports.size) }
-                items(reports, key = { it.id }) { report ->
-                    SubmittedReportCard(report)
-                }
-            }
+            // The standard GoPreach report: header, search, status filter, sort, List / Table view, records, Summary, Print / PDF / Excel.
+            val hoursText = { h: Double -> if (h % 1.0 == 0.0) h.toLong().toString() else "%.1f".format(h) }
+            com.emfitsolutions.gopreach.ui.components.UniversalReport(
+                title = "My Submitted Reports",
+                details = listOf("Reports on record" to reports.size.toString()),
+                items = reports,
+                key = { it.id },
+                columns = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<MonthlyReport>("Month", 120.dp) { periodFormat.format(Date(it.periodMonth)) },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<MonthlyReport>("Category", 150.dp) { it.category.displayName },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<MonthlyReport>("Status", 110.dp) { it.status.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<MonthlyReport>("Hours", 70.dp) { r -> if (MonthlyReportCalculator.isPioneerCategory(r.category)) hoursText(r.hoursRendered ?: 0.0) else "—" },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<MonthlyReport>("Return Visits", 100.dp) { it.returnVisitsCount.toString() },
+                    com.emfitsolutions.gopreach.ui.components.UniversalColumn<MonthlyReport>("Bible Studies", 100.dp) { it.bibleStudiesCount.toString() },
+                ),
+                searchText = { listOf(periodFormat.format(Date(it.periodMonth)), it.category.displayName, it.status.name) },
+                filters = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalFilter<MonthlyReport>(
+                        "status", "Statuses", ReportStatus.entries.map { it.name to it.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+                    ) { r, v -> r.status.name == v },
+                ),
+                sorts = listOf(
+                    com.emfitsolutions.gopreach.ui.components.UniversalSort<MonthlyReport>("newest", "Newest First", compareByDescending { it.periodMonth }),
+                    com.emfitsolutions.gopreach.ui.components.UniversalSort<MonthlyReport>("oldest", "Oldest First", compareBy { it.periodMonth }),
+                ),
+                summary = { shown ->
+                    listOf(
+                        "Total Records" to shown.size.toString(),
+                        "Total Hours" to hoursText(shown.sumOf { it.hoursRendered ?: 0.0 }),
+                        "Total Return Visits" to shown.sumOf { it.returnVisitsCount }.toString(),
+                        "Total Bible Studies" to shown.sumOf { it.bibleStudiesCount }.toString(),
+                    )
+                },
+                generatedBy = "Publisher",
+                card = { report -> SubmittedReportCard(report) },
+                modifier = Modifier.padding(padding),
+            )
         }
     }
 }
@@ -155,6 +182,8 @@ private fun StatusChip(status: ReportStatus) {
         ReportStatus.DRAFT -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
         ReportStatus.RETURNED -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
         ReportStatus.CORRECTED -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
+        ReportStatus.ACCESS_REQUESTED -> MaterialTheme.colorScheme.tertiaryContainer to MaterialTheme.colorScheme.onTertiaryContainer
+        ReportStatus.ACCESS_GRANTED -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
     }
     Card(colors = CardDefaults.cardColors(containerColor = containerColor)) {
         Text(

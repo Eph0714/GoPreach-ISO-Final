@@ -114,6 +114,8 @@ data class Person(
      */
     val activeCongregationId: String? = null,
     val activeAdminRole: String? = null,
+    /** The FS Group of an active Group Coordinator / Servant / Assistant role (null otherwise). The rules never trust it alone: they check the person really fills a slot of that group. */
+    val activeGroupId: String? = null,
 
     /** "Preaching Availability" module — which days of the week this
      * Publisher has said they're generally available to preach (spec's own

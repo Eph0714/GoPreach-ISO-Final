@@ -17,6 +17,7 @@ private const val COLLECTION = "preachingTimeRecords"
 class PreachingTimeRecordRepository(
     private val offline: OfflineFirestoreRepository,
     private val remote: RemoteCollections,
+    private val monthLock: MonthLockGuard,
 ) {
     fun observeForPublisher(publisherPersonId: String): Flow<List<PreachingTimeRecord>> =
         observeAll().map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
@@ -26,6 +27,7 @@ class PreachingTimeRecordRepository(
     fun observeAll(): Flow<List<PreachingTimeRecord>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(record: PreachingTimeRecord): PreachingTimeRecord {
+        monthLock.requireOpen(record.congregationId, record.date) // a month submitted to the Circuit Overseer is locked
         val id = record.id.ifBlank { remote.newId(COLLECTION) }
         val withId = record.copy(id = id)
         offline.save(COLLECTION, id, withId)

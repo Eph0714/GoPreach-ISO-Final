@@ -124,6 +124,7 @@ import com.emfitsolutions.gopreach.domain.map.GeoPoint
 import com.emfitsolutions.gopreach.ui.components.map.BoundaryGeometry
 import com.emfitsolutions.gopreach.ui.components.map.StatusBar
 import com.emfitsolutions.gopreach.ui.components.map.MapDrawingState
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitScopeStore
 import com.emfitsolutions.gopreach.ui.components.map.MapDrawingViewModel
 import com.emfitsolutions.gopreach.ui.components.map.TerritoryBoundaryInput
 import com.emfitsolutions.gopreach.ui.components.map.territoryBoundaries
@@ -189,6 +190,10 @@ fun TerritoryMapScreen(
     focusLat: Double? = null,
     focusLng: Double? = null,
     focusName: String? = null,
+    /** Circuit Overseer: only these congregations are offered (null = no restriction). */
+    allowedCongregationIds: Set<String>? = null,
+    /** View-only: no drawing, no pins, and none of the publishers' personal Searching / Return Visit / Bible Study records. */
+    readOnly: Boolean = false,
     onBack: () -> Unit,
     viewModel: TerritoryMapViewModel = koinViewModel(),
     pipelineViewModel: PipelineViewModel = koinViewModel(),
@@ -225,14 +230,44 @@ fun TerritoryMapScreen(
     }
 
     // ---- Congregation / FS Group scope ------------------------------------
-    val congregations by viewModel.congregations().collectAsStateWithLifecycle(initialValue = emptyList())
-    var pickedCongregationId by rememberSaveable { mutableStateOf<String?>(null) }
-    val congregationId = fixedCongregationId ?: pickedCongregationId
+    val allCongregations by viewModel.congregations().collectAsStateWithLifecycle(initialValue = emptyList())
+    val congregations = if (allowedCongregationIds == null) allCongregations else allCongregations.filter { it.id in allowedCongregationIds }
+    var pickedCongregationId by rememberSaveable {
+        // "View Territory Map" on the Circuit Overseer's Congregation Overview leaves its congregation here.
+        val handoff = com.emfitsolutions.gopreach.ui.components.CongregationContextStore.get("territory_map")
+        com.emfitsolutions.gopreach.ui.components.CongregationContextStore.set("territory_map", null)
+        mutableStateOf<String?>(handoff?.takeIf { fixedCongregationId == null && (allowedCongregationIds == null || it in allowedCongregationIds) })
+    }
+    // A Circuit Overseer (restricted picker) must choose a congregation first — nothing is auto-selected, and the choice
+    // is shared with Publishers / Elders & MS / Field Service Report. Others keep the picker's own behavior.
+    val restricted = allowedCongregationIds != null
+    val chosenCongregationId = if (restricted) CircuitScopeStore.congregation else pickedCongregationId
+    val congregationId = (fixedCongregationId ?: chosenCongregationId)
+        ?.takeIf { allowedCongregationIds == null || it in allowedCongregationIds }
+    if (restricted && congregationId == null) {
+        androidx.compose.material3.Scaffold(
+            topBar = {
+                androidx.compose.material3.TopAppBar(
+                    title = { Text("Territory Map") },
+                    navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
+                )
+            },
+        ) { padding ->
+            com.emfitsolutions.gopreach.ui.screens.circuit.SelectCongregationPrompt(
+                congregations = congregations,
+                onSelect = { CircuitScopeStore.selectCongregation(it) },
+                modifier = Modifier.padding(padding),
+                hint = "Choose a congregation under your assigned Circuit to view its territory.",
+            )
+        }
+        return
+    }
 
     val myGroupId by remember(currentPersonId) { viewModel.myGroupId(currentPersonId) }.collectAsStateWithLifecycle(initialValue = null)
     val groups by remember(congregationId) { viewModel.groupsFor(congregationId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val hasMine = !isSuperAdmin && myGroupId != null
-    var scope by rememberSaveable { mutableStateOf(GroupScope.MINE) }
+    // A view-only Circuit Overseer opens on "Show FS Group" (every FS Group of the congregation) — they have no FS Group of their own.
+    var scope by rememberSaveable { mutableStateOf(if (readOnly) GroupScope.ALL else GroupScope.MINE) }
     var otherGroupId by rememberSaveable { mutableStateOf<String?>(null) }
     var showGroupPicker by rememberSaveable { mutableStateOf(false) }
     // Province -> Municipality -> Barangay selection (kept across the group scopes: picking a Barangay shows the whole
@@ -318,6 +353,7 @@ fun TerritoryMapScreen(
         val key = datasetKey
         val a = areasState
         if (key == null || a == null) flowOf<Pair<String, List<LocationRecord>>?>(null)
+        else if (readOnly) flowOf(key to emptyList())
         else viewModel.recordsFor(congregationId, if (showingAll) null else selectedGroupId, a, areaLocator).map { key to it }
     }.collectAsStateWithLifecycle(initialValue = null)
     val recordsState: List<LocationRecord>? = recordsTagged?.takeIf { it.first == datasetKey }?.second
@@ -610,7 +646,7 @@ fun TerritoryMapScreen(
                         value = congregations.firstOrNull { it.id == pickedCongregationId }?.name,
                         placeholder = "Select a congregation",
                         options = congregations.map { it.id to it.name },
-                        onSelect = { pickedCongregationId = it; otherGroupId = null; selectedRecordId = null },
+                        onSelect = { pickedCongregationId = it; if (restricted) CircuitScopeStore.selectCongregation(it); otherGroupId = null; selectedRecordId = null },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
@@ -801,7 +837,7 @@ fun TerritoryMapScreen(
                         // Long-press asks: Create a Pin, or Open Google Maps at that exact spot.
                         // For someone who may draw, a long press turns Drawing Mode on; everyone else keeps the old choice.
                         // Long press: a small menu — Draw (only where the role allows it) and Open Google Maps.
-                        onLongPress = { lat, lng -> if (!drawingState.active) longPressPoint = lat to lng },
+                        onLongPress = { lat, lng -> if (!drawingState.active && !readOnly) longPressPoint = lat to lng },
                         drawingState = drawingState,
                         drawingAccess = drawingAccess,
                         drawingTerritories = drawingTerritories,

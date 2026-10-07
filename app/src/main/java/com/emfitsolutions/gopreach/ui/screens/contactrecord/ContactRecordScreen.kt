@@ -222,6 +222,7 @@ fun ContactRecordScreen(
                             onMessage = { messageContact(row.contact) },
                         )
                     }
+                item(key = "end-summary") { com.emfitsolutions.gopreach.ui.components.EndSummary(listOf("Total Contacts" to filteredRows.size.toString()), Modifier.padding(top = 8.dp)) }
                 }
             }
         }

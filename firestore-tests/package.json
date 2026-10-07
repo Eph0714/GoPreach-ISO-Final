@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "firebase emulators:exec --project gopreach-rules-test --only firestore \"node rules.test.mjs\""
+    "test": "firebase emulators:exec --project gopreach-rules-test --only firestore \"node rules.test.mjs\"",
+    "test:circuit": "firebase emulators:exec --project gopreach-rules-test --only firestore \"node circuit.rules.test.mjs\""
   },
   "dependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",

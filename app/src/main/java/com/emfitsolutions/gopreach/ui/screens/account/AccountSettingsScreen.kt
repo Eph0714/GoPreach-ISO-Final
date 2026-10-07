@@ -93,6 +93,8 @@ fun AccountSettingsScreen(
     // PublisherSchedulesScreen; null (default) hides the link entirely,
     // same pattern as isPublisher gating the section above it.
     onViewPublisherSchedules: (() -> Unit)? = null,
+    /** Shown as a tab inside the combined Settings screen: no top bar of its own. */
+    embedded: Boolean = false,
     viewModel: AccountSettingsViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -101,16 +103,7 @@ fun AccountSettingsScreen(
         if (uiState.passwordChanged) onSignedOutForPasswordChange()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Account Settings") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
-                },
-            )
-        },
-    ) { padding ->
+    com.emfitsolutions.gopreach.ui.components.SettingsFrame(title = "Account Settings", onBack = onBack, embedded = embedded) { padding ->
         Column(
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
