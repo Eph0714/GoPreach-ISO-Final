@@ -33,11 +33,20 @@ public keys (`FIREBASE_PROJECT_ID`), so no secret is needed. The person id is th
   `rules.js`) are filtered to the caller's own congregation (or a grant's scope). Firestore could not do this (it rejects a whole
   query instead of filtering rows); this server can. Remove a name from that set to loosen it.
 
+### Endpoints beyond sync
+
+| Call | Login | Purpose |
+|---|---|---|
+| `POST /v1/public/lookup-username` `{ username }` | none (30 per 10 min per IP) | `{ person }` for the sign-in screen, replacing Firestore's public read of `people` |
+| `POST /v1/public/password-reset-request` `{ username }` | none (5 per hour per IP) | server builds the `passwordResetRequests` row; always 202 |
+| `POST /v1/territory/save` | token | claim barangays for a group in one province; 409 `{ barangayName, takenByGroupName }` if taken |
+| `POST /v1/territory/remove-group` `{ congregationId, groupId, provinceId }` | token | release everything a group holds in a province |
+| `POST /v1/territory/remove` `{ assignmentId }` | token | delete one assignment and its claims |
+
+Territory calls are the server version of the app's three Firestore transactions; every write transaction locks the sequence counter, so concurrent claims are serialized (tested).
+
 ### Not ported / still open
 
-- [ ] Public (no login) endpoints the app needs: username → sign-in email lookup (Firestore allowed unauthenticated reads of `people`),
-      and `passwordResetRequests` creation. Today every call needs a Firebase ID token.
-- [ ] Territory barangay claims (`territoryAssignmentBarangays` is a Firestore transaction in the app today): needs a server "claim" endpoint so two people cannot claim the same barangay.
 - [ ] Image / file upload and download endpoints (`files` table exists).
 - [ ] Group chat unread counters were atomic increments in Firestore; here they are plain document updates.
 - [ ] Hardening the rules file itself documents as deliberately coarse (e.g. any signed-in user can edit `schedules`, `territories`, `forwardRequests`).

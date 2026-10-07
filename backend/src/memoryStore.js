@@ -15,6 +15,21 @@ export class MemoryStore {
     return d ? { data: structuredClone(d.data), version: d.version, seq: d.seq, deleted: d.deleted } : null;
   }
 
+  /** Live (not deleted) documents of one collection, optionally only one congregation's. */
+  async list(collection, congregationId) {
+    return [...this.docs.values()]
+      .filter((d) => d.collection === collection && !d.deleted && (congregationId === undefined || d.congregationId === congregationId))
+      .map((d) => ({ id: d.id, data: structuredClone(d.data), version: d.version, seq: d.seq }));
+  }
+
+  /** The people document whose username is exactly [username] (case-sensitive, like the Firestore query it replaces). */
+  async findPersonByUsername(username) {
+    for (const d of this.docs.values()) {
+      if (d.collection === 'people' && !d.deleted && d.data.username === username) return { id: d.id, data: structuredClone(d.data) };
+    }
+    return null;
+  }
+
   /** Writers run one at a time (like the MySQL counter row lock). */
   transaction(fn) {
     const run = this.queue.then(async () => {
@@ -27,6 +42,16 @@ export class MemoryStore {
             return s ? { data: structuredClone(s.data), version: s.version, seq: s.seq, deleted: s.deleted } : null;
           }
           return this.get(collection, id);
+        },
+        list: async (collection, congregationId) => {
+          const rows = new Map((await this.list(collection, congregationId)).map((r) => [r.id, r]));
+          for (const [k, s] of staged) {
+            if (!k.startsWith(collection + '/') || k.slice(collection.length + 1).includes('/')) continue;
+            const id = k.slice(collection.length + 1);
+            if (!s || s.deleted || (congregationId !== undefined && s.congregationId !== congregationId)) rows.delete(id);
+            else rows.set(id, { id, data: structuredClone(s.data), version: s.version, seq: s.seq });
+          }
+          return [...rows.values()];
         },
         put: async (collection, id, data, actor) => this.stage(staged, collection, id, data, false, actor),
         remove: async (collection, id, actor) => {

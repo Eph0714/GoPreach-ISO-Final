@@ -24,15 +24,17 @@ const COLLECTIONS = [
 ];
 // auditLog (local-only by design) and presence are intentionally not migrated.
 
-let admin;
+let db;
 try {
-  admin = (await import('firebase-admin')).default;
-} catch {
-  console.error('firebase-admin is not installed. Run:  npm i --no-save firebase-admin');
+  const { initializeApp, applicationDefault } = await import('firebase-admin/app');
+  const { getFirestore } = await import('firebase-admin/firestore');
+  initializeApp({ credential: applicationDefault() });
+  db = getFirestore();
+} catch (e) {
+  console.error('firebase-admin is not installed or could not start. Run:  npm i --no-save firebase-admin');
+  console.error(String(e.message ?? e).slice(0, 300));
   process.exit(1);
 }
-admin.initializeApp();
-const db = admin.firestore();
 const store = DRY ? null : await createStore();
 
 /** Firestore Timestamps / GeoPoints → plain JSON the app's Gson understands (epoch millis). */
@@ -46,6 +48,13 @@ function plain(value) {
 
 let total = 0;
 async function copy(path, ref) {
+  if (DRY) {
+    // Counts only, with Firestore's aggregation query (billed as a tiny fraction of reading every document).
+    const { count } = (await ref.count().get()).data();
+    total += count;
+    console.log(`[dry] ${path}: ${count}`);
+    return;
+  }
   const snap = await ref.get();
   if (!DRY && snap.size) {
     for (let i = 0; i < snap.docs.length; i += 100) {
@@ -62,5 +71,13 @@ async function copy(path, ref) {
 }
 
 for (const name of COLLECTIONS) await copy(name, db.collection(name));
+if (DRY) {
+  // Known subcollections, counted across every parent (a dry run does not walk each document).
+  for (const sub of ['visits', 'messages']) {
+    const { count } = (await db.collectionGroup(sub).count().get()).data();
+    total += count;
+    console.log(`[dry] (all) ${sub}: ${count}`);
+  }
+}
 console.log(`Done: ${total} documents ${DRY ? '(dry run — nothing written)' : 'written'}.`);
 await store?.close();

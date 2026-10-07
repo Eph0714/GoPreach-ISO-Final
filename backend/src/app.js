@@ -1,7 +1,10 @@
 import express from 'express';
 import helmet from 'helmet';
 import { authenticate } from './auth.js';
+import { randomBytes } from 'node:crypto';
 import { loadActor, authorizeWrite, canReadRow, loadGrant } from './policy/index.js';
+import { rateLimit } from './rateLimit.js';
+import { saveGroupTerritory, removeGroupTerritory, removeAssignment, validateSave } from './territory.js';
 
 const MAX_OPS = 200;
 const MAX_PULL = 1000;
@@ -17,19 +20,85 @@ const ID_RE = /^[^/\\\s][^/\\]{0,189}$/;
  *        -> { results: [{ collection, id, status: "ok" | "denied" | "invalid", version?, seq?, reason? }] }
  *   GET  /v1/sync/pull?since=<seq>&collections=a,b&limit=500
  *        -> { changes: [{ collection, id, data, deleted, version, seq }], cursor, hasMore }
+ *   POST /v1/public/lookup-username, /v1/public/password-reset-request   (no login, rate limited)
+ *   POST /v1/territory/save | remove-group | remove                         (atomic barangay claims)
  *
  * Every push op is authorized individually (role → congregation → FS Group → territory); a denied op never writes
  * and never blocks the others. Every pull is filtered to what the caller may read.
  */
-export function createApp(store, { devAuth = false, health = () => ({}) } = {}) {
+export function createApp(store, { devAuth = false, health = () => ({}), publicLimits = {} } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', 1); // Hostinger's HTTPS proxy sits in front: use the real client address for rate limiting
   app.use(helmet());
   app.use(express.json({ limit: '2mb' }));
 
   app.get('/v1/health', (req, res) => res.json({ ok: true, ...health() }));
 
   const auth = authenticate({ devMode: devAuth });
+
+  // ---- No login needed ---------------------------------------------------------------------------------------------
+  // Firestore let anyone read `people` and create password-reset requests, because a person cannot sign in before the app
+  // has turned their username into a sign-in identity. These two endpoints replace that, rate limited per IP.
+  const usernameOk = (u) => typeof u === 'string' && u.length > 0 && u.length <= 100;
+  const lookupLimit = rateLimit({ windowMs: 10 * 60_000, max: 30, ...publicLimits.lookup });
+  const resetLimit = rateLimit({ windowMs: 60 * 60_000, max: 5, ...publicLimits.reset });
+
+  /** POST { username } -> { person: { id, ...fields } | null }. The same person record Firestore returned to the sign-in screen. */
+  app.post('/v1/public/lookup-username', lookupLimit, async (req, res) => {
+    const username = req.body?.username;
+    if (!usernameOk(username)) return res.status(400).json({ error: 'username is required' });
+    try {
+      const found = await store.findPersonByUsername(username);
+      res.json({ person: found ? { ...found.data, id: found.id } : null });
+    } catch (e) {
+      console.error('lookup failed', e);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  /** POST { username } -> 202 always (it never reveals whether the username exists). Spec §4.5: the enrolling role sees the request. */
+  app.post('/v1/public/password-reset-request', resetLimit, async (req, res) => {
+    const username = req.body?.username;
+    if (!usernameOk(username)) return res.status(400).json({ error: 'username is required' });
+    try {
+      const found = await store.findPersonByUsername(username);
+      const id = randomBytes(15).toString('base64url');
+      await store.transaction((tx) => tx.put('passwordResetRequests', id, {
+        requestedUsername: username,
+        personId: found?.id ?? null,
+        targetPersonId: found?.data?.createdByPersonId ?? null,
+        status: 'PENDING',
+        requestedAt: Date.now(),
+      }, 'public'));
+      res.status(202).json({ ok: true });
+    } catch (e) {
+      console.error('password reset request failed', e);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  // ---- Territory assignment (atomic claims) -----------------------------------------------------------------------
+  const HTTP = { success: 200, conflict: 409, denied: 403, error: 400 };
+  const territory = (fn, validate = () => null) => async (req, res) => {
+    const bad = validate(req.body);
+    if (bad) return res.status(400).json({ status: 'error', message: bad });
+    try {
+      const result = await store.transaction(async (tx) => {
+        const actor = await loadActor(req.personId, tx.get);
+        if (!actor.known) return { status: 'denied', message: 'Unknown user' };
+        return fn(tx, actor, req.body);
+      });
+      res.status(HTTP[result.status] ?? 400).json(result);
+    } catch (e) {
+      console.error('territory request failed', e);
+      res.status(500).json({ status: 'error', message: 'Server error' });
+    }
+  };
+  /** POST the full desired barangay set for a group inside one province. 409 { barangayName, takenByGroupName } when one is taken. */
+  app.post('/v1/territory/save', auth, territory(saveGroupTerritory, validateSave));
+  app.post('/v1/territory/remove-group', auth, territory(removeGroupTerritory));
+  app.post('/v1/territory/remove', auth, territory(removeAssignment));
 
   app.post('/v1/sync/push', auth, async (req, res) => {
     const ops = req.body?.ops;

@@ -25,6 +25,25 @@ export class MysqlStore {
     return rows.length ? MysqlStore.row(rows[0]) : null;
   }
 
+  /** Live (not deleted) documents of one collection, optionally only one congregation's. */
+  async list(collection, congregationId, runner = this.pool) {
+    const params = [collection];
+    let where = 'collection = ? AND deleted = 0';
+    if (congregationId !== undefined) { where += ' AND congregation_id = ?'; params.push(congregationId); }
+    const [rows] = await runner.query(`SELECT doc_id, data, version, seq FROM documents WHERE ${where}`, params);
+    return rows.map((r) => ({ id: r.doc_id, ...MysqlStore.row({ ...r, deleted: 0 }) }));
+  }
+
+  /** The people document whose username is exactly [username]. The SQL narrows it; the strict compare keeps it case-sensitive. */
+  async findPersonByUsername(username) {
+    const [rows] = await this.pool.query(
+      "SELECT doc_id, data, version, seq FROM documents WHERE collection = 'people' AND deleted = 0 AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.username')) = ? LIMIT 20",
+      [username],
+    );
+    const hit = rows.map((r) => ({ id: r.doc_id, ...MysqlStore.row({ ...r, deleted: 0 }) })).find((r) => r.data?.username === username);
+    return hit ? { id: hit.id, data: hit.data } : null;
+  }
+
   /** All writes in one transaction that first locks the counter row, so sequence numbers follow commit order. */
   async transaction(fn) {
     const conn = await this.pool.getConnection();
@@ -51,6 +70,7 @@ export class MysqlStore {
           const [rows] = await conn.query('SELECT data, version, seq, deleted FROM documents WHERE collection = ? AND doc_id = ?', [collection, id]);
           return rows.length ? MysqlStore.row(rows[0]) : null;
         },
+        list: (collection, congregationId) => this.list(collection, congregationId, conn),
         put: (collection, id, data, actor) => write(collection, id, data, false, actor),
         remove: async (collection, id, actor) => {
           const cur = await tx.get(collection, id);
