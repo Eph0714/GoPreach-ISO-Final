@@ -53,7 +53,7 @@ class FakeQueueDao : SyncQueueDao {
     override suspend fun markPermanentFailure(id: Long, error: String) = update(id) { it.copy(retryCount = it.retryCount + 1, lastError = error, isPermanentFailure = true) }
     override fun observePermanentFailures(): Flow<List<PendingSyncOperationEntity>> = flowOf(ops.filter { it.isPermanentFailure })
     override suspend fun retryPermanentFailure(id: Long) = update(id) { it.copy(isPermanentFailure = false) }
-    override suspend fun retryAllPermanentFailures() { ops.replaceAll { it.copy(isPermanentFailure = false) } }
+    override suspend fun retryAllPermanentFailures() { for (i in ops.indices) ops[i] = ops[i].copy(isPermanentFailure = false) }
     private fun update(id: Long, f: (PendingSyncOperationEntity) -> PendingSyncOperationEntity) {
         val i = ops.indexOfFirst { it.id == id }
         if (i >= 0) ops[i] = f(ops[i])
