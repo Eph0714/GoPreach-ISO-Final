@@ -32,7 +32,7 @@ import platform.darwin.dispatch_get_main_queue
 
 private fun onMain(block: () -> Unit) = dispatch_async(dispatch_get_main_queue()) { block() }
 
-private fun topViewController(): UIViewController? {
+internal fun topViewController(): UIViewController? {
     var controller = UIApplication.sharedApplication.keyWindow?.rootViewController
     while (controller?.presentedViewController != null) controller = controller.presentedViewController
     return controller

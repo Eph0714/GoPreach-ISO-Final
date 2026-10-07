@@ -203,7 +203,7 @@ import com.emfitsolutions.gopreach.data.sync.FirebaseAuthService
 import com.emfitsolutions.gopreach.platform.AndroidKeyValueStores
 import com.emfitsolutions.gopreach.platform.KeyValueStores
 import com.emfitsolutions.gopreach.data.sync.NetworkStatus
-import com.emfitsolutions.gopreach.data.sync.AndroidNetworkStatus
+import com.emfitsolutions.gopreach.data.sync.DefaultNetworkStatus
 import com.emfitsolutions.gopreach.data.sync.FirebaseRemoteFiles
 import com.emfitsolutions.gopreach.data.remote.RemoteFiles
 import com.emfitsolutions.gopreach.data.sync.FirestoreRemoteCollections
@@ -230,7 +230,7 @@ val infraModule = module {
     single { get<PsgcDatabase>().psgcDao() }
 
     single<RemoteCollections> { FirestoreRemoteCollections(get(), get(), get()) }
-    single<NetworkStatus> { AndroidNetworkStatus(get(), get()) }
+    single<NetworkStatus> { DefaultNetworkStatus(get(), get()) }
     single<RemoteFiles> { FirebaseRemoteFiles(get()) }
     single<KeyValueStores> { AndroidKeyValueStores(get()) }
     single<AuthService> { FirebaseAuthService(get(), get()) }

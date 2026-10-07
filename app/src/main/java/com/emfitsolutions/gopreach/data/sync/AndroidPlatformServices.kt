@@ -3,16 +3,8 @@ package com.emfitsolutions.gopreach.data.sync
 import android.net.Uri
 import com.emfitsolutions.gopreach.data.remote.RemoteFiles
 import com.google.firebase.storage.FirebaseStorage
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.tasks.await
 
-class AndroidNetworkStatus(
-    private val syncStatusCenter: SyncStatusCenter,
-    private val connectivityObserver: ConnectivityObserver,
-) : NetworkStatus {
-    override val isSyncing: Flow<Boolean> get() = syncStatusCenter.isSyncing
-    override fun isOnline(): Boolean = connectivityObserver.isOnline()
-}
 
 class FirebaseRemoteFiles(private val storage: FirebaseStorage) : RemoteFiles {
     override suspend fun upload(path: String, localUri: String): String {
