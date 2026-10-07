@@ -9,6 +9,7 @@ import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.nativeHeap
 import kotlinx.cinterop.ptr
+import kotlinx.cinterop.rawValue
 import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.value
 import platform.CoreFoundation.CFDictionaryCreate
@@ -92,8 +93,8 @@ private class KeychainStore(private val service: String) : KeyValueStore {
         }
         return CFDictionaryCreate(kCFAllocatorDefault, keys.reinterpret(), values.reinterpret(), entries.size.convert(), null, null)
             .also {
-                nativeHeap.free(keys)
-                nativeHeap.free(values)
+                nativeHeap.free(keys.rawValue)
+                nativeHeap.free(values.rawValue)
             }
     }
 
