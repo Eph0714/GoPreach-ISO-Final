@@ -23,12 +23,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.emfitsolutions.gopreach.data.print.ReportPrinter
@@ -68,9 +71,9 @@ private fun signed(delta: Double, format: (Double) -> String): String =
 /**
  * The Comparative Graph shared by every report that compares two month ranges. It is always labelled with the actual
  * ranges the user picked ([labelA] vs [labelB], e.g. "September 2025 – October 2025 vs September 2026 – October 2026")
- * — never a generic name. One line per range for the chosen [metrics] entry, month by month (the real month names of
- * each range sit under the lines), tap for exact values, then a compact summary with the difference per metric.
- * All values are the ones passed in; nothing is estimated.
+ * — never a generic name. A grouped bar graph for the chosen [metrics] entry: one slot per month position with one bar
+ * for each range side by side (the real month names of each range sit centered under their slot), tap a slot for exact
+ * values, then a compact summary with the difference per metric. All values are the ones passed in; nothing is estimated.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -112,38 +115,60 @@ fun ComparativeGraphReport(
                 Text("No ${metric.label} data in the selected ranges.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 val max = maxOf(metric.valuesA.maxOrNull() ?: 0.0, metric.valuesB.maxOrNull() ?: 0.0).coerceAtLeast(0.0001)
+                val textMeasurer = rememberTextMeasurer()
+                val valueStyle = TextStyle(fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface)
+                val gridColor = MaterialTheme.colorScheme.outlineVariant
+                val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (wide) 220.dp else 170.dp)
+                        .height(if (wide) 240.dp else 200.dp)
                         .pointerInput(longest) {
+                            // Each month position is one equal slot, so the slot under the finger is simply x / slot width.
                             detectTapGestures { offset ->
-                                val step = if (longest > 1) size.width.toFloat() / (longest - 1) else size.width.toFloat()
-                                tapped = if (longest > 1) Math.round(offset.x / step).coerceIn(0, longest - 1) else 0
+                                tapped = (offset.x / (size.width.toFloat() / longest)).toInt().coerceIn(0, longest - 1)
                             }
                         },
                 ) {
-                    val step = if (longest > 1) size.width / (longest - 1) else 0f
-                    fun y(v: Double) = (size.height - (v / max * size.height)).toFloat()
-                    fun draw(series: List<Double>, color: Color) {
-                        val path = Path()
-                        series.forEachIndexed { i, v -> if (i == 0) path.moveTo(step * i, y(v)) else path.lineTo(step * i, y(v)) }
-                        drawPath(path, color, style = Stroke(width = 3.dp.toPx()))
-                        series.forEachIndexed { i, v -> drawCircle(color, 4.dp.toPx(), Offset(step * i, y(v))) }
+                    val bars = (if (showA) 1 else 0) + (if (showB) 1 else 0)
+                    val slotWidth = size.width / longest
+                    val topPad = 16.dp.toPx() // room for the value above the tallest bar
+                    val chartHeight = size.height - topPad
+                    listOf(0f, 0.5f, 1f).forEach { fraction ->
+                        val gridY = size.height - chartHeight * fraction
+                        drawLine(gridColor, Offset(0f, gridY), Offset(size.width, gridY), 1.dp.toPx())
                     }
-                    if (showA) draw(metric.valuesA, ColorFirst)
-                    if (showB) draw(metric.valuesB, ColorSecond)
-                    tapped?.let { i -> drawLine(Color.Gray.copy(alpha = 0.6f), Offset(step * i, 0f), Offset(step * i, size.height), 1.dp.toPx()) }
+                    tapped?.let { slot -> drawRect(highlight, Offset(slotWidth * slot, 0f), Size(slotWidth, size.height)) }
+                    if (bars == 0) return@Canvas
+                    val groupWidth = slotWidth * 0.72f
+                    val barWidth = groupWidth / bars
+                    val gap = 2.dp.toPx()
+                    for (slot in 0 until longest) {
+                        var x = slotWidth * slot + (slotWidth - groupWidth) / 2
+                        fun bar(series: List<Double>, color: Color) {
+                            val value = series.getOrNull(slot) ?: return // the shorter range simply has no bar here
+                            val barHeight = (value / max * chartHeight).toFloat()
+                            drawRect(color, Offset(x + gap / 2, size.height - barHeight), Size((barWidth - gap).coerceAtLeast(1f), barHeight))
+                            val label = textMeasurer.measure(metric.format(value), valueStyle)
+                            if (label.size.width <= barWidth * 1.4f) {
+                                val labelY = (size.height - barHeight - label.size.height).coerceAtLeast(0f)
+                                drawText(label, topLeft = Offset(x + barWidth / 2 - label.size.width / 2, labelY))
+                            }
+                            x += barWidth
+                        }
+                        if (showA) bar(metric.valuesA, ColorFirst)
+                        if (showB) bar(metric.valuesB, ColorSecond)
+                    }
                 }
-                // The actual months under each position: first range on top, second range below.
+                // The actual months, centered under each slot: first range on top, second range below.
                 Row(modifier = Modifier.fillMaxWidth()) {
                     (0 until longest).forEach { i ->
-                        Text(monthsA.getOrNull(i)?.let { shortMonth.format(Date(it)) } ?: "", style = MaterialTheme.typography.labelSmall, color = ColorFirst, modifier = Modifier.weight(1f), maxLines = 1)
+                        Text(monthsA.getOrNull(i)?.let { shortMonth.format(Date(it)) } ?: "", style = MaterialTheme.typography.labelSmall, color = ColorFirst, textAlign = TextAlign.Center, modifier = Modifier.weight(1f), maxLines = 1)
                     }
                 }
                 Row(modifier = Modifier.fillMaxWidth()) {
                     (0 until longest).forEach { i ->
-                        Text(monthsB.getOrNull(i)?.let { shortMonth.format(Date(it)) } ?: "", style = MaterialTheme.typography.labelSmall, color = ColorSecond, modifier = Modifier.weight(1f), maxLines = 1)
+                        Text(monthsB.getOrNull(i)?.let { shortMonth.format(Date(it)) } ?: "", style = MaterialTheme.typography.labelSmall, color = ColorSecond, textAlign = TextAlign.Center, modifier = Modifier.weight(1f), maxLines = 1)
                     }
                 }
                 val i = tapped
@@ -165,7 +190,7 @@ fun ComparativeGraphReport(
                         }
                     }
                 } else {
-                    Text("Tap the graph to see exact values.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Tap a month to see exact values.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -212,7 +237,7 @@ private fun SummaryBlock(range: String, accent: Color, metrics: List<GraphMetric
 }
 
 /**
- * The same Comparative Graph as print/PDF HTML: an inline SVG line chart of [metric] for the two ranges (titled with
+ * The same Comparative Graph as print/PDF HTML: an inline SVG grouped bar chart of [metric] for the two ranges (titled with
  * the actual ranges) plus a compact summary table, sized for one landscape page.
  */
 fun comparativeGraphHtml(labelA: String, labelB: String, monthsA: List<Long>, monthsB: List<Long>, metrics: List<GraphMetric>, metric: GraphMetric): String {
@@ -222,12 +247,15 @@ fun comparativeGraphHtml(labelA: String, labelB: String, monthsA: List<Long>, mo
     val max = maxOf(metric.valuesA.maxOrNull() ?: 0.0, metric.valuesB.maxOrNull() ?: 0.0).coerceAtLeast(0.0001)
     val w = 900.0
     val h = 220.0
-    fun xAt(i: Int) = if (longest > 1) w * i / (longest - 1) else w / 2
-    fun yAt(v: Double) = h - v / max * h
-    fun line(series: List<Double>, color: String): String {
-        val pts = series.mapIndexed { i, v -> String.format(Locale.US, "%.1f,%.1f", xAt(i), yAt(v)) }
-        val dots = series.mapIndexed { i, v -> String.format(Locale.US, "<circle cx=\"%.1f\" cy=\"%.1f\" r=\"4\" fill=\"%s\"/>", xAt(i), yAt(v), color) }
-        return "<polyline fill=\"none\" stroke=\"$color\" stroke-width=\"3\" points=\"${pts.joinToString(" ")}\"/>" + dots.joinToString("")
+    val slot = w / longest
+    // One slot per month position; the two ranges' bars sit side by side inside it.
+    fun bars(series: List<Double>, color: String, offset: Double): String = buildString {
+        series.forEachIndexed { i, v ->
+            val barHeight = v / max * (h - 14)
+            val x = slot * i + slot * 0.14 + offset
+            append(String.format(Locale.US, "<rect x=\"%.1f\" y=\"%.1f\" width=\"%.1f\" height=\"%.1f\" fill=\"%s\"/>", x, h - barHeight, slot * 0.36, barHeight, color))
+            append(String.format(Locale.US, "<text x=\"%.1f\" y=\"%.1f\" font-size=\"10\" text-anchor=\"middle\">%s</text>", x + slot * 0.18, h - barHeight - 3, e(metric.format(v))))
+        }
     }
     val delta = metric.difference
     val direction = if (delta > 0.0001) "increased" else if (delta < -0.0001) "decreased" else "did not change"
@@ -237,10 +265,10 @@ fun comparativeGraphHtml(labelA: String, labelB: String, monthsA: List<Long>, mo
         append("<div><span style=\"color:#1E88E5\"><b>").append(e(labelA)).append("</b></span> vs <span style=\"color:#EF6C00\"><b>").append(e(labelB)).append("</b></span></div>")
         append("<svg viewBox=\"-10 -10 ${(w + 20).toInt()} ${(h + 44).toInt()}\" style=\"width:100%;height:240px;margin-top:6px\">")
         append("<rect x=\"0\" y=\"0\" width=\"$w\" height=\"$h\" fill=\"none\" stroke=\"#ccc\"/>")
-        append(line(metric.valuesA, "#1E88E5")).append(line(metric.valuesB, "#EF6C00"))
+        append(bars(metric.valuesA, "#1E88E5", 0.0)).append(bars(metric.valuesB, "#EF6C00", slot * 0.36))
         for (i in 0 until longest) {
-            monthsA.getOrNull(i)?.let { append(String.format(Locale.US, "<text x=\"%.1f\" y=\"%.0f\" font-size=\"11\" fill=\"#1E88E5\" text-anchor=\"middle\">%s</text>", xAt(i), h + 15, e(shortMonth.format(Date(it))))) }
-            monthsB.getOrNull(i)?.let { append(String.format(Locale.US, "<text x=\"%.1f\" y=\"%.0f\" font-size=\"11\" fill=\"#EF6C00\" text-anchor=\"middle\">%s</text>", xAt(i), h + 29, e(shortMonth.format(Date(it))))) }
+            monthsA.getOrNull(i)?.let { append(String.format(Locale.US, "<text x=\"%.1f\" y=\"%.0f\" font-size=\"11\" fill=\"#1E88E5\" text-anchor=\"middle\">%s</text>", slot * (i + 0.5), h + 15, e(shortMonth.format(Date(it))))) }
+            monthsB.getOrNull(i)?.let { append(String.format(Locale.US, "<text x=\"%.1f\" y=\"%.0f\" font-size=\"11\" fill=\"#EF6C00\" text-anchor=\"middle\">%s</text>", slot * (i + 0.5), h + 29, e(shortMonth.format(Date(it))))) }
         }
         append("</svg>")
         append("<table style=\"margin-top:6px\"><tr><th class=\"l\"></th><th>").append(e(labelA)).append("</th><th>").append(e(labelB)).append("</th><th>Difference</th></tr>")

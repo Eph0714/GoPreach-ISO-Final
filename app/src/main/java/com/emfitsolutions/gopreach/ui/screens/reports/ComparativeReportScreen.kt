@@ -110,7 +110,7 @@ private val BibleStudyColor = Color(0xFF8E24AA)
 /**
  * Admin "Comparative Report": Searching, Return Visit and Bible Study counts for two separate month ranges (first vs
 * second, any lengths), chosen with the shared [DualPeriodFilter]. Each period keeps its month-by-month counts for a
- * line graph; totals and the difference are shown side by side on wide screens, stacked on narrow ones.
+ * bar graph; totals and the difference are shown side by side on wide screens, stacked on narrow ones.
  * [fixedCongregationId] is the access boundary; a Super-Admin (null) must pick a Congregation first.
  */
 @OptIn(ExperimentalMaterial3Api::class)
