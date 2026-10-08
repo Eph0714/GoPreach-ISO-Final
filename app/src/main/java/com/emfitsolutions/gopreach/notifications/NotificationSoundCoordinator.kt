@@ -104,6 +104,7 @@ class NotificationSoundCoordinator(
     private val householderAssignmentRepository: HouseholderAssignmentRepository,
     private val groupChatRepository: GroupChatRepository,
     private val congregationRepository: CongregationRepository,
+    private val receivedReportRepository: com.emfitsolutions.gopreach.data.repository.CoReceivedReportRepository,
     private val context: Context,
     private val appScope: CoroutineScope,
 ) {
@@ -148,7 +149,7 @@ class NotificationSoundCoordinator(
         // wrongly suppress genuinely new ones, depending on how the two
         // accounts' timestamps happened to compare.
         scope.flatMapLatest { s ->
-            unifiedItemsFor(s).notifyOnNewArrivals { item ->
+            unifiedItemsFor(s).notifyOnNewArrivals(since = watchSince()) { item ->
                 NotificationHelper.notify(
                     context,
                     id = (item.category.name + item.id).hashCode(),
@@ -179,6 +180,10 @@ class NotificationSoundCoordinator(
             .flatMapLatest { personId -> if (personId != null) outgoingHouseholderAssignmentStatusFor(personId) else flowOf(Unit) }
             .launchIn(appScope)
 
+        // Circuit Overseer: a congregation sent a Field Service Report.
+        scope.flatMapLatest { s -> if (s.personId != null && s.adminRole == AdminRole.CIRCUIT_OVERSEER) receivedReportsFor(s.personId) else flowOf(Unit) }
+            .launchIn(appScope)
+
         // Group Chat messages — every signed-in person regardless of role
         // context, same as the old per-screen `GroupChatMessageNotifier`
         // call sites (unconditional in both Home screens). Same reasoning as
@@ -187,9 +192,34 @@ class NotificationSoundCoordinator(
         scope.map { it.personId }
             .distinctUntilChanged()
             .flatMapLatest { personId ->
-                if (personId != null) chatBoxEntriesFor(personId).notifyOnChatArrivals() else flowOf(Unit)
+                if (personId != null) chatBoxEntriesFor(personId).notifyOnChatArrivals(since = watchSince()) else flowOf(Unit)
             }.launchIn(appScope)
     }
+
+    /** A moment slightly before a watcher starts: anything stamped earlier already existed, so it is never announced as new. */
+    private fun watchSince(): Long = System.currentTimeMillis() - 30_000L
+
+    /** The Circuit Overseer's "New Field Service Report Received": one sound per received report that appears unread after this watcher
+     * started (the same report on a first download after sign-in is not new). Reading it elsewhere, or opening it, never rings. */
+    private fun receivedReportsFor(personId: String): Flow<Unit> {
+        val since = watchSince()
+        var known: Set<String> = emptySet()
+        return combine(receivedReportRepository.observeReports(), receivedReportRepository.observeReadIds(personId)) { all, read ->
+            val unread = all.filter { it.id !in read }
+            unread.filter { it.id !in known && it.submittedAt >= since }.forEach { r ->
+                NotificationHelper.notify(
+                    context,
+                    id = 9500 + r.id.hashCode(),
+                    title = "New Field Service Report Received",
+                    text = "${r.congregationName} — ${monthLabel(r.periodMonth)}",
+                    category = NotificationCategory.MONTHLY_REPORT,
+                )
+            }
+            known = unread.map { it.id }.toSet()
+        }.map { }
+    }
+
+    private fun monthLabel(millis: Long): String = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(millis))
 
     private fun unifiedItemsFor(s: Scope): Flow<List<NotificationItem>> = when {
         s.isPublisher && s.personId != null -> itemsProvider.itemsForPublisher(s.personId, s.congregationId)
@@ -205,12 +235,14 @@ class NotificationSoundCoordinator(
      * the very first load" anti-flood rule the old `NewItemNotifier`
      * Composable already used (a fresh subscribe, e.g. right after sign-in,
      * must never replay a sound for every pre-existing item at once). */
-    private fun Flow<List<NotificationItem>>.notifyOnNewArrivals(onNewItem: (NotificationItem) -> Unit): Flow<Unit> {
+    private fun Flow<List<NotificationItem>>.notifyOnNewArrivals(since: Long, onNewItem: (NotificationItem) -> Unit): Flow<Unit> {
         var lastMaxTimestamp: Long? = null
         return onEach { current ->
             val previousMax = lastMaxTimestamp
             if (previousMax != null) {
-                current.filter { it.timestamp > previousMax }.forEach(onNewItem)
+                // The second test matters with the server's page-by-page download: a first sync after sign-in delivers old items in several
+                // emissions, and none of them may ring just because they arrived after the first, partial one.
+                current.filter { it.timestamp > previousMax && it.timestamp >= since }.forEach(onNewItem)
             }
             val currentMax = current.maxOfOrNull { it.timestamp }
             if (currentMax != null && (previousMax == null || currentMax > previousMax)) {
@@ -337,14 +369,15 @@ class NotificationSoundCoordinator(
     /** Ported from the old `GroupChatMessageNotifier` Composable, unchanged:
      * fires once per chat whose unread count went *up* since the previous
      * emission (never on the very first one). */
-    private fun Flow<List<ChatBoxEntry>>.notifyOnChatArrivals(): Flow<Unit> {
+    private fun Flow<List<ChatBoxEntry>>.notifyOnChatArrivals(since: Long): Flow<Unit> {
         var lastUnreadCounts: Map<String, Long>? = null
         return onEach { entries ->
             val previous = lastUnreadCounts
             if (previous != null) {
                 entries.forEach { entry ->
                     val before = previous[entry.chat.id] ?: 0L
-                    if (entry.unreadCount > before) {
+                    // A chat whose last message was sent before this watcher started is old news (the first download after sign-in), not a new one.
+                    if (entry.unreadCount > before && (entry.chat.lastMessageAt ?: 0L) >= since) {
                         val preview = when {
                             entry.chat.lastMessageIsAttachment -> "${entry.chat.lastMessageSenderName ?: "Someone"} sent an attachment."
                             entry.chat.lastMessageText != null -> "${entry.chat.lastMessageSenderName ?: "Someone"}: ${entry.chat.lastMessageText}"
