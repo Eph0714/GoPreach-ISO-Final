@@ -20,11 +20,8 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: Number(process.env.PORT ?? 3000),
   store: process.env.STORE ?? 'mysql',
-  firebaseProjectId: process.env.FIREBASE_PROJECT_ID ?? 'gopreach-957a6',
-  /** Signs the app's sign-in tokens. Without it the sign-in endpoints answer 503 and only Firebase tokens work (the old way). */
+  /** Signs the app's sign-in tokens. Required: without it the sign-in endpoints answer 503 and no request is accepted. */
   authSecret: process.env.AUTH_SECRET ?? '',
-  /** Keep accepting Firebase ID tokens until every app has moved to GoPreach sign-in; set ALLOW_FIREBASE_TOKENS=false afterwards. */
-  allowFirebaseTokens: (process.env.ALLOW_FIREBASE_TOKENS ?? 'true') !== 'false',
   /** Firebase's password-hash settings (console → Authentication → Users → ⋮ → Password hash parameters), only for imported accounts. */
   firebaseHash: {
     signerKey: process.env.FIREBASE_HASH_SIGNER_KEY ?? '',

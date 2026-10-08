@@ -40,12 +40,9 @@ import com.emfitsolutions.gopreach.data.model.displayLabel
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
-import com.emfitsolutions.gopreach.data.sync.PRESENCE_COLLECTION
 import com.emfitsolutions.gopreach.data.sync.PRESENCE_ONLINE_TIMEOUT_MS
 import com.emfitsolutions.gopreach.domain.PermissionChecker
 import com.emfitsolutions.gopreach.domain.UserSession
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -86,7 +83,6 @@ private fun PublisherCategory.displayLabel(): String = displayName
     .lowercase().split(' ').joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
 
 class OnlineUsersViewModel(
-    private val firestore: FirebaseFirestore,
     private val syncApi: com.emfitsolutions.gopreach.data.remote.SyncApi,
     userSession: UserSession,
     personRepository: PersonRepository,
@@ -94,63 +90,37 @@ class OnlineUsersViewModel(
     congregationRepository: CongregationRepository,
 ) : ViewModel() {
 
-    /** "GoPreach App — Add Online Users Indicator" spec §9: the congregation
-     * restriction is enforced by the query itself — a congregation-based
-     * caller's query is server-side scoped to their own `congregationId`,
-     * never "ask for everything, then hide the rest in the UI." firestore
-     * .rules' `presence` match block then backs this with a real security
-     * boundary of its own, not just "the app happens to ask nicely" — see
-     * that rule for what stops a modified client from asking anyway. */
+    /** Who is online, asked of the server every 15 seconds while someone is looking at the list. The server already limits the answer the way
+     * the old rules did: the Super-Admin sees everyone, anyone else only their own active congregation (a congregation-less account sees
+     * nobody). */
     private fun rawPresence(isSuperAdmin: Boolean, congregationId: String?): Flow<List<PresenceRow>> = callbackFlow {
-        if (com.emfitsolutions.gopreach.data.sync.BackendConfig.enabled) {
-            // Hostinger: no live listener — ask the server for the list every 15 seconds while someone is looking at it.
-            val job = launch {
-                while (true) {
-                    runCatching {
-                        val reply = syncApi.postJson("/v1/presence", kotlinx.serialization.json.JsonObject(emptyMap()))
-                        val list = reply.body?.get("online") as? kotlinx.serialization.json.JsonArray
-                        if (reply.status == 200 && list != null) {
-                            // Stamped with this phone's clock so a server/phone clock difference can never make a live user look stale.
-                            val received = System.currentTimeMillis()
-                            trySend(
-                                list.mapNotNull { e ->
-                                    val o = e as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
-                                    val id = (o["personId"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
-                                    val cong = (o["congregationId"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
-                                    PresenceRow(id, cong, received)
-                                },
-                            )
-                        }
-                    }.onFailure { Log.w(TAG, "presence poll failed: ${it.message}") }
-                    delay(15_000)
-                }
-            }
-            awaitClose { job.cancel() }
-            return@callbackFlow
-        }
         if (!isSuperAdmin && congregationId == null) {
-            // No congregation to scope to (shouldn't normally happen for an
-            // active session) — nothing is visible rather than everything.
             trySend(emptyList())
             awaitClose { }
             return@callbackFlow
         }
-        var query: Query = firestore.collection(PRESENCE_COLLECTION)
-        if (!isSuperAdmin) {
-            query = query.whereEqualTo("congregationId", congregationId)
-        }
-        val registration = query.addSnapshotListener { snapshot, error ->
-            if (error != null) {
-                Log.w(TAG, "presence listener failed: ${error.message}")
-                return@addSnapshotListener
+        val job = launch {
+            while (true) {
+                runCatching {
+                    val reply = syncApi.postJson("/v1/presence", kotlinx.serialization.json.JsonObject(emptyMap()))
+                    val list = reply.body?.get("online") as? kotlinx.serialization.json.JsonArray
+                    if (reply.status == 200 && list != null) {
+                        // Stamped with this phone's clock so a server/phone clock difference can never make a live user look stale.
+                        val received = System.currentTimeMillis()
+                        trySend(
+                            list.mapNotNull { e ->
+                                val o = e as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+                                val id = (o["personId"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
+                                val cong = (o["congregationId"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+                                PresenceRow(id, cong, received)
+                            },
+                        )
+                    }
+                }.onFailure { Log.w(TAG, "presence poll failed: ${it.message}") }
+                delay(15_000)
             }
-            val rows = snapshot?.documents?.mapNotNull { d ->
-                val lastSeen = d.getLong("lastSeen") ?: return@mapNotNull null
-                PresenceRow(d.id, d.getString("congregationId"), lastSeen)
-            } ?: emptyList()
-            trySend(rows)
         }
-        awaitClose { registration.remove() }
+        awaitClose { job.cancel() }
     }
 
     /** Re-evaluated every couple of seconds — not only when a presence

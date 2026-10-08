@@ -1,4 +1,5 @@
 package com.emfitsolutions.gopreach.platform
 
-actual typealias DocumentId = com.google.firebase.firestore.DocumentId
-actual typealias PropertyName = com.google.firebase.firestore.PropertyName
+// Plain marker annotations: nothing reads them at run time any more (the data comes from, and goes to, the GoPreach server as JSON).
+actual annotation class DocumentId
+actual annotation class PropertyName(actual val value: String)

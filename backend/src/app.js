@@ -38,7 +38,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
 
   app.get('/v1/health', (req, res) => res.json({ ok: true, ...health() }));
 
-  const auth = authenticate({ devMode: devAuth, secret: authOptions.secret, allowFirebase: authOptions.allowFirebase });
+  const auth = authenticate({ devMode: devAuth, secret: authOptions.secret });
 
   // ---- No login needed ---------------------------------------------------------------------------------------------
   // Firestore let anyone read `people` and create password-reset requests, because a person cannot sign in before the app

@@ -13,7 +13,6 @@ import com.emfitsolutions.gopreach.data.repository.QuickLoginCheck
 import com.emfitsolutions.gopreach.data.repository.QuickLoginMethod
 import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
 import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
-import com.emfitsolutions.gopreach.data.sync.RemoteSyncCoordinator
 import com.emfitsolutions.gopreach.data.sync.SyncScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,7 +52,6 @@ class LoginViewModel(
     private val quickLoginStore: QuickLoginStore,
     private val connectivityObserver: ConnectivityObserver,
     private val syncScheduler: SyncScheduler,
-    private val remoteSyncCoordinator: RemoteSyncCoordinator,
     private val biometricEnrollmentOffer: BiometricEnrollmentOffer,
     private val pendingLoginNotice: PendingLoginNotice,
     private val context: Context,
@@ -282,7 +280,6 @@ class LoginViewModel(
                         // SyncScheduler's own automatic triggers never fired
                         // yet); a fresh login is a natural moment to flush
                         // rather than waiting on the 15-minute periodic floor.
-                        remoteSyncCoordinator.retryIfNeeded()
                         syncScheduler.triggerSyncIfOnline()
                         // After a password sign-in, offer (never silently do) biometric login — only if the
                         // device has a biometric, it isn't already enrolled for this account, and the user

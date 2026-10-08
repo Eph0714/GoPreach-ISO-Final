@@ -17,7 +17,7 @@ before(async () => {
   await store.createAccount('pub001', await hashPassword('Secret123'));
   await store.createAccount('admin1', await hashPassword('AdminPass1'));
   await store.createAccount('sa', await hashPassword('SuperPass1'));
-  server = createApp(store, { authOptions: { secret: SECRET, allowFirebase: false, limits: { login: { max: 1000 } } } }).listen(0);
+  server = createApp(store, { authOptions: { secret: SECRET, limits: { login: { max: 1000 } } } }).listen(0);
   base = `http://127.0.0.1:${server.address().port}`;
 });
 after(() => server.close());

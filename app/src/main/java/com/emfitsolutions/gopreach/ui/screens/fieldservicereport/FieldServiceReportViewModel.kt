@@ -146,7 +146,6 @@ class FieldServiceReportViewModel(
     congregationRepository: CongregationRepository,
     private val coReportRepository: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository,
     private val coReportService: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportService,
-    private val restrictedSessionSync: com.emfitsolutions.gopreach.data.sync.RestrictedSessionSync,
     private val appSettingsRepository: com.emfitsolutions.gopreach.data.repository.AppSettingsRepository,
     private val statisticsBuilder: com.emfitsolutions.gopreach.data.repository.CongregationStatisticsBuilder,
     private val attendanceRepository: com.emfitsolutions.gopreach.data.repository.MeetingAttendanceRepository,
@@ -195,9 +194,6 @@ class FieldServiceReportViewModel(
 
     suspend fun setRequireAllPublishersSubmitted(required: Boolean, actorPersonId: String) =
         appSettingsRepository.saveRequireAllPublishersSubmitted(required, actorPersonId)
-
-    /** Keeps a submitted month's actual records mirrored for the Circuit Overseer while its screen is open. */
-    fun overseerMonthRecords(congregationId: String, month: Long): Flow<Unit> = restrictedSessionSync.monthRecords(congregationId, month)
 
     private suspend fun actorFor(personId: String): com.emfitsolutions.gopreach.data.repository.SubmissionActor {
         val person = personRepository.get(personId)

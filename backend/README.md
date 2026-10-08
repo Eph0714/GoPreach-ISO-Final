@@ -16,9 +16,10 @@ outbox. The server mirrors that: a versioned document store with a global change
 | `POST /v1/sync/push` | `{ ops: [{ collection, id, op: "set" \| "delete", data }] }` → a result per op (`ok` / `denied` / `invalid`). Each op is authorized on its own; one bad op never blocks the rest. |
 | `GET /v1/sync/pull?since=<seq>&collections=a,b&limit=500` | everything changed after `seq` that the caller may read, deletes as tombstones, plus the next `cursor` and `hasMore`. The app polls this every 15–30 s while open (Business hosting has no reliable WebSockets). |
 
-**Logins stay on Firebase Auth for now.** The app sends its Firebase ID token; the server only verifies it against Google's
-public keys (`FIREBASE_PROJECT_ID`), so no secret is needed. The person id is the email's part before `@`, like
-`firestore.rules`. Replacing Firebase Auth is a later, separate step.
+**Sign-in is GoPreach's own.** `POST /v1/auth/login` checks the password (scrypt) and returns a one-hour access token plus a rotating 90-day refresh
+token (`src/accounts.js`); every other request carries the access token, signed with `AUTH_SECRET`. The person id is the sign-in address's part
+before `@`. Accounts live in the `accounts` table; the 145 accounts that came from Firebase kept their password hashes and are converted to the
+server's own format at their first sign-in (`scripts/import-auth.js`, `FIREBASE_HASH_*` settings). Nothing here depends on Firebase any more.
 
 ## Authorization
 

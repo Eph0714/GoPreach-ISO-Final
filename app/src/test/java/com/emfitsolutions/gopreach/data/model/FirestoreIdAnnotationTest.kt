@@ -1,12 +1,12 @@
 package com.emfitsolutions.gopreach.data.model
 
-import com.google.firebase.firestore.DocumentId
+import com.emfitsolutions.gopreach.platform.DocumentId
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Regression test: Firestore only fills in a document's id when its `@DocumentId` is on the FIELD. In common code a plain
- * `@DocumentId val id` lands on the constructor parameter and the id comes back blank (login then used "@gopreach.internal").
+ * Every synchronized model marks its id property with `@field:DocumentId` (on the FIELD, not the constructor parameter), which is how the
+ * sync code and the screens find a record's id. Guards against a model being added or edited without it.
  */
 class FirestoreIdAnnotationTest {
     @Test

@@ -12,7 +12,6 @@ import com.emfitsolutions.gopreach.data.repository.PlannerDayRepository
 import com.emfitsolutions.gopreach.data.repository.WeeklyPlannerGoalRepository
 import com.emfitsolutions.gopreach.data.repository.YearlyPlannerGoalRepository
 import com.emfitsolutions.gopreach.data.repository.personIdFromAuthEmail
-import com.google.firebase.auth.FirebaseAuth
 
 private const val TAG = "DataRefresher"
 

@@ -22,7 +22,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.export.IncomingBibleTextImportHolder
 import com.emfitsolutions.gopreach.data.repository.ThemePreference
 import com.emfitsolutions.gopreach.data.repository.ThemePreferenceRepository
-import com.emfitsolutions.gopreach.data.sync.RemoteSyncCoordinator
 import com.emfitsolutions.gopreach.data.sync.SyncScheduler
 import com.emfitsolutions.gopreach.ui.components.SyncMessageHost
 import com.emfitsolutions.gopreach.ui.components.update.UpdateHost
@@ -48,7 +47,6 @@ class MainActivity : AppCompatActivity() {
 
     val syncScheduler: SyncScheduler by inject()
 
-    val remoteSyncCoordinator: RemoteSyncCoordinator by inject()
 
     val inactivityTracker: InactivityTracker by inject()
 
@@ -122,7 +120,6 @@ class MainActivity : AppCompatActivity() {
                     // calling it unconditionally here (and again on every
                     // foreground below) is safe.
                     LaunchedEffect(Unit) {
-                        remoteSyncCoordinator.retryIfNeeded()
                         syncScheduler.triggerSyncIfOnline()
                     }
 
@@ -147,7 +144,6 @@ class MainActivity : AppCompatActivity() {
                                 // foreground" trigger, for pending sync
                                 // instead of app updates — see this file's
                                 // own comment on the LaunchedEffect above.
-                                remoteSyncCoordinator.retryIfNeeded()
                                 syncScheduler.triggerSyncIfOnline()
                             }
                         }

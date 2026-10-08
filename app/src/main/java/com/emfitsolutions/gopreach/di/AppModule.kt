@@ -23,8 +23,6 @@ import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitOverseerAccountsVie
 import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitOverseerFormViewModel
 import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitPeopleViewModel
 import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitManagementViewModel
-import com.emfitsolutions.gopreach.data.sync.FirestoreCircuitAssignmentService
-import com.emfitsolutions.gopreach.data.sync.RestrictedSessionSync
 import com.emfitsolutions.gopreach.data.sync.ServerSyncClock
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.CredentialStore
@@ -94,7 +92,6 @@ import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.PresenceHeartbeat
 import com.emfitsolutions.gopreach.data.sync.ReminderScheduler
 import com.emfitsolutions.gopreach.data.sync.ReminderWorker
-import com.emfitsolutions.gopreach.data.sync.RemoteSyncCoordinator
 import com.emfitsolutions.gopreach.data.sync.SyncScheduler
 import com.emfitsolutions.gopreach.data.sync.SyncStatusCenter
 import com.emfitsolutions.gopreach.data.sync.SyncWorker
@@ -205,9 +202,6 @@ import com.emfitsolutions.gopreach.ui.screens.users.ManageUsersViewModel
 import android.content.Context
 import com.emfitsolutions.gopreach.data.local.AppDatabase
 import com.emfitsolutions.gopreach.data.local.psgc.PsgcDatabase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -224,14 +218,11 @@ import com.emfitsolutions.gopreach.data.sync.AndroidWriteQueuedListener
 import com.emfitsolutions.gopreach.data.sync.WriteQueuedListener
 import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import com.emfitsolutions.gopreach.data.repository.AuthService
-import com.emfitsolutions.gopreach.data.sync.FirebaseAuthService
 import com.emfitsolutions.gopreach.platform.AndroidKeyValueStores
 import com.emfitsolutions.gopreach.platform.KeyValueStores
 import com.emfitsolutions.gopreach.data.sync.NetworkStatus
 import com.emfitsolutions.gopreach.data.sync.DefaultNetworkStatus
-import com.emfitsolutions.gopreach.data.sync.FirebaseRemoteFiles
 import com.emfitsolutions.gopreach.data.remote.RemoteFiles
-import com.emfitsolutions.gopreach.data.sync.FirestoreRemoteCollections
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.tasks.await
@@ -245,34 +236,22 @@ val infraModule = module {
     single { Gson() }
     // Long-lived scope for work that must outlive a single screen/ViewModel (e.g. mirroring a listener into the cache).
     single<CoroutineScope> { CoroutineScope(SupervisorJob() + Dispatchers.IO) }
-    single { FirebaseAuth.getInstance() }
-    single { FirebaseFirestore.getInstance() }
-    single { FirebaseStorage.getInstance() }
     single { buildAppDatabase(get()) }
     single { get<AppDatabase>().cacheDao() }
     single { get<AppDatabase>().syncQueueDao() }
     single { buildPsgcDatabase(get()) }
     single { get<PsgcDatabase>().psgcDao() }
 
-    // Firestore normally; the Hostinger API when gopreach.backendUrl is set.
-    single<RemoteCollections> {
-        if (BackendConfig.enabled) com.emfitsolutions.gopreach.data.sync.BackendRemoteCollections(get(), get())
-        else FirestoreRemoteCollections(get(), get(), get())
-    }
+    // Everything talks to the GoPreach server on Hostinger (gopreach.backendUrl); there is no other backend.
+    single<RemoteCollections> { com.emfitsolutions.gopreach.data.sync.BackendRemoteCollections(get(), get()) }
     single<NetworkStatus> { DefaultNetworkStatus(get(), get()) }
-    single<RemoteFiles> {
-        if (BackendConfig.enabled) com.emfitsolutions.gopreach.data.sync.BackendRemoteFiles(get(), get()) else FirebaseRemoteFiles(get())
-    }
+    single<RemoteFiles> { com.emfitsolutions.gopreach.data.sync.BackendRemoteFiles(get(), get()) }
     single<KeyValueStores> { AndroidKeyValueStores(get()) }
-    // Hostinger mode signs in against GoPreach's own server; the Firebase path stays only for builds without a backend address.
-    single<AuthService> {
-        if (BackendConfig.enabled) com.emfitsolutions.gopreach.data.repository.HttpAuthService(get(), BackendConfig.baseUrl, get(), get())
-        else FirebaseAuthService(get(), get())
-    }
+    single<AuthService> { com.emfitsolutions.gopreach.data.repository.HttpAuthService(get(), BackendConfig.baseUrl, get(), get()) }
     single<LocationTracker> { AndroidLocationTracker(get()) }
     single<WriteQueuedListener> { AndroidWriteQueuedListener(get(), get(), get()) }
 
-    // Hostinger backend sync (only used when BackendConfig.enabled)
+    // Sync with the GoPreach server
     single { HttpClient(OkHttp) }
     single<SyncApi> {
         val auth = get<AuthService>()
@@ -353,22 +332,12 @@ val appModule = module {
     singleOf(::UserAccessGrantRepository)
     singleOf(::CircuitCodeRepository)
     single { com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository(get(), get()) }
-    // Report workflows: Firestore transactions normally; through the Hostinger API (server re-checks every move) when gopreach.backendUrl is set.
-    single<com.emfitsolutions.gopreach.data.repository.ComparativeReportService> {
-        if (BackendConfig.enabled) com.emfitsolutions.gopreach.data.repository.BackendComparativeReportService(get(), get(), get(), get())
-        else com.emfitsolutions.gopreach.data.sync.FirestoreComparativeReportService(get(), get())
-    }
-    single<com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportService> {
-        if (BackendConfig.enabled) com.emfitsolutions.gopreach.data.repository.BackendCoFieldServiceReportService(get(), get(), get(), get())
-        else com.emfitsolutions.gopreach.data.sync.FirestoreCoFieldServiceReportService(get(), get())
-    }
-    singleOf(::RestrictedSessionSync)
+    // Report workflows go through the server API, which re-checks every move.
+    single<com.emfitsolutions.gopreach.data.repository.ComparativeReportService> { com.emfitsolutions.gopreach.data.repository.BackendComparativeReportService(get(), get(), get(), get()) }
+    single<com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportService> { com.emfitsolutions.gopreach.data.repository.BackendCoFieldServiceReportService(get(), get(), get(), get()) }
     singleOf(::CircuitOverseerDirectory)
     singleOf(::ServerSyncClock)
-    single<CircuitAssignmentService> {
-        if (BackendConfig.enabled) com.emfitsolutions.gopreach.data.repository.BackendCircuitAssignmentService(get(), get(), get(), get())
-        else FirestoreCircuitAssignmentService(get(), get(), get())
-    }
+    single<CircuitAssignmentService> { com.emfitsolutions.gopreach.data.repository.BackendCircuitAssignmentService(get(), get(), get(), get()) }
     singleOf(::VisitRepository)
     singleOf(::WeeklyPlannerGoalRepository)
     singleOf(::YearlyPlannerGoalRepository)
@@ -378,7 +347,6 @@ val appModule = module {
     singleOf(::PresenceHeartbeat)
     singleOf(::BackendPoller)
     singleOf(::ReminderScheduler)
-    single { RemoteSyncCoordinator(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     singleOf(::SyncScheduler)
     singleOf(::SyncStatusCenter)
     singleOf(::ApkDownloader)

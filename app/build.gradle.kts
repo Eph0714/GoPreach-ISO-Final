@@ -4,7 +4,6 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
-    id("com.google.gms.google-services")
     id("com.google.devtools.ksp")
 }
 
@@ -43,8 +42,8 @@ android {
         applicationId = "com.emfitsolutions.gopreach"
         minSdk = 24
         targetSdk = 36
-        versionCode = 196
-        versionName = "1.135.0"
+        versionCode = 197
+        versionName = "1.136.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -179,12 +178,7 @@ dependencies {
     implementation("io.insert-koin:koin-compose-viewmodel")
     implementation("io.insert-koin:koin-androidx-workmanager")
 
-    // Firebase
-    implementation(platform("com.google.firebase:firebase-bom:33.3.0"))
-    implementation("com.google.firebase:firebase-auth-ktx")
-    implementation("com.google.firebase:firebase-firestore-ktx")
-    implementation("com.google.firebase:firebase-storage-ktx")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1") // Task.await() for the location client
 
     // Room (offline cache)
     implementation("androidx.room:room-runtime:2.7.0")

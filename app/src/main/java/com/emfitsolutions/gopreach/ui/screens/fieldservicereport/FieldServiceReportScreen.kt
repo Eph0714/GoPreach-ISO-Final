@@ -173,11 +173,6 @@ fun FieldServiceReportScreen(
         LaunchedEffect(visibleMonths.map { it.periodMonth }) {
             if (visibleMonths.isNotEmpty() && visibleMonths.none { it.periodMonth == fromMonth }) { fromMonth = visibleMonths.first().periodMonth; toMonth = fromMonth }
         }
-        LaunchedEffect(congregationId, visibleMonths.map { it.periodMonth }) {
-            val cid = congregationId ?: return@LaunchedEffect
-            if (visibleMonths.isEmpty()) return@LaunchedEffect
-            kotlinx.coroutines.flow.merge(*visibleMonths.map { viewModel.overseerMonthRecords(cid, it.periodMonth) }.toTypedArray()).collect { }
-        }
     }
 
     val sheetsFlow = remember(reportGroups.map { it.id }, fromMonth, toMonth, wholeCongregation?.id) {

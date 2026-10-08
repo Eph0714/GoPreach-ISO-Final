@@ -12,7 +12,6 @@ import android.app.Application
 import androidx.work.Configuration
 import com.emfitsolutions.gopreach.data.sync.PresenceHeartbeat
 import com.emfitsolutions.gopreach.data.sync.ReminderScheduler
-import com.emfitsolutions.gopreach.data.sync.RemoteSyncCoordinator
 import com.emfitsolutions.gopreach.data.sync.SyncScheduler
 import com.emfitsolutions.gopreach.notifications.CalendarAlarmRescheduler
 import com.emfitsolutions.gopreach.notifications.NotificationHelper
@@ -29,7 +28,6 @@ import com.emfitsolutions.gopreach.notifications.NotificationSoundCoordinator
 class GoPreachApp : Application(), Configuration.Provider {
 
     
-    val remoteSyncCoordinator: RemoteSyncCoordinator by inject()
 
     val reminderScheduler: ReminderScheduler by inject()
 
@@ -50,7 +48,6 @@ class GoPreachApp : Application(), Configuration.Provider {
             modules(infraModule, appModule)
         }
         kotlinx.coroutines.GlobalScope.launch { runCatching { get<com.emfitsolutions.gopreach.data.local.dao.CacheDao>().deleteBlankIds(); get<com.emfitsolutions.gopreach.data.local.dao.SyncQueueDao>().removeBlankIds() } }
-        remoteSyncCoordinator.startAll()
         backendPoller.start()
         NotificationHelper.ensureChannel(this)
         reminderScheduler.ensureScheduled()

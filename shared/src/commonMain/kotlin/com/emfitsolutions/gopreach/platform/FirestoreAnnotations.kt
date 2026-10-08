@@ -1,11 +1,7 @@
 package com.emfitsolutions.gopreach.platform
 
-/**
- * Marks the property that receives a record's document id. On Android this IS Firebase's `@DocumentId` (so Firestore's
- * object mapping keeps working while Firebase is still in use); on iOS, and once the backend replaces Firestore, it is a
- * harmless marker. The data models live in common code and must not import Firebase.
- */
+/** Marks the property that holds a record's document id (a plain marker annotation; the id is the record's key on the server). */
 expect annotation class DocumentId()
 
-/** Firebase's `@PropertyName` on Android (needed for `isSuperAdmin`-style names); a no-op marker elsewhere. */
+/** Marks a property whose stored name differs from its Kotlin name (a plain marker annotation). */
 expect annotation class PropertyName(val value: String)
