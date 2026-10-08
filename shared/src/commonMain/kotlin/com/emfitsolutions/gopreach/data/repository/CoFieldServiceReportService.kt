@@ -28,6 +28,8 @@ interface CoFieldServiceReportService {
     suspend fun submit(
         congregationId: String, periodMonth: Long, actor: SubmissionActor,
         statistics: com.emfitsolutions.gopreach.data.model.CongregationMonthlyStatistics? = null,
+        /** The frozen copy of the sent report the Circuit Overseer will read; the service stamps its id and send number. */
+        received: com.emfitsolutions.gopreach.data.model.CoReceivedReport? = null,
     ): CircuitResult
 
     /** SUBMITTED → NOT_SUBMITTED, before the overseer has received it. */

@@ -77,6 +77,7 @@ class FirestoreCoFieldServiceReportService(
     override suspend fun submit(
         congregationId: String, periodMonth: Long, actor: SubmissionActor,
         statistics: com.emfitsolutions.gopreach.data.model.CongregationMonthlyStatistics?,
+        received: com.emfitsolutions.gopreach.data.model.CoReceivedReport?,
     ): CircuitResult {
         // A service month that has not started yet can never be sent — checked for every role (the rules check it again).
         if (isFutureServiceMonth(periodMonth, nowMillis())) return CircuitResult.Conflict(FUTURE_MONTH_MESSAGE)

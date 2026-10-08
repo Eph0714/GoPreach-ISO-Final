@@ -134,7 +134,7 @@ const chatAllowsRead = (h, chat) => h.sa || chatParticipant(h, chat) || h.canMan
  * forwardRequests/publisherForwardRequests/houseHolderAssignments (cross-congregation by design), and global lookups.
  */
 const CONGREGATION_SCOPED_READS = new Set([
-  'interestedPeople', 'monthlyReports', 'roleAssignments', 'coFieldServiceReportEvents', 'meetingAttendance', 'meetingAttendanceEvents', 'congregationComparativeReports', 'comparativeReportHistory', 'comparativeReportRemarks', 'groups', 'mapPins', 'territoryAssignments',
+  'interestedPeople', 'monthlyReports', 'roleAssignments', 'coFieldServiceReportEvents', 'coReceivedReports', 'meetingAttendance', 'meetingAttendanceEvents', 'congregationComparativeReports', 'comparativeReportHistory', 'comparativeReportRemarks', 'groups', 'mapPins', 'territoryAssignments',
   'publisherTerritoryAssignments', 'territoryAssignmentBarangays',
 ]);
 
@@ -186,6 +186,13 @@ async function baseRead(h, actor, grant, collection, id, data, get) { // match /
       return ['VIEW_PUBLISHER_REPORTS', 'VIEW_GROUP_REPORTS', 'VIEW_CONGREGATION_REPORTS'].some((p) => h.restrictedAllows(p, nul(data.congregationId)));
     case 'coFieldServiceReportEvents':
       return h.isCircuitOverseerFor(nul(data.congregationId)) || h.canSubmitFieldServiceFor(nul(data.congregationId));
+    // The frozen copy of a sent month: the Circuit Overseer whose assignment covers that congregation (so a transfer moves it with the assignment),
+    // and the congregation's own senders.
+    case 'coReceivedReports':
+      return h.isCircuitOverseerFor(nul(data.congregationId)) || h.canSubmitFieldServiceFor(nul(data.congregationId));
+    // Which received reports a Circuit Overseer has opened: only that overseer sees their own marks.
+    case 'coReportReads':
+      return nul(data.coPersonId) === h.me;
     // Meeting attendance: its own congregation (any member), or the Circuit Overseer of that congregation.
     case 'meetingAttendance':
       return h.isCircuitOverseerFor(nul(data.congregationId)) || (!grant.has && inCongOf(actor, data.congregationId));
@@ -314,6 +321,14 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       const report = live(await h.get('congregationComparativeReports', next.comparativeReportId ?? '-'));
       return verdict(!!report && ['SUBMITTED', 'RETURNED'].includes(report.status), 'Remarks go on a submitted or returned report');
     }
+
+    case 'coReceivedReports': return await writeReceivedReport(h, { id, next, isCreate, verdict });
+
+    case 'coReportReads':
+      return verdict(
+        !isDelete && nul(next.coPersonId) === h.me && id === `${h.me}_${next.receivedReportId}` && h.isCircuitOverseerFor(nul(next.congregationId)),
+        'A Circuit Overseer marks only their own reads, for a congregation they hold',
+      );
 
     case 'coFieldServiceReportEvents':
       return verdict(isCreate && nul(next.userId) === h.me && (h.canSubmitFieldServiceFor(nul(next.congregationId)) || h.isCircuitOverseerFor(nul(next.congregationId))), 'History is append-only');
@@ -509,6 +524,21 @@ function writeComparativeReport(h, { id, next, old, isCreate, isUpdate, isDelete
     if (['SUBMITTED', 'RETURNED'].includes(old.status) && next.status === old.status && changed.every((k) => ['currentCoRemarks', 'updatedAt'].includes(k))) return ok();
   }
   return deny('That change to the Comparative Report is not allowed');
+}
+
+const MAX_RECEIVED_ROWS = 800;
+
+/** The frozen copy of a month's report, written once with the send: one document per congregation + month + send number. */
+async function writeReceivedReport(h, { id, next, isCreate, verdict }) {
+  if (!isCreate) return deny('A received report is never edited or deleted');
+  const cong = nul(next.congregationId);
+  const month = Math.trunc(Number(next.periodMonth));
+  const version = Math.trunc(Number(next.version));
+  if (id !== `${cong}_${month}_${version}`) return deny('The id must be congregation + month + send number');
+  if (!Array.isArray(next.rows) || next.rows.length > MAX_RECEIVED_ROWS) return deny('The report rows are missing or too many');
+  const status = live(await h.get('coFieldServiceMonthStatus', `${cong}_${month}`));
+  if (!status || status.status !== 'SUBMITTED' || Number(status.version) !== version) return deny('A received report follows the send that created it');
+  return verdict(h.canSubmitFieldServiceFor(cong) && nul(next.submittedByPersonId) === h.me, 'Only the congregation sending the report saves its copy');
 }
 
 async function writeStatistics(h, { id, next, old, isCreate, isUpdate, verdict }) {

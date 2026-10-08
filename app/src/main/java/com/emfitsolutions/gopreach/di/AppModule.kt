@@ -51,6 +51,7 @@ import com.emfitsolutions.gopreach.ui.screens.attendance.ComparativeReportsViewM
 import com.emfitsolutions.gopreach.ui.screens.attendance.ReportSubmissionViewModel
 import com.emfitsolutions.gopreach.ui.screens.attendance.MeetingAttendanceViewModel
 import com.emfitsolutions.gopreach.data.repository.MonthLockGuard
+import com.emfitsolutions.gopreach.data.repository.CoReceivedReportRepository
 import com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository
 import com.emfitsolutions.gopreach.data.repository.NameOrderPreference
 import com.emfitsolutions.gopreach.data.repository.NotificationDismissedStore
@@ -115,6 +116,7 @@ import com.emfitsolutions.gopreach.ui.components.NameOrderViewModel
 import com.emfitsolutions.gopreach.ui.components.OfflineSessionBannerViewModel
 import com.emfitsolutions.gopreach.ui.components.OnlineUsersViewModel
 import com.emfitsolutions.gopreach.ui.screens.circuit.CongregationStatsViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.ReceivedReportsViewModel
 import com.emfitsolutions.gopreach.ui.components.PhilippineAddressPickerViewModel
 import com.emfitsolutions.gopreach.ui.components.RefreshButtonViewModel
 import com.emfitsolutions.gopreach.ui.components.SyncMessageHostViewModel
@@ -314,6 +316,7 @@ val appModule = module {
     singleOf(::MonthlyPlannerGoalRepository)
     singleOf(::MonthlyReportRepository)
     singleOf(::MonthLockGuard)
+    singleOf(::CoReceivedReportRepository)
     singleOf(::MeetingAttendanceRepository)
     singleOf(::ComparativeReportRepository)
     single { com.emfitsolutions.gopreach.data.repository.ReportSubmissionPreferences(androidContext()) }
@@ -494,6 +497,7 @@ val appModule = module {
     viewModelOf(::CircuitOverviewViewModel)
     viewModelOf(::CircuitPeopleViewModel)
     viewModelOf(::CongregationStatsViewModel)
+    viewModelOf(::ReceivedReportsViewModel)
     viewModelOf(::MeetingAttendanceViewModel)
     viewModelOf(::ComparativeReportsViewModel)
     viewModelOf(::ReportSubmissionViewModel)

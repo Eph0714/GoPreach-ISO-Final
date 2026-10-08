@@ -26,6 +26,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountBalance
+import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Assessment
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.CompareArrows
@@ -206,12 +208,15 @@ fun CircuitHomeDashboard(
     onOpenReportSubmission: () -> Unit,
     onOpenCongregation: (String) -> Unit,
     onOpenLeaders: () -> Unit,
+    onOpenReceived: () -> Unit = {},
     modifier: Modifier = Modifier,
+    received: ReceivedReportsViewModel = koinViewModel(),
     dashboard: CircuitDashboardViewModel = koinViewModel(),
     people: CircuitPeopleViewModel = koinViewModel(),
     overviewVm: CircuitOverviewViewModel = koinViewModel(),
 ) {
     val header by remember(currentPersonId) { dashboard.stateFor(currentPersonId) }.collectAsStateWithLifecycle(initialValue = null)
+    val unreadReports by remember(currentPersonId) { received.unread(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val summaries by remember(currentPersonId) { people.summaries(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val sources by overviewVm.sources.collectAsStateWithLifecycle(initialValue = null)
     val online by people.isOnline.collectAsStateWithLifecycle(initialValue = true)
@@ -257,6 +262,23 @@ fun CircuitHomeDashboard(
                     (if (online) "Online" else "Offline – showing last synchronized data") + "  ·  Last synchronized: " + ago(lastSync),
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+
+        // A congregation sent a report: tap to open that one (and it stops being new once opened).
+        unreadReports.firstOrNull()?.let { newest ->
+            com.emfitsolutions.gopreach.ui.components.co.CoCard(
+                modifier = Modifier.fillMaxWidth(), accent = com.emfitsolutions.gopreach.ui.components.co.coPalette().danger,
+                onClick = { ReceivedReportsLaunch.pendingReportId = newest.id; CircuitScopeStore.selectCongregation(newest.congregationId); onOpenReceived() },
+            ) {
+                Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = com.emfitsolutions.gopreach.ui.components.co.coPalette().danger)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("New Field Service Report Received", fontWeight = FontWeight.Bold)
+                        Text(newest.congregationName + " — " + monthLabelLong(newest.periodMonth), style = MaterialTheme.typography.bodyMedium)
+                        Text(if (unreadReports.size > 1) "Tap to Review · ${unreadReports.size - 1} more waiting" else "Tap to Review", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    }
+                }
             }
         }
 
@@ -314,6 +336,7 @@ fun CircuitHomeDashboard(
                 listOf(
                     QuickModule(Icons.Rounded.AccountBalance, "Congregations", "Your circuit's congregations and their people counts", null, COLOR_CONGREGATIONS, onOpenCongregations),
                     QuickModule(Icons.Rounded.People, "Publishers", "View congregation publishers", null, COLOR_PUBLISHERS, onOpenPublishers),
+                    QuickModule(Icons.Rounded.Inbox, "Received Reports", "Reports your congregations sent you", null, COLOR_REPORT, onOpenReceived, badge = unreadReports.size),
                     QuickModule(Icons.Rounded.Assessment, "Field Service", "View monthly field service", null, COLOR_REPORT, onOpenReport),
                     QuickModule(Icons.Rounded.Groups, "Meeting Attendance", "View attendance records", null, COLOR_ATTENDANCE, onOpenAttendance),
                     QuickModule(Icons.Rounded.CompareArrows, "Comparative Report", "Compare historical months", null, COLOR_COMPARE, onOpenComparative),

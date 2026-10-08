@@ -207,11 +207,23 @@ class FieldServiceReportViewModel(
         )
     }
 
+    /** The month's whole-congregation table exactly as the sheet shows it right now: the Circuit Overseer's frozen copy. Null if it cannot be built (the send still goes). */
+    private suspend fun receivedCopyOf(congregationId: String, month: Long): com.emfitsolutions.gopreach.data.model.CoReceivedReport? = runCatching {
+        val congregation = congregations.first().firstOrNull { it.id == congregationId } ?: return@runCatching null
+        val sheet = sheetsFor(groupsFor(congregationId).first(), month, month, congregation).first().firstOrNull() ?: return@runCatching null
+        com.emfitsolutions.gopreach.data.model.CoReceivedReport(
+            congregationId = congregationId, congregationName = congregation.name, periodMonth = month,
+            rows = sheet.rows.map { r ->
+                com.emfitsolutions.gopreach.data.model.CoReceivedRow(r.number, r.status.label, r.name, r.reportsCount, r.hours, r.bibleStudies, r.remarks)
+            },
+        )
+    }.getOrNull()
+
     suspend fun submitMonth(congregationId: String, month: Long, actorPersonId: String): com.emfitsolutions.gopreach.data.repository.CircuitResult {
         // The month's historical statistics (publishers, pioneers, elders, reports, meeting attendance) are saved with the submission.
         val existing = attendanceRepository.observeStatistics().first().firstOrNull { it.id == attendanceRepository.statisticsIdFor(congregationId, month) }
         val stats = runCatching { statisticsBuilder.build(congregationId, month, actorPersonId, existing) }.getOrNull()
-        return coReportService.submit(congregationId, month, actorFor(actorPersonId), stats)
+        return coReportService.submit(congregationId, month, actorFor(actorPersonId), stats, receivedCopyOf(congregationId, month))
     }
 
     suspend fun undoSubmission(congregationId: String, month: Long, actorPersonId: String) =

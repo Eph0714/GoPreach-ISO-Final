@@ -71,6 +71,7 @@ fun CircuitDashboardBody(
     onOpenReportSubmission: () -> Unit = {},
     onOpenCongregation: (String) -> Unit = {},
     onOpenLeaders: () -> Unit = {},
+    onOpenReceived: () -> Unit = {},
     viewModel: CircuitDashboardViewModel = koinViewModel(),
     people: CircuitPeopleViewModel = koinViewModel(),
 ) {
@@ -78,7 +79,7 @@ fun CircuitDashboardBody(
     CircuitHomeDashboard(
         currentPersonId = currentPersonId, onOpenReport = onOpenReport, onOpenPublishers = onOpenPublishers, onOpenCongregations = onOpenCongregations,
         onOpenTerritory = onOpenTerritory, onOpenCircuitReport = onOpenCircuitReport, onOpenAttendance = onOpenAttendance, onOpenComparative = onOpenComparative,
-        onOpenReportSubmission = onOpenReportSubmission, onOpenCongregation = onOpenCongregation, onOpenLeaders = onOpenLeaders, modifier = modifier,
+        onOpenReportSubmission = onOpenReportSubmission, onOpenCongregation = onOpenCongregation, onOpenLeaders = onOpenLeaders, onOpenReceived = onOpenReceived, modifier = modifier,
     )
     if (false) {
     val state by remember(currentPersonId) { viewModel.stateFor(currentPersonId) }
@@ -171,6 +172,7 @@ fun CircuitDashboardScreen(
     onOpenCircuitReport: () -> Unit,
     onOpenAttendance: () -> Unit = {},
     onOpenComparative: () -> Unit = {},
+    onOpenReceived: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -185,7 +187,7 @@ fun CircuitDashboardScreen(
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
             onOpenReport = onOpenReport, onOpenPublishers = onOpenPublishers, onOpenCongregations = onOpenCongregations,
             onOpenTerritory = onOpenTerritory, onOpenCircuitReport = onOpenCircuitReport,
-            onOpenAttendance = onOpenAttendance, onOpenComparative = onOpenComparative,
+            onOpenAttendance = onOpenAttendance, onOpenComparative = onOpenComparative, onOpenReceived = onOpenReceived,
         )
     }
 }
@@ -198,6 +200,8 @@ internal class QuickModule(
     /** The module's color code — tints its tile and icon. */
     val color: androidx.compose.ui.graphics.Color,
     val onClick: () -> Unit,
+    /** Unread notifications shown as a red badge on the tile; 0 = none. */
+    val badge: Int = 0,
 )
 
 internal val COLOR_CONGREGATIONS = androidx.compose.ui.graphics.Color(0xFF1E88E5)
@@ -244,6 +248,7 @@ internal fun QuickAccessGrid(modules: List<QuickModule>) {
                                     Text(m.description, style = MaterialTheme.typography.labelSmall, fontSize = 10.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, lineHeight = 13.sp)
                                 }
                                 m.count?.let { Text(it, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = m.color) }
+                                if (m.badge > 0) com.emfitsolutions.gopreach.ui.components.co.CoStatusBadge(if (m.badge > 99) "99+" else m.badge.toString(), com.emfitsolutions.gopreach.ui.components.co.CoKind.Danger)
                             }
                         }
                     }

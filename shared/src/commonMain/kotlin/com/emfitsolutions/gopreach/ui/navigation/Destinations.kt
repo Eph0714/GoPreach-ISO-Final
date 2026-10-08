@@ -101,6 +101,8 @@ object Destinations {
     const val CIRCUIT_CONGREGATIONS = "circuit_congregations"
     // Consolidated summary of every congregation in one circuit.
     const val CIRCUIT_REPORT = "circuit_report"
+    // The Circuit Overseer's frozen copies of the Field Service Reports the congregations sent, with unread / read notifications.
+    const val RECEIVED_REPORTS = "received_reports"
     // Weekly meeting attendance, and the congregation's two-period comparison (reports, headcounts, attendance) built from monthly snapshots.
     const val MEETING_ATTENDANCE = "meeting_attendance"
     // The user's workspace of every report they have to prepare / follow for a saved month range.

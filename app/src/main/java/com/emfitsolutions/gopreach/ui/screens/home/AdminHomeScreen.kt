@@ -659,6 +659,7 @@ fun AdminHomeScreen(
                             onOpenReportSubmission = { onNavigate(Destinations.REPORT_SUBMISSION) },
                             onOpenCongregation = { onNavigate(Destinations.circuitCongregation(it)) },
                             onOpenLeaders = { onNavigate(Destinations.circuitLeaders()) },
+                            onOpenReceived = { onNavigate(Destinations.RECEIVED_REPORTS) },
                         )
                     }
 

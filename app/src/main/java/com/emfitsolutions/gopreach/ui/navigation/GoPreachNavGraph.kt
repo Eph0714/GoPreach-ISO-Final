@@ -1129,6 +1129,20 @@ fun GoPreachNavGraph(
                     onOpenCircuitReport = { navController.navigate(Destinations.CIRCUIT_REPORT) },
                     onOpenAttendance = { navController.navigate(Destinations.MEETING_ATTENDANCE) },
                     onOpenComparative = { navController.navigate(Destinations.CONGREGATION_COMPARATIVE) },
+                    onOpenReceived = { navController.navigate(Destinations.RECEIVED_REPORTS) },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.RECEIVED_REPORTS) {
+            if (isCircuitViewer) {
+                com.emfitsolutions.gopreach.ui.screens.circuit.ReceivedReportsScreen(
+                    currentPersonId = circuitScope,
+                    onBack = { navController.popBackStack() },
+                    // A month sent before frozen copies existed opens the congregation's own report, as before.
+                    onOpenLiveReport = { congregationId, _ ->
+                        com.emfitsolutions.gopreach.ui.screens.circuit.CircuitScopeStore.selectCongregation(congregationId)
+                        navController.navigate(Destinations.CIRCUIT_FS_REPORTS)
+                    },
                 )
             } else NoAccessScreen(onBack = { navController.popBackStack() })
         }

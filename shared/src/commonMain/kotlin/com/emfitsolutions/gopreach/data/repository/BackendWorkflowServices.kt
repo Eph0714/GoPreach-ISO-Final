@@ -79,7 +79,7 @@ class BackendCoFieldServiceReportService(
 
     private suspend fun statsDoc(id: String) = offline.get<CongregationMonthlyStatistics>(stats, id)
 
-    override suspend fun submit(congregationId: String, periodMonth: Long, actor: SubmissionActor, statistics: CongregationMonthlyStatistics?): CircuitResult {
+    override suspend fun submit(congregationId: String, periodMonth: Long, actor: SubmissionActor, statistics: CongregationMonthlyStatistics?, received: com.emfitsolutions.gopreach.data.model.CoReceivedReport?): CircuitResult {
         if (isFutureServiceMonth(periodMonth, nowMillis())) return CircuitResult.Conflict(FUTURE_MONTH_MESSAGE)
         val id = coReportId(congregationId, periodMonth)
         val now = nowMillis()
@@ -92,6 +92,10 @@ class BackendCoFieldServiceReportService(
         val ops = buildList {
             add(writer.op(statuses, id, next))
             if (statistics != null) add(writer.op(stats, id, statistics))
+            if (received != null) {
+                val copyId = "${id}_${next.version}"
+                add(writer.op(CoReceivedReportRepository.REPORTS, copyId, received.copy(id = copyId, congregationId = congregationId, periodMonth = periodMonth, version = next.version, submittedAt = now, submittedByPersonId = actor.personId, submittedByName = actor.name)))
+            }
             add(event(id, next, actor, if (from == CoReportStatus.RETURNED) "Corrected report submitted" else "Report submitted to the Circuit Overseer", from, CoReportStatus.SUBMITTED, null, null))
         }
         return writer.push(ops).also { if (it is CircuitResult.Success) offline.cacheFromServer(statuses, id, next) }
