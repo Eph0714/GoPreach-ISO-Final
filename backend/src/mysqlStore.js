@@ -15,6 +15,15 @@ export class MysqlStore {
       path VARCHAR(500) NOT NULL PRIMARY KEY, token VARCHAR(64) NOT NULL, owner VARCHAR(190) NOT NULL, mime VARCHAR(100) NOT NULL,
       size_bytes INT NOT NULL, data LONGBLOB NOT NULL, updated_at BIGINT NOT NULL, UNIQUE KEY idx_token (token)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    // Sign-in accounts (the person id is the key) and the long-lived refresh tokens that keep a phone signed in. Created on first start.
+    await pool.query(`CREATE TABLE IF NOT EXISTS accounts (
+      person_id VARCHAR(190) NOT NULL PRIMARY KEY, pw_hash VARCHAR(400) NOT NULL, disabled TINYINT(1) NOT NULL DEFAULT 0,
+      created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, last_login BIGINT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS refresh_tokens (
+      token_hash CHAR(64) NOT NULL PRIMARY KEY, person_id VARCHAR(190) NOT NULL, auth_time BIGINT NOT NULL, expires_at BIGINT NOT NULL,
+      KEY idx_person (person_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
     return new MysqlStore(pool);
   }
 
@@ -119,6 +128,41 @@ export class MysqlStore {
   }
 
   async deleteFile(path) { await this.pool.query('DELETE FROM file_blobs WHERE path = ?', [path]); }
+
+  // ---- sign-in accounts ----
+  async getAccount(personId) {
+    const [rows] = await this.pool.query('SELECT person_id, pw_hash, disabled FROM accounts WHERE person_id = ?', [personId]);
+    return rows.length ? { personId: rows[0].person_id, pwHash: rows[0].pw_hash, disabled: !!rows[0].disabled } : null;
+  }
+
+  /** Creates the account; false when one already exists for [personId]. */
+  async createAccount(personId, pwHash) {
+    const now = Date.now();
+    const [res] = await this.pool.query('INSERT IGNORE INTO accounts (person_id, pw_hash, created_at, updated_at) VALUES (?, ?, ?, ?)', [personId, pwHash, now, now]);
+    return res.affectedRows === 1;
+  }
+
+  async setPassword(personId, pwHash) {
+    await this.pool.query('UPDATE accounts SET pw_hash = ?, updated_at = ? WHERE person_id = ?', [pwHash, Date.now(), personId]);
+  }
+
+  async touchLogin(personId) { await this.pool.query('UPDATE accounts SET last_login = ? WHERE person_id = ?', [Date.now(), personId]); }
+
+  async addRefreshToken({ tokenHash, personId, authTime, expiresAt }) {
+    await this.pool.query('INSERT INTO refresh_tokens (token_hash, person_id, auth_time, expires_at) VALUES (?, ?, ?, ?)', [tokenHash, personId, authTime, expiresAt]);
+    await this.pool.query('DELETE FROM refresh_tokens WHERE expires_at < ?', [Date.now()]);
+  }
+
+  /** Returns and removes the refresh token (each one is used once), or null when unknown / expired. */
+  async takeRefreshToken(tokenHash) {
+    const [rows] = await this.pool.query('SELECT person_id, auth_time, expires_at FROM refresh_tokens WHERE token_hash = ?', [tokenHash]);
+    if (!rows.length) return null;
+    const [res] = await this.pool.query('DELETE FROM refresh_tokens WHERE token_hash = ?', [tokenHash]);
+    if (res.affectedRows !== 1 || Number(rows[0].expires_at) < Date.now()) return null;
+    return { personId: rows[0].person_id, authTime: Number(rows[0].auth_time) };
+  }
+
+  async deleteRefreshTokens(personId) { await this.pool.query('DELETE FROM refresh_tokens WHERE person_id = ?', [personId]); }
 
   async close() { await this.pool.end(); }
 }

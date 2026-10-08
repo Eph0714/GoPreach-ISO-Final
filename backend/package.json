@@ -10,6 +10,7 @@
     "start": "node src/server.js",
     "migrate": "node src/migrate.js",
     "import:firestore": "node scripts/import-firestore.js",
+    "import:auth": "node scripts/import-auth.js",
     "test": "node --test"
   },
   "dependencies": {

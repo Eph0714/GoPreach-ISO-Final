@@ -100,5 +100,30 @@ export class MemoryStore {
 
   async deleteFile(path) { this.files?.delete(path); }
 
+  // ---- sign-in accounts ----
+  async getAccount(personId) { const a = (this.accounts ??= new Map()).get(personId); return a ? { personId, pwHash: a.pwHash, disabled: !!a.disabled } : null; }
+
+  async createAccount(personId, pwHash) {
+    const m = (this.accounts ??= new Map());
+    if (m.has(personId)) return false;
+    m.set(personId, { pwHash, disabled: false });
+    return true;
+  }
+
+  async setPassword(personId, pwHash) { const a = (this.accounts ??= new Map()).get(personId); if (a) a.pwHash = pwHash; }
+
+  async touchLogin() {}
+
+  async addRefreshToken({ tokenHash, personId, authTime, expiresAt }) { (this.refresh ??= new Map()).set(tokenHash, { personId, authTime, expiresAt }); }
+
+  async takeRefreshToken(tokenHash) {
+    const m = (this.refresh ??= new Map());
+    const r = m.get(tokenHash);
+    m.delete(tokenHash);
+    return r && r.expiresAt >= Date.now() ? { personId: r.personId, authTime: r.authTime } : null;
+  }
+
+  async deleteRefreshTokens(personId) { for (const [k, v] of (this.refresh ??= new Map())) if (v.personId === personId) this.refresh.delete(k); }
+
   async close() {}
 }

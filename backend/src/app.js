@@ -6,6 +6,7 @@ import { loadActor, authorizeWrite, canReadRow, loadGrant } from './policy/index
 import { rateLimit } from './rateLimit.js';
 import { mountFiles } from './files.js';
 import { mountPresence } from './presence.js';
+import { mountAccounts } from './accounts.js';
 import { saveGroupTerritory, removeGroupTerritory, removeAssignment, validateSave } from './territory.js';
 
 const MAX_OPS = 200;
@@ -28,7 +29,7 @@ const ID_RE = /^[^/\\\s][^/\\]{0,189}$/;
  * Every push op is authorized individually (role → congregation → FS Group → territory); a denied op never writes
  * and never blocks the others. Every pull is filtered to what the caller may read.
  */
-export function createApp(store, { devAuth = false, health = () => ({}), publicLimits = {} } = {}) {
+export function createApp(store, { devAuth = false, health = () => ({}), publicLimits = {}, authOptions = {} } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1); // Hostinger's HTTPS proxy sits in front: use the real client address for rate limiting
@@ -37,7 +38,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
 
   app.get('/v1/health', (req, res) => res.json({ ok: true, ...health() }));
 
-  const auth = authenticate({ devMode: devAuth });
+  const auth = authenticate({ devMode: devAuth, secret: authOptions.secret, allowFirebase: authOptions.allowFirebase });
 
   // ---- No login needed ---------------------------------------------------------------------------------------------
   // Firestore let anyone read `people` and create password-reset requests, because a person cannot sign in before the app
@@ -104,6 +105,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
 
   mountFiles(app, store, auth);
   mountPresence(app, store, auth);
+  mountAccounts(app, store, auth, authOptions);
 
   app.post('/v1/sync/push', auth, async (req, res) => {
     const ops = req.body?.ops;
