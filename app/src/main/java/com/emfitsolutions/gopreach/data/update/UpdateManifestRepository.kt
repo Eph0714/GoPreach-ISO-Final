@@ -29,7 +29,7 @@ class UpdateManifestRepository(
     private val cache: UpdateManifestCache,
 ) {
     /** Public GitHub repo — no auth token needed for read access. */
-    private val manifestUrl = "https://api.github.com/repos/Eph0714/GoPreach/releases/latest"
+    private val manifestUrl = "https://api.github.com/repos/Eph0714/GoPreach-ISO-Final/releases/latest"
 
     /**
      * GitHub's stable "always the newest asset" redirect — lives on
@@ -40,7 +40,7 @@ class UpdateManifestRepository(
      * (bot/scraping mitigation) while plain `github.com` stays reachable, so
      * this can succeed even when the richer API call can't.
      */
-    private val stableApkUrl = "https://github.com/Eph0714/GoPreach/releases/latest/download/GoPreach.apk"
+    private val stableApkUrl = "https://github.com/Eph0714/GoPreach-ISO-Final/releases/latest/download/GoPreach.apk"
 
     private data class GithubAsset(
         val name: String?,
@@ -216,7 +216,7 @@ class UpdateManifestRepository(
 
         val responseCode = connection.responseCode
         if (responseCode !in 300..399) return null
-        // e.g. "https://github.com/Eph0714/GoPreach/releases/download/v1.117.0/GoPreach.apk"
+        // e.g. "https://github.com/Eph0714/GoPreach-ISO-Final/releases/download/v1.117.0/GoPreach.apk"
         val location = connection.getHeaderField("Location") ?: return null
         val tag = Regex("/releases/download/([^/]+)/").find(location)?.groupValues?.get(1) ?: return null
 

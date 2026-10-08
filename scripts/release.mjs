@@ -15,7 +15,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
 const legacy = process.argv.includes("--legacy");
 const dry = process.argv.includes("--dry-run");
-const REPO = "Eph0714/GoPreach";
+const REPO = "Eph0714/GoPreach-ISO-Final";
 
 const gradle = readFileSync(join(root, "app/build.gradle.kts"), "utf8");
 const versionCode = Number(gradle.match(/versionCode\s*=\s*(\d+)/)[1]);
