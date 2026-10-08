@@ -10,6 +10,11 @@ export class MysqlStore {
       // JSON columns come back already parsed.
     });
     await pool.query('SELECT 1');
+    // Uploaded files live in the database (the web server's folder is replaced on every deploy). Created on first start; safe to repeat.
+    await pool.query(`CREATE TABLE IF NOT EXISTS file_blobs (
+      path VARCHAR(500) NOT NULL PRIMARY KEY, token VARCHAR(64) NOT NULL, owner VARCHAR(190) NOT NULL, mime VARCHAR(100) NOT NULL,
+      size_bytes INT NOT NULL, data LONGBLOB NOT NULL, updated_at BIGINT NOT NULL, UNIQUE KEY idx_token (token)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
     return new MysqlStore(pool);
   }
 
@@ -99,6 +104,21 @@ export class MysqlStore {
     );
     return rows.map((r) => ({ collection: r.collection, id: r.doc_id, ...MysqlStore.row(r) }));
   }
+
+  /** Stores (or replaces) the file at [path]; the new random [token] is its public download address. */
+  async putFile({ path, token, owner, mime, data }) {
+    await this.pool.query(
+      'INSERT INTO file_blobs (path, token, owner, mime, size_bytes, data, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE token = VALUES(token), owner = VALUES(owner), mime = VALUES(mime), size_bytes = VALUES(size_bytes), data = VALUES(data), updated_at = VALUES(updated_at)',
+      [path, token, owner, mime, data.length, data, Date.now()],
+    );
+  }
+
+  async getFileByToken(token) {
+    const [rows] = await this.pool.query('SELECT mime, data FROM file_blobs WHERE token = ? LIMIT 1', [token]);
+    return rows.length ? { mime: rows[0].mime, data: rows[0].data } : null;
+  }
+
+  async deleteFile(path) { await this.pool.query('DELETE FROM file_blobs WHERE path = ?', [path]); }
 
   async close() { await this.pool.end(); }
 }

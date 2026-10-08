@@ -91,5 +91,14 @@ export class MemoryStore {
       .map((d) => ({ collection: d.collection, id: d.id, data: structuredClone(d.data), version: d.version, seq: d.seq, deleted: d.deleted }));
   }
 
+  async putFile({ path, token, owner, mime, data }) { (this.files ??= new Map()).set(path, { token, owner, mime, data }); }
+
+  async getFileByToken(token) {
+    for (const f of (this.files ?? new Map()).values()) if (f.token === token) return { mime: f.mime, data: f.data };
+    return null;
+  }
+
+  async deleteFile(path) { this.files?.delete(path); }
+
   async close() {}
 }

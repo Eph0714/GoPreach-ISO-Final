@@ -4,6 +4,7 @@ import { authenticate } from './auth.js';
 import { randomBytes } from 'node:crypto';
 import { loadActor, authorizeWrite, canReadRow, loadGrant } from './policy/index.js';
 import { rateLimit } from './rateLimit.js';
+import { mountFiles } from './files.js';
 import { saveGroupTerritory, removeGroupTerritory, removeAssignment, validateSave } from './territory.js';
 
 const MAX_OPS = 200;
@@ -99,6 +100,8 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   app.post('/v1/territory/save', auth, territory(saveGroupTerritory, validateSave));
   app.post('/v1/territory/remove-group', auth, territory(removeGroupTerritory));
   app.post('/v1/territory/remove', auth, territory(removeAssignment));
+
+  mountFiles(app, store, auth);
 
   app.post('/v1/sync/push', auth, async (req, res) => {
     const ops = req.body?.ops;

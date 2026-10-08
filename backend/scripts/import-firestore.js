@@ -10,9 +10,12 @@
  * Each document is written as { ...fields } keyed by its Firestore id (the id is not duplicated inside the data, exactly
  * like the app's uploads). Re-running overwrites with the latest Firestore values, so it can be repeated for a final delta.
  */
-import { createStore } from '../src/store.js';
+import { createStore, congregationOf } from '../src/store.js';
+import { writeFileSync } from 'node:fs';
 
 const DRY = process.argv.includes('--dry-run');
+// --sql <file>: do not connect to MySQL; write the data as a SQL file to import with phpMyAdmin instead.
+const SQL_FILE = process.argv.includes('--sql') ? process.argv[process.argv.indexOf('--sql') + 1] : null;
 const COLLECTIONS = [
   'people', 'congregations', 'groups', 'elderTitles', 'roleAssignments', 'userAccessGrants', 'territories', 'territoryAssignments',
   'territoryAssignmentBarangays', 'publisherTerritoryAssignments', 'schedules', 'interestedPeople', 'forwardRequests',
@@ -21,6 +24,10 @@ const COLLECTIONS = [
   'announcements', 'creditHourCategories', 'creditHourRecords', 'plannerDays', 'monthlyPlannerGoals', 'weeklyPlannerGoals',
   'yearlyPlannerGoals', 'ministryTimerSessions', 'bibleTextCategories', 'bibleTextRecords', 'preachingTimeRecords',
   'dashboardModuleLayouts', 'groupChats', 'territoryDrawings', 'territoryDrawingAudits', 'territoryBounds',
+  // Circuit Overseer, attendance, statistics and Comparative Report workflows
+  'circuitCodes', 'congregationCircuits', 'coFieldServiceMonthStatus', 'coFieldServiceReportEvents', 'meetingAttendance',
+  'meetingAttendanceSettings', 'meetingAttendanceEvents', 'congregationMonthlyStatistics', 'congregationComparativeReports',
+  'comparativeReportHistory', 'comparativeReportRemarks',
 ];
 // auditLog (local-only by design) and presence are intentionally not migrated.
 
@@ -35,7 +42,27 @@ try {
   console.error(String(e.message ?? e).slice(0, 300));
   process.exit(1);
 }
-const store = DRY ? null : await createStore();
+
+let sqlSeq = 0;
+const sqlLines = [];
+const hex = (s) => 'CONVERT(0x' + Buffer.from(s, 'utf8').toString('hex') + ' USING utf8mb4)';
+const sqlStore = {
+  async transaction(fn) {
+    await fn({
+      put: async (collection, id, data) => {
+        sqlSeq += 1;
+        const cong = congregationOf(collection, data);
+        sqlLines.push(
+          'INSERT INTO documents (collection, doc_id, data, version, seq, deleted, congregation_id, updated_at, updated_by) VALUES (' +
+            [hex(collection), hex(id), hex(JSON.stringify(data)), 1, sqlSeq, 0, cong == null ? 'NULL' : hex(String(cong)), Date.now(), "'import'"].join(', ') +
+            ') ON DUPLICATE KEY UPDATE data = VALUES(data), version = version + 1, seq = VALUES(seq), deleted = 0, congregation_id = VALUES(congregation_id), updated_at = VALUES(updated_at), updated_by = VALUES(updated_by);',
+        );
+      },
+    });
+  },
+  async close() {},
+};
+const store = DRY ? null : SQL_FILE ? sqlStore : await createStore();
 
 /** Firestore Timestamps / GeoPoints → plain JSON the app's Gson understands (epoch millis). */
 function plain(value) {
@@ -81,3 +108,8 @@ if (DRY) {
 }
 console.log(`Done: ${total} documents ${DRY ? '(dry run — nothing written)' : 'written'}.`);
 await store?.close();
+if (SQL_FILE) {
+  sqlLines.push("UPDATE counters SET value = GREATEST(value, " + sqlSeq + ") WHERE name = 'seq';");
+  writeFileSync(SQL_FILE, sqlLines.join('\n') + '\n');
+  console.log('SQL file written: ' + SQL_FILE + ' (' + sqlLines.length + ' statements)');
+}
