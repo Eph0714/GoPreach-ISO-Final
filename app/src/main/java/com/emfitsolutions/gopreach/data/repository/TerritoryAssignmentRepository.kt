@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.tasks.await
+import kotlinx.serialization.json.put
 
 private const val ASSIGNMENTS_COLLECTION = "territoryAssignments"
 private const val BARANGAYS_COLLECTION = "territoryAssignmentBarangays"
@@ -93,7 +94,30 @@ class TerritoryAssignmentRepository(
     private val connectivityObserver: ConnectivityObserver,
     private val auditLogRepository: AuditLogRepository,
     private val appScope: CoroutineScope,
+    private val syncApi: com.emfitsolutions.gopreach.data.remote.SyncApi,
+    private val syncEngine: com.emfitsolutions.gopreach.data.sync.SyncEngine,
 ) {
+    /**
+     * With the Hostinger backend the three claim operations are the server's own transactions (barangay claims are serialized there,
+     * so two admins can never take the same barangay). The server answers 200 / 409 {barangayName, takenByGroupName} / 403 / 400.
+     */
+    private suspend fun viaServer(path: String, body: kotlinx.serialization.json.JsonObject, resultId: String, auditAction: String, congregationId: String, actorPersonId: String, details: String): TerritoryAssignmentResult {
+        val reply = try { syncApi.postJson(path, body) } catch (e: Exception) { return TerritoryAssignmentResult.Error(e.message ?: "Couldn't reach the server.") }
+        val message = (reply.body?.get("message") as? kotlinx.serialization.json.JsonPrimitive)?.content
+        return when (reply.status) {
+            200 -> {
+                runCatching { syncEngine.syncOnce() }
+                auditLogRepository.log(actorPersonId = actorPersonId, action = auditAction, targetType = "TerritoryAssignment", targetId = resultId, congregationId = congregationId, details = details)
+                TerritoryAssignmentResult.Success(resultId)
+            }
+            409 -> TerritoryAssignmentResult.Conflict(
+                (reply.body?.get("barangayName") as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "a barangay",
+                (reply.body?.get("takenByGroupName") as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "another group",
+            )
+            else -> TerritoryAssignmentResult.Error(message ?: "The server did not allow that change.")
+        }
+    }
+
     fun observeAssignments(): Flow<List<TerritoryAssignment>> = offline.observeCollection(ASSIGNMENTS_COLLECTION)
     fun observeBarangayClaims(): Flow<List<TerritoryAssignmentBarangay>> = offline.observeCollection(BARANGAYS_COLLECTION)
 
@@ -128,6 +152,28 @@ class TerritoryAssignmentRepository(
         actorPersonId: String,
     ): TerritoryAssignmentResult {
         if (!connectivityObserver.isOnline()) return TerritoryAssignmentResult.Offline()
+        if (com.emfitsolutions.gopreach.data.sync.BackendConfig.enabled) {
+            val keep = municipalities.filter { it.barangays.isNotEmpty() }
+            if (keep.isEmpty()) return TerritoryAssignmentResult.Error("Select at least one barangay.")
+            if (keep.sumOf { it.barangays.size } > MAX_BARANGAYS_PER_SAVE) {
+                return TerritoryAssignmentResult.Error("You can assign at most $MAX_BARANGAYS_PER_SAVE barangays in one save. Split this into two assignments.")
+            }
+            val body = kotlinx.serialization.json.buildJsonObject {
+                put("congregationId", congregationId); put("groupId", groupId); put("groupName", groupName)
+                put("provinceId", provinceId); put("provinceName", provinceName)
+                put("municipalities", kotlinx.serialization.json.buildJsonArray {
+                    keep.forEach { m ->
+                        add(kotlinx.serialization.json.buildJsonObject {
+                            put("muncityId", m.muncityId); put("muncityName", m.muncityName)
+                            put("barangays", kotlinx.serialization.json.buildJsonArray {
+                                m.barangays.forEach { b -> add(kotlinx.serialization.json.buildJsonObject { put("id", b.id); put("name", b.name) }) }
+                            })
+                        })
+                    }
+                })
+            }
+            return viaServer("/v1/territory/save", body, groupId, "EDIT_TERRITORY_ASSIGNMENT", congregationId, actorPersonId, "group=$groupName province=$provinceName municipalities=${keep.size} barangays=${keep.sumOf { it.barangays.size }}")
+        }
         val selections = municipalities.filter { it.barangays.isNotEmpty() }
         if (selections.isEmpty()) return TerritoryAssignmentResult.Error("Select at least one barangay.")
         val totalBarangays = selections.sumOf { it.barangays.size }
@@ -298,6 +344,10 @@ class TerritoryAssignmentRepository(
         actorPersonId: String,
     ): TerritoryAssignmentResult {
         if (!connectivityObserver.isOnline()) return TerritoryAssignmentResult.Offline()
+        if (com.emfitsolutions.gopreach.data.sync.BackendConfig.enabled) {
+            val body = kotlinx.serialization.json.buildJsonObject { put("congregationId", congregationId); put("groupId", groupId); put("provinceId", provinceId) }
+            return viaServer("/v1/territory/remove-group", body, groupId, "REMOVE_TERRITORY_ASSIGNMENT", congregationId, actorPersonId, "group=$groupId province=$provinceId")
+        }
         return try {
             // Single-field equality filters only (groupId) — always covered
             // by Firestore's automatic indexing, no composite index needed —
@@ -349,6 +399,10 @@ class TerritoryAssignmentRepository(
      * keep every one of its barangays unavailable to every other Group. */
     suspend fun removeAssignment(assignmentId: String, congregationId: String, actorPersonId: String): TerritoryAssignmentResult {
         if (!connectivityObserver.isOnline()) return TerritoryAssignmentResult.Offline()
+        if (com.emfitsolutions.gopreach.data.sync.BackendConfig.enabled) {
+            val body = kotlinx.serialization.json.buildJsonObject { put("assignmentId", assignmentId) }
+            return viaServer("/v1/territory/remove", body, assignmentId, "REMOVE_TERRITORY_ASSIGNMENT", congregationId, actorPersonId, "assignment=$assignmentId")
+        }
         return try {
             // Firestore transactions can't run an arbitrary query, only
             // get() on already-known refs — so the claim docs belonging to

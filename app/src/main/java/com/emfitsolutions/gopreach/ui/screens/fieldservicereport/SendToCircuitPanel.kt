@@ -1,6 +1,22 @@
 package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.ui.components.co.CoButton
+import com.emfitsolutions.gopreach.ui.components.co.CoKind
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,16 +72,20 @@ private fun statusHeadline(status: CoReportStatus?): String = when (status) {
 @Composable
 fun SendToCircuitPanel(
     congregation: Congregation,
-    month: Long,
-    monthLabel: String,
     actorPersonId: String,
     viewModel: FieldServiceReportViewModel,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
-    val submission by remember(congregation.id, month) { viewModel.submissionFor(congregation.id, month) }
+    // The Report Month is ALWAYS chosen here by the user - nothing is preselected and the device's date never decides it.
+    var chosenMonth by remember(congregation.id) { mutableStateOf<Long?>(null) }
+    val month = chosenMonth ?: 0L
+    val monthLabel = chosenMonth?.let { SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date(it)) } ?: "the selected month"
+    val monthOptions = remember { (0 until 36).map { fieldServiceMonthStart(it) } }
+    val submission by remember(congregation.id, chosenMonth) { if (chosenMonth == null) kotlinx.coroutines.flow.flowOf(null) else viewModel.submissionFor(congregation.id, month) }
         .collectAsStateWithLifecycle(initialValue = null)
-    val overview by remember(congregation.id, month) { viewModel.publisherOverview(congregation.id, month) }.collectAsStateWithLifecycle(initialValue = PublisherOverview(0, 0))
+    val overview by remember(congregation.id, chosenMonth) { if (chosenMonth == null) kotlinx.coroutines.flow.flowOf(PublisherOverview(0, 0)) else viewModel.publisherOverview(congregation.id, month) }
+        .collectAsStateWithLifecycle(initialValue = PublisherOverview(0, 0))
     val requireAll by viewModel.requireAllPublishersSubmitted.collectAsStateWithLifecycle(initialValue = false)
     val blockedByPublishers = requireAll && overview.notSubmitted > 0
     var confirmSend by remember { mutableStateOf(false) }
@@ -76,7 +96,8 @@ fun SendToCircuitPanel(
 
     val current = submission
     val status = current?.status ?: CoReportStatus.NOT_SUBMITTED
-    val future = isFutureServiceMonth(month, System.currentTimeMillis())
+    val future = chosenMonth != null && isFutureServiceMonth(month, System.currentTimeMillis())
+    val monthReady = chosenMonth != null
 
     fun run(done: String, block: suspend () -> CircuitResult) {
         busy = true
@@ -94,7 +115,14 @@ fun SendToCircuitPanel(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("Circuit Overseer", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text("$monthLabel: ${statusHeadline(status)}", style = MaterialTheme.typography.bodySmall)
+                    com.emfitsolutions.gopreach.ui.screens.territoryassignments.SimpleDropdown(
+                        label = "Report Month (required)",
+                        selectedLabel = chosenMonth?.let { monthLabel } ?: "Select the month you are submitting",
+                        options = monthOptions.map { it.toString() to SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date(it)) },
+                        onSelected = { chosenMonth = it.toLong(); message = null },
+                    )
+                    if (!monthReady) Text("Choose the Report Month before submitting.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    if (monthReady) Text("$monthLabel: ${statusHeadline(status)}" + if (current != null && status != CoReportStatus.NOT_SUBMITTED) " - a report for this month already exists" else "", style = MaterialTheme.typography.bodySmall)
                     when (status) {
                         CoReportStatus.SUBMITTED -> Text(
                             "Publishers can no longer add, edit or delete records for this month. You can undo the sending until the Circuit Overseer receives it.",
@@ -125,7 +153,7 @@ fun SendToCircuitPanel(
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (status.canSend) {
-                        Button(enabled = !busy && !future && !blockedByPublishers, onClick = { confirmSend = true }) {
+                        Button(enabled = monthReady && !busy && !future && !blockedByPublishers, onClick = { confirmSend = true }) {
                             Text(if (status == CoReportStatus.RETURNED) "Send Again" else "Send Field Service Report")
                         }
                     }
@@ -152,7 +180,8 @@ fun SendToCircuitPanel(
             title = { Text("Send Field Service Report?") },
             text = {
                 Text(
-                    (if (overview.notSubmitted > 0) "${overview.notSubmitted} publisher(s) have not submitted yet. " else "") +
+                    "You are submitting the Field Service Report for $monthLabel. Continue?\n\n" +
+                        (if (overview.notSubmitted > 0) "${overview.notSubmitted} publisher(s) have not submitted yet. " else "") +
                         "The $monthLabel Field Service Report will be submitted to the Circuit Overseer. " +
                         "Publishers will no longer be able to add, edit or delete their records for this month until it is returned or the sending is undone.",
                 )
@@ -245,15 +274,24 @@ fun CoReviewPanel(
                     value = remarks, onValueChange = { remarks = it }, label = { Text("CO Remarks") },
                     minLines = 2, modifier = Modifier.fillMaxWidth(),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (status.status == CoReportStatus.SUBMITTED) {
-                        Button(enabled = !busy, onClick = { run { viewModel.receiveMonth(status.id, remarks, actorPersonId) } }) { Text("Mark Received") }
-                    }
-                    OutlinedButton(enabled = !busy && remarks != status.coRemarks.orEmpty(), onClick = { run { viewModel.saveCoRemarks(status.id, remarks, actorPersonId) } }) {
-                        Text("Save Remarks")
-                    }
+                // The Circuit Overseer account's one button system: the main action full width, the other two share the next row.
+                if (status.status == CoReportStatus.SUBMITTED) {
+                    CoButton(
+                        "Mark Received", { run { viewModel.receiveMonth(status.id, remarks, actorPersonId) } },
+                        kind = CoKind.Success, icon = Icons.Rounded.CheckCircle, enabled = !busy, fillWidth = true,
+                    )
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    CoButton(
+                        "Save Remarks", { run { viewModel.saveCoRemarks(status.id, remarks, actorPersonId) } },
+                        modifier = Modifier.weight(1f), kind = CoKind.Secondary, icon = Icons.Rounded.Save,
+                        enabled = !busy && remarks != status.coRemarks.orEmpty(),
+                    )
                     if (status.status == CoReportStatus.SUBMITTED || status.status == CoReportStatus.RECEIVED) {
-                        OutlinedButton(enabled = !busy, onClick = { returning = true }) { Text("Return") }
+                        CoButton(
+                            "Return", { returning = true }, modifier = Modifier.weight(1f),
+                            kind = CoKind.Warning, icon = Icons.AutoMirrored.Rounded.Undo, enabled = !busy,
+                        )
                     }
                 }
             } else if (!status.coRemarks.isNullOrBlank()) {

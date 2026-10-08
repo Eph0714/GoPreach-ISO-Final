@@ -183,7 +183,8 @@ fun BarangayBoundaryDialog(
     // content actually span the full screen instead of being capped to
     // Android's default dialog max-width, same as every other full-screen
     // Dialog in this app.
-    var fullScreen by remember { mutableStateOf(false) }
+    // A single barangay opens full screen (Exit / Back brings the title bar back), with a light boundary fill so pins and labels stay on top.
+    var fullScreen by remember { mutableStateOf(true) }
     Dialog(onDismissRequest = { if (fullScreen) fullScreen = false else onDismiss() }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         HideSystemBarsEffect(fullScreen)
         Scaffold(
@@ -273,6 +274,7 @@ fun BarangayBoundaryDialog(
                             landmarks = landmarks,
                             areas = areas,
                             boundaryColorHex = boundaryColorHex,
+                            boundaryFillOpacity = 0.03f,
                             exportTitle = "$barangayName $municipality",
                             fullScreen = fullScreen,
                             onFullScreenChange = { fullScreen = it },

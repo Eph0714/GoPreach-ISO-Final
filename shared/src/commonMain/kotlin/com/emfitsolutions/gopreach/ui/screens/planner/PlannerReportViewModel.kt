@@ -15,7 +15,14 @@ import kotlinx.coroutines.flow.map
 class PlannerReportViewModel(
     private val publisherReportService: PublisherReportService,
     private val monthlyReportRepository: com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository,
+    private val coReports: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository,
 ) : ViewModel() {
+    /** The congregation's months already sent to the Circuit Overseer (Submitted or Received) — closed in My Planner for everyone in it. */
+    fun congregationLockedMonths(congregationId: String?): Flow<Set<Long>> =
+        coReports.observeStatuses().map { list ->
+            if (congregationId == null) emptySet() else list.filter { it.congregationId == congregationId && it.isLocked }.map { it.periodMonth }.toSet()
+        }
+
     fun reportText(publisherPersonId: String, periodMonth: Long): Flow<String> =
         publisherReportService.observe(publisherPersonId, flowOf(periodMonth)).map { it.toReport().toText() }
 

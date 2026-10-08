@@ -23,7 +23,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.CloseFullscreen
 import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.OpenInFull
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -152,7 +154,10 @@ fun FieldServiceReportScreen(
     // Opens full screen: system bars and the filter controls are hidden so the report fills the display; the toolbar icon brings them back.
     var fullScreen by rememberSaveable { mutableStateOf(true) }
     val fullScreenActive = fullScreen && congregationId != null // with no congregation chosen yet the picker must stay visible
-    com.emfitsolutions.gopreach.ui.components.map.HideSystemBarsEffect(fullScreenActive)
+    // "Table only": hides the toolbar, the congregation bar, the Circuit Overseer panel and the search box so the report table fills the whole display.
+    var tableOnly by rememberSaveable { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = tableOnly) { tableOnly = false }
+    com.emfitsolutions.gopreach.ui.components.map.HideSystemBarsEffect(fullScreenActive || tableOnly)
     val wholeCongregation = if (showingAll && groupByCongregation) congregations.firstOrNull { it.id == congregationId } else null
 
     // The period: From..To months (both default to this month = a single-month report).
@@ -248,14 +253,24 @@ fun FieldServiceReportScreen(
     var rejectTarget by remember { mutableStateOf<FieldServiceReportListItem?>(null) }
     var reverseTarget by remember { mutableStateOf<FieldServiceReportListItem?>(null) }
 
+    // Back from a chosen congregation returns to the congregation picker (Super-Admin / Circuit Overseer); it only leaves the report from the picker itself.
+    val backToPicker = fixedCongregationId == null && congregationId != null
+    val goBack: () -> Unit = {
+        if (backToPicker) { pickedCongregationId = null; if (restricted) CircuitScopeStore.selectCongregation(null); selectedGroupId = ALL_GROUPS; query = "" } else onBack()
+    }
+    androidx.activity.compose.BackHandler(enabled = backToPicker) { goBack() }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Field Service Report") },
+            if (!tableOnly) TopAppBar(
+                title = { Text("Field Service Report", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+                    IconButton(onClick = goBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
+                    IconButton(enabled = congregationId != null && !compareMode && !listView, onClick = { tableOnly = true }) {
+                        Icon(Icons.Rounded.OpenInFull, contentDescription = "View the table full screen")
+                    }
                     IconButton(onClick = { fullScreen = !fullScreen }) {
                         Icon(if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, contentDescription = if (fullScreenActive) "Show filters" else "Full screen")
                     }
@@ -269,16 +284,17 @@ fun FieldServiceReportScreen(
             )
         },
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (restricted && congregationId != null) {
+        Box(Modifier.fillMaxSize().padding(padding)) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (!tableOnly && restricted && congregationId != null) {
                 SelectedCongregationBar(
                     name = congregations.firstOrNull { it.id == congregationId }?.name.orEmpty(),
                     onChange = { pickedCongregationId = null; CircuitScopeStore.selectCongregation(null); selectedGroupId = ALL_GROUPS },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
-            if (!fullScreenActive) Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (fixedCongregationId == null) {
+            if (!fullScreenActive && !tableOnly && !(restricted && congregationId == null)) Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (fixedCongregationId == null && !restricted) {
                     SimpleDropdown(
                         label = "Congregation",
                         selectedLabel = congregations.firstOrNull { it.id == congregationId }?.name.orEmpty(),
@@ -318,7 +334,7 @@ fun FieldServiceReportScreen(
                 )
                 }
             }
-                if (!fullScreenActive) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 16.dp)) {
+                if (!fullScreenActive && !tableOnly && !(restricted && congregationId == null)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 16.dp)) {
                     if (compareMode) {
                         FilterChip(selected = compareView == "report", onClick = { compareView = "report" }, label = { Text("Report View") })
                         FilterChip(selected = compareView == "list", onClick = { compareView = "list" }, label = { Text("List View") })
@@ -329,7 +345,7 @@ fun FieldServiceReportScreen(
                     }
                     FilterChip(selected = compareMode, onClick = { compareMode = !compareMode; if (compareMode) listView = false }, label = { Text("Compare Periods") })
                 }
-            if (coMode && congregationId != null && !compareMode && !listView) {
+            if (!tableOnly && coMode && congregationId != null && !compareMode && !listView) {
                 visibleMonths.firstOrNull { it.periodMonth == fromMonth }?.let { st ->
                     CoReviewPanel(
                         status = st,
@@ -342,7 +358,7 @@ fun FieldServiceReportScreen(
                     )
                 }
             }
-            if (recordScope != null && editingAllowed) {
+            if (!tableOnly && recordScope != null && editingAllowed) {
                 RecordScopeBar(
                     activeRole = activeRoleLabel ?: currentRole?.name?.replace('_', ' ').orEmpty(),
                     scope = recordScope,
@@ -364,20 +380,18 @@ fun FieldServiceReportScreen(
                     )
                 }
             }
-            if (canSendToCircuit && !restricted && congregationId != null && showingAll && groupByCongregation && fromMonth == toMonth && !compareMode && !listView) {
+            if (!tableOnly && canSendToCircuit && !restricted && congregationId != null && showingAll && groupByCongregation && fromMonth == toMonth && !compareMode && !listView) {
                 val congregation = congregations.firstOrNull { it.id == congregationId }
                 if (congregation != null) {
                     SendToCircuitPanel(
                         congregation = congregation,
-                        month = fromMonth,
-                        monthLabel = labelOf(fromMonth),
                         actorPersonId = currentPersonId,
                         viewModel = viewModel,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
             }
-            if (congregationId != null && !compareMode && !coModeEmpty(coMode, visibleMonths.size)) {
+            if (!tableOnly && congregationId != null && !compareMode && !coModeEmpty(coMode, visibleMonths.size)) {
                 androidx.compose.material3.OutlinedTextField(
                     value = query, onValueChange = { query = it }, singleLine = true, label = { Text("Search records...") },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -386,6 +400,11 @@ fun FieldServiceReportScreen(
             }
             val current = searchedSheets
             when {
+                restricted && congregationId == null -> com.emfitsolutions.gopreach.ui.screens.circuit.SelectCongregationPrompt(
+                    congregations = congregations,
+                    onSelect = { pickedCongregationId = it; CircuitScopeStore.selectCongregation(it); selectedGroupId = ALL_GROUPS },
+                    hint = "Choose a congregation under your assigned Circuit to view its Field Service Report.",
+                )
                 coMode && congregationId != null && visibleMonths.isEmpty() -> Message("This congregation has not submitted any Field Service Report yet. Months appear here once they are submitted.")
                 selectedGroupId == null || reportGroups.isEmpty() -> Message(
                     if (restricted && congregationId == null) "Select a Congregation — choose a congregation under your assigned Circuit to view its Field Service Report."
@@ -455,6 +474,15 @@ fun FieldServiceReportScreen(
                     }
                 }
             }
+        }
+        if (tableOnly) {
+            // The one control left on screen: a small round button to come back.
+            androidx.compose.material3.SmallFloatingActionButton(
+                onClick = { tableOnly = false },
+                modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(12.dp),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+            ) { Icon(Icons.Rounded.CloseFullscreen, contentDescription = "Exit full screen table") }
+        }
         }
     }
 

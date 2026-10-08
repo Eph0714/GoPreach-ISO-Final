@@ -105,7 +105,7 @@ class RestrictedSessionSync(
      * The security rules open a month's records to the overseer only once its status is Submitted / Received / Returned and
      * can only prove that for a query pinned to one congregation and one month, so each month is its own listener.
      */
-    fun monthRecords(congregationId: String, periodMonth: Long): Flow<Unit> = mirrorFirestoreCollection(
+    fun monthRecords(congregationId: String, periodMonth: Long): Flow<Unit> = if (BackendConfig.enabled) emptyFlow() else mirrorFirestoreCollection(
         firestore, offline, appScope, "monthlyReports", MonthlyReport::class.java,
         query = firestore.collection("monthlyReports").whereEqualTo("congregationId", congregationId).whereEqualTo("periodMonth", periodMonth),
         registrationKey = "monthlyReports#$congregationId#$periodMonth",

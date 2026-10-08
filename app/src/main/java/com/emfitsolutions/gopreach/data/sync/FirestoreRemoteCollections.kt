@@ -27,7 +27,9 @@ class FirestoreRemoteCollections(
     }
 
     override fun <T : Any> mirror(collectionPath: String, kClass: KClass<T>, equalTo: Pair<String, String>?, idOf: (T) -> String): Flow<Unit> =
-        mirrorFirestoreCollection(firestore, offline, appScope, collectionPath, kClass.java, query(collectionPath, equalTo), idOf = idOf)
+        // With the Hostinger backend set, records arrive through SyncEngine (pull); no Firestore listener is opened.
+        if (BackendConfig.enabled) kotlinx.coroutines.flow.emptyFlow()
+        else mirrorFirestoreCollection(firestore, offline, appScope, collectionPath, kClass.java, query(collectionPath, equalTo), idOf = idOf)
 
     override suspend fun pushNow(collectionPath: String, documentId: String, data: Any) {
         firestore.collection(collectionPath).document(documentId).set(data).await()
@@ -43,7 +45,7 @@ class FirestoreRemoteCollections(
     override suspend fun countWhere(collectionPath: String, field: String, value: String, limit: Int): Int =
         firestore.collection(collectionPath).whereEqualTo(field, value).limit(limit.toLong()).get(Source.SERVER).await().size()
 
-    override fun <T : Any> mirrorGroup(groupId: String, kClass: KClass<T>, equalTo: Pair<String, String>?, pathOf: (T) -> String, idOf: (T) -> String): Flow<Unit> = callbackFlow {
+    override fun <T : Any> mirrorGroup(groupId: String, kClass: KClass<T>, equalTo: Pair<String, String>?, pathOf: (T) -> String, idOf: (T) -> String): Flow<Unit> = if (BackendConfig.enabled) kotlinx.coroutines.flow.emptyFlow() else callbackFlow {
         val base = firestore.collectionGroup(groupId)
         val query = if (equalTo == null) base else base.whereEqualTo(equalTo.first, equalTo.second)
         val registration = query.addSnapshotListener { snapshot, error ->

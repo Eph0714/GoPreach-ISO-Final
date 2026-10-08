@@ -244,7 +244,8 @@ fun TerritoryMapScreen(
     val chosenCongregationId = if (restricted) CircuitScopeStore.congregation else pickedCongregationId
     val congregationId = (fixedCongregationId ?: chosenCongregationId)
         ?.takeIf { allowedCongregationIds == null || it in allowedCongregationIds }
-    if (restricted && congregationId == null) {
+    // Super-Admin and Circuit Overseer always choose a congregation before the territory map opens.
+    if (fixedCongregationId == null && congregationId == null) {
         androidx.compose.material3.Scaffold(
             topBar = {
                 androidx.compose.material3.TopAppBar(
@@ -255,9 +256,9 @@ fun TerritoryMapScreen(
         ) { padding ->
             com.emfitsolutions.gopreach.ui.screens.circuit.SelectCongregationPrompt(
                 congregations = congregations,
-                onSelect = { CircuitScopeStore.selectCongregation(it) },
+                onSelect = { if (restricted) CircuitScopeStore.selectCongregation(it) else pickedCongregationId = it },
                 modifier = Modifier.padding(padding),
-                hint = "Choose a congregation under your assigned Circuit to view its territory.",
+                hint = if (restricted) "Choose a congregation under your assigned Circuit to view its territory." else "Choose a congregation to view its territory map.",
             )
         }
         return
@@ -267,7 +268,7 @@ fun TerritoryMapScreen(
     val groups by remember(congregationId) { viewModel.groupsFor(congregationId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val hasMine = !isSuperAdmin && myGroupId != null
     // A view-only Circuit Overseer opens on "Show FS Group" (every FS Group of the congregation) — they have no FS Group of their own.
-    var scope by rememberSaveable { mutableStateOf(if (readOnly) GroupScope.ALL else GroupScope.MINE) }
+    var scope by rememberSaveable { mutableStateOf(if (readOnly || fixedCongregationId == null) GroupScope.ALL else GroupScope.MINE) }
     var otherGroupId by rememberSaveable { mutableStateOf<String?>(null) }
     var showGroupPicker by rememberSaveable { mutableStateOf(false) }
     // Province -> Municipality -> Barangay selection (kept across the group scopes: picking a Barangay shows the whole
@@ -452,7 +453,9 @@ fun TerritoryMapScreen(
     // current (filtered) records by distance; stepping restarts whenever a filter changes.
     var stepOrder by remember(datasetKey, typeFilter, municipalityFilter, territoryFilter) { mutableStateOf<SortOrder?>(null) }
     var stepIndex by remember(datasetKey, typeFilter, municipalityFilter, territoryFilter) { mutableIntStateOf(-1) }
-    var viewMode by rememberSaveable { mutableStateOf(ViewMode.MAP) }
+    var viewMode by rememberSaveable { mutableStateOf(if (fixedCongregationId == null) ViewMode.LIST else ViewMode.MAP) }
+    // Super-Admin / Circuit Overseer: every congregation opens on Show FS Group and the List view.
+    androidx.compose.runtime.LaunchedEffect(congregationId) { if (fixedCongregationId == null && focusLat == null) { scope = GroupScope.ALL; viewMode = ViewMode.LIST } }
     // Full-screen Map View: hides the app bar, the controls above the map and
     // the system bars so the map fills the display; Back exits it first.
     // The Territory Map opens in full screen (the controls come back with Exit); the user can leave it at any time.
@@ -616,6 +619,9 @@ fun TerritoryMapScreen(
         scopeBeforeBarangay = null
     }
     BackHandler(enabled = territoryFilter != null && !drawingState.active) { if (fullScreenActive) fullScreen = false else backFromBarangay() }
+    // Back from a chosen congregation returns to the congregation picker (Super-Admin / Circuit Overseer).
+    fun backToPicker() { pickedCongregationId = null; if (restricted) CircuitScopeStore.selectCongregation(null); otherGroupId = null; selectedRecordId = null }
+    BackHandler(enabled = fixedCongregationId == null && congregationId != null && territoryFilter == null && !drawingState.active) { backToPicker() }
 
     // Re-fit when a boundary finishes loading too, so a selected Barangay is always framed whole (fit-to-screen).
     val fitKey = "$datasetKey|${typeFilter.name}|$municipalityFilter|$territoryFilter|${barangayGroupFilter}|b${visibleAreas.count { it.id in boundaryJson }}"
@@ -628,7 +634,7 @@ fun TerritoryMapScreen(
                 TopAppBar(
                     title = { Text("Territory Map") },
                     navigationIcon = {
-                        IconButton(onClick = { if (territoryFilter != null && !drawingState.active) backFromBarangay() else onBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+                        IconButton(onClick = { if (territoryFilter != null && !drawingState.active) backFromBarangay() else if (fixedCongregationId == null && congregationId != null) backToPicker() else onBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
                     },
                 )
             }

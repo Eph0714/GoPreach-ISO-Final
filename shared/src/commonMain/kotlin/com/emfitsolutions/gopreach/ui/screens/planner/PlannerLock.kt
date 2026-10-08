@@ -11,9 +11,16 @@ import com.emfitsolutions.gopreach.domain.PublisherReportCalculator
  * read-only as "Submitted".
  */
 @Immutable
-class PlannerLock(private val submittedHoursByMonth: Map<Long, Double>) {
-    /** True when the month containing [anyMillis] has a submitted report. */
-    fun isLocked(anyMillis: Long): Boolean = MonthBounds.of(anyMillis).startInclusive in submittedHoursByMonth
+class PlannerLock(
+    private val submittedHoursByMonth: Map<Long, Double>,
+    /** Months whose whole congregation report was sent to (or received by) the Circuit Overseer. */
+    private val congregationLockedMonths: Set<Long> = emptySet(),
+) {
+    /** True when the month containing [anyMillis] has a submitted report, or the congregation's report for it was sent to the Circuit Overseer. */
+    fun isLocked(anyMillis: Long): Boolean {
+        val month = MonthBounds.of(anyMillis).startInclusive
+        return month in submittedHoursByMonth || month in congregationLockedMonths
+    }
 
     /** "Submitted: 15.5 Hours" for the month containing [anyMillis], or null if it isn't submitted. */
     fun submittedHoursLabel(anyMillis: Long): String? =

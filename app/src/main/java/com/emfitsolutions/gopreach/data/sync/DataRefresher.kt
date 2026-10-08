@@ -27,7 +27,7 @@ private const val TAG = "DataRefresher"
  * "Sync to Server" would additionally do.
  */
 class DataRefresher(
-    private val firebaseAuth: FirebaseAuth,
+    private val auth: com.emfitsolutions.gopreach.data.repository.AuthService,
     private val plannerDayRepository: PlannerDayRepository,
     private val monthlyPlannerGoalRepository: MonthlyPlannerGoalRepository,
     private val weeklyPlannerGoalRepository: WeeklyPlannerGoalRepository,
@@ -48,7 +48,7 @@ class DataRefresher(
      * whether it fully succeeded, but a partial result already updated
      * whatever it could. */
     suspend fun refreshNow(): Boolean {
-        val publisherPersonId = personIdFromAuthEmail(firebaseAuth.currentUser?.email)
+        val publisherPersonId = personIdFromAuthEmail(auth.currentUser?.email)
         val scopedPulls = if (publisherPersonId != null) {
             listOf(
                 "plannerDays" to suspend { plannerDayRepository.pullOnce(publisherPersonId) },

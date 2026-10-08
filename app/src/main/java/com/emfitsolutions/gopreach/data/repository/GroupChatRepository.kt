@@ -12,6 +12,7 @@ import com.google.firebase.storage.FirebaseStorage
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 
 private const val TAG = "GroupChatRepository"
@@ -31,7 +32,21 @@ private const val MESSAGES_SUBCOLLECTION = "messages"
 class GroupChatRepository(
     private val firestore: FirebaseFirestore,
     private val storage: FirebaseStorage,
+    private val offline: com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository,
+    private val syncEngine: com.emfitsolutions.gopreach.data.sync.SyncEngine,
+    private val files: com.emfitsolutions.gopreach.data.remote.RemoteFiles,
 ) {
+    // ---- Hostinger backend mode: the same chats and messages, read from and written to the synchronized local copy ----
+    private val backend get() = com.emfitsolutions.gopreach.data.sync.BackendConfig.enabled
+    private fun localChats(): Flow<List<GroupChat>> = offline.observeCollection<GroupChat>(COLLECTION)
+    private fun localMessages(groupChatId: String): Flow<List<GroupChatMessage>> =
+        offline.observeCollection<GroupChatMessage>("$COLLECTION/$groupChatId/$MESSAGES_SUBCOLLECTION").map { l -> l.sortedBy { it.createdAt } }
+    private suspend fun saveChat(chat: GroupChat) { offline.save(COLLECTION, chat.id, chat); runCatching { syncEngine.syncOnce() } }
+    private suspend fun saveMessage(groupChatId: String, message: GroupChatMessage) {
+        offline.save("$COLLECTION/$groupChatId/$MESSAGES_SUBCOLLECTION", message.id, message)
+    }
+    private fun newLocalId(): String = java.util.UUID.randomUUID().toString().replace("-", "").take(20)
+
     private fun chats() = firestore.collection(COLLECTION)
     private fun messages(groupChatId: String) = chats().document(groupChatId).collection(MESSAGES_SUBCOLLECTION)
 
@@ -41,18 +56,20 @@ class GroupChatRepository(
      * instant [updateParticipants] drops their id, which is what actually
      * makes a removed participant lose access (spec §12). */
     fun observeGroupChatsForParticipant(personId: String): Flow<List<GroupChat>> =
-        observeQuery(chats().whereArrayContains("participantIds", personId))
+        if (backend) localChats().map { l -> l.filter { personId in it.participantIds } }
+        else observeQuery(chats().whereArrayContains("participantIds", personId))
 
     /** Every group chat in one congregation — the Coordinator Elder/Admin
      * management view (spec §2-4: they may manage every group chat in their
      * own congregation, not just ones they personally created/joined). */
     fun observeGroupChatsForCongregation(congregationId: String): Flow<List<GroupChat>> =
-        observeQuery(chats().whereEqualTo("congregationId", congregationId))
+        if (backend) localChats().map { l -> l.filter { it.congregationId == congregationId } }
+        else observeQuery(chats().whereEqualTo("congregationId", congregationId))
 
     /** Every group chat, any congregation — Super-Admin only (spec §5). */
-    fun observeAllGroupChats(): Flow<List<GroupChat>> = observeQuery(chats())
+    fun observeAllGroupChats(): Flow<List<GroupChat>> = if (backend) localChats() else observeQuery(chats())
 
-    fun observeGroupChat(groupChatId: String): Flow<GroupChat?> = callbackFlow {
+    fun observeGroupChat(groupChatId: String): Flow<GroupChat?> = if (backend) localChats().map { l -> l.firstOrNull { it.id == groupChatId } } else callbackFlow {
         val registration = chats().document(groupChatId).addSnapshotListener { snapshot, error ->
             if (error != null) {
                 Log.w(TAG, "observeGroupChat($groupChatId) failed: ${error.message}")
@@ -63,7 +80,7 @@ class GroupChatRepository(
         awaitClose { registration.remove() }
     }
 
-    fun observeMessages(groupChatId: String): Flow<List<GroupChatMessage>> = callbackFlow {
+    fun observeMessages(groupChatId: String): Flow<List<GroupChatMessage>> = if (backend) localMessages(groupChatId) else callbackFlow {
         val registration = messages(groupChatId)
             .orderBy("createdAt", Query.Direction.ASCENDING)
             .addSnapshotListener { snapshot, error ->
@@ -94,7 +111,7 @@ class GroupChatRepository(
         participantIds: List<String>,
         createdByPersonId: String,
     ): GroupChat {
-        val id = chats().document().id
+        val id = if (backend) newLocalId() else chats().document().id
         // The creator (a Coordinator Elder/Admin/Super-Admin) is always a
         // participant of their own group, even if they forgot to tick their
         // own name in the picker — otherwise they'd immediately lose the
@@ -108,11 +125,12 @@ class GroupChatRepository(
             createdByPersonId = createdByPersonId,
             createdAt = System.currentTimeMillis(),
         )
-        chats().document(id).set(chat).await()
+        if (backend) saveChat(chat) else chats().document(id).set(chat).await()
         return chat
     }
 
     suspend fun updateGroupChat(groupChatId: String, groupName: String, description: String) {
+        if (backend) { offline.get<GroupChat>(COLLECTION, groupChatId)?.let { saveChat(it.copy(groupName = groupName, description = description)) }; return }
         chats().document(groupChatId).update(
             mapOf("groupName" to groupName, "description" to description),
         ).await()
@@ -122,10 +140,12 @@ class GroupChatRepository(
      * array. Message history is untouched (spec §12: preserve prior
      * messages for chat history and audit even after removal). */
     suspend fun updateParticipants(groupChatId: String, participantIds: List<String>) {
+        if (backend) { offline.get<GroupChat>(COLLECTION, groupChatId)?.let { saveChat(it.copy(participantIds = participantIds.distinct())) }; return }
         chats().document(groupChatId).update("participantIds", participantIds.distinct()).await()
     }
 
     suspend fun deleteGroupChat(groupChatId: String) {
+        if (backend) { offline.delete(COLLECTION, groupChatId); runCatching { syncEngine.syncOnce() }; return }
         // Best-effort: message docs (and whatever they attached in Storage)
         // are left behind rather than paginating/batch-deleting a
         // potentially large subcollection from the client — acceptable for
@@ -163,6 +183,20 @@ class GroupChatRepository(
             attachmentSize = attachmentSize,
             createdAt = now,
         )
+        if (backend) {
+            val id = messageId ?: newLocalId()
+            saveMessage(groupChatId, message.copy(id = id))
+            offline.get<GroupChat>(COLLECTION, groupChatId)?.let { chat ->
+                saveChat(
+                    chat.copy(
+                        lastMessageText = text.ifBlank { null }, lastMessageSenderName = senderName, lastMessageIsAttachment = attachmentUrl != null,
+                        lastMessageAt = now, messageCount = chat.messageCount + 1,
+                    ),
+                )
+            }
+            runCatching { syncEngine.syncOnce() }
+            return
+        }
         val messageRef = if (messageId != null) messages(groupChatId).document(messageId) else messages(groupChatId).document()
         firestore.runBatch { batch ->
             batch.set(messageRef, message)
@@ -186,6 +220,11 @@ class GroupChatRepository(
      * when a participant opens the chat screen and whenever a new message
      * arrives while it's still open. */
     suspend fun markRead(groupChatId: String, personId: String) {
+        if (backend) {
+            val chat = offline.get<GroupChat>(COLLECTION, groupChatId) ?: return
+            if (chat.readCounts[personId] != chat.messageCount) saveChat(chat.copy(readCounts = chat.readCounts + (personId to chat.messageCount)))
+            return
+        }
         val chatDoc = chats().document(groupChatId).get().await()
         val chat = chatDoc.toObject(GroupChat::class.java) ?: return
         chats().document(groupChatId).update("readCounts.$personId", chat.messageCount).await()
@@ -197,16 +236,23 @@ class GroupChatRepository(
      * freshly-generated id the caller then passes into [sendMessage]'s
      * message doc, so the Storage path and the Firestore doc line up. */
     suspend fun uploadAttachment(groupChatId: String, messageId: String, fileUri: Uri, fileName: String): String {
+        if (backend) return files.upload("groupChats/$groupChatId/attachments/$messageId/$fileName", fileUri.toString())
         val ref = storage.reference.child("groupChats/$groupChatId/attachments/$messageId/$fileName")
         ref.putFile(fileUri).await()
         return ref.downloadUrl.await().toString()
     }
 
-    fun newMessageId(groupChatId: String): String = messages(groupChatId).document().id
+    fun newMessageId(groupChatId: String): String = if (backend) newLocalId() else messages(groupChatId).document().id
 
     /** Sender-only text edit — an attachment, once sent, is immutable (see
      * [GroupChatMessage.isEdited]'s doc comment). */
     suspend fun editMessage(groupChatId: String, messageId: String, newText: String) {
+        if (backend) {
+            offline.get<GroupChatMessage>("$COLLECTION/$groupChatId/$MESSAGES_SUBCOLLECTION", messageId)
+                ?.let { saveMessage(groupChatId, it.copy(text = newText, isEdited = true, editedAt = System.currentTimeMillis())) }
+            runCatching { syncEngine.syncOnce() }
+            return
+        }
         messages(groupChatId).document(messageId).update(
             mapOf("text" to newText, "isEdited" to true, "editedAt" to System.currentTimeMillis()),
         ).await()
@@ -218,7 +264,15 @@ class GroupChatRepository(
      * failing the whole operation over" trade-off [deleteGroupChat] already
      * accepts. */
     suspend fun deleteForEveryone(groupChatId: String, messageId: String, attachmentFileName: String?) {
-        if (attachmentFileName != null) {
+        if (backend) {
+            offline.get<GroupChatMessage>("$COLLECTION/$groupChatId/$MESSAGES_SUBCOLLECTION", messageId)?.let {
+                saveMessage(groupChatId, it.copy(text = "", attachmentUrl = null, attachmentFileName = null, attachmentType = null, attachmentSize = 0L, isDeletedForEveryone = true))
+            }
+            runCatching { syncEngine.syncOnce() }
+            return
+        }
+        if (attachmentFileName != null && backend) files.delete("groupChats/$groupChatId/attachments/$messageId/$attachmentFileName")
+        else if (attachmentFileName != null) {
             runCatching { storage.reference.child("groupChats/$groupChatId/attachments/$messageId/$attachmentFileName").delete().await() }
         }
         messages(groupChatId).document(messageId).update(
@@ -237,6 +291,12 @@ class GroupChatRepository(
      * only (see [GroupChatMessage.deletedForPersonIds]); any participant
      * may call this on any message, not just their own. */
     suspend fun deleteForMe(groupChatId: String, messageId: String, personId: String) {
+        if (backend) {
+            offline.get<GroupChatMessage>("$COLLECTION/$groupChatId/$MESSAGES_SUBCOLLECTION", messageId)
+                ?.let { saveMessage(groupChatId, it.copy(deletedForPersonIds = (it.deletedForPersonIds + personId).distinct())) }
+            runCatching { syncEngine.syncOnce() }
+            return
+        }
         messages(groupChatId).document(messageId).update("deletedForPersonIds", FieldValue.arrayUnion(personId)).await()
     }
 }

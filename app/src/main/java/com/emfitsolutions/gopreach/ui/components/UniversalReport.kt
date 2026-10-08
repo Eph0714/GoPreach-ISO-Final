@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.ui.components.co.CoButton
+import com.emfitsolutions.gopreach.ui.components.co.CoKind
+import androidx.compose.material.icons.rounded.Print
+import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -149,8 +153,8 @@ fun <T> UniversalReport(
                     sorts.forEach { s -> FilterChip(selected = sortId == s.id, onClick = { sortId = s.id }, label = { Text(s.label) }) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(enabled = shown.isNotEmpty(), onClick = { TableReportExporter.print(context, exportData()) }) { Text("Print / PDF") }
-                    OutlinedButton(enabled = shown.isNotEmpty(), onClick = { TableReportExporter.shareExcel(context, exportData()) }) { Text("Excel") }
+                    CoButton("Print / PDF", { TableReportExporter.print(context, exportData()) }, kind = CoKind.Secondary, icon = Icons.Rounded.Print, enabled = shown.isNotEmpty())
+                    CoButton("Excel", { TableReportExporter.shareExcel(context, exportData()) }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart, enabled = shown.isNotEmpty())
                     trailingActions()
                 }
             }

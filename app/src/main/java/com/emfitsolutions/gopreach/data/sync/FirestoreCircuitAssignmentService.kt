@@ -53,7 +53,7 @@ class FirestoreCircuitAssignmentService(
             // Firestore wraps whatever a transaction lambda throws; unwrap ours.
             val conflict = generateSequence<Throwable>(e) { it.cause }.filterIsInstance<CircuitConflict>().firstOrNull()
             if (conflict != null) CircuitResult.Conflict(conflict.message ?: "That assignment conflicts with an existing one.")
-            else CircuitResult.Error(e.message ?: "Couldn't save. Please try again.")
+            else CircuitResult.Error(friendlyServerError(e))
         }
     }
 

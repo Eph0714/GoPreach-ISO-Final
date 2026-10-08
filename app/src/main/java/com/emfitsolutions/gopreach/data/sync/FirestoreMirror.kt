@@ -89,7 +89,8 @@ fun <T : Any> mirrorFirestoreCollection(
      * collection through several queries at once (a Circuit Overseer's per-congregation chunks) gives each its own key. */
     registrationKey: String = collectionPath,
     idOf: (T) -> String,
-): Flow<Unit> = callbackFlow {
+// With the Hostinger backend set, no live Firestore listener is ever opened: SyncEngine pulls instead.
+): Flow<Unit> = if (BackendConfig.enabled) kotlinx.coroutines.flow.emptyFlow() else callbackFlow {
     @Suppress("UNCHECKED_CAST") val serializer = kotlinx.serialization.serializer(clazz) as kotlinx.serialization.KSerializer<T>
     var retryCount = 0
 

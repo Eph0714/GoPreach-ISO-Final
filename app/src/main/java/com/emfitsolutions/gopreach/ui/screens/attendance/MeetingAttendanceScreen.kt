@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.attendance
 
+import com.emfitsolutions.gopreach.ui.components.co.CoButton
+import com.emfitsolutions.gopreach.ui.components.co.CoKind
+import androidx.compose.material.icons.rounded.Print
+import androidx.compose.material.icons.rounded.TableChart
 import android.app.DatePickerDialog
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.ScrollState
@@ -226,9 +230,13 @@ fun MeetingAttendanceScreen(
         )
     }
 
+    var fullScreen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    com.emfitsolutions.gopreach.ui.components.co.CoFullScreenEffect(fullScreen)
+    androidx.activity.compose.BackHandler(enabled = fullScreen) { fullScreen = false }
     Scaffold(
         topBar = {
             TopAppBar(
+                actions = { com.emfitsolutions.gopreach.ui.components.co.CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
                 title = { Text("Meeting Attendance") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )
@@ -274,8 +282,8 @@ fun MeetingAttendanceScreen(
                     }) { Text("Clear All") }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(enabled = shown.isNotEmpty(), onClick = { TableReportExporter.print(context, exportData()) }) { Text("Print / PDF") }
-                    OutlinedButton(enabled = shown.isNotEmpty(), onClick = { TableReportExporter.shareExcel(context, exportData()) }) { Text("Excel") }
+                    CoButton("Print / PDF", { TableReportExporter.print(context, exportData()) }, kind = CoKind.Secondary, icon = Icons.Rounded.Print, enabled = shown.isNotEmpty())
+                    CoButton("Excel", { TableReportExporter.shareExcel(context, exportData()) }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart, enabled = shown.isNotEmpty())
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (canEdit) {

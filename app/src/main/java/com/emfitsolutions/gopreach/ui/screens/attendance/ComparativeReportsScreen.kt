@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.attendance
 
+import com.emfitsolutions.gopreach.ui.components.co.CoButton
+import com.emfitsolutions.gopreach.ui.components.co.CoKind
+import androidx.compose.material.icons.rounded.Print
+import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -222,9 +226,13 @@ fun ComparativeReportsScreen(
         }
     }
 
+    var fullScreen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    com.emfitsolutions.gopreach.ui.components.co.CoFullScreenEffect(fullScreen)
+    androidx.activity.compose.BackHandler(enabled = fullScreen) { fullScreen = false }
     Scaffold(
         topBar = {
             TopAppBar(
+                actions = { com.emfitsolutions.gopreach.ui.components.co.CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
                 title = { Text(if (open != null) "Comparative Report ${open.reportNumber}" else if (creating) "Create Comparative Report" else "Comparative Reports") },
                 navigationIcon = {
                     IconButton(onClick = { when { creating -> { creating = false; editPeriods = false }; openId != null -> { openId = null; editPeriods = false }; else -> onBack() } }) {
@@ -330,7 +338,7 @@ fun ComparativeReportsScreen(
                             }
                             OutlinedButton(onClick = { doExport(open, "Print") }) { Text("Print") }
                             OutlinedButton(onClick = { doExport(open, "PDF") }) { Text("PDF") }
-                            OutlinedButton(onClick = { doExport(open, "Excel") }) { Text("Excel") }
+                            CoButton("Excel", { doExport(open, "Excel") }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart)
                         }
 
                         if (snap == null) Text("This report's saved content could not be read.", color = MaterialTheme.colorScheme.error)
@@ -416,7 +424,7 @@ fun ComparativeReportsScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(enabled = visible.isNotEmpty(), onClick = { com.emfitsolutions.gopreach.data.export.TableReportExporter.print(context, listExport()) }) { Text("Print") }
                             OutlinedButton(enabled = visible.isNotEmpty(), onClick = { com.emfitsolutions.gopreach.data.export.TableReportExporter.print(context, listExport()) }) { Text("PDF") }
-                            OutlinedButton(enabled = visible.isNotEmpty(), onClick = { com.emfitsolutions.gopreach.data.export.TableReportExporter.shareExcel(context, listExport()) }) { Text("Excel") }
+                            CoButton("Excel", { com.emfitsolutions.gopreach.data.export.TableReportExporter.shareExcel(context, listExport()) }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart, enabled = visible.isNotEmpty())
                         }
                     }
                     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -465,7 +473,7 @@ fun ComparativeReportsScreen(
                                                 OutlinedButton(onClick = { openId = r.id }) { Text("View") }
                                                 OutlinedButton(onClick = { doExport(r, "Print") }) { Text("Print") }
                                                 OutlinedButton(onClick = { doExport(r, "PDF") }) { Text("PDF") }
-                                                OutlinedButton(onClick = { doExport(r, "Excel") }) { Text("Excel") }
+                                                CoButton("Excel", { doExport(r, "Excel") }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart)
                                             }
                                         }
                                     }

@@ -58,6 +58,16 @@ class MainActivity : AppCompatActivity() {
         inactivityTracker.touch()
     }
 
+    override fun onStart() {
+        super.onStart()
+        com.emfitsolutions.gopreach.data.sync.AppForeground.visible = true
+    }
+
+    override fun onStop() {
+        com.emfitsolutions.gopreach.data.sync.AppForeground.visible = false
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

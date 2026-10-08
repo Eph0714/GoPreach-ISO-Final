@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import androidx.compose.material.icons.rounded.Print
+import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,6 +25,17 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.Card
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.rounded.Assessment
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.SortByAlpha
+import com.emfitsolutions.gopreach.ui.components.co.CoButton
+import com.emfitsolutions.gopreach.ui.components.co.CoCard
+import com.emfitsolutions.gopreach.ui.components.co.CoCongregationCard
+import com.emfitsolutions.gopreach.ui.components.co.CoFullScreenButton
+import com.emfitsolutions.gopreach.ui.components.co.CoFullScreenEffect
+import com.emfitsolutions.gopreach.ui.components.co.CoKind
+import com.emfitsolutions.gopreach.ui.components.co.CoSearchField
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -83,6 +96,9 @@ fun CircuitPublishersScreen(
     var query by remember { mutableStateOf("") }
     var descending by remember { mutableStateOf(false) }
     var tableView by remember { mutableStateOf(false) }
+    var fullScreen by rememberSaveable { mutableStateOf(false) }
+    CoFullScreenEffect(fullScreen)
+    androidx.activity.compose.BackHandler(enabled = fullScreen) { fullScreen = false }
     val cat = category?.let { runCatching { PublisherCategory.valueOf(it) }.getOrNull() }
     val all by remember(currentPersonId, congregationId, cat) {
         if (congregationId == null) kotlinx.coroutines.flow.emptyFlow() else viewModel.publishers(currentPersonId, congregationId, cat)
@@ -111,6 +127,7 @@ fun CircuitPublishersScreen(
             TopAppBar(
                 title = { Text(cat?.displayName?.let { "$it (${all.size})" } ?: "Publishers") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
+                actions = { if (selected != null) CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
             )
         },
     ) { padding ->
@@ -131,11 +148,9 @@ fun CircuitPublishersScreen(
         ) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    SelectedCongregationBar(selected.name, onChange = { CircuitScopeStore.selectCongregation(null); groupName = null })
-                    OutlinedTextField(
-                        value = query, onValueChange = { query = it }, label = { Text("Search name") }, singleLine = true,
-                        visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth(),
-                    )
+                    SelectedCongregationBar(selected.name, onChange = { CircuitScopeStore.selectCongregation(null); groupName = null }, title = "Publishers")
+                    if (!fullScreen) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CoSearchField(query, { query = it }, "Search name...")
                     SimpleDropdown(
                         label = "Category",
                         selectedLabel = cat?.displayName ?: "All categories",
@@ -160,10 +175,11 @@ fun CircuitPublishersScreen(
                             )
                         }
                     }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         FilterChip(selected = !tableView, onClick = { tableView = false }, label = { Text("List View") })
                         FilterChip(selected = tableView, onClick = { tableView = true }, label = { Text("Table View") })
-                        OutlinedButton(onClick = { descending = !descending }) { Text(if (descending) "Name: Z → A" else "Name: A → Z") }
+                        CoButton(if (descending) "Name: Z → A" else "Name: A → Z", { descending = !descending }, kind = CoKind.Secondary, icon = Icons.Rounded.SortByAlpha)
                     }
                     RecordFound(rows.size)
                     PublisherSummary(
@@ -213,6 +229,9 @@ fun CircuitLeadersScreen(
     val selected = validCongregation(congregations, CircuitScopeStore.congregation)
     val congregationId = selected?.id
     var query by remember { mutableStateOf("") }
+    var fullScreen by rememberSaveable { mutableStateOf(false) }
+    CoFullScreenEffect(fullScreen)
+    androidx.activity.compose.BackHandler(enabled = fullScreen) { fullScreen = false }
     val leaders by remember(currentPersonId, congregationId) {
         if (congregationId == null) kotlinx.coroutines.flow.emptyFlow() else viewModel.leaders(currentPersonId, congregationId)
     }
@@ -227,6 +246,7 @@ fun CircuitLeadersScreen(
             TopAppBar(
                 title = { Text("Elders & Ministerial Servants") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
+                actions = { if (selected != null) CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
             )
         },
     ) { padding ->
@@ -236,7 +256,7 @@ fun CircuitLeadersScreen(
         }
         val people = elders.map { "Elder" to it } + servants.map { "Ministerial Servant" to it }
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            SelectedCongregationBar(selected.name, onChange = { CircuitScopeStore.selectCongregation(null) }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+            SelectedCongregationBar(selected.name, onChange = { CircuitScopeStore.selectCongregation(null) }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), title = "Elders & Servants")
             com.emfitsolutions.gopreach.ui.components.UniversalReport(
                 title = "Elders & Ministerial Servants",
                 details = listOf("Congregation" to selected.name),
@@ -286,6 +306,7 @@ fun CircuitCongregationsScreen(
     viewModel: CircuitPeopleViewModel = koinViewModel(),
 ) {
     val summaries by remember(currentPersonId) { viewModel.summaries(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val cardStats by koinViewModel<CongregationStatsViewModel>().stats.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -329,27 +350,7 @@ fun CircuitCongregationsScreen(
                 )
             },
             generatedBy = "Circuit Overseer",
-            card = { s ->
-                Card(modifier = Modifier.fillMaxWidth(), onClick = { onOpenCongregation(s.congregation.id) }) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(
-                                (s.congregation.code.takeIf { it.isNotBlank() }?.let { "$it · " }.orEmpty()) + s.congregation.name,
-                                style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f).padding(end = 8.dp),
-                            )
-                        }
-                        listOf(s.congregation.cityMunicipality, "Coordinator: ${s.coordinator}").filter { !it.isNullOrBlank() }.forEach {
-                            Text(it!!, style = MaterialTheme.typography.bodySmall)
-                        }
-                        Text(
-                            "Publishers ${s.publishers}  ·  Regular Pioneers ${s.counts[PublisherCategory.REGULAR_PIONEER]}  ·  " +
-                                "Auxiliary ${s.counts[PublisherCategory.AUXILIARY_PIONEER]}  ·  Unbaptized ${s.counts[PublisherCategory.UNBAPTIZED_PUBLISHER]}",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        Text("Elders ${s.elders}  ·  Ministerial Servants ${s.servants}", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            },
+            card = { s -> CoCongregationCard(s.congregation, cardStats[s.congregation.id], onClick = { onOpenCongregation(s.congregation.id) }) },
             onRowClick = { onOpenCongregation(it.congregation.id) },
             emptyMessage = "No congregations are assigned to this account yet.",
             modifier = Modifier.padding(padding),
@@ -397,7 +398,7 @@ fun CircuitCongregationOverviewScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                CoCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("Congregation Information", style = MaterialTheme.typography.titleSmall)
                         Text(s.congregation.name, style = MaterialTheme.typography.titleMedium)
@@ -414,15 +415,11 @@ fun CircuitCongregationOverviewScreen(
             items(CIRCUIT_QUICK_CATEGORIES) { c -> LinkRow(c.displayName.lowercase().replaceFirstChar { it.uppercase() } + "s", s.counts[c]) { onOpenPublishers(c.name) } }
             item { Text("Territory", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 6.dp)) }
             item {
-                OutlinedButton(onClick = { CircuitScopeStore.selectCongregation(congregationId); onOpenTerritory() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("View Territory Map")
-                }
+                CoButton("View Territory Map", { CircuitScopeStore.selectCongregation(congregationId); onOpenTerritory() }, icon = Icons.Rounded.Map, fillWidth = true)
             }
             item { Text("Reports", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 6.dp)) }
             item {
-                OutlinedButton(onClick = { CircuitScopeStore.selectCongregation(congregationId); onOpenReports() }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Field Service Report")
-                }
+                CoButton("Field Service Report", { CircuitScopeStore.selectCongregation(congregationId); onOpenReports() }, icon = Icons.Rounded.Assessment, fillWidth = true)
             }
         }
     }
@@ -430,7 +427,7 @@ fun CircuitCongregationOverviewScreen(
 
 @Composable
 private fun LinkRow(label: String, count: Int, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+    CoCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(modifier = Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
             Text(count.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -519,8 +516,8 @@ private fun PublisherSummary(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
-                OutlinedButton(onClick = onPrint, enabled = totals.total > 0) { Text("Print / PDF") }
-                OutlinedButton(onClick = onExcel, enabled = totals.total > 0) { Text("Excel") }
+                CoButton("Print / PDF", onPrint, kind = CoKind.Secondary, icon = Icons.Rounded.Print, enabled = totals.total > 0)
+                CoButton("Excel", onExcel, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart, enabled = totals.total > 0)
             }
         }
     }

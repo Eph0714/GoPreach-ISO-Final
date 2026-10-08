@@ -126,6 +126,7 @@ class SessionTimeoutViewModel(
     fun idleMillis(): Long = inactivityTracker.idleMillis()
     fun resetIdle() = inactivityTracker.touch()
     fun signOut() { inactivityTracker.clear(); authRepository.signOut() }
+    val signInEvents get() = authRepository.signInEvents
 
     /** [onResult] gets null on success, or a message to show the user. */
     fun save(enabled: Boolean, minutes: Int, actorPersonId: String, onResult: (String?) -> Unit) {
@@ -155,6 +156,8 @@ fun SessionTimeoutHost(viewModel: SessionTimeoutViewModel = koinViewModel()) {
     val limitMillis = settings.sessionTimeoutMinutes.coerceAtLeast(AppSettings.MIN_SESSION_TIMEOUT_MINUTES) * 60_000L
     val active = signedIn && settings.sessionTimeoutEnabled
 
+    // A real sign-in (typed, remembered, biometric or offline) always starts a fresh idle window.
+    LaunchedEffect(Unit) { viewModel.signInEvents.collect { viewModel.resetIdle() } }
     // NOTE: no idle reset here. A restored session must keep its real idle time (a sign-in resets it through the touches it takes).
 
     // Shown first; the sign-out (back to the login screen) only happens once the user acknowledges it.

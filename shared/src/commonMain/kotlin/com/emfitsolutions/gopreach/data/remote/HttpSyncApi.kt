@@ -6,6 +6,8 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.put
+import io.ktor.client.request.delete
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
@@ -48,6 +50,54 @@ class HttpSyncApi(
             }
         }
         return DocJson.decodeFromString(PullPage.serializer(), text)
+    }
+
+    override suspend fun postJson(path: String, body: kotlinx.serialization.json.JsonObject): ApiReply {
+        val response = try {
+            client.post("$baseUrl$path") {
+                header(HttpHeaders.Authorization, "Bearer ${idToken()}")
+                contentType(ContentType.Application.Json)
+                setBody(DocJson.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), body))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw SyncTransportException("Network error: ${e.message}", cause = e)
+        }
+        val parsed = runCatching { DocJson.parseToJsonElement(response.bodyAsText()) as? kotlinx.serialization.json.JsonObject }.getOrNull()
+        return ApiReply(response.status.value, parsed)
+    }
+
+    override suspend fun uploadFile(path: String, bytes: ByteArray, mime: String): String {
+        val text = call {
+            client.put("$baseUrl/v1/files") {
+                header(HttpHeaders.Authorization, "Bearer ${idToken()}")
+                parameter("path", path)
+                contentType(ContentType.parse(mime))
+                setBody(bytes)
+            }
+        }
+        val url = (DocJson.parseToJsonElement(text) as? kotlinx.serialization.json.JsonObject)?.get("url") as? kotlinx.serialization.json.JsonPrimitive
+        return url?.content ?: throw SyncTransportException("The server did not return a file address.")
+    }
+
+    override suspend fun deleteFile(path: String) {
+        call {
+            client.delete("$baseUrl/v1/files") {
+                header(HttpHeaders.Authorization, "Bearer ${idToken()}")
+                parameter("path", path)
+            }
+        }
+    }
+
+    override suspend fun lookupUsername(username: String): kotlinx.serialization.json.JsonObject? {
+        val text = call {
+            client.post("$baseUrl/v1/public/lookup-username") {
+                contentType(ContentType.Application.Json)
+                setBody(DocJson.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), kotlinx.serialization.json.JsonObject(mapOf("username" to kotlinx.serialization.json.JsonPrimitive(username)))))
+            }
+        }
+        return (DocJson.parseToJsonElement(text) as? kotlinx.serialization.json.JsonObject)?.get("person") as? kotlinx.serialization.json.JsonObject
     }
 
     private suspend fun call(request: suspend () -> HttpResponse): String {

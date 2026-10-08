@@ -41,6 +41,8 @@ class GoPreachApp : Application(), Configuration.Provider {
 
     val presenceHeartbeat: PresenceHeartbeat by inject()
 
+    val backendPoller: com.emfitsolutions.gopreach.data.sync.BackendPoller by inject()
+
     override fun onCreate() {
         super.onCreate()
         startKoin {
@@ -49,6 +51,7 @@ class GoPreachApp : Application(), Configuration.Provider {
         }
         kotlinx.coroutines.GlobalScope.launch { runCatching { get<com.emfitsolutions.gopreach.data.local.dao.CacheDao>().deleteBlankIds(); get<com.emfitsolutions.gopreach.data.local.dao.SyncQueueDao>().removeBlankIds() } }
         remoteSyncCoordinator.startAll()
+        backendPoller.start()
         NotificationHelper.ensureChannel(this)
         reminderScheduler.ensureScheduled()
         calendarAlarmRescheduler.start()

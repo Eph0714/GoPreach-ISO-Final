@@ -1,0 +1,16 @@
+[
+  {
+    "version": "1.133.0",
+    "versionCode": 194,
+    "date": "2026-10-07",
+    "channel": "direct (legacy key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.134.0",
+    "versionCode": 195,
+    "date": "2026-10-08",
+    "channel": "direct (legacy key)",
+    "status": "Current"
+  }
+]

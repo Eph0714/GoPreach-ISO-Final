@@ -529,7 +529,9 @@ fun PublisherHomeScreen(
                     val plannerReportViewModel: com.emfitsolutions.gopreach.ui.screens.planner.PlannerReportViewModel = koinViewModel()
                     val submittedMonths by remember(currentPersonId) { plannerReportViewModel.submittedMonths(currentPersonId) }
                         .collectAsStateWithLifecycle(initialValue = emptyMap())
-                    val plannerLock = remember(submittedMonths) { com.emfitsolutions.gopreach.ui.screens.planner.PlannerLock(submittedMonths) }
+                    val congregationLocked by remember(ownPublisherAssignment?.congregationId) { plannerReportViewModel.congregationLockedMonths(ownPublisherAssignment?.congregationId) }
+                        .collectAsStateWithLifecycle(initialValue = emptySet())
+                    val plannerLock = remember(submittedMonths, congregationLocked) { com.emfitsolutions.gopreach.ui.screens.planner.PlannerLock(submittedMonths, congregationLocked) }
                     CompositionLocalProvider(
                         com.emfitsolutions.gopreach.ui.screens.planner.LocalPlannerLock provides plannerLock,
                         LocalPlannerVisibility provides plannerVisibility,

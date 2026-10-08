@@ -40,7 +40,7 @@ class FirestoreComparativeReportService(
         } catch (e: Exception) {
             val conflict = generateSequence<Throwable>(e) { it.cause }.filterIsInstance<ComparativeConflict>().firstOrNull()
             if (conflict != null) CircuitResult.Conflict(conflict.message ?: "That report changed. Reload and try again.")
-            else CircuitResult.Error(e.message ?: "Couldn't save. Please try again.")
+            else CircuitResult.Error(friendlyServerError(e))
         }
     }
 

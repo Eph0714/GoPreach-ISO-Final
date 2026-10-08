@@ -14,7 +14,21 @@ interface SyncApi {
 
     /** Everything changed after [since] (a server sequence number) that the caller may read. */
     suspend fun pull(since: Long, collections: List<String>? = null, limit: Int = 500): PullPage
+
+    /** A plain authenticated POST to one of the server's own endpoints (territory claims, ...): the status code and JSON body, never thrown for 4xx. */
+    suspend fun postJson(path: String, body: JsonObject): ApiReply = throw UnsupportedOperationException("postJson is not available")
+
+    /** Uploads [bytes] to the server's file store under [path] (replacing any file there) and returns the public download URL. */
+    suspend fun uploadFile(path: String, bytes: ByteArray, mime: String): String = throw UnsupportedOperationException("uploadFile is not available")
+
+    /** Best-effort delete of the file stored under [path]. */
+    suspend fun deleteFile(path: String) { throw UnsupportedOperationException("deleteFile is not available") }
+
+    /** The sign-in screen's public username lookup (no login yet): the person record with its id, or null. */
+    suspend fun lookupUsername(username: String): JsonObject? = null
 }
+
+data class ApiReply(val status: Int, val body: JsonObject?)
 
 @Serializable
 data class PushOp(

@@ -146,6 +146,8 @@ fun OsmBoundaryMap(
      * color already does everywhere else in the app. Null (no Group
      * assigned) falls back to a plain neutral blue. */
     boundaryColorHex: String? = null,
+    /** Fill strength of the boundary polygon; kept low where pins and labels must stay clearly visible on top. */
+    boundaryFillOpacity: Float = 0.05f,
     /** Fires with the tapped [NamedBoundary.name] when a boundary polygon is
      * clicked — e.g. [com.emfitsolutions.gopreach.ui.screens
      * .territoryassignments.GroupTerritoryMapDialog] uses this to drill from
@@ -319,7 +321,7 @@ fun OsmBoundaryMap(
         style.addLayer(
             FillLayer(LYR_BOUNDARY_FILL, SRC_BOUNDARY).withProperties(
                 PropertyFactory.fillColor(Expression.get("color")),
-                PropertyFactory.fillOpacity(0.05f),
+                PropertyFactory.fillOpacity(boundaryFillOpacity),
             ),
         )
         style.addLayer(

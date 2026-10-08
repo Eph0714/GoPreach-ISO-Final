@@ -190,3 +190,13 @@ The numbers come from `domain/CircuitOverview.kt`: the **current month** uses to
 snapshots; a month/congregation with neither shows "—" / "Data unavailable" (never 0). No new server rules: access is still limited by
 `isCircuitOverseerFor` and the CO's scoped sync. Tablet sidebar, a dedicated error screen ("Try again / View cached data") and notification
 deep-links are not part of this version (the existing notification bell and drawer remain).
+
+## Circuit Overseer design system (universal UI)
+
+One set of components (`ui/components/co/CoDesignSystem.kt`) now carries every CO screen:
+
+* **Congregation first, never a dropdown.** `SelectCongregationPrompt` shows the congregations assigned to the account as selectable cards (name, Publishers · Elders · Groups, chevron; a search box above five). It is used by Publishers, Elders & Servants, Field Service Report, Meeting Attendance, Report Submission, Comparative Reports and Territory. The list is built only from congregations the device already holds, which the security rules limit to the account's current assignment; the cards are not a security mechanism.
+* **Header.** After choosing, `SelectedCongregationBar` shows MODULE TITLE, the congregation prominently, and `Change Congregation`.
+* **Buttons.** `CoButton(kind = Primary | Secondary | Success | Warning | Danger | Neutral)`: one shape, one height, an icon from the Material "Rounded" family. Mark Received = Success, Return = Warning, Print / PDF / Excel / Change Congregation / Sort = Secondary.
+* **Colors.** `coPalette()`: the app's primary accent plus fixed success / warning / danger, with lighter variants on dark surfaces.
+* **Full screen.** `CoFullScreenButton` + `CoFullScreenEffect` in the top bar of Publishers, Elders, Field Service Report, Meeting Attendance, Report Submission, both Comparative screens and the Circuit Report; the Field Service Report also has a "table only" mode.

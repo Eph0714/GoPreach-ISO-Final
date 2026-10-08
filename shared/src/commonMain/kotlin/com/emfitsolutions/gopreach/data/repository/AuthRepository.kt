@@ -64,6 +64,10 @@ class AuthRepository(
         const val TAG = "AuthDebug"
     }
 
+    private val _signInEvents = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    /** Emits once for every successful sign-in (password, remembered, biometric, offline), so the session timer starts a fresh idle window. */
+    val signInEvents: kotlinx.coroutines.flow.SharedFlow<Unit> = _signInEvents
+
     val currentPersonId: String?
         get() = personIdFromAuthEmail(auth.currentUser?.email) ?: offlineSessionMarker.personId.value
 
@@ -131,6 +135,7 @@ class AuthRepository(
         runCatching { offlineAuthStore.saveVerifier(username, password, person.id) }
             .onFailure { Log.e(TAG, "Failed to save offline verifier: ${it::class.simpleName}") }
         offlineSessionMarker.save(person.id)
+        _signInEvents.tryEmit(Unit)
         auditLogRepository.log(actorPersonId = person.id, action = "SIGN_IN")
         Log.d(TAG, "Navigation result: SUCCESS")
         return AuthResult.Success(person, requiresPasswordChange = person.isTemporaryCredential)
@@ -173,6 +178,7 @@ class AuthRepository(
                 return AuthResult.Error("This account has been deactivated. Contact your administrator.")
             }
             offlineSessionMarker.save(personId)
+            _signInEvents.tryEmit(Unit)
             Log.d(TAG, "Navigation result: SUCCESS (offline)")
             AuthResult.Success(person, requiresPasswordChange = person.isTemporaryCredential)
         } catch (e: Exception) {

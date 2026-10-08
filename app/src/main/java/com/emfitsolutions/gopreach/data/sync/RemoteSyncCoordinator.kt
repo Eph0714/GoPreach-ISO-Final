@@ -238,6 +238,7 @@ class RemoteSyncCoordinator(
         .mapLatest { uid ->
             val personId = personIdFromAuthEmail(firebaseAuth.currentUser?.email)
             if (uid == null || personId == null) null
+            else if (BackendConfig.enabled) false // the Hostinger server scopes a Circuit Overseer's downloads itself; no Firestore read
             else runCatching { restrictedSessionSync.resolve(personId) != null }.getOrDefault(false)
         }
         .stateIn(appScope, SharingStarted.Eagerly, null)

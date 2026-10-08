@@ -1,0 +1,20 @@
+# Permissions GoPreach may request. A release that adds one not listed here is blocked until it is reviewed and added with a reason.
+# Each entry needs a feature that genuinely requires it.
+android.permission.INTERNET                          # Firestore sync, maps, updates (HTTPS only)
+android.permission.ACCESS_NETWORK_STATE              # offline-first sync decisions
+android.permission.ACCESS_FINE_LOCATION              # territory map position, Share Location while preaching
+android.permission.ACCESS_COARSE_LOCATION
+android.permission.POST_NOTIFICATIONS                # reminders, announcements, report notices
+android.permission.USE_BIOMETRIC                     # fingerprint / face sign-in
+android.permission.CAMERA                            # photo of an Interested Person's place (optional feature)
+android.permission.REQUEST_INSTALL_PACKAGES          # direct-distribution self-update only; REMOVE for the Google Play build
+android.permission.SCHEDULE_EXACT_ALARM              # calendar alarm
+android.permission.VIBRATE                           # calendar alarm
+android.permission.FOREGROUND_SERVICE                # alarm ring, Share Location
+android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK # alarm ring
+android.permission.FOREGROUND_SERVICE_LOCATION       # Share Location while preaching
+android.permission.RECEIVE_BOOT_COMPLETED            # re-arm alarms after reboot
+android.permission.USE_FINGERPRINT                   # added by the AndroidX biometric library for older devices
+android.permission.ACCESS_WIFI_STATE                 # added by the networking / Firebase libraries
+android.permission.WAKE_LOCK                         # added by WorkManager / Firebase for background sync
+com.google.android.providers.gsf.permission.READ_GSERVICES  # added by Google Play services (maps / location)

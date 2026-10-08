@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.co.CoButton
+import com.emfitsolutions.gopreach.ui.components.co.CoKind
+import androidx.compose.material.icons.rounded.Print
+import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -31,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -78,9 +83,13 @@ fun CircuitReportScreen(
     }
     val allCircuits = currentPersonId == CIRCUIT_SCOPE_ALL
 
+    var fullScreen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    com.emfitsolutions.gopreach.ui.components.co.CoFullScreenEffect(fullScreen)
+    androidx.activity.compose.BackHandler(enabled = fullScreen) { fullScreen = false }
     Scaffold(
         topBar = {
             TopAppBar(
+                actions = { com.emfitsolutions.gopreach.ui.components.co.CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
                 title = { Text("Circuit Report") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )
@@ -127,7 +136,7 @@ fun CircuitReportScreen(
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(enabled = rows.isNotEmpty(), onClick = { CircuitReportExporter.print(context, header, rows, total, syncNote) }) { Text("Print Circuit Report / PDF") }
-                        OutlinedButton(enabled = rows.isNotEmpty(), onClick = { CircuitReportExporter.shareExcel(context, header, rows, total, syncNote) }) { Text("Excel") }
+                        CoButton("Excel", { CircuitReportExporter.shareExcel(context, header, rows, total, syncNote) }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart, enabled = rows.isNotEmpty())
                     }
                     if (rows.isEmpty()) Text("No congregations are assigned to this circuit yet.", style = MaterialTheme.typography.bodyMedium)
                 }

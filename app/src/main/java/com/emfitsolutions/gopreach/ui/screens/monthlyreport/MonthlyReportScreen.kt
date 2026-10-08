@@ -542,6 +542,7 @@ private fun MonthlyReportPreview(
     onEdit: () -> Unit,
     onSubmit: () -> Unit,
 ) {
+    var showMonthConfirmDialog by remember { mutableStateOf(false) }
     var showHoursConfirmDialog by remember { mutableStateOf(false) }
 
     Column(
@@ -602,7 +603,7 @@ private fun MonthlyReportPreview(
                     // one-off dialog, checked right here at the actual Send
                     // action so it always reflects whatever is currently on
                     // screen (spec §7: never a stale check).
-                    if (uiState.isPioneer && uiState.hoursDifferFromSystem) showHoursConfirmDialog = true else onSubmit()
+                    showMonthConfirmDialog = true
                 },
                 enabled = !uiState.isSaving && !effectivelyLocked,
                 colors = ButtonDefaults.buttonColors(containerColor = SolidGreen),
@@ -612,6 +613,28 @@ private fun MonthlyReportPreview(
                 Text(stringResource(Res.string.monthly_report_preview_send_button))
             }
         }
+    }
+
+    // Every submission names the month first, so a report can never go under the wrong month by accident.
+    if (showMonthConfirmDialog) {
+        AlertDialog(
+            properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
+            onDismissRequest = { showMonthConfirmDialog = false },
+            title = { Text("Report Month: $selectedMonthLabel") },
+            text = {
+                Text(
+                    "You are submitting the Field Service Report for $selectedMonthLabel. Continue?" +
+                        (uiState.existingReport?.let { "\n\nA report for this month already exists (status: ${it.status.name.lowercase().replace('_', ' ')}); this replaces it according to the usual edit and resubmission rules." } ?: ""),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showMonthConfirmDialog = false
+                    if (uiState.isPioneer && uiState.hoursDifferFromSystem) showHoursConfirmDialog = true else onSubmit()
+                }) { Text("Continue") }
+            },
+            dismissButton = { TextButton(onClick = { showMonthConfirmDialog = false }) { Text("Change Month") } },
+        )
     }
 
     if (showHoursConfirmDialog) {

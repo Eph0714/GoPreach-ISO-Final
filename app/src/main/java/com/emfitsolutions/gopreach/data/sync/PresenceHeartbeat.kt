@@ -34,8 +34,12 @@ const val PRESENCE_COLLECTION = "presence"
  * everywhere else, and [com.emfitsolutions.gopreach.ui.components
  * .OnlineUsersViewModel]'s own 2-second ticker is what re-evaluates it against the
  * clock continuously rather than only when a new heartbeat happens to arrive. */
-const val PRESENCE_ONLINE_TIMEOUT_MS = 20_000L
-private const val HEARTBEAT_INTERVAL_MS = 8_000L
+// Presence used to be written every 8 seconds by every signed-in device and read by every other device's live listener, which on its own
+// could use up the free daily Firestore quota. It is now written every 30 seconds, only while the app is on screen. With the Hostinger
+// backend it is a small POST to /v1/presence instead (kept in the server's memory, not in the database).
+const val PRESENCE_ONLINE_TIMEOUT_MS = 75_000L
+private const val HEARTBEAT_INTERVAL_MS = 30_000L
+private const val HEARTBEAT_CHECK_MS = 5_000L
 
 /**
  * "GoPreach App — Add Online Users Indicator": keeps exactly one `presence`
@@ -64,12 +68,17 @@ class PresenceHeartbeat(
     private val userSession: UserSession,
     private val connectivityObserver: ConnectivityObserver,
     private val appScope: CoroutineScope,
+    private val syncApi: com.emfitsolutions.gopreach.data.remote.SyncApi,
 ) {
     private var started = false
 
     fun start() {
         if (started) return
         started = true
+        if (BackendConfig.enabled) {
+            startBackend()
+            return
+        }
         appScope.launch {
             userSession.state
                 .map { it.person?.id }
@@ -92,6 +101,28 @@ class PresenceHeartbeat(
         }
     }
 
+    /** Hostinger mode: while signed in, online and on screen, tell the server we are here — at once, then every 30 seconds. */
+    private fun startBackend() {
+        appScope.launch {
+            var lastBeat = 0L
+            var wasVisible = false
+            while (true) {
+                val visible = AppForeground.visible
+                val now = System.currentTimeMillis()
+                if (visible && userSession.state.value.person != null && connectivityObserver.isOnline() &&
+                    (!wasVisible || now - lastBeat >= HEARTBEAT_INTERVAL_MS)
+                ) {
+                    runCatching {
+                        syncApi.postJson("/v1/presence", kotlinx.serialization.json.buildJsonObject { put("beat", kotlinx.serialization.json.JsonPrimitive(true)) })
+                    }.onFailure { Log.w(TAG, "Heartbeat failed: ${it.message}") }
+                    lastBeat = now
+                }
+                wasVisible = visible
+                delay(HEARTBEAT_CHECK_MS)
+            }
+        }
+    }
+
     /** Runs for as long as [personId] stays signed in — starts/stops the actual
      * heartbeat loop as [UserSession]'s own active congregation or
      * [ConnectivityObserver]'s online state changes, without ever deleting the
@@ -110,13 +141,22 @@ class PresenceHeartbeat(
     }
 
     private suspend fun heartbeatLoop(personId: String, congregationId: String?) {
+        var lastWrite = 0L
+        var wasVisible = false
         while (true) {
-            runCatching {
-                firestore.collection(PRESENCE_COLLECTION).document(personId)
-                    .set(mapOf("congregationId" to congregationId, "lastSeen" to System.currentTimeMillis()))
-                    .await()
-            }.onFailure { Log.w(TAG, "Heartbeat failed for $personId: ${it.message}") }
-            delay(HEARTBEAT_INTERVAL_MS)
+            val visible = AppForeground.visible
+            val now = System.currentTimeMillis()
+            // Only while the app is on screen: at once when it comes back, then every 30 seconds.
+            if (visible && (!wasVisible || now - lastWrite >= HEARTBEAT_INTERVAL_MS)) {
+                runCatching {
+                    firestore.collection(PRESENCE_COLLECTION).document(personId)
+                        .set(mapOf("congregationId" to congregationId, "lastSeen" to now))
+                        .await()
+                }.onFailure { Log.w(TAG, "Heartbeat failed for $personId: ${it.message}") }
+                lastWrite = now
+            }
+            wasVisible = visible
+            delay(HEARTBEAT_CHECK_MS)
         }
     }
 }

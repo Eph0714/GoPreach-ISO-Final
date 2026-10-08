@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 private const val TAG = "OnlineUsersViewModel"
 
@@ -86,6 +87,7 @@ private fun PublisherCategory.displayLabel(): String = displayName
 
 class OnlineUsersViewModel(
     private val firestore: FirebaseFirestore,
+    private val syncApi: com.emfitsolutions.gopreach.data.remote.SyncApi,
     userSession: UserSession,
     personRepository: PersonRepository,
     roleAssignmentRepository: RoleAssignmentRepository,
@@ -100,6 +102,32 @@ class OnlineUsersViewModel(
      * boundary of its own, not just "the app happens to ask nicely" — see
      * that rule for what stops a modified client from asking anyway. */
     private fun rawPresence(isSuperAdmin: Boolean, congregationId: String?): Flow<List<PresenceRow>> = callbackFlow {
+        if (com.emfitsolutions.gopreach.data.sync.BackendConfig.enabled) {
+            // Hostinger: no live listener — ask the server for the list every 15 seconds while someone is looking at it.
+            val job = launch {
+                while (true) {
+                    runCatching {
+                        val reply = syncApi.postJson("/v1/presence", kotlinx.serialization.json.JsonObject(emptyMap()))
+                        val list = reply.body?.get("online") as? kotlinx.serialization.json.JsonArray
+                        if (reply.status == 200 && list != null) {
+                            // Stamped with this phone's clock so a server/phone clock difference can never make a live user look stale.
+                            val received = System.currentTimeMillis()
+                            trySend(
+                                list.mapNotNull { e ->
+                                    val o = e as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+                                    val id = (o["personId"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
+                                    val cong = (o["congregationId"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+                                    PresenceRow(id, cong, received)
+                                },
+                            )
+                        }
+                    }.onFailure { Log.w(TAG, "presence poll failed: ${it.message}") }
+                    delay(15_000)
+                }
+            }
+            awaitClose { job.cancel() }
+            return@callbackFlow
+        }
         if (!isSuperAdmin && congregationId == null) {
             // No congregation to scope to (shouldn't normally happen for an
             // active session) — nothing is visible rather than everything.

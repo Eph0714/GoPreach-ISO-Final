@@ -172,9 +172,13 @@ fun ReportSubmissionScreen(
         else -> "View"
     }
 
+    var fullScreen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    com.emfitsolutions.gopreach.ui.components.co.CoFullScreenEffect(fullScreen)
+    androidx.activity.compose.BackHandler(enabled = fullScreen) { fullScreen = false }
     Scaffold(
         topBar = {
             TopAppBar(
+                actions = { com.emfitsolutions.gopreach.ui.components.co.CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
                 title = { Text("Report Submission") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )

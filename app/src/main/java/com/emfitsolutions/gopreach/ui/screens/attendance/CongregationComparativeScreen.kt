@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.attendance
 
+import com.emfitsolutions.gopreach.ui.components.co.CoButton
+import com.emfitsolutions.gopreach.ui.components.co.CoKind
+import androidx.compose.material.icons.rounded.Print
+import androidx.compose.material.icons.rounded.TableChart
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -166,9 +170,13 @@ fun CongregationComparativeScreen(
         comparison.drop(1).map { r -> listOf(r[0].removeSuffix(" (total)") + " Difference", r[3] + if (r[4] != "—") " (" + r[4] + ")" else "") } +
         listOf(listOf("Months Missing Data", (monthsA + monthsB).count { m -> stats.none { it.serviceMonth == m } }.toString()))
 
+    var fullScreen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
+    com.emfitsolutions.gopreach.ui.components.co.CoFullScreenEffect(fullScreen)
+    androidx.activity.compose.BackHandler(enabled = fullScreen) { fullScreen = false }
     Scaffold(
         topBar = {
             TopAppBar(
+                actions = { com.emfitsolutions.gopreach.ui.components.co.CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
                 title = { Text("Congregation Comparative Report") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )
@@ -206,8 +214,8 @@ fun CongregationComparativeScreen(
                         calculationMode = rounding.label, comparison = comparison, monthly = monthly, notes = notes, summary = summary,
                         missingMonths = (monthsA + monthsB).filter { m -> stats.none { it.serviceMonth == m } }.map { monthFmt.format(Date(it)) },
                     )
-                    OutlinedButton(onClick = { scope.launch { ComparativeStatisticsExporter.print(context, data(viewModel.generatedBy(currentPersonId))) } }) { Text("Print / PDF") }
-                    OutlinedButton(onClick = { scope.launch { ComparativeStatisticsExporter.shareExcel(context, data(viewModel.generatedBy(currentPersonId))) } }) { Text("Excel") }
+                    CoButton("Print / PDF", { scope.launch { ComparativeStatisticsExporter.print(context, data(viewModel.generatedBy(currentPersonId))) } }, kind = CoKind.Secondary, icon = Icons.Rounded.Print)
+                    CoButton("Excel", { scope.launch { ComparativeStatisticsExporter.shareExcel(context, data(viewModel.generatedBy(currentPersonId))) } }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart)
                 }
             }
 

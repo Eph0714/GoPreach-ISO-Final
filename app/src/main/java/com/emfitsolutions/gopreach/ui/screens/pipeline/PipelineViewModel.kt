@@ -327,7 +327,12 @@ class PipelineViewModel(
     fun advanceStage(person: InterestedPerson, newStage: PipelineStage, actorPersonId: String) {
         viewModelScope.launch {
             val now = System.currentTimeMillis()
-            interestedPersonRepository.save(person.copy(pipelineStage = newStage, stageEnteredAt = now))
+            try {
+                interestedPersonRepository.save(person.copy(pipelineStage = newStage, stageEnteredAt = now))
+            } catch (e: com.emfitsolutions.gopreach.data.model.MonthLockedException) {
+                _errorEvents.emit(e.message ?: "This month's report was already sent to the Circuit Overseer.")
+                return@launch
+            }
             auditLogRepository.log(
                 actorPersonId = actorPersonId,
                 action = "ADVANCE_PIPELINE_STAGE",

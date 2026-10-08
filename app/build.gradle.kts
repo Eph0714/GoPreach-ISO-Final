@@ -43,8 +43,8 @@ android {
         applicationId = "com.emfitsolutions.gopreach"
         minSdk = 24
         targetSdk = 36
-        versionCode = 195
-        versionName = "1.134.0"
+        versionCode = 196
+        versionName = "1.135.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -174,6 +174,7 @@ dependencies {
     implementation(platform("io.insert-koin:koin-bom:4.0.4"))
     implementation("io.insert-koin:koin-android")
     implementation("io.ktor:ktor-client-okhttp:3.0.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("io.insert-koin:koin-compose")
     implementation("io.insert-koin:koin-compose-viewmodel")
     implementation("io.insert-koin:koin-androidx-workmanager")
