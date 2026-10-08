@@ -33,7 +33,11 @@ function sdk() {
 }
 const tools = sdk();
 const win = process.platform === "win32";
-const run = (tool, args) => execFileSync(join(tools, tool + (win ? (tool === "aapt2" ? ".exe" : ".bat") : "")), args, { encoding: "utf8", shell: win && tool !== "aapt2" });
+const run = (tool, args) => {
+  const exe = join(tools, tool + (win ? (tool === "aapt2" ? ".exe" : ".bat") : ""));
+  const viaShell = win && tool !== "aapt2"; // a .bat needs a shell, which does not quote paths that contain spaces
+  return execFileSync(viaShell ? `"${exe}"` : exe, viaShell ? args.map((a) => (/\s/.test(a) ? `"${a}"` : a)) : args, { encoding: "utf8", shell: viaShell });
+};
 
 const failures = [];
 const ok = (m) => console.log("  ok    " + m);

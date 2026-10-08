@@ -28,7 +28,8 @@ const notes = process.argv.find((a) => a.startsWith("--notes="))?.slice(8) || `G
 console.log(`Releasing GoPreach ${versionName} (code ${versionCode}); previous code ${previous}${legacy ? "  [LEGACY debug-key mode]" : ""}`);
 
 const win = process.platform === "win32";
-const build = spawnSync(join(root, win ? "gradlew.bat" : "gradlew"), [":app:testDebugUnitTest", ":shared:testDebugUnitTest", ":app:assembleRelease", "-q"], { cwd: root, stdio: "inherit", shell: win });
+const gradlew = join(root, win ? "gradlew.bat" : "gradlew");
+const build = spawnSync(win ? `"${gradlew}"` : gradlew, [":app:testDebugUnitTest", ":shared:testDebugUnitTest", ":app:assembleRelease", "-q"], { cwd: root, stdio: "inherit", shell: win });
 if (build.status !== 0) { console.error("Build or tests failed - nothing was published."); process.exit(1); }
 
 const apk = join(root, "app/build/outputs/apk/release/GoPreach.apk");
