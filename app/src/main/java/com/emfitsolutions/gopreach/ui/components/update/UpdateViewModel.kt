@@ -139,7 +139,12 @@ class UpdateViewModel(
         _state.value = UpdateCheckState.Checking
         viewModelScope.launch {
             manifestRepository.fetchLatest()
-                .onSuccess { info ->
+                .onSuccess { fetched ->
+                    // Every update is mandatory: any newer release is treated
+                    // as critical (no Remind Me Later, not dismissable),
+                    // whether it came from the API, the fallback redirect, or
+                    // the cache, and regardless of a [CRITICAL] marker.
+                    val info = fetched.copy(isCritical = true)
                     val isNewer = manifestRepository.isNewer(currentVersion, info.version)
                     // "The notification should not continuously interrupt the
                     // user after selecting Remind Me Later" — a silent/
@@ -197,7 +202,11 @@ class UpdateViewModel(
      * critical Available closed some other way than Remind Me Later, if it
      * ever is) dismisses normally. */
     fun dismiss() {
+        // A failed download of a mandatory update can't be closed either —
+        // only TRY AGAIN — so the app stays blocked until it's installed.
         val info = (_state.value as? UpdateCheckState.Available)?.info
+            ?: (_state.value as? UpdateCheckState.Failed)?.info
+            ?: (_state.value as? UpdateCheckState.ReadyToInstall)?.info
         if (info?.isCritical == true) return
         _state.value = UpdateCheckState.Idle
     }
@@ -214,6 +223,7 @@ class UpdateViewModel(
     fun updateNow() {
         val info = (_state.value as? UpdateCheckState.Available)?.info
             ?: (_state.value as? UpdateCheckState.Failed)?.info
+            ?: (_state.value as? UpdateCheckState.ReadyToInstall)?.info
             ?: return
         viewModelScope.launch {
             try {

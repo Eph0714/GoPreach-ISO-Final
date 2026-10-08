@@ -170,7 +170,7 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                     if (stalled) Button(onClick = { attempt++ }) { Text("INSTALL AGAIN") }
                 },
                 dismissButton = {
-                    TextButton(onClick = viewModel::dismiss) { Text(if (stalled) "CLOSE" else "CANCEL") }
+                    if (!s.info.isCritical) TextButton(onClick = viewModel::dismiss) { Text(if (stalled) "CLOSE" else "CANCEL") }
                 },
             )
         }
@@ -180,12 +180,20 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                 properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
                 onDismissRequest = viewModel::dismiss,
                 title = { Text("Update Failed") },
-                text = { Text("${s.message}\n\nYour current version is still available.") },
+                text = {
+                    val mandatory = s.info?.isCritical == true
+                    Text(
+                        if (mandatory) "${s.message}\n\nThis update is required to continue using GoPreach."
+                        else "${s.message}\n\nYour current version is still available.",
+                    )
+                },
                 confirmButton = {
                     Button(onClick = viewModel::retry) { Text("TRY AGAIN") }
                 },
                 dismissButton = {
-                    TextButton(onClick = viewModel::dismiss) { Text("Close") }
+                    if (s.info?.isCritical != true) {
+                        TextButton(onClick = viewModel::dismiss) { Text("Close") }
+                    }
                 },
             )
         }
