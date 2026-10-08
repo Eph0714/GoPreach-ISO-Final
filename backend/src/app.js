@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { loadActor, authorizeWrite, canReadRow, loadGrant } from './policy/index.js';
 import { rateLimit } from './rateLimit.js';
 import { mountFiles } from './files.js';
+import { mountPresence } from './presence.js';
 import { saveGroupTerritory, removeGroupTerritory, removeAssignment, validateSave } from './territory.js';
 
 const MAX_OPS = 200;
@@ -102,6 +103,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   app.post('/v1/territory/remove', auth, territory(removeAssignment));
 
   mountFiles(app, store, auth);
+  mountPresence(app, store, auth);
 
   app.post('/v1/sync/push', auth, async (req, res) => {
     const ops = req.body?.ops;
