@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
@@ -211,6 +212,14 @@ fun SyncToServerButton(
         if (showStatusIndicator) {
             SyncStatusIndicator(modifier = Modifier.padding(bottom = 4.dp))
         }
+
+        Text(
+            "Hostinger Server Used for this version",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 4.dp),
+        )
 
         Button(
             onClick = viewModel::syncToServer,
