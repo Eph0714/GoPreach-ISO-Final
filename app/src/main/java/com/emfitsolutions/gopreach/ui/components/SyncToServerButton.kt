@@ -3,12 +3,14 @@ package com.emfitsolutions.gopreach.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -21,6 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -179,6 +184,9 @@ fun SyncToServerButton(
     val syncing = state as? ManualSyncState.Syncing
 
     if (compact) {
+        // The About icon sits next to the sync icon: it says which server this version uses (there is no room for a label in the header).
+        Row(verticalAlignment = Alignment.CenterVertically) {
+        AboutServerButton(tint)
         Box {
             IconButton(onClick = viewModel::syncToServer, enabled = syncing == null) {
                 if (syncing != null) {
@@ -200,6 +208,7 @@ fun SyncToServerButton(
                         .background(MaterialTheme.colorScheme.error, CircleShape),
                 )
             }
+        }
         }
         SyncFeedbackDialogs(state = state, pendingCount = pendingCount, onDismiss = viewModel::dismissDialog, onRetry = viewModel::syncToServer)
         return
@@ -265,6 +274,29 @@ fun SyncToServerButton(
     }
 
     SyncFeedbackDialogs(state = state, pendingCount = pendingCount, onDismiss = viewModel::dismissDialog, onRetry = viewModel::syncToServer)
+}
+
+/**
+ * "About" icon for a header: opens a small dialog saying which server this version of the app uses, with the app version. Shown in every
+ * account's header (next to the sync icon where there is one) so everybody can see it.
+ */
+@Composable
+fun AboutServerButton(tint: Color = Color.White) {
+    var showAbout by remember { mutableStateOf(false) }
+    IconButton(onClick = { showAbout = true }) { Icon(Icons.Rounded.Info, contentDescription = "About", tint = tint) }
+    if (showAbout) {
+        AlertDialog(
+            onDismissRequest = { showAbout = false },
+            title = { Text("About") },
+            text = {
+                Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+                    Text("Hostinger Server Used for this version", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                    Text("GoPreach v" + com.emfitsolutions.gopreach.BuildConfig.VERSION_NAME, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showAbout = false }) { Text("OK") } },
+        )
+    }
 }
 
 /** The NoNetwork/Summary feedback dialogs — shared by both the full and

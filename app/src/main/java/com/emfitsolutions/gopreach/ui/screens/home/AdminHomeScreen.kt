@@ -608,6 +608,7 @@ fun AdminHomeScreen(
                         // "Add a refresh button only not sync" — a plain
                         // re-fetch from the server, separate from the full
                         // "Sync to Server" button below.
+                        if (role != AdminRole.CIRCUIT_OVERSEER) com.emfitsolutions.gopreach.ui.components.AboutServerButton()
                         com.emfitsolutions.gopreach.ui.components.RefreshButton()
                         // The Circuit Overseer's Sync to Server is a small icon up here instead of a full-width button below.
                         if (role == AdminRole.CIRCUIT_OVERSEER) SyncToServerButton(compact = true)
