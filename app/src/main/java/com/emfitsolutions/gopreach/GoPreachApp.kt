@@ -1,4 +1,4 @@
-package com.emfitsolutions.gopreach
+﻿package com.emfitsolutions.gopreach
 
 import com.emfitsolutions.gopreach.di.appModule
 import com.emfitsolutions.gopreach.di.infraModule
@@ -7,7 +7,7 @@ import org.koin.core.context.startKoin
 import org.koin.android.ext.android.get
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
-import org.koin.androidx.workmanager.factory.KoinWorkerFactory
+import org.koin.android.ext.android.getKoin
 import android.app.Application
 import androidx.work.Configuration
 import com.emfitsolutions.gopreach.data.sync.PresenceHeartbeat
@@ -70,6 +70,6 @@ class GoPreachApp : Application(), Configuration.Provider {
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
-            .setWorkerFactory(KoinWorkerFactory())
+            .setWorkerFactory(com.emfitsolutions.gopreach.data.sync.AppWorkerFactory(getKoin()))
             .build()
 }

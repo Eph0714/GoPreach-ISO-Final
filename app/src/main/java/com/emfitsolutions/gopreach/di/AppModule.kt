@@ -375,9 +375,7 @@ val appModule = module {
     singleOf(::NotificationItemsProvider)
     singleOf(::InactivityTracker)
 
-    // WorkManager workers
-    workerOf(::SyncWorker)
-    workerOf(::ReminderWorker)
+    // WorkManager workers are built by AppWorkerFactory (it takes their dependencies from Koin).
 
     singleOf(::OverpassStreetRepository)
 

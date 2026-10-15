@@ -1014,9 +1014,7 @@ private fun publisherModuleTiles(
     // HouseholderVisitHistoryScreen's own doc comment); Super-Admin
     // reaches the same screen unscoped via the drawer instead.
     add(PublisherModuleTile(DashboardModuleId.HOUSEHOLDER_VISIT_HISTORY, stringResource(Res.string.home_tile_householder_visit_history_title), stringResource(Res.string.home_tile_householder_visit_history_subtitle), Icons.Rounded.History, Destinations.HOUSEHOLDER_VISIT_HISTORY))
-    if (isPioneer) {
-        add(PublisherModuleTile(DashboardModuleId.MY_TOTAL_HOURS, stringResource(Res.string.home_tile_my_total_hours_title), stringResource(Res.string.home_tile_my_total_hours_subtitle), Icons.Rounded.Timer, Destinations.PREACHING_TIME_RECORD))
-    }
+    // "My Total Hours" is no longer offered here: hours are entered in My Planner.
     // "My Bible Text Record" module — every Publisher, not just Pioneers.
     // A distinct icon from "Bible Study" (also MenuBook) — this is a
     // personal saved-reference collection, not the ministry module.

@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -7,13 +7,13 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
-// TomTom map tiles experiment — the key lives only in local.properties
+// TomTom map tiles experiment â€” the key lives only in local.properties
 // (gitignored, never committed) and is exposed to Kotlin as a BuildConfig
 // constant rather than hardcoded in source, same reasoning as any other
 // per-developer secret. Note this does NOT make the key safe from
 // extraction: it still ends up embedded in plain text inside the WebView
 // HTML string the app loads at runtime, readable by anyone who inspects
-// network traffic or decompiles the APK — there is no way to fully hide a
+// network traffic or decompiles the APK â€” there is no way to fully hide a
 // client-side map-tile key, this is just "don't also leak it via git history."
 val localProperties = Properties().apply {
     val localPropertiesFile = rootProject.file("local.properties")
@@ -23,7 +23,7 @@ val tomtomApiKey: String = localProperties.getProperty("tomtomApiKey", "")
 val backendUrl: String = localProperties.getProperty("gopreach.backendUrl", "")
 
 // MapTiler's "Dark" basemap (Territory Assignment's Barangay Boundary map,
-// Night mode) — same per-developer-secret reasoning as the TomTom key above:
+// Night mode) â€” same per-developer-secret reasoning as the TomTom key above:
 // lives only in local.properties (gitignored), not safe from extraction once
 // embedded in a running app, just kept out of git history.
 val mapTilerApiKey: String = localProperties.getProperty("mapTilerApiKey", "")
@@ -42,13 +42,13 @@ android {
         applicationId = "com.emfitsolutions.gopreach"
         minSdk = 24
         targetSdk = 36
-        versionCode = 200
-        versionName = "1.139.0"
+        versionCode = 201
+        versionName = "1.139.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
         // Still consumed by a few raster tile URLs elsewhere (Share Location,
-        // Territory Map's satellite layer, Location Preview) — the native
+        // Territory Map's satellite layer, Location Preview) â€” the native
         // TomTom Maps SDK itself is no longer a dependency of this app (see
         // dependencies block below); Territory Assignment's Barangay
         // Boundary map now renders entirely on free/keyless OpenStreetMap-
@@ -153,7 +153,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
     implementation("androidx.activity:activity-compose:1.9.2")
-    // AppCompatActivity — MainActivity extends it for androidx.biometric.BiometricPrompt's
+    // AppCompatActivity â€” MainActivity extends it for androidx.biometric.BiometricPrompt's
     // FragmentManager requirement (see MainActivity.kt's own comment).
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.compose.ui:ui")
@@ -196,7 +196,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
 
 
-    // MapLibre Native — vector maps with tilt/rotate and 3D buildings. Replaces
+    // MapLibre Native â€” vector maps with tilt/rotate and 3D buildings. Replaces
     // osmdroid and the Leaflet WebViews stage by stage (restore point: git tag
     // `restore-before-maplibre`).
     implementation("org.maplibre.gl:android-sdk:11.13.5")
