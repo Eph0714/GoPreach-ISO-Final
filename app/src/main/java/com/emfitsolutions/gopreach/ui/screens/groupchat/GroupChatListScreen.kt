@@ -1,5 +1,11 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import androidx.compose.material.icons.rounded.Delete
+import com.emfitsolutions.gopreach.shared.resources.action_cancel
+import com.emfitsolutions.gopreach.shared.resources.chat_delete_group_chat_title
+import com.emfitsolutions.gopreach.shared.resources.chat_delete_group_chat_message
+import com.emfitsolutions.gopreach.shared.resources.chat_delete_group_chat
+import com.emfitsolutions.gopreach.shared.resources.chat_delete
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.chat_attachment_preview
 import com.emfitsolutions.gopreach.shared.resources.chat_empty_manage
@@ -86,6 +92,9 @@ fun GroupChatListScreen(
     }
     val chats by chatsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var showCreateDialog by remember { mutableStateOf(false) }
+    // A group chat can be deleted right from this list by whoever manages group chats (the same people who could already
+    // delete it from the chat's Settings; the server still limits them to their own congregation, Super-Admin to all).
+    var pendingDelete by remember { mutableStateOf<GroupChat?>(null) }
 
     Scaffold(
         topBar = {
@@ -100,9 +109,7 @@ fun GroupChatListScreen(
         },
         floatingActionButton = {
             if (canManage) {
-                FloatingActionButton(onClick = { showCreateDialog = true }) {
-                    Icon(Icons.Rounded.Add, contentDescription = stringResource(Res.string.chat_new_group_chat))
-                }
+                androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showCreateDialog = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text(stringResource(Res.string.chat_new_group_chat)) })
             }
         },
     ) { padding ->
@@ -142,11 +149,27 @@ fun GroupChatListScreen(
                         congregationName = congregationName,
                         unreadCount = (chat.messageCount - (chat.readCounts[currentPersonId] ?: 0L)).coerceAtLeast(0L),
                         onClick = { onOpenGroupChat(chat.id) },
+                        onDelete = if (canManage) ({ pendingDelete = chat }) else null,
                     )
                 }
             }
         }
       }
+    }
+
+    pendingDelete?.let { chat ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(stringResource(Res.string.chat_delete_group_chat_title)) },
+            text = { Text(stringResource(Res.string.chat_delete_group_chat_message, chat.groupName)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    pendingDelete = null
+                    viewModel.deleteGroupChat(chat, currentPersonId) {}
+                }) { Text(stringResource(Res.string.chat_delete), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingDelete = null }) { Text(stringResource(Res.string.action_cancel)) } },
+        )
     }
 
     if (showCreateDialog) {
@@ -162,7 +185,7 @@ fun GroupChatListScreen(
 }
 
 @Composable
-private fun GroupChatRow(chat: GroupChat, congregationName: String?, unreadCount: Long, onClick: () -> Unit) {
+private fun GroupChatRow(chat: GroupChat, congregationName: String?, unreadCount: Long, onClick: () -> Unit, onDelete: (() -> Unit)? = null) {
     Card(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -192,6 +215,11 @@ private fun GroupChatRow(chat: GroupChat, congregationName: String?, unreadCount
                     Box(modifier = Modifier.padding(top = 4.dp)) {
                         Badge { Text(if (unreadCount > 99) "99+" else unreadCount.toString()) }
                     }
+                }
+            }
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Rounded.Delete, contentDescription = stringResource(Res.string.chat_delete_group_chat), tint = MaterialTheme.colorScheme.error)
                 }
             }
         }

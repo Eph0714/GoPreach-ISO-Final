@@ -129,6 +129,52 @@ class HttpAuthService(
         post("/v1/auth/accounts", buildJsonObject { put("personId", JsonPrimitive(personId)); put("password", JsonPrimitive(password)) }, token)
     }
 
+    override suspend fun passkeyLoginOptions(): PasskeyChallenge {
+        val reply = post("/v1/auth/passkey/login/options", JsonObject(emptyMap()), token = null)
+        val options = reply["options"] ?: throw AuthFailure.Other("The server sent no passkey challenge.")
+        return PasskeyChallenge(reply.string("sessionId"), options.toString())
+    }
+
+    override suspend fun passkeyLogin(sessionId: String, responseJson: String): String? {
+        ensureLoaded()
+        val response = DocJson.parseToJsonElement(responseJson)
+        val reply = post("/v1/auth/passkey/login/verify", buildJsonObject { put("sessionId", JsonPrimitive(sessionId)); put("response", response) }, token = null)
+        lock.withLock { save(reply, signedInNow = true) }
+        return reply.string("username")
+    }
+
+    override suspend fun passkeyRegisterOptions(): String {
+        val token = idToken(false) ?: throw AuthFailure.InvalidUser()
+        val reply = post("/v1/auth/passkey/register/options", JsonObject(emptyMap()), token)
+        return (reply["options"] ?: throw AuthFailure.Other("The server sent no passkey options.")).toString()
+    }
+
+    override suspend fun passkeyRegister(responseJson: String, name: String) {
+        val token = idToken(false) ?: throw AuthFailure.InvalidUser()
+        val response = DocJson.parseToJsonElement(responseJson)
+        post("/v1/auth/passkey/register/verify", buildJsonObject { put("response", response); put("name", JsonPrimitive(name)) }, token)
+    }
+
+    override suspend fun passkeyList(): List<PasskeyInfo> {
+        val token = idToken(false) ?: throw AuthFailure.InvalidUser()
+        val reply = post("/v1/auth/passkey/list", JsonObject(emptyMap()), token)
+        return (reply["passkeys"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { element ->
+            val o = element as? JsonObject ?: return@mapNotNull null
+            PasskeyInfo(
+                id = o.string("id") ?: return@mapNotNull null,
+                name = o.string("name") ?: "Passkey",
+                createdAt = (o["createdAt"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L,
+                lastUsedAt = (o["lastUsedAt"] as? JsonPrimitive)?.content?.toLongOrNull(),
+            )
+        }
+    }
+
+    override suspend fun passkeyDelete(id: String): Boolean {
+        val token = idToken(false) ?: throw AuthFailure.InvalidUser()
+        val reply = post("/v1/auth/passkey/delete", buildJsonObject { put("id", JsonPrimitive(id)) }, token)
+        return (reply["ok"] as? JsonPrimitive)?.content == "true"
+    }
+
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     /** One POST; maps every failure to an [AuthFailure]. Returns the reply's JSON object. */
@@ -156,6 +202,8 @@ class HttpAuthService(
             code == 403 && error == "requires-recent-login" -> AuthFailure.Other("For security, please sign in again before changing your password.")
             code == 400 && error == "weak-password" -> AuthFailure.Other("The password is too weak. Use at least 6 characters.")
             code == 409 -> AuthFailure.Other("An account for this person already exists.")
+            code == 503 && error == "passkeys-not-configured" -> AuthFailure.Other("Passkeys aren't set up on the server yet.")
+            code == 400 && (error == "not-verified" || error == "challenge-expired") -> AuthFailure.Other("That passkey could not be verified. Please try again.")
             code == 503 -> AuthFailure.Other("Sign-in is not available right now. Please try again later.")
             else -> AuthFailure.Other("Sign-in failed (${code}).")
         }

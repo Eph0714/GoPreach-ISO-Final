@@ -100,9 +100,7 @@ fun CalendarScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Rounded.Add, contentDescription = if (isPublisherScope) "New Note" else "New Event")
-            }
+            androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showCreateDialog = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text(if (isPublisherScope) "New Note" else "New Event") })
         },
     ) { padding ->
       Column(modifier = Modifier.fillMaxSize().padding(padding)) {

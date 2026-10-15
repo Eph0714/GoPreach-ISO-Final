@@ -267,8 +267,8 @@ fun LoginScreen(
                 // Every method is always listed; one that was never set up (or isn't available) explains
                 // itself when tapped instead of signing anyone in. Each one that is set up ends in the
                 // same server-verified sign-in as the password form above.
-                OutlinedButton(
-                    onClick = viewModel::onPasskeyClick,
+                if (com.emfitsolutions.gopreach.data.passkey.PASSKEY_LOGIN_ENABLED) OutlinedButton(
+                    onClick = { viewModel.onPasskeyClick(activity) },
                     enabled = !uiState.isLoading,
                     shape = FieldShape,
                     modifier = Modifier.fillMaxWidth(),

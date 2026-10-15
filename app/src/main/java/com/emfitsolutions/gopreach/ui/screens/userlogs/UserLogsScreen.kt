@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.userlogs
 
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
 import androidx.compose.foundation.layout.Arrangement
@@ -77,6 +81,7 @@ fun UserLogsScreen(
     val rowsFlow = remember(effectiveCongregationId, needsCongregation) { if (needsCongregation) kotlinx.coroutines.flow.flowOf(emptyList()) else viewModel.rowsFor(effectiveCongregationId) }
     val rows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val dateFormat = remember { SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault()) }
+    val viewMode = rememberRecordViewMode("user_logs")
     val showToast = rememberActionToast()
 
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -145,7 +150,15 @@ fun UserLogsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { RecordFound(rows.size) }
-                items(rows, key = { it.entry.id }) { row ->
+                item { RecordViewToggle(viewMode) }
+                recordItems(
+                    viewMode, rows, { it.entry.id },
+                    listOf(
+                        UniversalColumn<com.emfitsolutions.gopreach.ui.screens.userlogs.LogRow>("Action", 180.dp) { it.entry.action.replace('_', ' ') },
+                        UniversalColumn("User", 180.dp) { it.actorName },
+                        UniversalColumn("Date", 170.dp) { dateFormat.format(Date(it.entry.timestamp)) },
+                    ),
+                ) { row ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),

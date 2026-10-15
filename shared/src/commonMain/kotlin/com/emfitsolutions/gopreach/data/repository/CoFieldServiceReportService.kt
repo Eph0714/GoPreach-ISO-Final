@@ -30,16 +30,24 @@ interface CoFieldServiceReportService {
         statistics: com.emfitsolutions.gopreach.data.model.CongregationMonthlyStatistics? = null,
         /** The frozen copy of the sent report the Circuit Overseer will read; the service stamps its id and send number. */
         received: com.emfitsolutions.gopreach.data.model.CoReceivedReport? = null,
+        /**
+         * The version of the month the caller saw and validated against (0 = never sent). If the month has moved on - a repeated tap, a retry,
+         * another admin sending first - nothing is sent and no duplicate snapshot is made.
+         */
+        expectedVersion: Int? = null,
     ): CircuitResult
 
     /** SUBMITTED → NOT_SUBMITTED, before the overseer has received it. */
     suspend fun undoSubmission(congregationId: String, periodMonth: Long, actor: SubmissionActor): CircuitResult
 
-    /** Circuit Overseer: SUBMITTED → RECEIVED, with optional remarks. */
-    suspend fun receive(reportId: String, remarks: String?, actor: SubmissionActor): CircuitResult
+    /** Circuit Overseer: SUBMITTED → RECEIVED, with optional remarks. [expectedVersion] is the snapshot version the overseer reviewed; a newer one is refused. */
+    suspend fun receive(reportId: String, remarks: String?, actor: SubmissionActor, expectedVersion: Int? = null): CircuitResult
 
-    /** Circuit Overseer: SUBMITTED / RECEIVED → RETURNED. The [reason] is also kept as the month's remarks. */
-    suspend fun returnForCorrection(reportId: String, reason: String, actor: SubmissionActor): CircuitResult
+    /** Circuit Overseer: SUBMITTED / RECEIVED → RETURNED. The [reason] (required) is also kept as the month's remarks. */
+    suspend fun returnForCorrection(reportId: String, reason: String, actor: SubmissionActor, expectedVersion: Int? = null): CircuitResult
+
+    /** Circuit Overseer: SUBMITTED / RECEIVED → CANCELLED, with a required [reason]. The snapshot and its history are kept; a received month stays locked. */
+    suspend fun cancelSubmission(reportId: String, reason: String, actor: SubmissionActor, expectedVersion: Int? = null): CircuitResult
 
     /** Circuit Overseer: add or change the remarks of a submitted / received / returned month. */
     suspend fun saveRemarks(reportId: String, remarks: String, actor: SubmissionActor): CircuitResult

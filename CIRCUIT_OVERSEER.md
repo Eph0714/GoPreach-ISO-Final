@@ -76,36 +76,42 @@ username and password, and signs in again — then it is an ordinary Active acco
   territory, reports, account), pointed at the chosen circuit (`CircuitScopeStore`). The Super-Admin's Approve /
   Return is recorded under their own name in the audit trail.
 
-## Field Service Report workflow
+## Field Service Report workflow (Circuit Report snapshots)
 
-The congregation's own Field Service Report (the publishers' monthly reports) is the **single source of truth** — nothing is
-copied for the Circuit Overseer. What the workflow adds is one small status document per congregation and service month,
-`coFieldServiceMonthStatus/{congregationId}_{periodMonth}` (no report figures), plus an append-only audit trail in
-`coFieldServiceReportEvents`.
+Each service month is sent to the Circuit Overseer as its own **immutable snapshot** (`coReceivedReports/{congregationId}_{month}_{version}`,
+written once and never edited, see `writeReceivedReport`). The congregation's own records stay the live data; the overseer reads only
+the snapshots. A small status document per congregation and month, `coFieldServiceMonthStatus/{congregationId}_{periodMonth}`, tracks
+where that month stands (with its current version), and an append-only audit trail is kept in `coFieldServiceReportEvents`.
 
 ```
-NOT SUBMITTED → SUBMITTED → RECEIVED          SUBMITTED → NOT SUBMITTED (undo, before receipt)
-RECEIVED / SUBMITTED → RETURNED → SUBMITTED   (only the Circuit Overseer returns a received month)
+DRAFT (NOT_SUBMITTED) -> SUBMITTED (Sent to CO, awaiting receipt) -> RECEIVED
+SUBMITTED -> SUBMITTED   an updated snapshot while awaiting receipt (version + 1)
+SUBMITTED -> DRAFT       undo, before receipt
+SUBMITTED / RECEIVED -> RETURNED (reason required) -> SUBMITTED (version + 1)
+SUBMITTED / RECEIVED -> CANCELLED (reason required) -> SUBMITTED (version + 1)
 ```
 
-* **Submitting** — Admin, Coordinator Elder, Service Overseer, Secretary of that congregation, or the Super-Admin. A service month
-  that has not started cannot be submitted (rules `request.time`, and the client for every role). One status document per month
-  makes a duplicate submission impossible.
-* **Lock** — while a month is SUBMITTED or RECEIVED nobody but the Super-Admin adds, edits or deletes its records: monthly
-  reports (publisher submission and the Manual Field Service Record), preaching time (hours/minutes), credit hours, planner days
-  and visits (searching, return visits, Bible studies). RETURNED and NOT SUBMITTED open it again. Only that month locks.
-  Enforced in `firestore.rules` (`fsMonthLocked` / `fsDayLocked`) and the backend policy, plus a client guard
-  (`MonthLockGuard`) so an offline device does not queue a change that could never sync. Screens show
-  "Status: Submitted to Circuit Overseer" and the lock message.
-* **Circuit Overseer** — sees only submitted months (SUBMITTED / RECEIVED / RETURNED). They open the congregation's actual Field
-  Service Report for such a month (its records are mirrored on demand), see a review panel and can *Mark Received*, edit the
-  **CO Remarks** of that month, or *Return* it (remarks required). Remarks belong to the month and are kept in the history.
-* **Undo** — the congregation can undo a SUBMITTED month; the active CO remarks are cleared but kept in the audit history.
-  After RECEIVED only the Circuit Overseer can return it.
-* **Audit** — every move records congregation, month, from/to status, user, role, time and remarks (and the previous remarks).
+* **Sending** - Admin, Coordinator Elder, Service Overseer, Secretary of that congregation, or the Super-Admin. One send may include any
+  number of months (consecutive or not, from any year up to the current month, by the **server's** date: `POST /v1/time`; the rules check
+  again with the server clock). Every month is validated on its own first (eligible, already received, awaiting receipt and changed or
+  not, returned, cancelled, has data) and sent as its own snapshot with its own version; a repeated tap or retry cannot duplicate a
+  version (each send names the version it validated against, and the rules require exactly the next version).
+* **Lock** - while a snapshot is only **awaiting receipt** the live month stays editable ("Changes Since Submission" shows when it
+  differs from the sent snapshot, and an updated snapshot can be sent). **Only RECEIVED locks** the month's records for everyone but the
+  Super-Admin: monthly reports, preaching time, credit hours, planner days and visits. RETURNED and DRAFT open it again. Cancelling a
+  received submission does **not** silently unlock the month (`cancelledFromStatus`); only the overseer returning it for editing does.
+  Enforced in the backend policy (`fsMonthLocked` / `fsDayLocked`) plus a client guard (`MonthLockGuard`).
+* **Circuit Overseer** - Circuit Reports (side panel) lists every month the overseer's congregations sent, with filters (All, Awaiting
+  Receipt, Received, Returned, Cancelled), search, the read-only snapshot viewer (report, details with version history, comparison with
+  the previous send of the same month) and the actions *Mark as Received*, *Return for Editing* and *Cancel Submission*, each behind a
+  confirmation that names the congregation, month and snapshot version; return and cancel require a reason. An action applies only to the
+  version the overseer reviewed: a newer version makes it refuse (the status document must still be at that version).
+* **Notifications** - the overseer's unread list gets every new version; the congregation's notification bell gets "received", "returned
+  for editing" and "cancelled" (with the reason).
+* **Audit** - every move records congregation, month, from/to status, version, user, role, time and the reason or remarks.
 
-Limitations: the Super-Admin override in `firestore.rules` is not bound by the future-month or lock rules (the app enforces the
-future-month rule for them too). Service months use UTC+8 (the Philippines) when a date is mapped to its month in the rules.
+Limitations: permanent deletion of a submission is not offered (cancelling keeps the snapshot and its history). Service months use
+UTC+8 (the Philippines) when a date is mapped to its month in the rules.
 
 ## Meeting Attendance and the Congregation Comparative Report
 
@@ -200,3 +206,36 @@ One set of components (`ui/components/co/CoDesignSystem.kt`) now carries every C
 * **Buttons.** `CoButton(kind = Primary | Secondary | Success | Warning | Danger | Neutral)`: one shape, one height, an icon from the Material "Rounded" family. Mark Received = Success, Return = Warning, Print / PDF / Excel / Change Congregation / Sort = Secondary.
 * **Colors.** `coPalette()`: the app's primary accent plus fixed success / warning / danger, with lighter variants on dark surfaces.
 * **Full screen.** `CoFullScreenButton` + `CoFullScreenEffect` in the top bar of Publishers, Elders, Field Service Report, Meeting Attendance, Report Submission, both Comparative screens and the Circuit Report; the Field Service Report also has a "table only" mode.
+
+## Received Reports (navigation)
+
+The Circuit Overseer has no standalone Field Service Report module. **Received Reports** (`Destinations.RECEIVED_REPORTS`) is a landing page with two categories:
+
+- **Field Service Report** -> the submitted-snapshot list (`CIRCUIT_REPORTS_INBOX`, with search, status filters, sort and the Mark as Received / Return for Editing / Cancel actions); "Open Snapshot" opens the frozen copy (`RECEIVED_SNAPSHOTS`).
+- **Circuit Attendance Report** -> the consolidated circuit table (`CIRCUIT_REPORT`, formerly labelled "Circuit Report"; only the user-facing labels changed).
+
+Route ids, stored data and server rules are unchanged. `CIRCUIT_FS_REPORTS` still exists (legacy months sent before snapshots existed open the live report) but has no menu entry.
+
+## Circuit Attendance Report (Meeting Attendance snapshots)
+
+The Meeting Attendance of a service month goes to the Circuit Overseer by exactly the same process as the Field Service Report:
+
+* **Sending** (admin app -> Meeting Attendance -> menu -> *Send to Circuit Overseer*; Admin, Coordinator Elder, Service Overseer, Secretary, Super-Admin):
+  pick one month or several, see where each stands, send. Every month is validated on its own (not a future month by the server's date, not already
+  received, has recorded meetings, changed or not) and saved as its own immutable snapshot with its own version
+  (`coAttendanceReports/{congregationId}_{month}_{version}`: every weekly meeting with its original counts, average, official figure and rounding).
+  The status of each month is `coAttendanceMonthStatus/{congregationId}_{month}` (a `CoMonthStatus`), its audit trail `coAttendanceReportEvents`.
+* **Status flow** (same as the Field Service Report): `DRAFT -> SUBMITTED -> RECEIVED`, `SUBMITTED -> SUBMITTED` (updated snapshot, version + 1),
+  `SUBMITTED -> DRAFT` (undo, before receipt), `SUBMITTED / RECEIVED -> RETURNED | CANCELLED` (reason required) -> `SUBMITTED` (version + 1).
+  A month taken back (undo) disappears from the Circuit Overseer's list; its old copy stays as history.
+* **Lock**: while a snapshot only awaits receipt the live attendance stays editable ("Changed" shows when it differs from what was sent).
+  **Only RECEIVED locks** the month's attendance (add / edit / delete / rounding recalculation) for everyone but the Super-Admin, in the app
+  (`MeetingAttendanceRepository`) and on the server (`monthFrozen` in `backend/src/policy/rules.js`). Cancelling a received month keeps the lock;
+  returning it unlocks it. This lock is independent of the Field Service Report: receiving that no longer freezes attendance.
+* **Circuit Overseer**: Received Reports -> *Circuit Attendance Report* -> congregation -> month: the frozen sheet (a Midweek and a Weekend block,
+  the original counts, average, official figure and the monthly average), version chips, Print / PDF / Excel, and *Mark as Received*,
+  *Return to Congregation* and *Cancel Submission* (each behind a confirmation naming the congregation, month and version; return and cancel need a
+  reason; an action applies only to the version the overseer reviewed). *Circuit summary* opens the previous consolidated circuit table.
+* **Report Submission** shows each attendance month's real status (Submitted, Correction Required, Received) for the admin and the Circuit Overseer.
+* Server: new collections are covered in `backend/src/policy/rules.js` and `backend/test/rules.test.js`; `firestore.rules` (the old Firebase rules)
+  was not extended because the app talks to the backend.

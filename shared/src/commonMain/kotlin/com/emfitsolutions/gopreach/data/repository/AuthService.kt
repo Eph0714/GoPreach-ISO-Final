@@ -14,6 +14,12 @@ sealed class AuthFailure(message: String?, cause: Throwable? = null) : Exception
     class Other(message: String?, cause: Throwable? = null) : AuthFailure(message, cause)
 }
 
+/** The server's one-time passkey challenge: [optionsJson] goes to the phone's passkey manager as-is; [sessionId] comes back with the answer. */
+data class PasskeyChallenge(val sessionId: String?, val optionsJson: String)
+
+/** A passkey saved for the signed-in account (the server holds only its public key). */
+data class PasskeyInfo(val id: String, val name: String, val createdAt: Long, val lastUsedAt: Long?)
+
 /**
  * Identity provider facade used by the shared code. Android backs it with Firebase Auth; the same interface lets the Hostinger
  * backend or another provider replace it later without touching screens or repositories. Every failing call throws [AuthFailure].
@@ -37,4 +43,18 @@ interface AuthService {
 
     /** Creates an account for someone else without signing the current admin out. */
     suspend fun createAccount(email: String, password: String)
+
+    // ---- Passkeys (WebAuthn). Only the HTTP service implements these; the phone's passkey manager does the signing. ----
+
+    /** Asks the server for a sign-in challenge (no login needed). */
+    suspend fun passkeyLoginOptions(): PasskeyChallenge = throw AuthFailure.Other("Passkeys aren't available on this device.")
+
+    /** Sends the phone's signed answer. On success the person is signed in (tokens stored); returns their username. */
+    suspend fun passkeyLogin(sessionId: String, responseJson: String): String? = throw AuthFailure.Other("Passkeys aren't available on this device.")
+
+    /** The options for creating a passkey for the signed-in account. */
+    suspend fun passkeyRegisterOptions(): String = throw AuthFailure.Other("Passkeys aren't available on this device.")
+    suspend fun passkeyRegister(responseJson: String, name: String) { throw AuthFailure.Other("Passkeys aren't available on this device.") }
+    suspend fun passkeyList(): List<PasskeyInfo> = throw AuthFailure.Other("Passkeys aren't available on this device.")
+    suspend fun passkeyDelete(id: String): Boolean = throw AuthFailure.Other("Passkeys aren't available on this device.")
 }

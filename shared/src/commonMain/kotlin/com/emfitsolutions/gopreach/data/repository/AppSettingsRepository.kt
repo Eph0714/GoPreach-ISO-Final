@@ -3,6 +3,7 @@ package com.emfitsolutions.gopreach.data.repository
 import com.emfitsolutions.gopreach.data.model.AppSettings
 import com.emfitsolutions.gopreach.data.remote.RemoteFiles
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
+import com.emfitsolutions.gopreach.data.sync.saveNow
 import com.emfitsolutions.gopreach.platform.nowMillis
 import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import kotlinx.coroutines.flow.Flow
@@ -54,7 +55,9 @@ class AppSettingsRepository(
     suspend fun saveSessionTimeout(enabled: Boolean, minutes: Int, updatedByPersonId: String) {
         val current = observe().first()
         val clamped = minutes.coerceIn(AppSettings.MIN_SESSION_TIMEOUT_MINUTES, AppSettings.MAX_SESSION_TIMEOUT_MINUTES)
-        offline.save(
+        // Pushed to the server straight away when online (not just queued), so every other phone gets it on its next sync.
+        offline.saveNow(
+            remote,
             COLLECTION,
             AppSettings.GLOBAL_ID,
             current.copy(
@@ -97,6 +100,13 @@ class AppSettingsRepository(
         val current = observe().first()
         offline.save(COLLECTION, AppSettings.GLOBAL_ID, current.copy(requireAllPublishersSubmitted = required, updatedAt = nowMillis(), updatedByPersonId = updatedByPersonId))
         auditLogRepository.log(actorPersonId = updatedByPersonId, action = "UPDATE_CONSOLIDATED_SUBMISSION_REQUIREMENT", details = "requireAllPublishersSubmitted=$required")
+    }
+
+    /** Super-Admin only (the Control Panel, firestore.rules and the backend policy all enforce it). */
+    suspend fun saveAllowCaptureImage(allowed: Boolean, updatedByPersonId: String) {
+        val current = observe().first()
+        offline.save(COLLECTION, AppSettings.GLOBAL_ID, current.copy(allowCaptureImage = allowed, updatedAt = nowMillis(), updatedByPersonId = updatedByPersonId))
+        auditLogRepository.log(actorPersonId = updatedByPersonId, action = "UPDATE_ALLOW_CAPTURE_IMAGE", details = "allowCaptureImage=$allowed")
     }
 
     fun startRemoteSync(): Flow<Unit> =

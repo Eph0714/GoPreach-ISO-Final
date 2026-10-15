@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.householdervisithistory
 
 import com.emfitsolutions.gopreach.platform.rememberFileCreator
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.data.print.escapeHtml
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
@@ -275,9 +279,20 @@ fun HouseholderVisitHistoryScreen(
                     Text("No house holder records found.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
+                val viewMode = rememberRecordViewMode("householders")
                 LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { RecordFound(uiState.rows.size) }
-                    items(uiState.rows, key = { it.person.id }) { row ->
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, uiState.rows, { it.person.id },
+                        listOf(
+                                UniversalColumn("Householder", 200.dp) { it.person.name },
+                                UniversalColumn("Status", 150.dp) { it.person.pipelineStage.statusLabel() },
+                                UniversalColumn("Assigned Publisher", 180.dp) { it.publisherName ?: "Unassigned" },
+                                UniversalColumn("Location", 260.dp) { listOfNotNull(it.person.barangay, it.person.cityMunicipality, it.person.province).joinToString(", ") },
+                        ),
+                        onRowClick = { selectedRow = it },
+                    ) { row ->
                         HouseholderCard(row, onClick = { selectedRow = row })
                     }
                 item(key = "end-summary") { com.emfitsolutions.gopreach.ui.components.EndSummary(listOf("Total Householders" to uiState.rows.size.toString()), Modifier.padding(top = 8.dp)) }

@@ -22,6 +22,7 @@ export async function mayWriteFile(actor, path, get) {
   if (!actor.known) return false;
   if (path.includes('..') || path.includes('//')) return false;
   if (path.startsWith('app-settings/')) return actor.isSuperAdmin;
+  if (path.startsWith('announcement-files/')) return false; // served only through the permission-checked /v1/announcements/:id/files routes
   const chat = /^groupChats\/([^/]+)\//.exec(path);
   if (chat) {
     const doc = await get('groupChats', chat[1]);

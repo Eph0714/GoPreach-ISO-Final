@@ -371,6 +371,27 @@ class MonthlyReportViewModel(
         }
     }
 
+    /** A publisher may delete their own report only while it is still a Draft (never submitted) and the month is open. */
+    fun deleteDraft(publisherPersonId: String) {
+        val state = _uiState.value
+        val report = state.existingReport ?: return
+        if (report.status != ReportStatus.DRAFT || state.monthApproved || report.id.isBlank()) return
+        viewModelScope.launch {
+            try {
+                monthlyReportRepository.delete(report.id)
+                _uiState.value = _uiState.value.copy(existingReport = null, errorMessage = null)
+                runCatching {
+                    auditLogRepository.log(
+                        actorPersonId = publisherPersonId, action = "PUBLISHER_REPORT_DRAFT_DELETED", targetType = "MonthlyReport",
+                        targetId = report.id, congregationId = report.congregationId, details = "Month ${report.periodMonth}",
+                    )
+                }
+            } catch (e: com.emfitsolutions.gopreach.data.model.MonthLockedException) {
+                _uiState.value = _uiState.value.copy(errorMessage = e.message)
+            }
+        }
+    }
+
     fun submit(publisherPersonId: String, allowEditWhenLocked: Boolean = false) {
         val state = _uiState.value
         if (state.isLocked && !allowEditWhenLocked) return

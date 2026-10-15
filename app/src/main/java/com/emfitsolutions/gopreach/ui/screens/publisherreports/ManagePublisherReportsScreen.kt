@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.publisherreports
 
 import com.emfitsolutions.gopreach.platform.rememberFileCreator
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
@@ -315,13 +319,28 @@ fun ManagePublisherReportsScreen(
                     style = MaterialTheme.typography.titleSmall,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
+                val viewMode = rememberRecordViewMode("publisher_reports")
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item { RecordFound(uiState.rows.size) }
-                    items(uiState.rows, key = { it.report.id }) { row ->
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, uiState.rows, { it.report.id },
+                        listOf(
+                                UniversalColumn("Publisher", 200.dp) { it.person.fullName },
+                                UniversalColumn("Category", 160.dp) { it.category.displayName },
+                                UniversalColumn("Congregation", 170.dp) { it.congregationName },
+                                UniversalColumn("Bible Studies", 100.dp) { it.report.bibleStudiesCount.toString() },
+                                UniversalColumn("Return Visits", 100.dp) { it.report.returnVisitsCount.toString() },
+                                UniversalColumn("Hours", 80.dp) { (it.report.hoursRendered ?: 0.0).toString() },
+                                UniversalColumn("Participated", 100.dp) { if (it.report.participatedInPreaching == true) "Yes" else "No" },
+                                UniversalColumn("Status", 110.dp) { it.report.status.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+                        ),
+                        onRowClick = { if (!readOnly) pendingEdit = it },
+                    ) { row ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Row(

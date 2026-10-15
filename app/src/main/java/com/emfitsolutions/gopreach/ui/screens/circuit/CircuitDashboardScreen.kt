@@ -72,91 +72,17 @@ fun CircuitDashboardBody(
     onOpenCongregation: (String) -> Unit = {},
     onOpenLeaders: () -> Unit = {},
     onOpenReceived: () -> Unit = {},
+    onOpenSnapshot: () -> Unit = {},
+    onOpenAnnouncements: () -> Unit = {},
     viewModel: CircuitDashboardViewModel = koinViewModel(),
     people: CircuitPeopleViewModel = koinViewModel(),
 ) {
-    // The Circuit Overseer's command center (see CircuitHomeDashboard); the older tile layout below is kept only for reference.
+    // The Circuit Overseer's command center (see CircuitHomeDashboard).
     CircuitHomeDashboard(
         currentPersonId = currentPersonId, onOpenReport = onOpenReport, onOpenPublishers = onOpenPublishers, onOpenCongregations = onOpenCongregations,
         onOpenTerritory = onOpenTerritory, onOpenCircuitReport = onOpenCircuitReport, onOpenAttendance = onOpenAttendance, onOpenComparative = onOpenComparative,
-        onOpenReportSubmission = onOpenReportSubmission, onOpenCongregation = onOpenCongregation, onOpenLeaders = onOpenLeaders, onOpenReceived = onOpenReceived, modifier = modifier,
+        onOpenReportSubmission = onOpenReportSubmission, onOpenCongregation = onOpenCongregation, onOpenLeaders = onOpenLeaders, onOpenReceived = onOpenReceived, onOpenSnapshot = onOpenSnapshot, onOpenAnnouncements = onOpenAnnouncements, modifier = modifier,
     )
-    if (false) {
-    val state by remember(currentPersonId) { viewModel.stateFor(currentPersonId) }
-        .collectAsStateWithLifecycle(initialValue = null)
-
-    run {
-        Column(
-            modifier = modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            run {
-                state?.let { s -> CircuitSummaryHeader(s) }
-            }
-            run {
-                // Quick Access: five modules. The detailed ones (Field Service Report, Territory Map, Publishers) first ask
-                // for a congregation; Circuit Report is the one summary-level view of the whole circuit.
-                Text("QUICK ACCESS", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
-                QuickAccessGrid(
-                    listOf(
-                        QuickModule(Icons.Rounded.AccountBalance, "Congregations", (state?.assignedCount?.let { "$it in your circuit — with their people counts" } ?: "Your circuit's congregations and their people counts"), null, COLOR_CONGREGATIONS, onOpenCongregations),
-                        QuickModule(Icons.Rounded.Assessment, "Field Service Report", "Select a congregation, then view its report", null, COLOR_REPORT, onOpenReport),
-                        QuickModule(Icons.Rounded.Map, "Territory Map", "Select a congregation to view its territory", null, COLOR_TERRITORY, onOpenTerritory),
-                        QuickModule(Icons.Rounded.People, "Publishers", "Select a congregation to view its publishers", null, COLOR_PUBLISHERS, onOpenPublishers),
-                        QuickModule(Icons.Rounded.BarChart, "Circuit Report", "Consolidated statistics of every congregation in the circuit", null, COLOR_CIRCUIT, onOpenCircuitReport),
-                        QuickModule(Icons.Rounded.Groups, "Meeting Attendance", "Weekly Midweek and Weekend attendance of a congregation", null, COLOR_ATTENDANCE, onOpenAttendance),
-                        QuickModule(Icons.Rounded.CompareArrows, "Comparative Report", "Compare a congregation's statistics between two periods", null, COLOR_COMPARE, onOpenComparative),
-                    ),
-                )
-            }
-        }
-    }
-    }
-}
-
-/** One slim line: the circuit number as a small chip, the overseer's name and how many congregations they oversee. */
-@Composable
-private fun CircuitSummaryHeader(state: CircuitDashboardState) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "CIRCUIT ${state.circuitCode ?: "—"}",
-                    style = MaterialTheme.typography.labelMedium, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier
-                        .background(MaterialTheme.colorScheme.primaryContainer, androidx.compose.foundation.shape.RoundedCornerShape(7.dp))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                )
-                Text(state.overseerName, style = MaterialTheme.typography.titleSmall, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, modifier = Modifier.weight(1f))
-            }
-            Text(
-                if (state.congregationNames.isEmpty()) "${state.assignedCount} congregations"
-                else state.congregationNames.joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2,
-            )
-        }
-    }
-}
-
-/** Compact card for the Circuit Overseer's Main Form — circuit, name, congregation count, and a way into the dashboard. */
-@Composable
-fun CircuitOverseerSummaryCard(
-    currentPersonId: String,
-    onOpenDashboard: () -> Unit,
-    viewModel: CircuitDashboardViewModel = koinViewModel(),
-) {
-    val state by remember(currentPersonId) { viewModel.stateFor(currentPersonId) }
-        .collectAsStateWithLifecycle(initialValue = null)
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        state?.let { CircuitSummaryHeader(it) }
-        OutlinedButton(onClick = onOpenDashboard, modifier = Modifier.fillMaxWidth()) { Text("Open Circuit Dashboard") }
-    }
 }
 
 /** The Circuit Dashboard as its own screen (back arrow + scrolling body); the same body is the Circuit Overseer's Main Form. */
@@ -173,6 +99,8 @@ fun CircuitDashboardScreen(
     onOpenAttendance: () -> Unit = {},
     onOpenComparative: () -> Unit = {},
     onOpenReceived: () -> Unit = {},
+    onOpenSnapshot: () -> Unit = {},
+    onOpenAnnouncements: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -187,7 +115,7 @@ fun CircuitDashboardScreen(
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
             onOpenReport = onOpenReport, onOpenPublishers = onOpenPublishers, onOpenCongregations = onOpenCongregations,
             onOpenTerritory = onOpenTerritory, onOpenCircuitReport = onOpenCircuitReport,
-            onOpenAttendance = onOpenAttendance, onOpenComparative = onOpenComparative, onOpenReceived = onOpenReceived,
+            onOpenAttendance = onOpenAttendance, onOpenComparative = onOpenComparative, onOpenReceived = onOpenReceived, onOpenSnapshot = onOpenSnapshot, onOpenAnnouncements = onOpenAnnouncements,
         )
     }
 }

@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.householderassignment
 
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -96,13 +100,25 @@ fun IncomingHouseholderAssignmentsScreen(
                 Text("No incoming House Holder Assignments.", style = MaterialTheme.typography.bodyMedium)
             }
         } else {
+            val viewMode = rememberRecordViewMode("incoming_assignments")
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { RecordFound(assignments.size) }
-                items(assignments, key = { it.id }) { assignment ->
+                item { RecordViewToggle(viewMode) }
+                recordItems(
+                    viewMode, assignments, { it.id },
+                    listOf(
+                            UniversalColumn("Householder", 200.dp) { it.personNameSnapshot },
+                            UniversalColumn("Record Type", 150.dp) { it.recordType.assignmentLabel() },
+                            UniversalColumn("Barangay", 160.dp) { it.barangaySnapshot.orEmpty() },
+                            UniversalColumn("From", 170.dp) { it.assignedByNameSnapshot },
+                            UniversalColumn("Assigned", 170.dp) { formatRecordTimestamp(it.assignedAt) },
+                    ),
+                    onRowClick = { selected = it },
+                ) { assignment ->
                     val personFlow = remember(assignment.interestedPersonId) { viewModel.personFor(assignment.interestedPersonId) }
                     val person by personFlow.collectAsStateWithLifecycle(initialValue = null)
                     Card(modifier = Modifier.fillMaxWidth()) {

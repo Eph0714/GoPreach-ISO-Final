@@ -196,7 +196,7 @@ test('meeting attendance: managers write valid records, nobody else; frozen mont
   await put('meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'soA' }));
   assert.equal(await del('soA', 'meetingAttendance', id), false, 'never hard-deleted');
   assert.equal(await set('soA', 'meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'soA', deleted: true })), true, 'a soft delete');
-  await put('congregationMonthlyStatistics', `congA_${SEP}`, { congregationId: 'congA', serviceMonth: SEP, snapshotStatus: 'RECEIVED' });
+  await put('coAttendanceMonthStatus', `congA_${SEP}`, { congregationId: 'congA', periodMonth: SEP, status: 'RECEIVED', version: 1 });
   assert.equal(await set('soA', 'meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'soA', remarks: 'late' })), false, 'a received month is frozen');
   assert.equal(await set('sa', 'meetingAttendance', id, mid([79, 80, 85], { updatedBy: 'sa', remarks: 'late' })), true, 'the Super Admin is not bound');
   assert.equal(await set('adminA', 'meetingAttendanceSettings', 'congA', { congregationId: 'congA', roundingMode: 'EXACT', updatedBy: 'adminA' }), true, 'a manager sets the rounding');
@@ -383,6 +383,11 @@ test('settings and lookups: credit hour categories, app settings, preaching time
   assert.equal(await set('coordA', 'creditHourCategories', 'cat1', { name: 'x' }), false, 'only the Admin Per Congregation or Super Admin');
   assert.equal(await set('elderA', 'appSettings', 'logo', { v: 1 }), true);
   assert.equal(await set('pubA', 'appSettings', 'logo', { v: 2 }), false);
+  // the Session Timeout is one setting for every phone: only the Super Admin changes it
+  assert.equal(await set('adminA', 'appSettings', 'global', { sessionTimeoutEnabled: true, sessionTimeoutMinutes: 30 }), false, 'an Admin cannot change the timeout');
+  assert.equal(await set('elderA', 'appSettings', 'global', { sessionTimeoutEnabled: false, sessionTimeoutMinutes: 5 }), false, 'an Elder cannot turn it off');
+  assert.equal(await set('adminA', 'appSettings', 'global', { sessionTimeoutEnabled: true, sessionTimeoutMinutes: 5, trashRetentionDays: 14 }), true, 'other settings are unchanged for them');
+  assert.equal(await set('sa', 'appSettings', 'global', { sessionTimeoutEnabled: true, sessionTimeoutMinutes: 30 }), true, 'the Super Admin sets it');
   assert.equal(await set('pubA', 'preachingTimeRecords', 'pt1', { publisherPersonId: 'pubA' }), true);
   assert.equal(await del('adminA', 'preachingTimeRecords', 'pt1'), false);
   assert.equal(await del('sa', 'preachingTimeRecords', 'pt1'), true);
@@ -480,8 +485,10 @@ test('month status: senders submit past months only, undo before receipt; the ov
   assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, { ...received, status: 'RETURNED' }), false, 'the congregation cannot return a RECEIVED month');
   assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...received, coRemarks: 'Reviewed' }), true, 'the overseer edits the remarks');
   assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...received, submittedByName: 'forged' }), false, 'the overseer cannot touch submission fields');
-  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...received, status: 'RETURNED', returnedAt: 4, coRemarks: 'Check RV' }), true, 'the overseer returns it');
-  const returned = { ...received, status: 'RETURNED', returnedAt: 4, coRemarks: 'Check RV' };
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...received, status: 'RETURNED', returnedAt: 4, coRemarks: 'Check RV' }), false, 'a return needs a reason');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...received, status: 'RETURNED', returnedAt: 4, returnReason: '  ', coRemarks: 'Check RV' }), false, 'a blank reason is no reason');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...received, status: 'RETURNED', returnedAt: 4, returnReason: 'Check RV', coRemarks: 'Check RV' }), true, 'the overseer returns it');
+  const returned = { ...received, status: 'RETURNED', returnedAt: 4, returnReason: 'Check RV', coRemarks: 'Check RV' };
   await put('coFieldServiceMonthStatus', id, returned);
   assert.equal(await set('secB', 'coFieldServiceMonthStatus', id, { ...returned, status: 'SUBMITTED', version: 2, submittedAt: 5, coRemarks: 'forged' }), false, 'a re-send cannot forge remarks');
   assert.equal(await set('secB', 'coFieldServiceMonthStatus', id, { ...returned, status: 'SUBMITTED', version: 2, submittedAt: 5 }), true, 'the Secretary sends it again after a return');
@@ -490,7 +497,7 @@ test('month status: senders submit past months only, undo before receipt; the ov
   assert.equal(await set('coB', 'coFieldServiceReportEvents', 'e2', { reportId: id, congregationId: 'congB', userId: 'adminB' }), false, 'events are written as yourself');
 });
 
-test('month lock and overseer visibility: Submitted / Received lock the records; the overseer sees only submitted months', async () => {
+test('month lock and overseer visibility: only Received locks the records; the overseer sees only submitted months', async () => {
   const month = 1790784000000; // 1 Oct 2026 (UTC+8)
   const day = month + 5 * 86400000;
   const open = month + 40 * 86400000;
@@ -498,7 +505,10 @@ test('month lock and overseer visibility: Submitted / Received lock the records;
   await put('coFieldServiceMonthStatus', `congB_${month}`, { congregationId: 'congB', periodMonth: month, status: 'NOT_SUBMITTED', version: 1 });
   assert.equal(await set('pubB', 'monthlyReports', 'pubB_open', rec), true, 'a NOT_SUBMITTED month accepts the publisher');
   await put('coFieldServiceMonthStatus', `congB_${month}`, { congregationId: 'congB', periodMonth: month, status: 'SUBMITTED', version: 1 });
-  assert.equal(await set('pubB', 'monthlyReports', 'pubB_sub', rec), false, 'a SUBMITTED month is locked for the publisher');
+  assert.equal(await set('pubB', 'monthlyReports', 'pubB_sub', rec), true, 'a SUBMITTED (awaiting receipt) month stays editable');
+  assert.equal(await set('adminB', 'monthlyReports', 'pubB_sub_man', { ...rec, source: 'MANUAL' }), true, 'for the Secretary / Admin too');
+  await put('coFieldServiceMonthStatus', `congB_${month}`, { congregationId: 'congB', periodMonth: month, status: 'RECEIVED', version: 1 });
+  assert.equal(await set('pubB', 'monthlyReports', 'pubB_rcv', rec), false, 'a RECEIVED month is locked for the publisher');
   assert.equal(await set('adminB', 'monthlyReports', 'pubB_man', { ...rec, source: 'MANUAL' }), false, 'and for the Secretary / Admin');
   assert.equal(await set('adminB', 'monthlyReports', 'pubB_other', { ...rec, periodMonth: open }), true, 'another month stays open');
   assert.equal(await set('sa', 'monthlyReports', 'pubB_sa', rec), true, 'the Super Admin is not bound');
@@ -506,6 +516,10 @@ test('month lock and overseer visibility: Submitted / Received lock the records;
   assert.equal(await set('pubB', 'preachingTimeRecords', 'pt2', { publisherPersonId: 'pubB', congregationId: 'congB', date: open, hoursConsumed: 1 }), true, 'hours of an open month');
   assert.equal(await set('pubB', 'creditHourRecords', 'ch1', { publisherPersonId: 'pubB', dayStart: day, hours: 1 }), false, 'credit hours of a locked month');
   assert.equal(await set('pubB', 'plannerDays', 'pd1', { publisherPersonId: 'pubB', dayStart: day, totalMinutes: 30 }), false, 'a planner day of a locked month');
+  await put('coFieldServiceMonthStatus', `congB_${month}`, { congregationId: 'congB', periodMonth: month, status: 'CANCELLED', cancelledFromStatus: 'RECEIVED', version: 1 });
+  assert.equal(await set('pubB', 'monthlyReports', 'pubB_cx', rec), false, 'cancelling a RECEIVED month does not silently unlock it');
+  await put('coFieldServiceMonthStatus', `congB_${month}`, { congregationId: 'congB', periodMonth: month, status: 'CANCELLED', cancelledFromStatus: 'SUBMITTED', version: 1 });
+  assert.equal(await set('pubB', 'monthlyReports', 'pubB_cx2', rec), true, 'a cancelled awaiting-receipt month was never locked');
   await put('coFieldServiceMonthStatus', `congB_${month}`, { congregationId: 'congB', periodMonth: month, status: 'RETURNED', version: 1 });
   assert.equal(await set('pubB', 'monthlyReports', 'pubB_back', rec), true, 'a RETURNED month is open again');
 
@@ -515,4 +529,92 @@ test('month lock and overseer visibility: Submitted / Received lock the records;
   assert.equal(await reads('coB', 'monthlyReports', 'act_1'), true, 'the overseer reads a submitted / returned month');
   assert.equal(await reads('coB', 'monthlyReports', 'act_2'), false, 'but not a month with no status');
   assert.equal(await reads('restricted', 'monthlyReports', 'act_1'), false, 'a grant outside the circuit does not');
+});
+
+test('month status: an updated snapshot while awaiting receipt, versions, and the overseer cancelling with a reason', async () => {
+  await put('people', 'coB', person('CIRCUIT_OVERSEER', null));
+  await put('userAccessGrants', 'coB', { permissions: ['VIEW_CONGREGATIONS'], scopeType: 'SELECTED_CONGREGATIONS', scopeCongregationIds: ['congB'], circuitCode: 'NT01' });
+  const month = 1788192000000;
+  const id = `congB_${month}`;
+  const v1 = { congregationId: 'congB', periodMonth: month, status: 'SUBMITTED', version: 1, submittedAt: 1 };
+  await put('coFieldServiceMonthStatus', id, v1);
+
+  // an updated snapshot while the first is still awaiting receipt: the next version, nothing else
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, { ...v1, version: 2, submittedAt: 2 }), true, 'an updated snapshot is version 2');
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, { ...v1, version: 1, submittedAt: 2 }), false, 'a repeated version is refused');
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, { ...v1, version: 3, submittedAt: 2 }), false, 'versions cannot be skipped');
+  assert.equal(await set('pubB', 'coFieldServiceMonthStatus', id, { ...v1, version: 2, submittedAt: 2 }), false, 'a publisher cannot send');
+  const v2 = { ...v1, version: 2, submittedAt: 2 };
+  await put('coFieldServiceMonthStatus', id, v2);
+
+  // the overseer's receipt applies to the version it reviewed: a stale copy is refused
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...v1, status: 'RECEIVED', receivedAt: 3 }), false, 'a receipt of the old version is refused');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...v2, status: 'RECEIVED', receivedAt: 3 }), true, 'the receipt of the current version');
+  await put('coFieldServiceMonthStatus', id, { ...v2, status: 'RECEIVED', receivedAt: 3 });
+
+  // once received the congregation can no longer send another version
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, { ...v2, status: 'SUBMITTED', version: 3, submittedAt: 4 }), false, 'a received snapshot cannot be replaced by the congregation');
+
+  // cancelling: only the overseer, with a reason, remembering what it was cancelled from, never changing the version
+  const cancelled = { ...v2, status: 'RECEIVED', receivedAt: 3, cancelledAt: 5, cancelledByPersonId: 'coB', cancelledByName: 'CO', cancelReason: 'Wrong month', cancelledFromStatus: 'RECEIVED' };
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, { ...cancelled, status: 'CANCELLED' }), false, 'the congregation cannot cancel');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...cancelled, status: 'CANCELLED', cancelReason: '' }), false, 'a cancellation needs a reason');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...cancelled, status: 'CANCELLED', cancelledFromStatus: 'SUBMITTED' }), false, 'it records what it was cancelled from');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...cancelled, status: 'CANCELLED', version: 3 }), false, 'the version never changes');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...cancelled, status: 'CANCELLED' }), true, 'the overseer cancels a received submission');
+  await put('coFieldServiceMonthStatus', id, { ...cancelled, status: 'CANCELLED' });
+
+  // after a cancellation a new version can be sent (a Received-then-cancelled month stays locked for editing until returned, but the congregation may send)
+  assert.equal(await set('adminB', 'coFieldServiceMonthStatus', id, { ...cancelled, status: 'SUBMITTED', version: 3, submittedAt: 6 }), true, 'a cancelled submission can be sent again as the next version');
+  assert.equal(await set('coB', 'coFieldServiceMonthStatus', id, { ...cancelled, status: 'RETURNED', returnedAt: 7, returnReason: 'Please re-check' }), true, 'the overseer can return a cancelled month so it can be edited');
+});
+
+// ---- Meeting Attendance workflow (the twin of the Field Service Report one) -----------------------------------------
+
+test('attendance workflow: senders send, undo and re-send; the overseer receives / returns; received locks the month\'s attendance', async () => {
+  await put('people', 'coB', person('CIRCUIT_OVERSEER', null));
+  await put('userAccessGrants', 'coB', { permissions: ['VIEW_CONGREGATIONS'], scopeType: 'SELECTED_CONGREGATIONS', scopeCongregationIds: ['congB'], circuitCode: 'NT01' });
+  await put('people', 'secB', person('SECRETARY', 'congB'));
+  const month = 1790784000000;
+  const id = `congB_${month}`;
+  const sent = { congregationId: 'congB', periodMonth: month, status: 'SUBMITTED', version: 1, submittedAt: 1 };
+  const snap = (v, extra = {}) => ({ congregationId: 'congB', periodMonth: month, version: v, submittedByPersonId: 'secB', rows: [], ...extra });
+
+  assert.equal(await set('pubB', 'coAttendanceMonthStatus', id, sent), false, 'a publisher cannot send attendance');
+  assert.equal(await set('coB', 'coAttendanceMonthStatus', id, sent), false, 'the overseer cannot send');
+  assert.equal(await set('adminA', 'coAttendanceMonthStatus', id, sent), false, 'another congregation cannot send');
+  assert.equal(await set('secB', 'coAttendanceMonthStatus', id, sent), true, 'a Secretary sends a past month');
+  assert.equal(await set('secB', 'coAttendanceReports', `${id}_1`, snap(1)), false, 'a snapshot needs its status saved first');
+  await put('coAttendanceMonthStatus', id, sent);
+  assert.equal(await set('secB', 'coAttendanceReports', `${id}_1`, snap(1)), true, 'the snapshot of the version just sent');
+  assert.equal(await set('secB', 'coAttendanceReports', `${id}_2`, snap(2)), false, 'not a version that was never sent');
+  assert.equal(await set('secB', 'coAttendanceReports', `${id}_1`, snap(1, { submittedByPersonId: 'adminB' })), false, 'saved as yourself');
+  await put('coAttendanceReports', `${id}_1`, snap(1));
+  assert.equal(await set('secB', 'coAttendanceReports', `${id}_1`, snap(1, { rows: [{}] })), false, 'a snapshot is never edited');
+  assert.equal(await reads('coB', 'coAttendanceReports', `${id}_1`), true, 'the overseer reads the snapshot');
+  assert.equal(await reads('pubB', 'coAttendanceReports', `${id}_1`), false, 'a publisher does not');
+
+  assert.equal(await set('secB', 'coAttendanceMonthStatus', id, { ...sent, status: 'NOT_SUBMITTED', coRemarks: null, undoneAt: 2 }), true, 'a sender undoes a sent month');
+  assert.equal(await set('coB', 'coAttendanceMonthStatus', id, { ...sent, status: 'RECEIVED', receivedAt: 3 }), true, 'the overseer receives it');
+  const received = { ...sent, status: 'RECEIVED', receivedAt: 3 };
+  await put('coAttendanceMonthStatus', id, received);
+  assert.equal(await set('secB', 'coAttendanceMonthStatus', id, { ...received, status: 'NOT_SUBMITTED', coRemarks: null }), false, 'the congregation cannot undo a received month');
+
+  // received = the month's attendance is locked
+  const date = month + 2 * 86400000;
+  const rec = (extra = {}) => ({ congregationId: 'congB', meetingType: 'MIDWEEK', meetingDate: date, serviceMonth: month, treasuresAttendance: 80, applyYourselfAttendance: 80, livingAsChristiansAttendance: 80, publicMeetingAttendance: null, watchtowerStudyAttendance: null, calculatedAverage: 80, officialAttendance: 80, roundingMode: 'ROUNDED', deleted: false, updatedBy: 'secB', ...extra });
+  const attId = `congB_MIDWEEK_${date}`;
+  assert.equal(await set('secB', 'meetingAttendance', attId, rec()), false, 'a received month\'s attendance is locked');
+  assert.equal(await set('sa', 'meetingAttendance', attId, rec({ updatedBy: 'sa' })), true, 'the Super Admin is not bound');
+
+  // returned = unlocked again
+  const returned = { ...received, status: 'RETURNED', returnedAt: 4, returnReason: 'Check the weekend', coRemarks: 'Check the weekend' };
+  assert.equal(await set('coB', 'coAttendanceMonthStatus', id, { ...received, status: 'RETURNED', returnedAt: 4 }), false, 'a return needs a reason');
+  assert.equal(await set('coB', 'coAttendanceMonthStatus', id, returned), true, 'the overseer returns it');
+  await put('coAttendanceMonthStatus', id, returned);
+  assert.equal(await set('secB', 'meetingAttendance', attId, rec()), true, 'a returned month can be edited again');
+  assert.equal(await set('secB', 'coAttendanceMonthStatus', id, { ...returned, status: 'SUBMITTED', version: 2, submittedAt: 5 }), true, 'sent again as version 2');
+  assert.equal(await del('secB', 'coAttendanceMonthStatus', id), false, 'never deleted');
+  assert.equal(await set('coB', 'coAttendanceReportEvents', 'ae1', { reportId: id, congregationId: 'congB', userId: 'coB' }), true, 'the overseer logs its own action');
+  assert.equal(await set('coB', 'coAttendanceReportEvents', 'ae2', { reportId: id, congregationId: 'congB', userId: 'secB' }), false, 'events are written as yourself');
 });

@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.announcements
 
 import android.net.Uri
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -69,6 +73,8 @@ import com.emfitsolutions.gopreach.ui.components.formatRecordTimestamp
 import com.emfitsolutions.gopreach.ui.components.rememberActionToast
 import com.emfitsolutions.gopreach.ui.components.requiredFieldsMessage
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * "Announcement Module" — one screen for both sides:
@@ -87,6 +93,7 @@ fun AnnouncementsScreen(
     readOnly: Boolean = false,
     onBack: () -> Unit,
     viewModel: ManageAnnouncementsViewModel = koinViewModel(),
+    coViewModel: CoAnnouncementsViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
     // "Add a filter for Congregation" (Super-Admin only).
@@ -99,7 +106,17 @@ fun AnnouncementsScreen(
     var pendingEdit by remember { mutableStateOf<Announcement?>(null) }
     var pendingDelete by remember { mutableStateOf<Announcement?>(null) }
     var viewingDetail by remember { mutableStateOf<Announcement?>(null) }
+    // A Circuit Overseer announcement opens in its own details window (formatted text, attachments); opening it marks it read for this person.
+    var viewingCo by remember { mutableStateOf<Announcement?>(null) }
+    val readIds by remember(currentPersonId) { coViewModel.readIds(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptySet())
+    val readScope = rememberCoroutineScope()
     val showToast = rememberActionToast()
+    viewingCo?.let { a ->
+        AnnouncementDetailsDialog(
+            announcement = a, congregationName = congregations.firstOrNull { it.id == a.congregationId }?.name.orEmpty(),
+            viewModel = coViewModel, showReaders = false, onDismiss = { viewingCo = null },
+        )
+    }
 
     // A Publisher opening their own notification list — mark everything
     // currently in scope as seen, clearing the Main Form's badge.
@@ -120,9 +137,7 @@ fun AnnouncementsScreen(
         },
         floatingActionButton = {
             if (!readOnly) {
-                FloatingActionButton(onClick = { showCreateDialog = true }) {
-                    Icon(Icons.Rounded.Add, contentDescription = "New Announcement")
-                }
+                androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showCreateDialog = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("New Announcement") })
             }
         },
     ) { padding ->
@@ -149,14 +164,31 @@ fun AnnouncementsScreen(
                 )
             }
         } else {
+            val viewMode = rememberRecordViewMode("announcements")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { RecordFound(rows.size) }
-                items(rows, key = { it.id }) { announcement ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                item { RecordViewToggle(viewMode) }
+                recordItems(
+                    viewMode, rows, { it.id },
+                    listOf(
+                            UniversalColumn("Title", 220.dp) { it.title },
+                            UniversalColumn("Details", 320.dp) { it.details },
+                            UniversalColumn("Attachment", 160.dp) { it.attachmentFileName ?: (if (it.imageUrl != null) "Image" else "") },
+                    ),
+                    onRowClick = {
+                        if (it.isCircuitOverseerStyle) { viewingCo = it; readScope.launch { coViewModel.markRead(currentPersonId, it.id) } }
+                        else if (!readOnly) pendingEdit = it
+                    },
+                ) { announcement ->
+                    if (announcement.isCircuitOverseerStyle) RecipientAnnouncementCard(
+                        announcement, unread = announcement.id !in readIds,
+                        congregationName = congregations.firstOrNull { it.id == announcement.congregationId }?.name.orEmpty(),
+                        onClick = { viewingCo = announcement; readScope.launch { coViewModel.markRead(currentPersonId, announcement.id) } },
+                    ) else Card(modifier = Modifier.fillMaxWidth()) {
                         Column(
                             modifier = Modifier.fillMaxWidth().padding(16.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),

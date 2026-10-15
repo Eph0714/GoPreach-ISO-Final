@@ -250,12 +250,13 @@ private fun MethodsStep(state: FirstLoginUiState, viewModel: ForcedPasswordChang
             MethodRow("Login with PIN", "A 6-digit PIN for this device.", state.pinOn, state.canSetUpMethods) { setting = QuickLoginMethod.PIN }
             HorizontalDivider()
             MethodRow("Login with Pattern", "An unlock pattern for this device.", state.patternOn, state.canSetUpMethods) { setting = QuickLoginMethod.PATTERN }
-            HorizontalDivider()
-            ListItem(
-                headlineContent = { Text("Login with Passkey") },
-                supportingContent = { Text("Not available yet.") },
-                trailingContent = { Text("Not Set Up", color = MaterialTheme.colorScheme.onSurfaceVariant) },
-            )
+            if (com.emfitsolutions.gopreach.data.passkey.PASSKEY_LOGIN_ENABLED) {
+                HorizontalDivider()
+                ListItem(
+                    headlineContent = { Text("Login with Passkey") },
+                    supportingContent = { Text("After you log in with your new password, add a passkey in Account Settings.") },
+                )
+            }
         }
     }
     state.methodMessage?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }

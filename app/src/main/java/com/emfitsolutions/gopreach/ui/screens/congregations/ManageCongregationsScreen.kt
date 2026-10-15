@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.congregations
 
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -109,20 +113,12 @@ fun ManageCongregationsScreen(
         },
         floatingActionButton = {
             if (!readOnly) {
-                FloatingActionButton(onClick = onAddNew) {
-                    Icon(Icons.Rounded.Add, contentDescription = "New Congregation")
-                }
+                androidx.compose.material3.ExtendedFloatingActionButton(onClick = onAddNew, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("New Congregation") })
             }
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
-                Text("Show Inactive")
-            }
+            androidx.compose.material3.FilterChip(selected = showInactive, onClick = { showInactive = !showInactive }, label = { Text("Include inactive") }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             if (congregations.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -132,57 +128,47 @@ fun ManageCongregationsScreen(
                     Text("No congregations yet. Tap + to add one.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
+                val viewMode = rememberRecordViewMode("congregations")
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    item { RecordFound(congregations.size) }
-                    items(congregations, key = { it.id }) { congregation ->
-                        Card(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(congregation.name, style = MaterialTheme.typography.titleMedium)
-                                    Text(congregation.address, style = MaterialTheme.typography.bodySmall)
-                                    Text("Code: ${congregation.code}", style = MaterialTheme.typography.bodySmall)
-                                    val link = circuitLinks[congregation.id]
-                                    if (link != null) {
-                                        Text(
-                                            "Circuit Overseer: ${overseerNames[link.circuitOverseerPersonId] ?: "—"}\nCircuit Code: ${link.circuitCode}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                        )
-                                    } else {
-                                        Text("Circuit Overseer: not assigned", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                                    }
-                                    if (congregation.languages.isNotEmpty()) {
-                                        Text("Languages: ${congregation.languages.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
-                                    }
-                                    if (congregation.status == RecordStatus.INACTIVE) {
-                                        Text("Inactive", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                                    }
-                                }
-                                if (!readOnly) {
-                                    Row {
-                                        IconButton(onClick = { pendingEdit = congregation }) {
-                                            Icon(Icons.Rounded.Edit, contentDescription = "Edit")
-                                        }
-                                        if (congregation.status == RecordStatus.ACTIVE) {
-                                            IconButton(onClick = { pendingDelete = congregation }) {
-                                                Icon(Icons.Rounded.Delete, contentDescription = "Delete")
-                                            }
-                                        } else {
-                                            IconButton(onClick = { viewModel.setStatus(congregation, RecordStatus.ACTIVE, currentPersonId); showToast("\"${congregation.name}\" reactivated.") }) {
-                                                Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Reactivate")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    item {
+                        Text(
+                            "${congregations.size} " + if (congregations.size == 1) "congregation" else "congregations",
+                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, congregations, { it.id },
+                        listOf(
+                                UniversalColumn<com.emfitsolutions.gopreach.data.model.Congregation>("Congregation", 200.dp) { it.name },
+                                UniversalColumn("Code", 90.dp) { it.code },
+                                UniversalColumn("Address", 240.dp) { it.address },
+                                UniversalColumn("Circuit Overseer", 170.dp) { circuitLinks[it.id]?.let { l -> overseerNames[l.circuitOverseerPersonId] } ?: "Not assigned" },
+                                UniversalColumn("Status", 90.dp) { if (it.status == RecordStatus.ACTIVE) "Active" else "Inactive" },
+                        ),
+                        onRowClick = { pendingEdit = it },
+                    ) { congregation ->
+                        val link = circuitLinks[congregation.id]
+                        com.emfitsolutions.gopreach.ui.screens.elders.PersonRecordCard(
+                            name = congregation.name,
+                            detail = listOf(congregation.address, "Code: ${congregation.code}").filter { it.isNotBlank() }.joinToString(" · "),
+                            active = congregation.status == RecordStatus.ACTIVE,
+                            readOnly = readOnly,
+                            hasTemporarySignIn = false,
+                            chips = listOfNotNull(
+                                link?.let { "Circuit Overseer: ${overseerNames[it.circuitOverseerPersonId] ?: "-"}" },
+                                link?.let { "Circuit Code: ${it.circuitCode}" },
+                            ) + congregation.languages,
+                            note = if (link == null) "Circuit Overseer: not assigned" else null,
+                            onEdit = { pendingEdit = congregation },
+                            onDelete = { pendingDelete = congregation },
+                            onRestore = { viewModel.setStatus(congregation, RecordStatus.ACTIVE, currentPersonId); showToast("\"${congregation.name}\" reactivated.") },
+                            onShowSignIn = {},
+                        )
                     }
                 }
             }

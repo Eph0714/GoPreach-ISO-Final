@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.export.BibleTextExportFile
 import com.emfitsolutions.gopreach.data.model.BibleTextCategory
 import com.emfitsolutions.gopreach.data.model.BibleTextRecord
+import com.emfitsolutions.gopreach.data.model.sortKey
 import com.emfitsolutions.gopreach.data.repository.BibleTextCategoryRepository
 import com.emfitsolutions.gopreach.data.repository.BibleTextRecordRepository
 import kotlinx.coroutines.flow.Flow
@@ -89,6 +90,16 @@ class BibleTextRecordViewModel(
 
     fun saveRecord(record: BibleTextRecord) {
         viewModelScope.launch { recordRepository.save(record) }
+    }
+
+    /** Saves a drag-and-drop rearrangement: the group's existing positions are handed out again in the new order. */
+    fun reorderRecords(reordered: List<BibleTextRecord>) {
+        val keys = reordered.map { it.sortKey() }.sortedDescending().toMutableList()
+        for (i in 1 until keys.size) if (keys[i] >= keys[i - 1]) keys[i] = keys[i - 1] - 1
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            reordered.forEachIndexed { i, r -> if (r.sortKey() != keys[i] || r.order != keys[i]) recordRepository.save(r.copy(order = keys[i], updatedAt = now)) }
+        }
     }
 
     fun deleteRecord(record: BibleTextRecord, label: String, actorPersonId: String) {
@@ -192,6 +203,7 @@ class BibleTextRecordViewModel(
                     verses = exported.verses,
                     categoryId = eventId,
                     remarks = exported.remarks,
+                    verseText = exported.verseText.orEmpty(),
                     videos = exported.videos,
                     createdAt = now,
                     updatedAt = now,

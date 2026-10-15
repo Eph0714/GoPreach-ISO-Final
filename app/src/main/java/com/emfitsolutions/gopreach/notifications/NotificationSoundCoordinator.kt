@@ -1,4 +1,4 @@
-package com.emfitsolutions.gopreach.notifications
+﻿package com.emfitsolutions.gopreach.notifications
 
 import android.content.Context
 import com.emfitsolutions.gopreach.data.model.AdminRole
@@ -105,6 +105,7 @@ class NotificationSoundCoordinator(
     private val groupChatRepository: GroupChatRepository,
     private val congregationRepository: CongregationRepository,
     private val receivedReportRepository: com.emfitsolutions.gopreach.data.repository.CoReceivedReportRepository,
+    private val attendanceRepository: com.emfitsolutions.gopreach.data.repository.CoAttendanceRepository,
     private val context: Context,
     private val appScope: CoroutineScope,
 ) {
@@ -183,6 +184,9 @@ class NotificationSoundCoordinator(
         // Circuit Overseer: a congregation sent a Field Service Report.
         scope.flatMapLatest { s -> if (s.personId != null && s.adminRole == AdminRole.CIRCUIT_OVERSEER) receivedReportsFor(s.personId) else flowOf(Unit) }
             .launchIn(appScope)
+        // ... and a congregation sent its Meeting Attendance.
+        scope.flatMapLatest { s -> if (s.personId != null && s.adminRole == AdminRole.CIRCUIT_OVERSEER) receivedAttendanceFor(s.personId) else flowOf(Unit) }
+            .launchIn(appScope)
 
         // Group Chat messages — every signed-in person regardless of role
         // context, same as the old per-screen `GroupChatMessageNotifier`
@@ -211,6 +215,26 @@ class NotificationSoundCoordinator(
                     context,
                     id = 9500 + r.id.hashCode(),
                     title = "New Field Service Report Received",
+                    text = "${r.congregationName} — ${monthLabel(r.periodMonth)}",
+                    category = NotificationCategory.MONTHLY_REPORT,
+                )
+            }
+            known = unread.map { it.id }.toSet()
+        }.map { }
+    }
+
+    /** The Circuit Overseer's "New Attendance Report Received": one sound per snapshot that appears unread after this watcher started. */
+    private fun receivedAttendanceFor(personId: String): Flow<Unit> {
+        val since = watchSince()
+        var known: Set<String> = emptySet()
+        return combine(attendanceRepository.observeSnapshots(), attendanceRepository.observeReadIds(personId), attendanceRepository.observeStatuses()) { all, read, st ->
+            val live = st.filter { it.status.visibleToCircuitOverseer }.map { it.congregationId to it.periodMonth }.toSet()
+            val unread = all.filter { it.id !in read && (it.congregationId to it.periodMonth) in live }
+            unread.filter { it.id !in known && it.submittedAt >= since }.forEach { r ->
+                NotificationHelper.notify(
+                    context,
+                    id = 9600 + r.id.hashCode(),
+                    title = "New Attendance Report Received",
                     text = "${r.congregationName} — ${monthLabel(r.periodMonth)}",
                     category = NotificationCategory.MONTHLY_REPORT,
                 )

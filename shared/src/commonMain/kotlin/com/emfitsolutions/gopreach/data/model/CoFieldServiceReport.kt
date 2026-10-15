@@ -3,18 +3,20 @@ package com.emfitsolutions.gopreach.data.model
 import com.emfitsolutions.gopreach.platform.DocumentId
 
 /**
- * Where a congregation's Field Service Report for one service month stands with the Circuit Overseer.
+ * Where a congregation's Field Service Report for one service month stands with the Circuit Overseer. Every month has its own status.
  *
- *  NOT_SUBMITTED → (the congregation sends it) SUBMITTED → (the overseer receives it) RECEIVED
+ *  NOT_SUBMITTED → (the congregation sends a snapshot) SUBMITTED, "Sent to CO - awaiting receipt" → (the overseer receives it) RECEIVED
+ *  SUBMITTED → (the congregation sends an updated snapshot) SUBMITTED with the next version
  *  SUBMITTED → (undo, before the overseer receives it) NOT_SUBMITTED
- *  SUBMITTED / RECEIVED → (the overseer returns it, with remarks) RETURNED → (corrected, sent again) SUBMITTED
+ *  SUBMITTED / RECEIVED → (the overseer returns it, with a reason) RETURNED → (corrected, sent again) SUBMITTED
+ *  SUBMITTED / RECEIVED → (the overseer cancels the submission, with a reason) CANCELLED → (sent again) SUBMITTED
  *
- * The report itself is never copied: it stays the congregation's own records (the publishers' monthly reports), the single
- * source of truth. This status only decides who may change those records and whether the overseer can see them.
+ * What the overseer reads is the frozen snapshot of each send (see [CoReceivedReport]); the congregation's own records stay the live
+ * data. While a snapshot is only SUBMITTED the live records remain editable; RECEIVED locks them until the overseer returns the month.
  */
 @kotlinx.serialization.Serializable
 enum class CoReportStatus {
-    NOT_SUBMITTED, SUBMITTED, RECEIVED, RETURNED;
+    NOT_SUBMITTED, SUBMITTED, RECEIVED, RETURNED, CANCELLED;
 
     val label: String
         get() = when (this) {
@@ -22,16 +24,36 @@ enum class CoReportStatus {
             SUBMITTED -> "Submitted"
             RECEIVED -> "Received"
             RETURNED -> "Returned"
+            CANCELLED -> "Cancelled"
         }
 
-    /** SUBMITTED and RECEIVED freeze the month's records for everyone but the Super-Admin. */
-    val locksMonth: Boolean get() = this == SUBMITTED || this == RECEIVED
+    /** What the congregation sees for the month ("Sent to CO - Awaiting Receipt", ...). */
+    val workflowLabel: String
+        get() = when (this) {
+            NOT_SUBMITTED -> "Draft"
+            SUBMITTED -> "Sent to CO - Awaiting Receipt"
+            RECEIVED -> "Received by CO"
+            RETURNED -> "Returned for Editing"
+            CANCELLED -> "Cancelled by CO"
+        }
+
+    /** Only RECEIVED freezes the month's records for everyone but the Super-Admin; a snapshot that is just awaiting receipt does not. */
+    val locksMonth: Boolean get() = this == RECEIVED
 
     /** The Circuit Overseer sees a month only once it was submitted. */
     val visibleToCircuitOverseer: Boolean get() = this != NOT_SUBMITTED
 
     /** The congregation may (re)send the month. */
-    val canSend: Boolean get() = this == NOT_SUBMITTED || this == RETURNED
+    val canSend: Boolean get() = this == NOT_SUBMITTED || this == RETURNED || this == CANCELLED
+
+    /** The congregation may send an updated snapshot (the next version) while the previous one is still awaiting receipt. */
+    val canSendUpdate: Boolean get() = this == SUBMITTED
+
+    /** The Circuit Overseer may return the month for editing. */
+    val canReturn: Boolean get() = this == SUBMITTED || this == RECEIVED
+
+    /** The Circuit Overseer may cancel the submission. */
+    val canCancel: Boolean get() = this == SUBMITTED || this == RECEIVED
 
     /** The congregation may undo a send the overseer has not received yet. */
     val canUndo: Boolean get() = this == SUBMITTED
@@ -68,10 +90,19 @@ data class CoMonthStatus(
     val undoneAt: Long? = null,
     val undoneByPersonId: String? = null,
     val undoneByName: String? = null,
+    /** The Circuit Overseer cancelled the submission: who, when, why, and which status it was cancelled from (a Received month stays locked). */
+    val cancelledAt: Long? = null,
+    val cancelledByPersonId: String? = null,
+    val cancelledByName: String? = null,
+    val cancelReason: String? = null,
+    val cancelledFromStatus: String? = null,
     val updatedAt: Long = 0L,
 ) {
-    /** SUBMITTED / RECEIVED: no record of the month is added, edited or deleted. */
-    val isLocked: Boolean get() = status.locksMonth
+    /**
+     * RECEIVED: no record of the month is added, edited or deleted. Cancelling a received submission never silently unlocks the month,
+     * so CANCELLED keeps the lock when it was cancelled from RECEIVED; only the overseer returning the month for editing unlocks it.
+     */
+    val isLocked: Boolean get() = status.locksMonth || (status == CoReportStatus.CANCELLED && cancelledFromStatus == CoReportStatus.RECEIVED.name)
 }
 
 /** One permanent audit line (`coFieldServiceReportEvents/{id}`) — written together with every move, never edited. */
@@ -103,12 +134,12 @@ fun isMonthLocked(statuses: List<CoMonthStatus>, congregationId: String?, period
 
 /** The message a locked month shows. */
 const val MONTH_LOCKED_MESSAGE =
-    "This Field Service Report has already been submitted to the Circuit Overseer. " +
-        "You can no longer add, edit, or delete field-service records for this month."
+    "This Field Service Report has already been received by the Circuit Overseer. " +
+        "You can no longer add, edit, or delete field-service records for this month unless the Circuit Overseer returns it for editing."
 
 /** What a device sees when an old change for a locked month tries to synchronize. */
 const val MONTH_LOCKED_SYNC_MESSAGE =
-    "This service month has already been submitted to the Circuit Overseer. Your changes cannot be synchronized."
+    "This service month has already been received by the Circuit Overseer. Your changes cannot be synchronized."
 
 const val FUTURE_MONTH_TITLE = "Cannot Submit Report"
 const val FUTURE_MONTH_MESSAGE =

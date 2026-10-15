@@ -6,6 +6,7 @@ import androidx.biometric.BiometricManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.R
+import com.emfitsolutions.gopreach.data.passkey.PasskeyClient
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
 import com.emfitsolutions.gopreach.data.repository.AuthResult
 import com.emfitsolutions.gopreach.data.repository.CredentialStore
@@ -179,9 +180,32 @@ class LoginViewModel(
         }
     }
 
-    /** Passkeys need a WebAuthn server GoPreach doesn't have yet, so none can be registered. */
-    fun onPasskeyClick() = _uiState.update {
-        it.copy(notice = "Passkey Not Set Up" to "Passkey login isn't available yet. Please log in with your username and password, or use a PIN, Pattern or Biometrics.")
+    /**
+     * "Login with Passkey": the system passkey sheet lists the passkeys saved for GoPreach on this phone; the one picked is checked by the
+     * server, which signs the person in to their own account. [activityContext] must be the Activity (the sheet is shown over it); it is only
+     * used for this one call and not kept.
+     */
+    fun onPasskeyClick(activityContext: Context) {
+        if (_uiState.value.isLoading) return
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        viewModelScope.launch {
+            try {
+                if (!connectivityObserver.isOnline()) {
+                    _uiState.update { it.copy(isLoading = false, errorMessage = "Passkey sign-in needs an internet connection. Use your username and password to sign in offline.") }
+                    return@launch
+                }
+                when (val result = authRepository.signInWithPasskey { options -> PasskeyClient.get(activityContext, options) }) {
+                    is AuthResult.Success -> {
+                        syncScheduler.triggerSyncIfOnline()
+                        _uiState.update { it.copy(isLoading = false, signedIn = true, requiresPasswordChange = result.requiresPasswordChange) }
+                    }
+                    is AuthResult.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Unexpected passkey error: ${e::class.simpleName}")
+                _uiState.update { it.copy(isLoading = false, errorMessage = "Something went wrong. Please try again.") }
+            }
+        }
     }
 
     /** Whose account a PIN/Pattern would sign in — shown in the dialog so it's clear who is signing in. */

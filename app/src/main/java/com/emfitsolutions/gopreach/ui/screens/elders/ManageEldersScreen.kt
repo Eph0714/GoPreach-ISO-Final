@@ -181,9 +181,11 @@ private fun ManageEldersContent(
         },
         floatingActionButton = {
             if (!readOnly) {
-                FloatingActionButton(onClick = onAddNew) {
-                    Icon(Icons.Rounded.Add, contentDescription = "Enroll Elder")
-                }
+                androidx.compose.material3.ExtendedFloatingActionButton(
+                    onClick = onAddNew,
+                    icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
+                    text = { Text("Add Elder") },
+                )
             }
         },
     ) { padding ->
@@ -198,10 +200,11 @@ private fun ManageEldersContent(
                     )
                 }
                 RoleFilterDropdown(selected = roleFilter, onSelected = { roleFilter = it })
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
-                    Text("Show Inactive")
-                }
+                androidx.compose.material3.FilterChip(
+                    selected = showInactive,
+                    onClick = { showInactive = !showInactive },
+                    label = { Text("Include inactive") },
+                )
             }
             if (fixedCongregationId == null && selectedCongregationId == null) {
                 SelectCongregationPrompt()
@@ -239,49 +242,21 @@ private fun ManageEldersContent(
                         ) + shown.flatMap { it.adminRoles }.groupingBy { it }.eachCount().entries.sortedBy { it.key.displayLabel() }.map { (role, n) -> role.displayLabel() to n.toString() }
                     },
                     generatedBy = "Administrator",
+                    compact = true,
                     card = { row ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth().clickable(enabled = row.person.isTemporaryCredential) { lookupTarget = row.person },
-                        ) {
-                            Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text(row.person.fullName, style = MaterialTheme.typography.titleMedium)
-                                    Text("Congregation: ${row.congregationName}", style = MaterialTheme.typography.bodySmall)
-                                    // "If the list becomes too wide on mobile,
-                                    // display roles as chips" (spec §28).
-                                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        row.adminRoles.forEach { role ->
-                                            AssistChip(onClick = {}, label = { Text(role.displayLabel(), style = MaterialTheme.typography.labelSmall) }, colors = AssistChipDefaults.assistChipColors())
-                                        }
-                                        row.regularElderRole?.let { groupRole ->
-                                            AssistChip(onClick = {}, label = { Text(groupRole.regularElderRoleDisplayLabel(), style = MaterialTheme.typography.labelSmall) })
-                                        }
-                                        row.publisherCategory?.let { category ->
-                                            AssistChip(onClick = {}, label = { Text(category.displayName, style = MaterialTheme.typography.labelSmall) })
-                                        }
-                                    }
-                                    Text("Contact: ${row.person.contact}", style = MaterialTheme.typography.bodySmall)
-                                    Text(
-                                        if (row.isActive) "Active" else "Inactive",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (row.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                    )
-                                    if (row.person.isTemporaryCredential) {
-                                        Text("Tap to view temporary sign-in", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                                    }
-                                }
-                                if (!readOnly) {
-                                    IconButton(onClick = { pendingEdit = row }) { Icon(Icons.Rounded.Edit, contentDescription = "Edit") }
-                                    if (row.isActive) {
-                                        IconButton(onClick = { pendingDeactivate = row }) { Icon(Icons.Rounded.Delete, contentDescription = "Delete") }
-                                    } else {
-                                        IconButton(onClick = { onSetActive(row, true); showToast("\"${row.person.fullName}\" reactivated.") }) {
-                                            Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Restore")
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        PersonRecordCard(
+                            name = row.person.fullName,
+                            detail = listOf(row.congregationName, row.person.contact).filter { it.isNotBlank() }.joinToString(" · "),
+                            active = row.isActive,
+                            readOnly = readOnly,
+                            hasTemporarySignIn = row.person.isTemporaryCredential,
+                            chips = row.adminRoles.map { it.displayLabel() } +
+                                listOfNotNull(row.regularElderRole?.regularElderRoleDisplayLabel(), row.publisherCategory?.displayName),
+                            onEdit = { pendingEdit = row },
+                            onDelete = { pendingDeactivate = row },
+                            onRestore = { onSetActive(row, true); showToast("\"${row.person.fullName}\" reactivated.") },
+                            onShowSignIn = { lookupTarget = row.person },
+                        )
                     },
                     modifier = Modifier.fillMaxSize(),
                 )

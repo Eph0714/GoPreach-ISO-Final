@@ -98,6 +98,9 @@ export class MemoryStore {
     return null;
   }
 
+  async getFileByPath(path) { const f = this.files?.get(path); return f ? { mime: f.mime, data: f.data } : null; }
+  async getFileOwner(path) { return this.files?.get(path)?.owner ?? null; }
+
   async deleteFile(path) { this.files?.delete(path); }
 
   // ---- sign-in accounts ----
@@ -113,6 +116,18 @@ export class MemoryStore {
   async setPassword(personId, pwHash) { const a = (this.accounts ??= new Map()).get(personId); if (a) a.pwHash = pwHash; }
 
   async touchLogin() {}
+
+  // ---- passkeys (WebAuthn public keys; the private key never leaves the phone) ----
+  async addPasskey(p) { (this.passkeys ??= new Map()).set(p.credentialId, { ...p, lastUsedAt: null }); }
+  async getPasskey(credentialId) { const p = (this.passkeys ??= new Map()).get(credentialId); return p ? structuredClone(p) : null; }
+  async listPasskeys(personId) { return [...(this.passkeys ??= new Map()).values()].filter((p) => p.personId === personId).map((p) => structuredClone(p)); }
+  async updatePasskeyCounter(credentialId, counter) { const p = (this.passkeys ??= new Map()).get(credentialId); if (p) { p.counter = counter; p.lastUsedAt = Date.now(); } }
+  async deletePasskey(personId, credentialId) {
+    const m = (this.passkeys ??= new Map());
+    const p = m.get(credentialId);
+    if (!p || p.personId !== personId) return false;
+    return m.delete(credentialId);
+  }
 
   async addRefreshToken({ tokenHash, personId, authTime, expiresAt }) { (this.refresh ??= new Map()).set(tokenHash, { personId, authTime, expiresAt }); }
 

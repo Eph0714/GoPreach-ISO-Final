@@ -20,11 +20,12 @@ data class CongregationFigures(
     val regularPioneers: Int?, val auxiliaryPioneers: Int?, val unbaptized: Int?,
     val fieldServiceReports: Int?,
     val source: FigureSource,
+    val specialPioneers: Int? = null,
 )
 
 /** The standing of a congregation's Field Service Report for the chosen month. */
 enum class ReportStanding(val label: String) {
-    RECEIVED("Received"), SUBMITTED("Submitted"), RETURNED("Returned"), NOT_SUBMITTED("Not Submitted"), NO_DATA("No Data")
+    RECEIVED("Received"), SUBMITTED("Submitted"), RETURNED("Returned"), CANCELLED("Cancelled"), NOT_SUBMITTED("Not Submitted"), NO_DATA("No Data")
 }
 
 data class AttendanceStanding(
@@ -73,6 +74,14 @@ data class CircuitTotals(
     val publishers: Int?, val elders: Int?, val regularPioneers: Int?, val auxiliaryPioneers: Int?, val unbaptized: Int?,
     /** Change of the publisher total from the previous month's saved snapshots; null unless every congregation has both. */
     val publishersChange: Int?,
+    /** Special pioneers: from today's records, or a saved snapshot that recorded them; null otherwise (never 0). */
+    val specialPioneers: Int? = null,
+    /** Change from the previous month for each figure; null unless every congregation has both months (see [CircuitOverviewBuilder.build]). */
+    val eldersChange: Int? = null,
+    val regularPioneersChange: Int? = null,
+    val auxiliaryPioneersChange: Int? = null,
+    val specialPioneersChange: Int? = null,
+    val unbaptizedChange: Int? = null,
     /** How many congregations the figures above cover (a snapshot month may be partial). */
     val covered: Int,
 )
@@ -116,11 +125,11 @@ object CircuitOverviewBuilder {
             val figures = when {
                 month == thisMonth -> CongregationFigures(
                     s.publishers, s.elders, s.servants, s.counts[PublisherCategory.REGULAR_PIONEER], s.counts[PublisherCategory.AUXILIARY_PIONEER],
-                    s.counts[PublisherCategory.UNBAPTIZED_PUBLISHER], snap?.fieldServiceReportCount, FigureSource.LIVE,
+                    s.counts[PublisherCategory.UNBAPTIZED_PUBLISHER], snap?.fieldServiceReportCount, FigureSource.LIVE, s.counts[PublisherCategory.SPECIAL_PIONEER],
                 )
                 snap != null -> CongregationFigures(
                     snap.publisherCount, snap.elderCount, snap.ministerialServantCount, snap.regularPioneerCount, snap.auxiliaryPioneerCount,
-                    snap.unbaptizedPublisherCount, snap.fieldServiceReportCount, FigureSource.SNAPSHOT,
+                    snap.unbaptizedPublisherCount, snap.fieldServiceReportCount, FigureSource.SNAPSHOT, snap.specialPioneerCount,
                 )
                 else -> CongregationFigures(null, null, null, null, null, null, null, FigureSource.NONE)
             }
@@ -129,6 +138,7 @@ object CircuitOverviewBuilder {
                 CoReportStatus.RECEIVED -> ReportStanding.RECEIVED
                 CoReportStatus.SUBMITTED -> ReportStanding.SUBMITTED
                 CoReportStatus.RETURNED -> ReportStanding.RETURNED
+                CoReportStatus.CANCELLED -> ReportStanding.CANCELLED
                 CoReportStatus.NOT_SUBMITTED -> if (monthOver) ReportStanding.NOT_SUBMITTED else ReportStanding.NO_DATA
             }
             val recs = attendance.filter { it.congregationId == id && it.serviceMonth == month && !it.deleted }
@@ -175,14 +185,29 @@ object CircuitOverviewBuilder {
             cards.mapNotNull { pick(it.figures) }.takeIf { it.isNotEmpty() }?.sum()
         val covered = cards.count { it.figures.source != FigureSource.NONE }
         val prev = summaries.map { s -> statistics.firstOrNull { it.congregationId == s.congregation.id && it.serviceMonth == previousMonth } }
-        val change = total { it.publishers }?.let { now ->
-            if (cards.isNotEmpty() && prev.all { it != null } && covered == cards.size) now - prev.sumOf { it!!.publisherCount } else null
+        // A change is only stated when every congregation has this month's figure AND the previous month's saved one, so a partial month never fakes a trend.
+        fun change(now: Int?, before: (CongregationMonthlyStatistics) -> Int?): Int? {
+            if (now == null || cards.isEmpty() || covered != cards.size || prev.any { it == null }) return null
+            val earlier = prev.map { it?.let(before) }
+            return if (earlier.all { it != null }) now - earlier.sumOf { it!! } else null
         }
+        val publishersNow = total { it.publishers }
+        val eldersNow = total { it.elders }
+        val regularNow = total { it.regularPioneers }
+        val auxiliaryNow = total { it.auxiliaryPioneers }
+        val specialNow = total { it.specialPioneers }
+        val unbaptizedNow = total { it.unbaptized }
         val totals = CircuitTotals(
             congregations = cards.size,
-            publishers = total { it.publishers }, elders = total { it.elders }, regularPioneers = total { it.regularPioneers },
-            auxiliaryPioneers = total { it.auxiliaryPioneers }, unbaptized = total { it.unbaptized },
-            publishersChange = change, covered = covered,
+            publishers = publishersNow, elders = eldersNow, regularPioneers = regularNow,
+            auxiliaryPioneers = auxiliaryNow, unbaptized = unbaptizedNow,
+            publishersChange = change(publishersNow) { it.publisherCount }, covered = covered,
+            specialPioneers = specialNow,
+            eldersChange = change(eldersNow) { it.elderCount },
+            regularPioneersChange = change(regularNow) { it.regularPioneerCount },
+            auxiliaryPioneersChange = change(auxiliaryNow) { it.auxiliaryPioneerCount },
+            specialPioneersChange = change(specialNow) { it.specialPioneerCount },
+            unbaptizedChange = change(unbaptizedNow) { it.unbaptizedPublisherCount },
         )
         return CircuitOverview(totals, ReportStanding.entries.associateWith { s -> cards.count { it.standing == s } }, cards, actions)
     }

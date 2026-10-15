@@ -54,7 +54,12 @@ data class ManualRecordInput(
     val remarks: String,
     /** Null keeps whatever the record already holds (the Manual form has no such field). */
     val returnVisits: Int? = null,
+    /** The status the publisher had IN [month], chosen by the admin for a previous month. Null = the record's own / the publisher's current status. */
+    val category: PublisherCategory? = null,
 )
+
+/** True when [month] starts before the current month, i.e. the publisher's status then may differ from today's. */
+fun isPreviousMonth(month: Long): Boolean = MonthBounds.of(month).startInclusive < MonthBounds.of(System.currentTimeMillis()).startInclusive
 
 /** Roles that may enter field service records on a publisher's behalf. */
 val ManualEntryRoles = setOf(
@@ -122,15 +127,19 @@ class ManualFieldServiceViewModel(
         val monthStart = MonthBounds.of(input.month).startInclusive
         try { monthlyReportRepository.requireMonthOpen(scopeCongregationId, monthStart) } catch (e: com.emfitsolutions.gopreach.data.model.MonthLockedException) { return e.message }
         if (input.bibleStudies < 0) return "Bible Studies cannot be negative."
-        if (publisher.isPioneer) {
+        val existing = monthlyReportRepository.observeAll().first()
+            .firstOrNull { it.publisherPersonId == publisher.person.id && MonthBounds.of(it.periodMonth).startInclusive == monthStart }
+        // A previous month may be recorded under the status the publisher had then; the current month always uses the current status.
+        val chosen = input.category?.takeIf { isPreviousMonth(monthStart) && it != PublisherCategory.REMOVED_PUBLISHER }
+        val category = chosen ?: existing?.category ?: publisher.category
+        val isPioneer = isPioneerCategory(category)
+        if (isPioneer) {
             if (input.hours < 0 || input.minutes !in 0..59) return "Enter hours of 0 or more and minutes from 0 to 59."
         } else {
             val participated = input.participated ?: return "Choose whether the publisher participated (Yes or No)."
             if (!participated && input.bibleStudies > 0) return "Participation is No, so Bible Studies must be 0 — set Participation to Yes if there were Bible Studies."
         }
 
-        val existing = monthlyReportRepository.observeAll().first()
-            .firstOrNull { it.publisherPersonId == publisher.person.id && MonthBounds.of(it.periodMonth).startInclusive == monthStart }
         // A record belonging to another congregation can never be overwritten from here.
         if (existing != null && existing.congregationId != scopeCongregationId) return "A record for this month belongs to another congregation."
 
@@ -140,21 +149,22 @@ class ManualFieldServiceViewModel(
         val base = existing ?: MonthlyReport(
             publisherPersonId = publisher.person.id,
             congregationId = scopeCongregationId,
-            category = publisher.category,
+            category = category,
             periodMonth = monthStart,
             createdByPersonId = actorPersonId,
             createdAt = now,
         )
         val saved = base.copy(
             source = SOURCE_MANUAL,
+            category = category,
             bibleStudiesCount = input.bibleStudies,
             returnVisitsCount = input.returnVisits ?: base.returnVisitsCount,
-            hoursRendered = if (publisher.isPioneer) totalHours else null,
+            hoursRendered = if (isPioneer) totalHours else null,
             // Same value as hoursRendered: a manual entry is not an adjustment of calculated hours.
-            systemCalculatedHours = if (publisher.isPioneer) totalHours else null,
+            systemCalculatedHours = if (isPioneer) totalHours else null,
             hoursConfirmed = false,
             hoursAdjustmentRemarks = null,
-            participatedInPreaching = if (publisher.isPioneer) (totalHours > 0.0 || input.bibleStudies > 0) else input.participated,
+            participatedInPreaching = if (isPioneer) (totalHours > 0.0 || input.bibleStudies > 0) else input.participated,
             // Counts as a submitted report everywhere; a returned/draft one becomes submitted, a posted one stays posted.
             status = if (base.status == ReportStatus.POSTED) ReportStatus.POSTED else ReportStatus.SUBMITTED,
             submittedAt = base.submittedAt ?: now,

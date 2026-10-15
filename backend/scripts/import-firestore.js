@@ -25,7 +25,7 @@ const COLLECTIONS = [
   'yearlyPlannerGoals', 'ministryTimerSessions', 'bibleTextCategories', 'bibleTextRecords', 'preachingTimeRecords',
   'dashboardModuleLayouts', 'groupChats', 'territoryDrawings', 'territoryDrawingAudits', 'territoryBounds',
   // Circuit Overseer, attendance, statistics and Comparative Report workflows
-  'circuitCodes', 'congregationCircuits', 'coFieldServiceMonthStatus', 'coFieldServiceReportEvents', 'meetingAttendance',
+  'circuitCodes', 'congregationCircuits', 'coFieldServiceMonthStatus', 'coFieldServiceReportEvents', 'coAttendanceMonthStatus', 'coAttendanceReports', 'coAttendanceReportEvents', 'meetingAttendance',
   'meetingAttendanceSettings', 'meetingAttendanceEvents', 'congregationMonthlyStatistics', 'congregationComparativeReports',
   'comparativeReportHistory', 'comparativeReportRemarks',
 ];

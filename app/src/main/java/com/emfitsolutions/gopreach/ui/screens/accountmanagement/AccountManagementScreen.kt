@@ -1,5 +1,19 @@
 package com.emfitsolutions.gopreach.ui.screens.accountmanagement
 
+import androidx.compose.material3.HorizontalDivider
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Box
@@ -119,14 +133,14 @@ fun AccountManagementScreen(
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 availableTypes.forEach { accountType ->
                     FilterChip(
                         selected = accountType == selectedType,
                         onClick = { selectedType = accountType },
-                        label = { Text(accountType.label) },
+                        label = { Text(accountType.label, maxLines = 1, softWrap = false) },
                     )
                 }
             }
@@ -134,9 +148,11 @@ fun AccountManagementScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                label = { Text("Search by name, username, or congregation") },
+                placeholder = { Text("Search name or username", maxLines = 1) },
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                trailingIcon = { if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
                 singleLine = true,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
                 visualTransformation = VisualTransformation.None,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             )
@@ -155,13 +171,29 @@ fun AccountManagementScreen(
                     )
                 }
             } else {
+                val viewMode = rememberRecordViewMode("account_management")
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    item { RecordFound(rows.size) }
-                    items(rows, key = { it.person.id }) { row ->
+                    item {
+                        Text(
+                            "${rows.size} " + if (rows.size == 1) "account" else "accounts",
+                            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, rows, { it.person.id },
+                        listOf(
+                                UniversalColumn("Name", 200.dp) { it.person.fullName },
+                                UniversalColumn("Username", 150.dp) { it.person.username },
+                                UniversalColumn("Account Type", 150.dp) { it.accountType.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+                                UniversalColumn("Congregation", 180.dp) { it.congregationName },
+                                UniversalColumn("Status", 110.dp) { it.person.accountStatus.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+                        ),
+                    ) { row ->
                         AccountRowCard(
                             row = row,
                             onChangeUsername = { pendingUsernameChange = row },
@@ -220,37 +252,65 @@ private fun AccountRowCard(
     onResetPassword: () -> Unit,
     onSetStatus: (AccountStatus) -> Unit,
 ) {
-    var statusMenuOpen by remember { mutableStateOf(false) }
-    Card(modifier = Modifier.fillMaxWidth()) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val status = row.person.accountStatus
+    val (pillContainer, pillContent) = when (status) {
+        AccountStatus.ACTIVE -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
+        AccountStatus.INACTIVE -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+        AccountStatus.SUSPENDED -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+    }
+    val initials = row.person.fullName.split(',', ' ').filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }
+    androidx.compose.material3.OutlinedCard(modifier = Modifier.fillMaxWidth().clickable(onClick = onChangeUsername)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.padding(start = 12.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(row.person.fullName, style = MaterialTheme.typography.titleMedium)
-                Text("@${row.person.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("${row.accountType.label} · ${row.congregationName}", style = MaterialTheme.typography.bodySmall)
-                AssistChip(onClick = {}, label = { Text(row.person.accountStatus.name) })
+            Box(
+                modifier = Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(initials, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
-            IconButton(onClick = onChangeUsername) { Icon(Icons.Rounded.Edit, contentDescription = "Change username") }
-            IconButton(onClick = onResetPassword) { Icon(Icons.Rounded.VpnKey, contentDescription = "Reset password") }
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(row.person.fullName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text("@${row.person.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${row.accountType.label} · ${row.congregationName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text(
+                    status.name.lowercase().replaceFirstChar { it.uppercase() },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = pillContent,
+                    modifier = Modifier.padding(top = 2.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(50)).background(pillContainer).padding(horizontal = 10.dp, vertical = 3.dp),
+                )
+            }
             Box {
-                IconButton(onClick = { statusMenuOpen = true }) {
-                    Icon(
-                        when (row.person.accountStatus) {
-                            AccountStatus.ACTIVE -> Icons.Rounded.CheckCircle
-                            AccountStatus.INACTIVE -> Icons.Rounded.Block
-                            AccountStatus.SUSPENDED -> Icons.Rounded.PauseCircle
-                        },
-                        contentDescription = "Change status (currently ${row.person.accountStatus})",
+                IconButton(onClick = { menuOpen = true }) { Icon(Icons.Rounded.MoreVert, contentDescription = "Account options") }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Change username") },
+                        leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                        onClick = { menuOpen = false; onChangeUsername() },
                     )
-                }
-                DropdownMenu(expanded = statusMenuOpen, onDismissRequest = { statusMenuOpen = false }) {
-                    AccountStatus.entries.forEach { status ->
+                    DropdownMenuItem(
+                        text = { Text("Reset password") },
+                        leadingIcon = { Icon(Icons.Rounded.VpnKey, contentDescription = null) },
+                        onClick = { menuOpen = false; onResetPassword() },
+                    )
+                    HorizontalDivider()
+                    AccountStatus.entries.filter { it != status }.forEach { target ->
                         DropdownMenuItem(
-                            text = { Text(status.name) },
-                            onClick = { statusMenuOpen = false; onSetStatus(status) },
+                            text = { Text("Set ${target.name.lowercase()}") },
+                            leadingIcon = {
+                                Icon(
+                                    when (target) {
+                                        AccountStatus.ACTIVE -> Icons.Rounded.CheckCircle
+                                        AccountStatus.INACTIVE -> Icons.Rounded.Block
+                                        AccountStatus.SUSPENDED -> Icons.Rounded.PauseCircle
+                                    },
+                                    contentDescription = null,
+                                )
+                            },
+                            onClick = { menuOpen = false; onSetStatus(target) },
                         )
                     }
                 }

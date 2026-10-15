@@ -202,7 +202,7 @@ fun PublisherAssignmentScreen(
         floatingActionButton = {
             // Bible Studies are viewed and (re)assigned here, not created or edited.
             if (stage != PipelineStage.BIBLE_STUDY) {
-                FloatingActionButton(onClick = { showCreate = true }) { Icon(Icons.Rounded.Add, contentDescription = "Add ${stage.assignmentLabel()} Record") }
+                androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showCreate = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("Add ${stage.assignmentLabel()} Record") })
             }
         },
     ) { padding ->

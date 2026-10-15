@@ -1,4 +1,4 @@
-package com.emfitsolutions.gopreach.di
+﻿package com.emfitsolutions.gopreach.di
 
 import com.emfitsolutions.gopreach.data.location.AndroidLocationTracker
 import com.emfitsolutions.gopreach.data.location.LocationTracker
@@ -47,6 +47,10 @@ import com.emfitsolutions.gopreach.data.repository.ComparativeReportRepository
 import com.emfitsolutions.gopreach.data.repository.MeetingAttendanceRepository
 import com.emfitsolutions.gopreach.ui.screens.attendance.ComparativeReportsViewModel
 import com.emfitsolutions.gopreach.ui.screens.attendance.ReportSubmissionViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.AcceptedComparativeViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.CircuitReportsInboxViewModel
+import com.emfitsolutions.gopreach.ui.screens.attendance.AttendanceSubmissionViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.ReceivedAttendanceViewModel
 import com.emfitsolutions.gopreach.ui.screens.attendance.MeetingAttendanceViewModel
 import com.emfitsolutions.gopreach.data.repository.MonthLockGuard
 import com.emfitsolutions.gopreach.data.repository.CoReceivedReportRepository
@@ -73,6 +77,7 @@ import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
 import com.emfitsolutions.gopreach.data.repository.RecycleBinRepository
 import com.emfitsolutions.gopreach.data.repository.RemoteBarangayBoundaryRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
+import com.emfitsolutions.gopreach.data.repository.PublisherCategoryHistoryRepository
 import com.emfitsolutions.gopreach.data.repository.SavedLocationRepository
 import com.emfitsolutions.gopreach.data.repository.ScheduleRepository
 import com.emfitsolutions.gopreach.data.repository.SharedLocationRepository
@@ -125,6 +130,7 @@ import com.emfitsolutions.gopreach.ui.navigation.SessionViewModel
 import com.emfitsolutions.gopreach.ui.screens.account.AccountSettingsViewModel
 import com.emfitsolutions.gopreach.ui.screens.accountmanagement.AccountManagementViewModel
 import com.emfitsolutions.gopreach.ui.screens.admins.ManageAdminsViewModel
+import com.emfitsolutions.gopreach.ui.screens.announcements.CoAnnouncementsViewModel
 import com.emfitsolutions.gopreach.ui.screens.announcements.ManageAnnouncementsViewModel
 import com.emfitsolutions.gopreach.ui.screens.auth.ForcedPasswordChangeViewModel
 import com.emfitsolutions.gopreach.ui.screens.auth.ForgotPasswordViewModel
@@ -320,6 +326,8 @@ val appModule = module {
     singleOf(::QuickLoginStore)
     singleOf(::RecycleBinRepository)
     singleOf(::RemoteBarangayBoundaryRepository)
+    singleOf(::PublisherCategoryHistoryRepository)
+    single { com.emfitsolutions.gopreach.data.remote.ServerClock(get()) }
     singleOf(::RoleAssignmentRepository)
     singleOf(::SavedLocationRepository)
     singleOf(::ScheduleRepository)
@@ -332,6 +340,8 @@ val appModule = module {
     singleOf(::UserAccessGrantRepository)
     singleOf(::CircuitCodeRepository)
     single { com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository(get(), get()) }
+    single { com.emfitsolutions.gopreach.data.repository.CoAttendanceRepository(get()) }
+    single<com.emfitsolutions.gopreach.data.repository.CoAttendanceService> { com.emfitsolutions.gopreach.data.repository.BackendCoAttendanceService(get(), get(), get(), get()) }
     // Report workflows go through the server API, which re-checks every move.
     single<com.emfitsolutions.gopreach.data.repository.ComparativeReportService> { com.emfitsolutions.gopreach.data.repository.BackendComparativeReportService(get(), get(), get(), get()) }
     single<com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportService> { com.emfitsolutions.gopreach.data.repository.BackendCoFieldServiceReportService(get(), get(), get(), get()) }
@@ -390,6 +400,7 @@ val appModule = module {
     viewModelOf(::AccountManagementViewModel)
     viewModelOf(::ManageAdminsViewModel)
     viewModelOf(::ManageAnnouncementsViewModel)
+    viewModelOf(::CoAnnouncementsViewModel)
     viewModelOf(::ForcedPasswordChangeViewModel)
     viewModelOf(::ForgotPasswordViewModel)
     viewModelOf(::BackupRestoreViewModel)
@@ -467,8 +478,12 @@ val appModule = module {
     viewModelOf(::CongregationStatsViewModel)
     viewModelOf(::ReceivedReportsViewModel)
     viewModelOf(::MeetingAttendanceViewModel)
+    viewModelOf(::AttendanceSubmissionViewModel)
+    viewModelOf(::ReceivedAttendanceViewModel)
     viewModelOf(::ComparativeReportsViewModel)
     viewModelOf(::ReportSubmissionViewModel)
+    viewModelOf(::AcceptedComparativeViewModel)
+    viewModelOf(::CircuitReportsInboxViewModel)
     viewModelOf(::CircuitManagementViewModel)
     viewModelOf(::CircuitAssignmentMigrationViewModel)
 }

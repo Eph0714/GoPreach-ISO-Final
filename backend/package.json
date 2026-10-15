@@ -5,7 +5,9 @@
   "description": "GoPreach sync API for Hostinger Business Web Hosting (Node.js + MySQL)",
   "type": "module",
   "main": "src/server.js",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/server.js",
     "migrate": "node src/migrate.js",
@@ -14,6 +16,7 @@
     "test": "node --test"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^13.3.3",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
     "jose": "^5.9.6",

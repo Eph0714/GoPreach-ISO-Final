@@ -1,4 +1,4 @@
-package com.emfitsolutions.gopreach.ui.navigation
+﻿package com.emfitsolutions.gopreach.ui.navigation
 
 /**
  * All navigation routes in the app. Grouped by the phase that introduces them
@@ -101,13 +101,25 @@ object Destinations {
     const val CIRCUIT_CONGREGATIONS = "circuit_congregations"
     // Consolidated summary of every congregation in one circuit.
     const val CIRCUIT_REPORT = "circuit_report"
-    // The Circuit Overseer's frozen copies of the Field Service Reports the congregations sent, with unread / read notifications.
+    // The Circuit Overseer's Received Reports landing page: the Field Service Report and Circuit Attendance Report categories.
     const val RECEIVED_REPORTS = "received_reports"
+    // The Circuit Overseer's frozen copies of the Field Service Reports the congregations sent, with unread / read notifications.
+    const val RECEIVED_SNAPSHOTS = "received_snapshots"
+    // The Circuit Overseer's Circuit Attendance Report: the Meeting Attendance months the congregations sent, as frozen snapshots.
+    const val RECEIVED_ATTENDANCE = "received_attendance"
+    // A congregation's own view of the Field Service Report snapshots it sent to the Circuit Overseer ("My Submitted Reports" in the admin app).
+    const val SENT_REPORTS = "sent_reports"
+    // The Circuit Overseer's announcements to a congregation or to chosen elders of it, with attachments.
+    const val CO_ANNOUNCEMENTS = "co_announcements"
     // Weekly meeting attendance, and the congregation's two-period comparison (reports, headcounts, attendance) built from monthly snapshots.
     const val MEETING_ATTENDANCE = "meeting_attendance"
     // The user's workspace of every report they have to prepare / follow for a saved month range.
     const val REPORT_SUBMISSION = "report_submission"
     const val CONGREGATION_COMPARATIVE = "congregation_comparative"
+    /** The Circuit Overseer's inbox of submitted Circuit Reports (snapshots) with Mark as Received / Return for Editing / Cancel. */
+    const val CIRCUIT_REPORTS_INBOX = "circuit_reports_inbox"
+    /** The formal Comparative Reports the congregations themselves submitted (the Circuit Overseer's older review screen). */
+    const val CONGREGATION_COMPARATIVE_SUBMITTED = "congregation_comparative_submitted"
     // Field Service Reports the congregations sent to the Circuit Overseer (submitted copies) and one report's detail.
     const val CIRCUIT_FS_REPORTS = "circuit_fs_reports"
     const val CIRCUIT_CONGREGATION = "circuit_congregation/{congregationId}"

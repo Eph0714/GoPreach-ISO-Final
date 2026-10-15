@@ -4,6 +4,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Checkbox
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -145,6 +148,38 @@ fun ControlPanelScreen(
             }
 
             if (canManageLogo) {
+                Text("Image Capture", style = MaterialTheme.typography.titleMedium)
+                var allowCapture by remember(settings.allowCaptureImage) { mutableStateOf(settings.allowCaptureImage) }
+                var savingCapture by remember { mutableStateOf(false) }
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable(enabled = !savingCapture) { allowCapture = !allowCapture }.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Checkbox(checked = allowCapture, onCheckedChange = { allowCapture = it }, enabled = !savingCapture)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Allow Capture Image", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "Enable or disable image capture in Searching, Return Visit, and Bible Study.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                Button(
+                    onClick = {
+                        savingCapture = true
+                        viewModel.saveAllowCaptureImage(allowCapture, currentPersonId) { error ->
+                            savingCapture = false
+                            showToast(error ?: "Capture Image setting saved.")
+                        }
+                    },
+                    enabled = !savingCapture && allowCapture != settings.allowCaptureImage,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Save") }
+
                 Text("Data Maintenance", style = MaterialTheme.typography.titleMedium)
                 Text(
                     "Permanently deletes any Elder/Publisher/Ministerial role record left over from a " +

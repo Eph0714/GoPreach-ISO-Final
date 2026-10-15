@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -82,7 +86,7 @@ fun CircuitOverseerAccountsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAdd) { Icon(Icons.Rounded.Add, contentDescription = "New Circuit Overseer") }
+            androidx.compose.material3.ExtendedFloatingActionButton(onClick = onAdd, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("New Circuit Overseer") })
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -116,6 +120,7 @@ fun CircuitOverseerAccountsScreen(
                     )
                 }
             }
+            val viewMode = rememberRecordViewMode("co_accounts")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
@@ -125,7 +130,18 @@ fun CircuitOverseerAccountsScreen(
                 if (rows.isEmpty()) {
                     item { Text("No Circuit Overseer accounts yet. Tap + to add one.", style = MaterialTheme.typography.bodyMedium) }
                 }
-                items(visible, key = { it.person.id }) { row ->
+                item { RecordViewToggle(viewMode) }
+                recordItems(
+                    viewMode, visible, { it.person.id },
+                    listOf(
+                            UniversalColumn("Name", 200.dp) { "${it.person.lastName}, ${it.person.firstName}" },
+                            UniversalColumn("Username", 150.dp) { it.person.username },
+                            UniversalColumn("Circuit", 100.dp) { it.circuitCode ?: "—" },
+                            UniversalColumn("Congregations", 260.dp) { it.congregations.joinToString(", ") { c -> c.name }.ifBlank { "none assigned" } },
+                            UniversalColumn("Status", 110.dp) { it.person.accountStatus.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+                    ),
+                    onRowClick = { onView(it.person.id) },
+                ) { row ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(12.dp),

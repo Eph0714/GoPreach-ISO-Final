@@ -141,9 +141,16 @@ data class BibleTextRecord(
      * which moves its texts back to null rather than deleting them) simply
      * leaves this pointing at nothing, which reads the exact same as null. */
     val subtopicId: String? = null,
+    /** The scripture text itself, imported from JW.org / pasted from JW Library or typed. A record saved before this field existed has it
+     * empty and keeps whatever it had in [remarks] untouched (that text is never assumed to be scripture). */
+    val verseText: String = "",
     /** Optional (spec §3/§20) — the Publisher's own personal note; multi-line
      * free text. */
     val remarks: String = "",
+    /** "" for a Bible Text; [BIBLE_TEXT_KIND_NOTE] for a free-text note kept in the same Event list (its text is in [remarks]). */
+    val kind: String = "",
+    /** Manual position set by drag-and-drop (higher = nearer the top); 0 = never rearranged, so [createdAt] decides. */
+    val order: Long = 0L,
     /** JW Library / jw.org videos the Publisher attached to this Bible Text —
      * links only (see [SavedVideo]); the video files themselves are never
      * stored in the record. */
@@ -173,3 +180,11 @@ data class SavedVideo(
     val thumbnailUrl: String = "",
     val addedAt: Long = 0L,
 )
+
+const val BIBLE_TEXT_KIND_NOTE = "NOTE"
+
+/** A Note entry (no Bible reference) kept alongside the Event's Bible Texts. */
+fun BibleTextRecord.isNote(): Boolean = kind == BIBLE_TEXT_KIND_NOTE
+
+/** Newest-first position in an Event's list: the dragged position when set, else the creation time. */
+fun BibleTextRecord.sortKey(): Long = if (order > 0L) order else createdAt

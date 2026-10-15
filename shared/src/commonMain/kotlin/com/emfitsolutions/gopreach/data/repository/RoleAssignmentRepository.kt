@@ -17,6 +17,7 @@ private const val COLLECTION = "roleAssignments"
 class RoleAssignmentRepository(
     private val offline: OfflineFirestoreRepository,
     private val remote: RemoteCollections,
+    private val categoryHistory: PublisherCategoryHistoryRepository,
 ) {
     /** Every RoleAssignment in the cache, any person, any status — for admin-facing
      * list screens (Manage Admins, Manage Elders, ...) that need to join across
@@ -29,7 +30,10 @@ class RoleAssignmentRepository(
 
     suspend fun save(assignment: RoleAssignment) {
         val id = assignment.id.ifBlank { remote.newId(COLLECTION) }
+        val before = if (assignment.id.isBlank()) null else offline.get<RoleAssignment>(COLLECTION, id)
         offline.save(COLLECTION, id, assignment.copy(id = id))
+        // A publisher enrolled or moved to another service category is added to the category history (never blocks the save).
+        categoryHistory.recordAssignmentSave(before, assignment.copy(id = id))
     }
 
     /** Same as [save], but also pushes straight to Firestore immediately —
@@ -41,7 +45,9 @@ class RoleAssignmentRepository(
     suspend fun saveNow(assignment: RoleAssignment): RoleAssignment {
         val id = assignment.id.ifBlank { remote.newId(COLLECTION) }
         val withId = assignment.copy(id = id)
+        val before = if (assignment.id.isBlank()) null else offline.get<RoleAssignment>(COLLECTION, id)
         offline.saveNow(remote, COLLECTION, id, withId)
+        categoryHistory.recordAssignmentSave(before, withId)
         return withId
     }
 

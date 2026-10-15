@@ -1,4 +1,4 @@
-package com.emfitsolutions.gopreach.ui.screens.circuit
+﻿package com.emfitsolutions.gopreach.ui.screens.circuit
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Assessment
 import androidx.compose.material.icons.rounded.BarChart
@@ -35,6 +36,13 @@ import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.People
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.SupervisorAccount
+import androidx.compose.material.icons.rounded.WorkspacePremium
+import androidx.compose.material.icons.rounded.EventAvailable
+import androidx.compose.material.icons.rounded.Stars
+import androidx.compose.material.icons.rounded.PersonOutline
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
@@ -85,6 +93,7 @@ fun standingColor(s: ReportStanding): Color = when (s) {
     ReportStanding.RECEIVED -> Color(0xFF2E7D32)
     ReportStanding.SUBMITTED -> Color(0xFF1565C0)
     ReportStanding.RETURNED -> Color(0xFFEF6C00)
+    ReportStanding.CANCELLED -> Color(0xFF6A1B9A)
     ReportStanding.NOT_SUBMITTED -> Color(0xFFC62828)
     ReportStanding.NO_DATA -> Color(0xFF757575)
 }
@@ -161,34 +170,6 @@ private fun Skeleton(height: Dp, modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(height).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), RoundedCornerShape(14.dp)))
 }
 
-@Composable
-private fun StatCard(label: String, value: Int?, modifier: Modifier = Modifier, note: String? = null, noteColor: Color = Color.Unspecified, accent: Color = Color(0xFF3949AB), onClick: (() -> Unit)? = null) {
-    val animated by animateIntAsState(value ?: 0, animationSpec = tween(600), label = "stat")
-    val shape = RoundedCornerShape(14.dp)
-    Card(
-        modifier = modifier.clip(shape).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
-        shape = shape,
-        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.09f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        border = BorderStroke(1.dp, accent.copy(alpha = 0.35f)),
-    ) {
-        Column {
-            Box(Modifier.fillMaxWidth().height(4.dp).background(accent)) // the colored top edge that marks each card
-            Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-                Text(if (value == null) "—" else "%,d".format(animated), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = accent)
-                Text(
-                    if (value == null) "Data unavailable" else note.orEmpty().ifBlank { " " },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (value == null) MaterialTheme.colorScheme.onSurfaceVariant else if (noteColor == Color.Unspecified) MaterialTheme.colorScheme.onSurfaceVariant else noteColor,
-                    maxLines = 1,
-                )
-                if (onClick != null) Text("View  ›", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = accent)
-            }
-        }
-    }
-}
-
 /**
  * The Circuit Overseer's command center: what needs attention, how the circuit is doing, which congregation to open, and what to do next.
  * Figures of the chosen month come from the saved monthly snapshots (today's records only for the current month); anything missing is
@@ -209,14 +190,19 @@ fun CircuitHomeDashboard(
     onOpenCongregation: (String) -> Unit,
     onOpenLeaders: () -> Unit,
     onOpenReceived: () -> Unit = {},
+    /** Opens the submitted snapshot a "New Field Service Report Received" card points at (the card sets which one just before). */
+    onOpenSnapshot: () -> Unit = {},
+    onOpenAnnouncements: () -> Unit = {},
     modifier: Modifier = Modifier,
     received: ReceivedReportsViewModel = koinViewModel(),
     dashboard: CircuitDashboardViewModel = koinViewModel(),
     people: CircuitPeopleViewModel = koinViewModel(),
     overviewVm: CircuitOverviewViewModel = koinViewModel(),
+    attendanceReceived: ReceivedAttendanceViewModel = koinViewModel(),
 ) {
     val header by remember(currentPersonId) { dashboard.stateFor(currentPersonId) }.collectAsStateWithLifecycle(initialValue = null)
     val unreadReports by remember(currentPersonId) { received.unread(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val unreadAttendance by remember(currentPersonId) { attendanceReceived.unread(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val summaries by remember(currentPersonId) { people.summaries(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val sources by overviewVm.sources.collectAsStateWithLifecycle(initialValue = null)
     val online by people.isOnline.collectAsStateWithLifecycle(initialValue = true)
@@ -245,17 +231,21 @@ fun CircuitHomeDashboard(
     }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // ---------------- header ----------------
+        // ---------------- header: who, which circuit, what is new ----------------
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Circuit Overview", fontSize = 24.sp, fontWeight = FontWeight.Bold)
-            Text(
-                listOfNotNull(header?.circuitCode?.let { "Circuit $it" }, header?.assignedCount?.let { "$it congregation${if (it == 1) "" else "s"}" }).joinToString(" · "),
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            SimpleDropdown(
-                label = "Reporting Month", selectedLabel = monthLabelLong(month),
-                options = months.map { it.toString() to monthLabelLong(it) }, onSelected = { month = it.toLong() },
-            )
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        header?.circuitCode?.let { "Circuit $it" } ?: "Your Circuit",
+                        fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        listOfNotNull(header?.assignedCount?.let { "$it assigned congregation${if (it == 1) "" else "s"}" }).joinToString(" · "),
+                        style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (unreadReports.isNotEmpty() || unreadAttendance.isNotEmpty()) NewReportsIndicator(unreadReports.size + unreadAttendance.size, onOpenReceived)
+            }
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.size(8.dp).background(if (online) Color(0xFF2E7D32) else Color(0xFFEF6C00), CircleShape))
                 Text(
@@ -265,98 +255,127 @@ fun CircuitHomeDashboard(
             }
         }
 
-        // A congregation sent a report: tap to open that one (and it stops being new once opened).
-        unreadReports.firstOrNull()?.let { newest ->
-            com.emfitsolutions.gopreach.ui.components.co.CoCard(
-                modifier = Modifier.fillMaxWidth(), accent = com.emfitsolutions.gopreach.ui.components.co.coPalette().danger,
-                onClick = { ReceivedReportsLaunch.pendingReportId = newest.id; CircuitScopeStore.selectCongregation(newest.congregationId); onOpenReceived() },
-            ) {
-                Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = com.emfitsolutions.gopreach.ui.components.co.coPalette().danger)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("New Field Service Report Received", fontWeight = FontWeight.Bold)
-                        Text(newest.congregationName + " — " + monthLabelLong(newest.periodMonth), style = MaterialTheme.typography.bodyMedium)
-                        Text(if (unreadReports.size > 1) "Tap to Review · ${unreadReports.size - 1} more waiting" else "Tap to Review", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-        }
-
         if (overview == null) {
             // skeleton loading, never a blank screen
-            Skeleton(84.dp); Skeleton(84.dp); Skeleton(130.dp); Skeleton(150.dp)
+            Skeleton(84.dp); Skeleton(130.dp); Skeleton(150.dp)
             return@Column
         }
 
-        // ---------------- circuit summary ----------------
+        // ---------------- Circuit Overview: the statistics and the shortcuts, in one module ----------------
         val t = overview.totals
-        val periodNote = if (month == thisMonth) "As of ${monthLabelLong(month)} (current records)" else monthLabelLong(month) + " (saved monthly snapshots)"
-        Section("Circuit Summary", periodNote) {
-            val partial = t.covered in 1 until t.congregations
-            if (t.covered == 0 && month != thisMonth) {
-                Text("No saved monthly statistics exist for ${monthLabelLong(month)}.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            if (partial) Text("Showing ${t.covered} of ${t.congregations} congregations that have data for this month.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            BoxWithConstraints(Modifier.fillMaxWidth()) {
-                val cols = when { maxWidth < 600.dp -> 2; maxWidth < 900.dp -> 3; else -> 6 }
-                val items: List<@Composable (Modifier) -> Unit> = listOf(
-                    { m -> StatCard("Congregations", t.congregations, m, accent = Color(0xFF3949AB), onClick = onOpenCongregations) },
-                    { m ->
-                        val ch = t.publishersChange
-                        StatCard("Publishers", t.publishers, m, accent = Color(0xFF1E88E5), onClick = onOpenPublishers, note = ch?.let { (if (it >= 0) "+" else "") + it + " from previous month" }, noteColor = if ((ch ?: 0) < 0) Color(0xFFC62828) else Color(0xFF2E7D32))
-                    },
-                    { m -> StatCard("Elders", t.elders, m, accent = Color(0xFF6A1B9A), onClick = onOpenLeaders) },
-                    { m -> StatCard("Regular Pioneers", t.regularPioneers, m, accent = Color(0xFF2E7D32), onClick = onOpenPublishers) },
-                    { m -> StatCard("Auxiliary Pioneers", t.auxiliaryPioneers, m, accent = Color(0xFF00897B), onClick = onOpenPublishers) },
-                    { m -> StatCard("Unbaptized Publishers", t.unbaptized, m, accent = Color(0xFFEF6C00), onClick = onOpenPublishers) },
+        val periodNote = if (month == thisMonth) "Current records" else "Saved monthly snapshots"
+        com.emfitsolutions.gopreach.ui.components.co.CoCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Circuit Overview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Text(periodNote, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                SimpleDropdown(
+                    label = "Reporting Month", selectedLabel = monthLabelLong(month),
+                    options = months.map { it.toString() to monthLabelLong(it) }, onSelected = { month = it.toLong() },
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items.chunked(cols).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            row.forEach { it(Modifier.weight(1f)) }
-                            repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
+                val partial = t.covered in 1 until t.congregations
+                if (t.covered == 0 && month != thisMonth) {
+                    Text("No saved monthly statistics exist for ${monthLabelLong(month)}.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (partial) Text("Showing ${t.covered} of ${t.congregations} congregations that have data for this month.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val cols = if (maxWidth < 600.dp) 2 else 3
+                    val stats: List<@Composable (Modifier) -> Unit> = listOf(
+                        // Congregations has no earlier-month figure to compare with: the assignment list keeps no history.
+                        { m -> OverviewStatCard(Icons.Rounded.AccountBalance, COLOR_CONGREGATIONS, "Congregations", t.congregations, m) },
+                        { m -> OverviewStatCard(Icons.Rounded.People, COLOR_PUBLISHERS, "Publishers", t.publishers, m, change = t.publishersChange) },
+                        { m -> OverviewStatCard(Icons.Rounded.SupervisorAccount, Color(0xFF3949AB), "Elders", t.elders, m, change = t.eldersChange) },
+                        { m -> OverviewStatCard(Icons.Rounded.WorkspacePremium, Color(0xFF2E7D32), "Regular Pioneers", t.regularPioneers, m, change = t.regularPioneersChange) },
+                        { m -> OverviewStatCard(Icons.Rounded.EventAvailable, Color(0xFF00897B), "Auxiliary Pioneers", t.auxiliaryPioneers, m, change = t.auxiliaryPioneersChange) },
+                        { m -> OverviewStatCard(Icons.Rounded.Stars, Color(0xFFF9A825), "Special Pioneers", t.specialPioneers, m, change = t.specialPioneersChange) },
+                        { m -> OverviewStatCard(Icons.Rounded.PersonOutline, Color(0xFFEF6C00), "Unbaptized Publishers", t.unbaptized, m, change = t.unbaptizedChange) },
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        stats.chunked(cols).forEachIndexed { rowIndex, row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Max)) {
+                                row.forEachIndexed { i, card -> AppearIn(rowIndex * cols + i, Modifier.weight(1f).fillMaxHeight()) { card(Modifier.fillMaxHeight().fillMaxWidth()) } }
+                                repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
+                    }
+                }
+
+                androidx.compose.material3.HorizontalDivider()
+                Text("GO TO", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant, letterSpacing = 1.sp)
+
+                // Every shortcut is a destination the old Quick Access offered or the task list names; the Field Service Report and the
+                // Circuit Attendance Report are reached through Received Reports, so neither has a tile of its own.
+                class Shortcut(val icon: androidx.compose.ui.graphics.vector.ImageVector, val color: Color, val title: String, val caption: String, val onClick: () -> Unit)
+                val shortcuts = listOf(
+                    Shortcut(Icons.Rounded.AccountBalance, COLOR_CONGREGATIONS, "Congregations", "View and select a congregation", onOpenCongregations),
+                    Shortcut(Icons.Rounded.Inbox, COLOR_REPORT, "Received Reports", "Field Service and Circuit Attendance Reports", onOpenReceived),
+                    Shortcut(Icons.Rounded.Campaign, Color(0xFFD84315), "Announcements", "Write to a congregation or its elders", onOpenAnnouncements),
+                    Shortcut(Icons.Rounded.Map, COLOR_TERRITORY, "Territory Map", "Select a congregation's territory", onOpenTerritory),
+                    Shortcut(Icons.Rounded.People, COLOR_PUBLISHERS, "Publishers", "Publishers by category", onOpenPublishers),
+                    Shortcut(Icons.Rounded.SupervisorAccount, Color(0xFF3949AB), "Elders & Servants", "Elders and ministerial servants", onOpenLeaders),
+                    Shortcut(Icons.Rounded.Groups, COLOR_ATTENDANCE, "Meeting Attendance", "Weekly attendance records", onOpenAttendance),
+                    Shortcut(Icons.Rounded.CompareArrows, COLOR_COMPARE, "Comparative Report", "Compare periods", onOpenComparative),
+                )
+                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                    val cols = when { maxWidth < 360.dp -> 1; maxWidth < 700.dp -> 2; else -> 3 }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        shortcuts.chunked(cols).forEachIndexed { rowIndex, row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(androidx.compose.foundation.layout.IntrinsicSize.Max)) {
+                                row.forEachIndexed { i, s ->
+                                    AppearIn(8 + rowIndex * cols + i, Modifier.weight(1f).fillMaxHeight()) {
+                                        OverviewShortcut(s.icon, s.color, s.title, s.caption, s.onClick, Modifier.fillMaxHeight().fillMaxWidth())
+                                    }
+                                }
+                                repeat(cols - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
                         }
                     }
                 }
             }
         }
 
-        // ---------------- action required ----------------
-        val actions = overview.actions
-        if (actions.isNotEmpty()) {
-            Section("Action Required", "${actions.size} item${if (actions.size == 1) "" else "s"}") {
+        // ---------------- actionable notifications (hidden when there is nothing to act on) ----------------
+        // A report the overseer has not opened yet is the banner; the same report is not listed again as an action.
+        val actions = overview.actions.filterNot { a ->
+            a.review && a.area == ActionArea.FIELD_SERVICE && unreadReports.any { r -> r.congregationId == a.congregationId && r.periodMonth == month }
+        }
+        if (unreadReports.isNotEmpty() || actions.isNotEmpty()) {
+            Section("Needs Your Attention", "${unreadReports.take(1).size + actions.size} item${if (unreadReports.take(1).size + actions.size == 1) "" else "s"}") {
+                // A congregation sent a report: tap to open that one (and it stops being new once opened).
+                unreadReports.firstOrNull()?.let { newest ->
+                    com.emfitsolutions.gopreach.ui.components.co.CoCard(
+                        modifier = Modifier.fillMaxWidth(), accent = com.emfitsolutions.gopreach.ui.components.co.coPalette().danger,
+                        onClick = { ReceivedReportsLaunch.pendingReportId = newest.id; CircuitScopeStore.selectCongregation(newest.congregationId); onOpenSnapshot() },
+                    ) {
+                        Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Rounded.NotificationsActive, contentDescription = null, tint = com.emfitsolutions.gopreach.ui.components.co.coPalette().danger)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("New Field Service Report Received", fontWeight = FontWeight.Bold)
+                                Text(newest.congregationName + " — " + monthLabelLong(newest.periodMonth), style = MaterialTheme.typography.bodyMedium)
+                                Text(if (unreadReports.size > 1) "Tap to Review · ${unreadReports.size - 1} more waiting" else "Tap to Review", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
                 (if (showAllActions) actions else actions.take(4)).forEach { a -> ActionCard(a, month, onOpenReport, onOpenCongregation) }
                 if (actions.size > 4) TextButton(onClick = { showAllActions = !showAllActions }) { Text(if (showAllActions) "Show fewer" else "Show all ${actions.size}") }
             }
-        }
-
-        // ---------------- quick actions ----------------
-        Section("Quick Actions") {
-            QuickAccessGrid(
-                listOf(
-                    QuickModule(Icons.Rounded.AccountBalance, "Congregations", "Your circuit's congregations and their people counts", null, COLOR_CONGREGATIONS, onOpenCongregations),
-                    QuickModule(Icons.Rounded.People, "Publishers", "View congregation publishers", null, COLOR_PUBLISHERS, onOpenPublishers),
-                    QuickModule(Icons.Rounded.Inbox, "Received Reports", "Reports your congregations sent you", null, COLOR_REPORT, onOpenReceived, badge = unreadReports.size),
-                    QuickModule(Icons.Rounded.Assessment, "Field Service", "View monthly field service", null, COLOR_REPORT, onOpenReport),
-                    QuickModule(Icons.Rounded.Groups, "Meeting Attendance", "View attendance records", null, COLOR_ATTENDANCE, onOpenAttendance),
-                    QuickModule(Icons.Rounded.CompareArrows, "Comparative Report", "Compare historical months", null, COLOR_COMPARE, onOpenComparative),
-                    QuickModule(Icons.Rounded.Person, "Elders & Servants", "View elders and ministerial servants", null, COLOR_CONGREGATIONS, onOpenLeaders),
-                    QuickModule(Icons.Rounded.Map, "Territory", "View territory information", null, COLOR_TERRITORY, onOpenTerritory),
-                    QuickModule(Icons.Rounded.BarChart, "Reports", "Open the Circuit Report", null, COLOR_CIRCUIT, onOpenCircuitReport),
-                ),
-            )
         }
 
         Spacer(Modifier.height(72.dp)) // room for the bottom navigation
     }
 }
 
-
 @Composable
 private fun ActionCard(a: ActionItem, month: Long, onOpenReport: () -> Unit, onOpenCongregation: (String) -> Unit) {
     DashCard(Modifier.fillMaxWidth(), accent = Color(0xFFEF6C00)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text("⚠  ${a.congregationName}", fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Icon(Icons.Rounded.Warning, contentDescription = null, tint = Color(0xFFEF6C00), modifier = Modifier.size(18.dp))
+                Text(a.congregationName, fontWeight = FontWeight.SemiBold)
+            }
             Text(a.area.label, style = MaterialTheme.typography.labelLarge)
             Text(a.status, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = Color(0xFFEF6C00))
             a.reason?.takeIf { it.isNotBlank() }?.let { Text("Reason: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }

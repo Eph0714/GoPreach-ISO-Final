@@ -7,6 +7,15 @@ import android.net.Uri
 
 private const val JW_LIBRARY_PACKAGE = "org.jw.jwlibrary.mobile"
 
+/** Whether the JW Library app is installed (a plain package check - nothing is launched and none of its content is read). */
+internal fun isJwLibraryInstalled(context: Context): Boolean = try {
+    @Suppress("DEPRECATION")
+    context.packageManager.getPackageInfo(JW_LIBRARY_PACKAGE, 0)
+    true
+} catch (_: android.content.pm.PackageManager.NameNotFoundException) {
+    false
+}
+
 /**
  * Opens a Bible reference in the JW Library app so it can be read there — with
  * no internet if that Bible is downloaded in JW Library. GoPreach can't read

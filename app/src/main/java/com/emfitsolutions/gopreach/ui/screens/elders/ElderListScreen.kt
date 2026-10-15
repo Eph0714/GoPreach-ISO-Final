@@ -134,20 +134,21 @@ fun ElderListScreen(
         },
         floatingActionButton = {
             if (!readOnly) {
-                FloatingActionButton(onClick = onAddNew) {
-                    Icon(Icons.Rounded.Add, contentDescription = "Enroll $title")
-                }
+                androidx.compose.material3.ExtendedFloatingActionButton(
+                    onClick = onAddNew,
+                    icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
+                    text = { Text("Add " + title.removeSuffix("s")) },
+                )
             }
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
-                Text("Show Inactive")
-            }
+            androidx.compose.material3.FilterChip(
+                selected = showInactive,
+                onClick = { showInactive = !showInactive },
+                label = { Text("Include inactive") },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
             if (congregationFilterContent != null) {
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                     congregationFilterContent()
@@ -191,49 +192,19 @@ fun ElderListScreen(
                     ) + shown.groupingBy { it.scopeName }.eachCount().entries.sortedBy { it.key }.map { (scope, n) -> scope to n.toString() }
                 },
                 generatedBy = "Administrator",
+                compact = true,
                 card = { row ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = row.person.isTemporaryCredential) { lookupTarget = row.person },
-                    ) {
-                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(row.person.fullName, style = MaterialTheme.typography.titleMedium)
-                                if (row.regularElderRole != null) {
-                                    Text("Role: ${row.regularElderRole.displayLabel()}", style = MaterialTheme.typography.bodySmall)
-                                }
-                                Text("$scopeLabel: ${row.scopeName}", style = MaterialTheme.typography.bodySmall)
-                                Text("Contact: ${row.person.contact}", style = MaterialTheme.typography.bodySmall)
-                                Text(
-                                    if (row.isActive) "Active" else "Inactive",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (row.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                )
-                                if (row.person.isTemporaryCredential) {
-                                    Text(
-                                        "Tap to view temporary sign-in",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                    )
-                                }
-                            }
-                            if (!readOnly) {
-                                IconButton(onClick = { pendingEdit = row }) {
-                                    Icon(Icons.Rounded.Edit, contentDescription = "Edit")
-                                }
-                                if (row.isActive) {
-                                    IconButton(onClick = { pendingDeactivate = row }) {
-                                        Icon(Icons.Rounded.Delete, contentDescription = "Delete")
-                                    }
-                                } else {
-                                    IconButton(onClick = { onSetActive(row, true); showToast("\"${row.person.fullName}\" reactivated.") }) {
-                                        Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Restore")
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    PersonRecordCard(
+                        name = row.person.fullName,
+                        detail = listOfNotNull(row.regularElderRole?.let { "Role: ${it.displayLabel()}" }, row.scopeName, row.person.contact.takeIf { it.isNotBlank() }).joinToString(" · "),
+                        active = row.isActive,
+                        readOnly = readOnly,
+                        hasTemporarySignIn = row.person.isTemporaryCredential,
+                        onEdit = { pendingEdit = row },
+                        onDelete = { pendingDeactivate = row },
+                        onRestore = { onSetActive(row, true); showToast("\"${row.person.fullName}\" reactivated.") },
+                        onShowSignIn = { lookupTarget = row.person },
+                    )
                 },
                 modifier = Modifier.fillMaxSize(),
             )

@@ -98,16 +98,9 @@ class InactivityTracker(context: android.content.Context) {
     }
 }
 
-/** Roles that may open Session Timeout Setting — Super-Admin, every Admin and
- * every Elder. Mirrors the `appSettings` write rule in firestore.rules. */
-val SESSION_TIMEOUT_MANAGER_ROLES: Set<AdminRole> = setOf(
-    AdminRole.SUPER_ADMIN,
-    AdminRole.ADMIN_PER_CONGREGATION,
-    AdminRole.COORDINATOR_ELDER,
-    AdminRole.REGULAR_ELDER,
-    AdminRole.SERVICE_OVERSEER,
-    AdminRole.SECRETARY,
-)
+/** Only the Super-Admin sets the Session Timeout - one value, kept on the server, that every user's phone follows. Mirrors the `appSettings`
+ * rule in the backend policy, which refuses anyone else. */
+val SESSION_TIMEOUT_MANAGER_ROLES: Set<AdminRole> = setOf(AdminRole.SUPER_ADMIN)
 
 class SessionTimeoutViewModel(
     private val appSettingsRepository: AppSettingsRepository,
@@ -119,6 +112,15 @@ class SessionTimeoutViewModel(
 
     val settings: StateFlow<AppSettings> = appSettingsRepository.observe()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), AppSettings())
+
+    /**
+     * The saved settings, or null until they have actually been read from this phone's cache. [settings] starts with the built-in default
+     * (5 minutes) so the settings screen has something to show; the idle watcher must NOT act on that placeholder, or a session that was
+     * away longer than 5 minutes was logged out the instant the app opened - before the real limit (for example 100 minutes) had loaded.
+     */
+    val loadedSettings: StateFlow<AppSettings?> = appSettingsRepository.observe()
+        .map<AppSettings, AppSettings?> { it }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     val isSignedIn: StateFlow<Boolean> = userSession.state.map { it.person != null }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -150,11 +152,13 @@ class SessionTimeoutViewModel(
  * while the device sleeps, the monotonic clock does). */
 @Composable
 fun SessionTimeoutHost(viewModel: SessionTimeoutViewModel = koinViewModel()) {
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val loaded by viewModel.loadedSettings.collectAsStateWithLifecycle()
+    val settings = loaded ?: AppSettings()
     val signedIn by viewModel.isSignedIn.collectAsStateWithLifecycle()
     val toast = rememberToaster()
     val limitMillis = settings.sessionTimeoutMinutes.coerceAtLeast(AppSettings.MIN_SESSION_TIMEOUT_MINUTES) * 60_000L
-    val active = signedIn && settings.sessionTimeoutEnabled
+    // Nothing is judged against a limit that has not been loaded yet (see [SessionTimeoutViewModel.loadedSettings]).
+    val active = signedIn && loaded != null && settings.sessionTimeoutEnabled
 
     // A real sign-in (typed, remembered, biometric or offline) always starts a fresh idle window.
     LaunchedEffect(Unit) { viewModel.signInEvents.collect { viewModel.resetIdle() } }
@@ -240,7 +244,7 @@ fun SessionTimeoutSettingScreen(
         ) {
             Text(
                 "Automatically log users out after a period of no activity. They will have to log in again. " +
-                    "This applies to everyone using the app.",
+                    "Only the Super Admin can change this. It is saved online and every user's phone follows it as soon as it syncs.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -272,7 +276,7 @@ fun SessionTimeoutSettingScreen(
                         return@Button
                     }
                     viewModel.save(enabled, toSave, currentPersonId) { error ->
-                        if (error == null) toast("Session timeout setting saved.")
+                        if (error == null) toast("Saved online. Every phone will use it once it syncs.")
                         else message = error
                     }
                 },

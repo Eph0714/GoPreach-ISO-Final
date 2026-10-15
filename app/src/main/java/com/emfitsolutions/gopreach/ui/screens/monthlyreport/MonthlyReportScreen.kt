@@ -1,7 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.monthlyreport
 
 import com.emfitsolutions.gopreach.shared.resources.Res
-import com.emfitsolutions.gopreach.shared.resources.home_tile_my_reports_title
 import com.emfitsolutions.gopreach.shared.resources.monthly_report_bible_studies_label
 import com.emfitsolutions.gopreach.shared.resources.monthly_report_calculation_failed
 import com.emfitsolutions.gopreach.shared.resources.monthly_report_calculation_retry
@@ -136,7 +135,6 @@ fun MonthlyReportScreen(
      * as a top-bar action only for the Publisher's own normal entry point
      * (null for the separate Elder-editing-someone-else's-report route,
      * where a report-history shortcut doesn't make sense). */
-    onViewHistory: (() -> Unit)? = null,
     onBack: () -> Unit,
     viewModel: MonthlyReportViewModel = koinViewModel(),
 ) {
@@ -184,11 +182,6 @@ fun MonthlyReportScreen(
                 actions = {
                     IconButton(onClick = ::shareAsText) {
                         Icon(Icons.Rounded.Share, contentDescription = "Share as Text")
-                    }
-                    if (onViewHistory != null) {
-                        IconButton(onClick = onViewHistory) {
-                            Icon(Icons.AutoMirrored.Rounded.ListAlt, contentDescription = stringResource(Res.string.home_tile_my_reports_title))
-                        }
                     }
                 },
             )
@@ -397,8 +390,8 @@ private fun MonthlyReportForm(
             }
         }
 
-        if (allowEditWhenLocked) {
-            // An Elder correcting a report can still change its figures.
+        // An Elder correcting a report - or the Publisher while their own report is still a Draft - can change its figures.
+        if (allowEditWhenLocked || (uiState.existingReport?.status == ReportStatus.DRAFT && !effectivelyLocked)) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = uiState.hoursText,
@@ -517,6 +510,28 @@ private fun MonthlyReportForm(
                     ) { Text("Send Request") }
                 },
                 dismissButton = { androidx.compose.material3.TextButton(onClick = { askingAccess = false }) { Text("Cancel") } },
+            )
+        }
+        // A Draft (never submitted, not yet received) can be edited above and deleted here.
+        var confirmingDelete by remember { mutableStateOf(false) }
+        if (!allowEditWhenLocked && !uiState.monthApproved && uiState.existingReport?.status == ReportStatus.DRAFT) {
+            OutlinedButton(
+                onClick = { confirmingDelete = true },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Delete Draft Report") }
+        }
+        if (confirmingDelete) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { confirmingDelete = false },
+                title = { Text("Delete Draft Report") },
+                text = { Text("Delete your draft report for $selectedMonthLabel? This cannot be undone.") },
+                confirmButton = {
+                    androidx.compose.material3.TextButton(
+                        onClick = { confirmingDelete = false; viewModel.deleteDraft(publisherPersonId) },
+                    ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = { androidx.compose.material3.TextButton(onClick = { confirmingDelete = false }) { Text("Cancel") } },
             )
         }
         Button(

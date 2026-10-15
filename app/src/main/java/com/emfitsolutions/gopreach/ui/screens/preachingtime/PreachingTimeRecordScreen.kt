@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.preachingtime
 
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
 import androidx.compose.foundation.layout.Arrangement
@@ -118,13 +122,7 @@ fun PreachingTimeRecordScreen(
                 visualTransformation = VisualTransformation.None,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
             )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
-                Text("Show Inactive")
-            }
+            androidx.compose.material3.FilterChip(selected = showInactive, onClick = { showInactive = !showInactive }, label = { Text("Include inactive") }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             Text(
                 "Total: ${"%.2f".format(totalHours)} hours",
                 style = MaterialTheme.typography.titleSmall,
@@ -139,13 +137,24 @@ fun PreachingTimeRecordScreen(
                     Text("No preaching time records for this period. Tap Add Record to log one.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
+                val viewMode = rememberRecordViewMode("preaching_time")
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item { RecordFound(records.size) }
-                    items(records, key = { it.id }) { record ->
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, records, { it.id },
+                        listOf(
+                                UniversalColumn("Date", 140.dp) { dateFormat.format(Date(it.date)) },
+                                UniversalColumn("Hours", 90.dp) { "%.2f".format(it.hoursConsumed) },
+                                UniversalColumn("Remarks", 260.dp) { it.remarks.orEmpty() },
+                                UniversalColumn("Status", 90.dp) { if (it.status == RecordStatus.INACTIVE) "Inactive" else "Active" },
+                        ),
+                        onRowClick = { pendingEdit = it },
+                    ) { record ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(16.dp),

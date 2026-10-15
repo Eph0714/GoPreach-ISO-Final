@@ -26,7 +26,11 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import android.content.Context
+import androidx.lifecycle.viewModelScope
+import com.emfitsolutions.gopreach.data.passkey.PasskeyClient
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
+import com.emfitsolutions.gopreach.data.repository.PasskeyInfo
 import com.emfitsolutions.gopreach.data.repository.QuickLoginMethod
 import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
 import com.emfitsolutions.gopreach.domain.UserSession
@@ -67,6 +71,33 @@ class LoginMethodsViewModel(
     fun disable(method: QuickLoginMethod) {
         runCatching { quickLoginStore.disable(method) }
         _enrolled.value = readEnrolled()
+    }
+
+    // ---- Passkeys: kept on the server (public key only); the private key lives in the phone's passkey manager. ----
+    private val _passkeys = MutableStateFlow<List<PasskeyInfo>?>(null)
+    /** The account's passkeys, or null until loaded / when they could not be loaded. */
+    val passkeys: StateFlow<List<PasskeyInfo>?> = _passkeys.asStateFlow()
+
+    fun refreshPasskeys() {
+        viewModelScope.launch { _passkeys.value = authRepository.passkeys().getOrNull() }
+    }
+
+    /** Creates a passkey on this phone. [onResult] gets a message to show (success or the reason it failed). */
+    fun addPasskey(activityContext: Context, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val model = android.os.Build.MODEL?.takeIf { it.isNotBlank() } ?: "This phone"
+            val error = authRepository.addPasskey(model) { options -> PasskeyClient.create(activityContext, options) }
+            refreshPasskeys()
+            onResult(error ?: "Passkey added. Next time, tap \"Login with Passkey\" on the login screen.")
+        }
+    }
+
+    fun removePasskey(id: String, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val ok = authRepository.removePasskey(id)
+            refreshPasskeys()
+            onResult(if (ok) "Passkey removed." else "Couldn't remove the passkey. Please try again.")
+        }
     }
 }
 
@@ -132,6 +163,7 @@ fun LoginMethodsSection(viewModel: LoginMethodsViewModel = koinViewModel()) {
     var verifiedPassword by remember { mutableStateOf<String?>(null) }
     var disabling by remember { mutableStateOf<QuickLoginMethod?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var removingPasskey by remember { mutableStateOf<PasskeyInfo?>(null) }
 
     Text("Security — Login Methods", style = MaterialTheme.typography.titleMedium)
     Text(
@@ -146,12 +178,37 @@ fun LoginMethodsSection(viewModel: LoginMethodsViewModel = koinViewModel()) {
                 supportingContent = { Text("Always on. Needed to set up, change or recover the others.") },
                 trailingContent = { Text("Enabled", color = MaterialTheme.colorScheme.primary) },
             )
+            if (com.emfitsolutions.gopreach.data.passkey.PASSKEY_LOGIN_ENABLED) {
             HorizontalDivider()
+            val passkeys by viewModel.passkeys.collectAsStateWithLifecycle()
+            val context = androidx.compose.ui.platform.LocalContext.current
+            androidx.compose.runtime.LaunchedEffect(Unit) { viewModel.refreshPasskeys() }
+            val count = passkeys?.size ?: 0
             ListItem(
                 headlineContent = { Text("Passkey") },
-                supportingContent = { Text("Not available yet. It needs a server component GoPreach doesn't have.") },
-                trailingContent = { Text("Not Set Up", color = MaterialTheme.colorScheme.onSurfaceVariant) },
+                supportingContent = {
+                    Text(
+                        when {
+                            passkeys == null -> "Sign in with your screen lock, fingerprint or face - no password to type."
+                            count == 0 -> "Off. Sign in with your screen lock, fingerprint or face - no password to type."
+                            else -> "On for your account. Passkeys are kept by your phone's passkey manager and can work on other devices you sync."
+                        },
+                    )
+                },
+                trailingContent = {
+                    Text(if (count > 0) "Enabled" else "Not Set Up", color = if (count > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                },
             )
+            Column(modifier = Modifier.padding(start = 8.dp, bottom = 4.dp)) {
+                passkeys.orEmpty().forEach { passkey ->
+                    androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Text(passkey.name, modifier = Modifier.padding(start = 8.dp).weight(1f), style = MaterialTheme.typography.bodyMedium)
+                        TextButton(onClick = { removingPasskey = passkey }) { Text("Remove") }
+                    }
+                }
+                TextButton(onClick = { viewModel.addPasskey(context) { message = it } }) { Text(if (count == 0) "Set up Passkey" else "Add another Passkey") }
+            }
+            }
             QuickLoginMethod.entries.forEach { method ->
                 HorizontalDivider()
                 val on = method in enrolled
@@ -216,6 +273,16 @@ fun LoginMethodsSection(viewModel: LoginMethodsViewModel = koinViewModel()) {
             text = { Text("You'll sign in with your password (or another method) instead. You can set it up again any time.") },
             confirmButton = { TextButton(onClick = { viewModel.disable(method); disabling = null }) { Text("Disable") } },
             dismissButton = { TextButton(onClick = { disabling = null }) { Text("Cancel") } },
+        )
+    }
+
+    removingPasskey?.let { passkey ->
+        AlertDialog(
+            onDismissRequest = { removingPasskey = null },
+            title = { Text("Remove this passkey?") },
+            text = { Text("\"${passkey.name}\" will no longer sign in to your account. You can add a new one any time. (Also delete it from your phone's passkey manager if you like.)") },
+            confirmButton = { TextButton(onClick = { viewModel.removePasskey(passkey.id) { message = it }; removingPasskey = null }) { Text("Remove") } },
+            dismissButton = { TextButton(onClick = { removingPasskey = null }) { Text("Cancel") } },
         )
     }
 

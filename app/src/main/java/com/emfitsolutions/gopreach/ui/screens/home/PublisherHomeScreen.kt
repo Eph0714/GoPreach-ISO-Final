@@ -1,5 +1,11 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
+import com.emfitsolutions.gopreach.shared.resources.app_name
+import androidx.compose.runtime.mutableStateMapOf
+import com.emfitsolutions.gopreach.ui.components.NavProfileHeader
+import com.emfitsolutions.gopreach.ui.components.NavMenuRow
+import com.emfitsolutions.gopreach.ui.components.NavGroupSection
+import com.emfitsolutions.gopreach.ui.components.NavGroup
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.action_cancel
 import com.emfitsolutions.gopreach.shared.resources.dashboard_layout_confirm_to_main_form
@@ -48,8 +54,6 @@ import com.emfitsolutions.gopreach.shared.resources.home_tile_my_bible_text_reco
 import com.emfitsolutions.gopreach.shared.resources.home_tile_my_bible_text_record_title
 import com.emfitsolutions.gopreach.shared.resources.home_tile_my_calendar_subtitle
 import com.emfitsolutions.gopreach.shared.resources.home_tile_my_calendar_title
-import com.emfitsolutions.gopreach.shared.resources.home_tile_my_reports_subtitle
-import com.emfitsolutions.gopreach.shared.resources.home_tile_my_reports_title
 import com.emfitsolutions.gopreach.shared.resources.home_tile_my_total_hours_subtitle
 import com.emfitsolutions.gopreach.shared.resources.home_tile_my_total_hours_title
 import com.emfitsolutions.gopreach.shared.resources.home_tile_publisher_schedules_subtitle
@@ -391,6 +395,10 @@ fun PublisherHomeScreen(
                 onNavigate = { route -> reopenSidePanelOnReturn = true; drawerScope.launch { drawerState.close() }; onNavigate(route) },
                 onLongPressModule = onLongPressModule,
                 onResetLayout = { showResetConfirm = true },
+                userName = session.person?.fullName.orEmpty(),
+                roleLabel = category?.displayLabel() ?: stringResource(Res.string.role_label_publisher),
+                scopeLabel = congregationName.orEmpty(),
+                profileImageUrl = session.person?.profileImageUrl,
             )
         },
     ) {
@@ -992,7 +1000,6 @@ private fun publisherModuleTiles(
     // "Allow the publisher to see all his submitted Report record" —
     // its own tile since MONTHLY_REPORT's form only ever shows the
     // current/previous month, not the full history.
-    add(PublisherModuleTile(DashboardModuleId.MY_SUBMITTED_REPORTS, stringResource(Res.string.home_tile_my_reports_title), stringResource(Res.string.home_tile_my_reports_subtitle), Icons.AutoMirrored.Rounded.ListAlt, Destinations.MY_SUBMITTED_REPORTS))
     add(PublisherModuleTile(DashboardModuleId.SEARCHING, stringResource(Res.string.home_tile_searching_title), stringResource(Res.string.home_tile_searching_subtitle), Icons.Rounded.PersonSearch, Destinations.SEARCHING))
     add(PublisherModuleTile(DashboardModuleId.RETURN_VISIT, stringResource(Res.string.home_tile_return_visit_title), stringResource(Res.string.home_tile_return_visit_subtitle), Icons.Rounded.PeopleAlt, Destinations.RETURN_VISIT))
     add(PublisherModuleTile(DashboardModuleId.BIBLE_STUDY, stringResource(Res.string.home_tile_bible_study_title), stringResource(Res.string.home_tile_bible_study_subtitle), Icons.AutoMirrored.Rounded.MenuBook, Destinations.BIBLE_STUDY))
@@ -1090,46 +1097,27 @@ private fun FeatureTileGrid(
     }
 }
 
-/** The Side Panel drawer's own module list — same modules, tucked away
- * instead of on the Main Form grid (spec §4); long-press works identically
- * here so a module can be moved back (spec §2's "If the module is currently
- * on the Side Panel"). */
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun SidePanelModuleRow(tile: PublisherModuleTile, onNavigate: (String) -> Unit, onLongPressModule: (DashboardModuleId) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = { onNavigate(tile.route) }, onLongClick = { onLongPressModule(tile.id) })
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Box(
-            modifier = Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(tile.icon, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(tile.title, style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(tile.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        if (tile.badge > 0) {
-            Badge { Text(tile.badge.toString()) }
-        }
-    }
+/**
+ * Which navigation group a Publisher module is shown under. A display decision only: which modules this Publisher has in the Side Panel
+ * (the ones moved off the Main Form) and their routes are unchanged.
+ */
+private fun navGroupOf(id: DashboardModuleId): NavGroup = when (id) {
+    DashboardModuleId.MONTHLY_REPORT, DashboardModuleId.SEARCHING, DashboardModuleId.RETURN_VISIT, DashboardModuleId.BIBLE_STUDY,
+    DashboardModuleId.MY_PLANNER, DashboardModuleId.MY_TOTAL_HOURS -> NavGroup.INPUT
+
+    DashboardModuleId.MY_BIBLE_TEXT_RECORD, DashboardModuleId.HOUSEHOLDER_VISIT_HISTORY, DashboardModuleId.FORWARDED_TO_ME,
+    DashboardModuleId.INCOMING_HOUSEHOLDER_ASSIGNMENTS, DashboardModuleId.MY_ASSIGNMENTS -> NavGroup.RECORD
+
+    DashboardModuleId.MY_SUBMITTED_REPORTS -> NavGroup.REPORTS
+
+    else -> NavGroup.TOOLS
 }
 
 /**
- * "Publishers App – Customizable Module Navigation Redesign" — the drawer
- * content for the Side Panel (spec §4): every module this Publisher has
- * moved (or defaults to) off the Main Form, plus a "Reset Dashboard Layout"
- * action (spec §9). Long-pressing any row here opens the same move dialog
- * as a Main Form tile — the dialog itself is hosted once, inline, near the
- * end of [PublisherHomeScreen] (see its own "Long Press Icon → Select Move"
- * comment), driven by the same `pendingModuleId`/`pendingTarget` state this
- * row's [onLongPressModule] callback sets.
+ * "Publishers App - Customizable Module Navigation Redesign" - the drawer content for the Side Panel (spec section 4): every module this
+ * Publisher has moved (or defaults to) off the Main Form, now in the same collapsible, colour-coded groups every other role uses (all
+ * collapsed until tapped), plus a "Reset Dashboard Layout" action. Long-pressing any row opens the same move dialog as a Main Form tile -
+ * the dialog itself is hosted once, inline, near the end of [PublisherHomeScreen], driven by the state [onLongPressModule] sets.
  */
 @Composable
 private fun SidePanelDrawerContent(
@@ -1137,12 +1125,17 @@ private fun SidePanelDrawerContent(
     onNavigate: (String) -> Unit,
     onLongPressModule: (DashboardModuleId) -> Unit,
     onResetLayout: () -> Unit,
+    userName: String,
+    roleLabel: String,
+    scopeLabel: String,
+    profileImageUrl: String?,
 ) {
+    val expanded = remember { mutableStateMapOf<NavGroup, Boolean>() }
+    val grouped = NavGroup.entries.mapNotNull { group -> tiles.filter { navGroupOf(it.id) == group }.takeIf { it.isNotEmpty() }?.let { group to it } }
     ModalDrawerSheet {
-        Text(
-            stringResource(Res.string.dashboard_layout_side_panel_title),
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(20.dp),
+        NavProfileHeader(
+            appName = stringResource(Res.string.app_name),
+            userName = userName, roleLabel = roleLabel, scopeLabel = scopeLabel, profileImageUrl = profileImageUrl,
         )
         HorizontalDivider()
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
@@ -1154,24 +1147,38 @@ private fun SidePanelDrawerContent(
                     modifier = Modifier.padding(20.dp),
                 )
             } else {
-                tiles.forEach { tile -> SidePanelModuleRow(tile, onNavigate, onLongPressModule) }
+                grouped.forEach { (group, groupTiles) ->
+                    NavGroupSection(
+                        group = group,
+                        expanded = expanded[group] == true,
+                        containsActive = false,
+                        itemCount = groupTiles.size,
+                        onToggle = { expanded[group] = expanded[group] != true },
+                    ) {
+                        groupTiles.forEach { tile ->
+                            NavMenuRow(
+                                icon = tile.icon, label = tile.title, group = group, selected = false, badge = tile.badge,
+                                onClick = { onNavigate(tile.route) }, onLongClick = { onLongPressModule(tile.id) },
+                            )
+                        }
+                    }
+                }
             }
         }
         HorizontalDivider()
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onResetLayout),
+                .padding(horizontal = 12.dp, vertical = 4.dp)
+                .heightIn(min = 46.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onResetLayout)
+                .padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Icon(Icons.Rounded.RestartAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(start = 20.dp))
-            Text(
-                stringResource(Res.string.dashboard_layout_reset_title),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(vertical = 16.dp),
-            )
+            Icon(Icons.Rounded.RestartAlt, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+            Text(stringResource(Res.string.dashboard_layout_reset_title), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
     }
 }

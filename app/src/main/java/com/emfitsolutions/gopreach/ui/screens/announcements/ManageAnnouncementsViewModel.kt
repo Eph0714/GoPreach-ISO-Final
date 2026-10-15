@@ -39,8 +39,9 @@ class ManageAnnouncementsViewModel(
 
     fun rowsFor(congregationId: String?): Flow<List<Announcement>> =
         announcementRepository.observeAll().map { list ->
-            list.filter { congregationId == null || it.congregationId == congregationId }
-                .sortedByDescending { it.createdAt }
+            // A Circuit Overseer announcement is only listed here once published (the server never sends a draft to a recipient anyway).
+            list.filter { (congregationId == null || it.congregationId == congregationId) && (!it.isCircuitOverseerStyle || it.status == Announcement.STATUS_PUBLISHED) }
+                .sortedByDescending { it.publishedAt ?: it.createdAt }
         }
 
     /** Live unseen count for the notification balloon — every announcement
@@ -49,7 +50,7 @@ class ManageAnnouncementsViewModel(
     fun unseenCountFor(congregationId: String?, personId: String): Flow<Int> =
         combine(rowsFor(congregationId), announcementSeenStore.lastSeenAtByPerson) { rows, seenMap ->
             val lastSeenAt = seenMap[personId] ?: announcementSeenStore.lastSeenAt(personId)
-            rows.count { it.createdAt > lastSeenAt }
+            rows.count { (it.publishedAt ?: it.createdAt) > lastSeenAt }
         }
 
     fun markSeen(personId: String) = announcementSeenStore.markSeenNow(personId)

@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.contactrecord
 
 import android.content.ActivityNotFoundException
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import android.content.Intent
 import android.net.Uri
@@ -208,13 +212,25 @@ fun ContactRecordScreen(
                     )
                 }
             } else {
+                val viewMode = rememberRecordViewMode("contacts")
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item { RecordFound(filteredRows.size) }
-                    items(filteredRows, key = { "${it.name}|${it.congregationName}|${it.sourceLabels}" }) { row ->
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, filteredRows, { "${it.name}|${it.congregationName}|${it.sourceLabels}" },
+                        listOf(
+                                UniversalColumn("Name", 200.dp) { it.name },
+                                UniversalColumn("Source", 150.dp) { it.sourceLabels.joinToString(", ") },
+                                UniversalColumn("Contact", 140.dp) { it.contact },
+                                UniversalColumn("Address", 260.dp) { it.address },
+                                UniversalColumn("Congregation", 170.dp) { it.congregationName },
+                        ),
+                        onRowClick = { selectedRow = it },
+                    ) { row ->
                         ContactRowCard(
                             row = row,
                             onClick = { selectedRow = row },

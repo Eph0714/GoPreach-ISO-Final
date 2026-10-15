@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
 import com.emfitsolutions.gopreach.ui.components.co.CoButton
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.co.CoKind
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.TableChart
@@ -82,6 +86,7 @@ fun CircuitReportScreen(
         else -> null
     }
     val allCircuits = currentPersonId == CIRCUIT_SCOPE_ALL
+    val viewMode = com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode("circuit_attendance_report")
 
     var fullScreen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     com.emfitsolutions.gopreach.ui.components.co.CoFullScreenEffect(fullScreen)
@@ -90,7 +95,7 @@ fun CircuitReportScreen(
         topBar = {
             TopAppBar(
                 actions = { com.emfitsolutions.gopreach.ui.components.co.CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
-                title = { Text("Circuit Report") },
+                title = { Text("Circuit Attendance Report") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )
         },
@@ -99,7 +104,7 @@ fun CircuitReportScreen(
             Column(modifier = Modifier.padding(padding).padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Select a Circuit", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
-                    "A Circuit Report covers one circuit. Choose a circuit (and its Circuit Overseer) in Circuit Overseer Management first.",
+                    "A Circuit Attendance Report covers one circuit. Choose a circuit (and its Circuit Overseer) in Circuit Overseer Management first.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -117,7 +122,7 @@ fun CircuitReportScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer), modifier = Modifier.fillMaxWidth()) {
                         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text("CIRCUIT REPORT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("CIRCUIT ATTENDANCE REPORT", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                             Text("Circuit: ${header.circuit}", style = MaterialTheme.typography.bodyMedium)
                             Text("Circuit Overseer: ${header.overseer}", style = MaterialTheme.typography.bodyMedium)
                             Text("Total Congregations: ${header.totalCongregations}", style = MaterialTheme.typography.bodyMedium)
@@ -138,12 +143,13 @@ fun CircuitReportScreen(
                         OutlinedButton(enabled = rows.isNotEmpty(), onClick = { CircuitReportExporter.print(context, header, rows, total, syncNote) }) { Text("Print Circuit Report / PDF") }
                         CoButton("Excel", { CircuitReportExporter.shareExcel(context, header, rows, total, syncNote) }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart, enabled = rows.isNotEmpty())
                     }
+                    com.emfitsolutions.gopreach.ui.components.RecordViewToggle(viewMode)
                     if (rows.isEmpty()) Text("No congregations are assigned to this circuit yet.", style = MaterialTheme.typography.bodyMedium)
                 }
             }
             if (rows.isNotEmpty()) {
                 // The heading row stays pinned while the congregations scroll underneath; every row shares one sideways scroll.
-                stickyHeader(key = "head") {
+                if (viewMode.table) stickyHeader(key = "head") {
                     Row(modifier = Modifier.horizontalScroll(hScroll).height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.secondaryContainer)) {
                         CIRCUIT_REPORT_COLUMNS.forEach { (title, _) ->
                             Text(
@@ -153,7 +159,19 @@ fun CircuitReportScreen(
                         }
                     }
                 }
-                itemsIndexed(rows, key = { _, r -> "row-" + r.congregationId }) { i, r ->
+                // List View: one card per congregation, every column of the table as a labelled line.
+                if (!viewMode.table) items(rows.size, key = { "card-" + rows[it].congregationId }) { idx ->
+                    val r = rows[idx]
+                    Card(modifier = Modifier.fillMaxWidth().clickable { onOpenCongregation(r.congregationId) }) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            CIRCUIT_REPORT_COLUMNS.forEachIndexed { n, (title, value) ->
+                                if (n == 0) Text(value(r), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                else Text(title + ": " + value(r), style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+                }
+                if (viewMode.table) itemsIndexed(rows, key = { _, r -> "row-" + r.congregationId }) { i, r ->
                     Row(
                         modifier = Modifier
                             .horizontalScroll(hScroll)
@@ -170,7 +188,7 @@ fun CircuitReportScreen(
                         }
                     }
                 }
-                item(key = "total") {
+                if (viewMode.table) item(key = "total") {
                     Row(modifier = Modifier.horizontalScroll(hScroll).height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f))) {
                         CIRCUIT_REPORT_COLUMNS.forEach { (title, value) ->
                             Text(

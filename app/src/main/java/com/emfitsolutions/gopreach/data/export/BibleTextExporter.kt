@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.core.content.FileProvider
 import com.emfitsolutions.gopreach.data.model.BibleTextCategory
 import com.emfitsolutions.gopreach.data.model.BibleTextRecord
+import com.emfitsolutions.gopreach.data.model.isNote
 import com.emfitsolutions.gopreach.data.model.SavedVideo
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
@@ -59,6 +60,8 @@ data class ExportedBibleTextRecord(
     val chapter: Int,
     val verses: String,
     val remarks: String,
+    /** Added with Verse Text; null in a file exported before it existed. */
+    val verseText: String? = null,
     val videos: List<SavedVideo> = emptyList(),
 )
 
@@ -81,7 +84,7 @@ object BibleTextExporter {
     private val gson = Gson()
 
     fun buildExportJson(records: List<BibleTextRecord>, eventsById: Map<String, BibleTextCategory>): String {
-        val exported = records.map { record ->
+        val exported = records.filterNot { it.isNote() }.map { record ->
             val event = eventsById[record.categoryId]
             ExportedBibleTextRecord(
                 eventName = event?.event.orEmpty(),
@@ -93,6 +96,7 @@ object BibleTextExporter {
                 chapter = record.chapter,
                 verses = record.verses,
                 remarks = record.remarks,
+                verseText = record.verseText,
                 videos = record.videos,
             )
         }

@@ -22,6 +22,11 @@ import kotlinx.coroutines.withTimeout
  * [AuthRepository.createSecondaryAuthAccount]'s callers could reuse the same
  * mapping if a future auth entry point needs it. */
 private const val SIGN_IN_TIMEOUT_MS = 15_000L
+/** Longer than a password sign-in: it includes the time the person spends on the system passkey sheet. */
+private const val PASSKEY_TIMEOUT_MS = 120_000L
+
+/** Thrown by a platform passkey manager when the person backs out or has no usable passkey; the message is shown as-is. */
+class PasskeyCancelled(message: String) : Exception(message)
 private fun friendlyAuthErrorMessage(e: Throwable): String = when (e) {
     is TimeoutCancellationException -> "Connection timeout. Please check your internet connection and try again."
     is AuthFailure.Network -> "No internet connection. Please check your connection and try again."
@@ -95,6 +100,61 @@ class AuthRepository(
             AuthResult.Error(friendlyAuthErrorMessage(e))
         }
     }
+
+    /**
+     * Passkey sign-in. [getAssertion] is the phone's passkey manager: it receives the server's challenge options (JSON) and returns the signed
+     * answer (JSON), or throws [PasskeyCancelled] if the person backs out / has no passkey. After the server accepts it the account is signed in
+     * exactly like a password sign-in (same deactivated-account check, caches and audit entry); no password verifier is saved, as none was typed.
+     */
+    suspend fun signInWithPasskey(getAssertion: suspend (optionsJson: String) -> String): AuthResult {
+        return try {
+            withTimeout(PASSKEY_TIMEOUT_MS) {
+                val challenge = auth.passkeyLoginOptions()
+                val answer = getAssertion(challenge.optionsJson)
+                val sessionId = challenge.sessionId ?: return@withTimeout AuthResult.Error("The server sent no passkey session.")
+                val username = auth.passkeyLogin(sessionId, answer)
+                val person = username?.let { findPersonByUsername(it) }
+                    ?: run { auth.signOut(); return@withTimeout AuthResult.Error("This passkey's account could not be found.") }
+                val roleAssignments = roleAssignmentRepository.observeForPerson(person.id).first()
+                if (!PermissionChecker.isAccountUsable(person, roleAssignments)) {
+                    auth.signOut()
+                    return@withTimeout AuthResult.Error("This account has been deactivated. Contact your administrator.")
+                }
+                personRepository.cacheFromServer(person)
+                offlineSessionMarker.save(person.id)
+                _signInEvents.tryEmit(Unit)
+                auditLogRepository.log(actorPersonId = person.id, action = "SIGN_IN")
+                AuthResult.Success(person, requiresPasswordChange = person.isTemporaryCredential)
+            }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            AuthResult.Error("Passkey sign-in took too long. Please try again.")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: PasskeyCancelled) {
+            AuthResult.Error(e.message ?: "Passkey sign-in was cancelled.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Passkey sign-in failed: ${e::class.simpleName}")
+            AuthResult.Error(if (e is AuthFailure.InvalidCredentials) "That passkey wasn't accepted. Use your username and password instead." else friendlyAuthErrorMessage(e))
+        }
+    }
+
+    /** Adds a passkey to the signed-in account. [createCredential] is the phone's passkey manager (options JSON in, response JSON out). Returns an error message, or null on success. */
+    suspend fun addPasskey(name: String, createCredential: suspend (optionsJson: String) -> String): String? = try {
+        val response = createCredential(auth.passkeyRegisterOptions())
+        auth.passkeyRegister(response, name)
+        null
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: PasskeyCancelled) {
+        e.message ?: "Passkey set-up was cancelled."
+    } catch (e: Exception) {
+        Log.e(TAG, "Adding a passkey failed: ${e::class.simpleName}")
+        friendlyAuthErrorMessage(e)
+    }
+
+    suspend fun passkeys(): Result<List<PasskeyInfo>> = runCatching { auth.passkeyList() }
+
+    suspend fun removePasskey(id: String): Boolean = runCatching { auth.passkeyDelete(id) }.getOrDefault(false)
 
     private suspend fun signInInternal(username: String, password: String): AuthResult {
         val person = findPersonByUsername(username)

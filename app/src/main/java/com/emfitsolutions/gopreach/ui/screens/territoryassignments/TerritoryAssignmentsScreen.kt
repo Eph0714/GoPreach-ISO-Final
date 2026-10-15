@@ -200,9 +200,7 @@ fun TerritoryAssignmentsScreen(
         },
         floatingActionButton = {
             if (!readOnly) {
-                FloatingActionButton(onClick = onAddNew) {
-                    Icon(Icons.Rounded.Add, contentDescription = "Add Territory Assignment")
-                }
+                androidx.compose.material3.ExtendedFloatingActionButton(onClick = onAddNew, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("Add Territory Assignment") })
             }
         },
     ) { padding ->

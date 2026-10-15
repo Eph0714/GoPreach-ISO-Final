@@ -25,6 +25,9 @@ data class AppSettings(
     val trashRetentionDays: Int = DEFAULT_TRASH_RETENTION_DAYS,
     /** Consolidated report: when on, the congregation cannot submit a month to the Circuit Overseer until every publisher has submitted (off = only a warning). */
     val requireAllPublishersSubmitted: Boolean = false,
+    /** "Allow Capture Image" - Super-Admin only. Off by default: Searching / Return Visit / Bible Study show no image-capture
+     * controls and the server refuses new images. Existing images are never removed. */
+    val allowCaptureImage: Boolean = false,
     val updatedAt: Long = 0L,
     val updatedByPersonId: String? = null,
 ) {

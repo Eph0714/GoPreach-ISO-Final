@@ -36,6 +36,10 @@
          screen, not just while it happens to stay open. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
+    <queries>
+        <package android:name="org.jw.jwlibrary.mobile" />
+    </queries>
+
     <application
         android:name=".GoPreachApp"
         android:allowBackup="false"
@@ -116,6 +120,13 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:mimeType="application/vnd.gopreach.bibletext+zip" />
+            </intent-filter>
+            <!-- A verse shared from JW Library (Share -> GoPreach). It is only used when an Add / Edit Bible Verse form is open;
+                 see IncomingSharedVerseText. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
 

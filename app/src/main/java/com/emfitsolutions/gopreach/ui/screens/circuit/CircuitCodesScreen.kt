@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -79,7 +83,7 @@ fun CircuitCodesScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAdd = true }) { Icon(Icons.Rounded.Add, contentDescription = "New Circuit Code") }
+            androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showAdd = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("New Circuit Code") })
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -96,6 +100,7 @@ fun CircuitCodesScreen(
                 FilterChip(selected = statusFilter == RecordStatus.ACTIVE, onClick = { statusFilter = RecordStatus.ACTIVE }, label = { Text("Active") })
                 FilterChip(selected = statusFilter == RecordStatus.INACTIVE, onClick = { statusFilter = RecordStatus.INACTIVE }, label = { Text("Inactive") })
             }
+            val viewMode = rememberRecordViewMode("circuit_codes")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
@@ -105,7 +110,17 @@ fun CircuitCodesScreen(
                 if (rows.isEmpty()) {
                     item { Text("No Circuit Codes yet. Tap + to add one, e.g. NT01.", style = MaterialTheme.typography.bodyMedium) }
                 }
-                items(visible, key = { it.code.id }) { row ->
+                item { RecordViewToggle(viewMode) }
+                recordItems(
+                    viewMode, visible, { it.code.id },
+                    listOf(
+                            UniversalColumn("Circuit Code", 130.dp) { it.code.code },
+                            UniversalColumn("Description", 220.dp) { it.code.description },
+                            UniversalColumn("Circuit Overseer", 190.dp) { it.overseerName ?: "Not assigned" },
+                            UniversalColumn("Congregations", 120.dp) { it.congregationCount.toString() },
+                            UniversalColumn("Status", 90.dp) { if (it.code.status == RecordStatus.ACTIVE) "Active" else "Inactive" },
+                    ),
+                ) { row ->
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(12.dp),

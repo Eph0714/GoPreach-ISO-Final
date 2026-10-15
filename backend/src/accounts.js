@@ -4,6 +4,7 @@ import { loadActor } from './policy/index.js';
 import { hashPassword, verifyPassword } from './passwords.js';
 import { signAccessToken, ACCESS_TOKEN_SECONDS, personIdFromEmail } from './auth.js';
 import { config } from './config.js';
+import { mountPasskeys } from './passkeys.js';
 
 /**
  * GoPreach's own sign-in (replaces Firebase Auth). The app still signs in with "<personId>@<domain>" and a password.
@@ -40,6 +41,8 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       personId,
     };
   }
+
+  mountPasskeys(app, { store, auth, enabled, loginLimit, issue, passkeyConfig: limits.passkey ?? config.passkey });
 
   async function checkPassword(personId, password) {
     const account = await store.getAccount(personId);

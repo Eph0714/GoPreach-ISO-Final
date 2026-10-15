@@ -42,8 +42,8 @@ android {
         applicationId = "com.emfitsolutions.gopreach"
         minSdk = 24
         targetSdk = 36
-        versionCode = 199
-        versionName = "1.138.0"
+        versionCode = 200
+        versionName = "1.139.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -168,6 +168,10 @@ dependencies {
     implementation("androidx.fragment:fragment-ktx:1.8.4")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Passkeys (Credential Manager). The play-services artifact lets Android 13 and older use passkeys too; Android 14+ has them built in.
+    implementation("androidx.credentials:credentials:1.2.0-rc01")
+    implementation("androidx.credentials:credentials-play-services-auth:1.2.0-rc01")
 
     // Hilt
     implementation(platform("io.insert-koin:koin-bom:4.0.4"))

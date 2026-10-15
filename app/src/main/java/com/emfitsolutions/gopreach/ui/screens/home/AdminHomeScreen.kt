@@ -494,6 +494,9 @@ fun AdminHomeScreen(
 
     // Drag from the side panel to Quick Access: shared drag state, the modules the side panel currently offers, and the overlay origin.
     val dragState = remember { QuickAccessDragState() }
+    // The panel's profile header names the user's congregation (their scope).
+    val congregationRepository = org.koin.compose.koinInject<com.emfitsolutions.gopreach.data.repository.CongregationRepository>()
+    val allCongregations by remember(congregationRepository) { congregationRepository.observeAll() }.collectAsStateWithLifecycle(initialValue = emptyList())
     var sideItems by remember { mutableStateOf<List<com.emfitsolutions.gopreach.ui.components.SideItem>>(emptyList()) }
     var contentOrigin by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
     ModalNavigationDrawer(
@@ -501,6 +504,14 @@ fun AdminHomeScreen(
         drawerContent = {
             GoPreachSidePanelContent(
                 activeRoute = Destinations.ADMIN_HOME,
+                userName = session.person?.fullName.orEmpty(),
+                roleLabel = session.activeRoleLabel ?: role?.name?.replace('_', ' ').orEmpty(),
+                scopeLabel = when {
+                    isSuperAdmin -> "All congregations"
+                    role == AdminRole.CIRCUIT_OVERSEER -> "Assigned congregations"
+                    else -> allCongregations.firstOrNull { it.id == session.person?.activeCongregationId }?.name.orEmpty()
+                },
+                profileImageUrl = session.person?.profileImageUrl,
                 canManageCongregationsAndAdmins = isSuperAdmin,
                 canEnrollCoordinatorElder = canEnrollCoordinatorElder,
                 canEnrollServiceOverseer = canEnrollServiceOverseer,
@@ -528,10 +539,14 @@ fun AdminHomeScreen(
                 canViewContactRecord = canViewContactRecord,
                 // Same role set: Super-Admin, Admin, Coordinator Elder, Regular
                 // Elder, Service Overseer, Secretary.
-                canManageSessionTimeout = canViewContactRecord,
+                // Super-Admin only: the Session Timeout is one online setting that every user's phone follows.
+                canManageSessionTimeout = isSuperAdmin,
                 canEnterManualFieldService = role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles || session.isGroupRole,
                 // Meeting Attendance and the Congregation Comparative Report: the congregation-wide roles and the Super-Admin (not a group role).
                 canManageMeetingAttendance = role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles && !session.isGroupRole,
+                canViewSentReports = role in setOf(
+                    AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY,
+                ),
                 canViewInterestedPeopleScope = canViewInterestedPeopleScope,
                 onSwitchToPublisher = onSwitchToPublisher?.let { switchAction ->
                     { coroutineScope.launch { drawerState.close() }; switchAction() }
@@ -650,7 +665,7 @@ fun AdminHomeScreen(
                         com.emfitsolutions.gopreach.ui.screens.circuit.CircuitDashboardBody(
                             currentPersonId = currentPersonId,
                             modifier = Modifier,
-                            onOpenReport = { onNavigate(Destinations.CIRCUIT_FS_REPORTS) },
+                            onOpenReport = { onNavigate(Destinations.CIRCUIT_REPORTS_INBOX) },
                             onOpenPublishers = { onNavigate(Destinations.circuitPublishers()) },
                             onOpenCongregations = { onNavigate(Destinations.CIRCUIT_CONGREGATIONS) },
                             onOpenTerritory = { onNavigate(Destinations.MANAGE_TERRITORIES_BASE) },
@@ -661,6 +676,8 @@ fun AdminHomeScreen(
                             onOpenCongregation = { onNavigate(Destinations.circuitCongregation(it)) },
                             onOpenLeaders = { onNavigate(Destinations.circuitLeaders()) },
                             onOpenReceived = { onNavigate(Destinations.RECEIVED_REPORTS) },
+                            onOpenSnapshot = { onNavigate(Destinations.RECEIVED_SNAPSHOTS) },
+                            onOpenAnnouncements = { onNavigate(Destinations.CO_ANNOUNCEMENTS) },
                         )
                     }
 

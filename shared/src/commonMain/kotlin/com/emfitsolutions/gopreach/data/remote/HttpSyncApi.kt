@@ -2,6 +2,7 @@ package com.emfitsolutions.gopreach.data.remote
 
 import com.emfitsolutions.gopreach.data.json.DocJson
 import io.ktor.client.HttpClient
+import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -87,6 +88,42 @@ class HttpSyncApi(
                 header(HttpHeaders.Authorization, "Bearer ${idToken()}")
                 parameter("path", path)
             }
+        }
+    }
+
+    override suspend fun uploadAnnouncementFile(announcementId: String, name: String, bytes: ByteArray, mime: String): kotlinx.serialization.json.JsonObject {
+        val text = try {
+            call {
+                client.put("$baseUrl/v1/announcements/$announcementId/files") {
+                    header(HttpHeaders.Authorization, "Bearer ${idToken()}")
+                    parameter("name", name)
+                    contentType(ContentType.parse(mime))
+                    setBody(bytes)
+                }
+            }
+        } catch (e: SyncTransportException) {
+            // The server explains a refusal ("Files of type .exe are not allowed"); show that rather than a status code.
+            val reason = Regex("\"error\":\"([^\"]+)\"").find(e.message.orEmpty())?.groupValues?.get(1)
+            throw if (e.statusCode == 400 && reason != null) SyncTransportException(reason, 400, e) else e
+        }
+        return DocJson.parseToJsonElement(text) as? kotlinx.serialization.json.JsonObject ?: throw SyncTransportException("The server did not describe the uploaded file.")
+    }
+
+    override suspend fun downloadAnnouncementFile(announcementId: String, fileId: String): ByteArray {
+        val response = try {
+            client.get("$baseUrl/v1/announcements/$announcementId/files/$fileId") { header(HttpHeaders.Authorization, "Bearer ${idToken()}") }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw SyncTransportException("Network error: ${e.message}", cause = e)
+        }
+        if (!response.status.isSuccess()) throw SyncTransportException(if (response.status.value == 404) "This file is no longer available to you." else "Server answered ${response.status.value}", response.status.value)
+        return response.body()
+    }
+
+    override suspend fun deleteAnnouncementFile(announcementId: String, fileId: String) {
+        call {
+            client.delete("$baseUrl/v1/announcements/$announcementId/files/$fileId") { header(HttpHeaders.Authorization, "Bearer ${idToken()}") }
         }
     }
 

@@ -153,12 +153,20 @@ fun ManualFieldServiceScreen(
                 reports.firstOrNull { it.publisherPersonId == p.person.id && MonthBounds.of(it.periodMonth).startInclusive == MonthBounds.of(month).startInclusive }
             }
 
+            // The status the publisher had in the chosen month. A previous month lets the admin set it; the current month keeps today's status.
+            var statusChoice by remember { mutableStateOf<com.emfitsolutions.gopreach.data.model.PublisherCategory?>(null) }
+            val previousMonth = isPreviousMonth(month)
+            val effectiveCategory = (if (previousMonth) statusChoice else null) ?: existing?.category ?: selected?.category
+            val effectivePioneer = effectiveCategory?.let { com.emfitsolutions.gopreach.ui.screens.home.isPioneerCategory(it) } == true
+            LaunchedEffect(selectedId, month, existing?.id) { statusChoice = existing?.category ?: selected?.category }
+
             // Selecting a publisher/month that already has a record loads it, so Save becomes an update.
             LaunchedEffect(selectedId, month, existing?.id, existing?.lastEditedAt) {
                 if (existing != null) {
                     val minutes = Math.round((existing.hoursRendered ?: 0.0) * 60).toInt()
-                    hoursText = if (selected?.isPioneer == true) (minutes / 60).toString() else ""
-                    minutesText = if (selected?.isPioneer == true) (minutes % 60).toString() else ""
+                    val existingPioneer = com.emfitsolutions.gopreach.ui.screens.home.isPioneerCategory(existing.category)
+                    hoursText = if (existingPioneer) (minutes / 60).toString() else ""
+                    minutesText = if (existingPioneer) (minutes % 60).toString() else ""
                     participated = existing.participatedInPreaching
                     studiesText = existing.bibleStudiesCount.toString()
                     remarks = existing.remarks.orEmpty()
@@ -176,6 +184,7 @@ fun ManualFieldServiceScreen(
                 participated = participated,
                 bibleStudies = studiesText.toIntOrNull() ?: 0,
                 remarks = remarks,
+                category = if (previousMonth) statusChoice else null,
             )
 
             fun doSave() {
@@ -281,6 +290,20 @@ fun ManualFieldServiceScreen(
                 Text("Month", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 MonthDropdown(selected = month, months = months, format = monthFormat) { month = it }
 
+                if (previousMonth) {
+                    // This month is already over: the publisher's status then may differ from today's, and the report and the Circuit Overseer's snapshot use the one chosen here.
+                    com.emfitsolutions.gopreach.ui.screens.territoryassignments.SimpleDropdown(
+                        label = "Status in " + monthFormat.format(Date(month)),
+                        selectedLabel = (effectiveCategory ?: selected.category).displayName,
+                        options = com.emfitsolutions.gopreach.data.model.PublisherCategory.entries
+                            .filter { it != com.emfitsolutions.gopreach.data.model.PublisherCategory.REMOVED_PUBLISHER }.map { it.name to it.displayName },
+                        onSelected = { statusChoice = com.emfitsolutions.gopreach.data.model.PublisherCategory.valueOf(it) },
+                    )
+                    if (effectiveCategory != null && effectiveCategory != selected.category) {
+                        Text("Different from the current status (${selected.category.displayName}); only this month's record is affected.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+
                 val monthLocked = com.emfitsolutions.gopreach.data.model.isMonthLocked(lockStatuses, congregationId, MonthBounds.of(month).startInclusive)
                 if (monthLocked) {
                     Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
@@ -303,7 +326,7 @@ fun ManualFieldServiceScreen(
 
                 // --- Fields: pioneers enter hours, everyone else participation. Stack on phones, side by side when wide. ---
                 val wide = LocalConfiguration.current.screenWidthDp >= 600
-                if (selected.isPioneer) {
+                if (effectivePioneer) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         NumberField("Hours", hoursText, { hoursText = it }, Modifier.width(if (wide) 160.dp else 140.dp))
                         NumberField("Minutes", minutesText, { minutesText = it }, Modifier.width(if (wide) 160.dp else 140.dp))

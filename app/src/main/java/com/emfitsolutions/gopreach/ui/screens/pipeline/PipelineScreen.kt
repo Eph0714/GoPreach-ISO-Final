@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.platform.AppPermission
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.Image
@@ -266,29 +270,34 @@ private fun PipelineListScreen(
             // RETURN VISIT]/[MOVE TO BIBLE STUDY] on an existing record) —
             // this is an additional entry point, not a replacement for that
             // one.
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Rounded.Add, contentDescription = "New ${stage.label()} Record")
-            }
+            androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showCreateDialog = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("New ${stage.label()} Record") })
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
-                Text("Show Inactive")
-            }
+            androidx.compose.material3.FilterChip(selected = showInactive, onClick = { showInactive = !showInactive }, label = { Text("Include inactive") }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             if (people.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     RecordFound(0)
                     Text("No records yet.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
+                val viewMode = rememberRecordViewMode("pipeline_people")
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item { RecordFound(people.size) }
-                    items(people, key = { it.id }) { person ->
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, people, { it.id },
+                        listOf(
+                                UniversalColumn("Name", 200.dp) { it.name },
+                                UniversalColumn("Address", 280.dp) { it.address },
+                                UniversalColumn("Status", 90.dp) { if (it.status == RecordStatus.INACTIVE) "Inactive" else "Active" },
+                        ),
+                        onRowClick = { onOpenPerson(it) },
+                    ) { person ->
                         Card(modifier = Modifier.fillMaxWidth().clickable { onOpenPerson(person) }) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -627,8 +636,14 @@ internal fun PipelinePersonDialog(
                 OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Notes (optional)") }, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = contact, onValueChange = { contact = it }, label = { Text("Contact (optional)") }, singleLine = true, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
 
-                EditSectionHeader("Supporting Information")
-                SupportingImageSection(currentImage = image, onImageConfirmed = { image = it }, onClear = { image = null })
+                // Hidden entirely while the Super Admin's "Allow Capture Image" is off; an image already saved on the record stays untouched.
+                val allowCaptureImage by org.koin.compose.koinInject<com.emfitsolutions.gopreach.data.repository.AppSettingsRepository>().observe()
+                    .let { flow -> remember(flow) { flow.map { it.allowCaptureImage } } }
+                    .collectAsStateWithLifecycle(initialValue = false)
+                if (allowCaptureImage) {
+                    EditSectionHeader("Supporting Information")
+                    SupportingImageSection(currentImage = image, onImageConfirmed = { image = it }, onClear = { image = null })
+                }
 
                 // "ASSIGN PUBLISHER" — only for an authorized non-Publisher
                 // creating a new record. Optional: left on "None" the record
@@ -894,7 +909,7 @@ internal fun PipelinePersonDetailScreen(
             // "Add Visit" only applies once there's an actual visit history to
             // keep — Searching has none yet (spec's own module description).
             if (canAddVisit) {
-                FloatingActionButton(onClick = { showAddVisit = true }) { Icon(Icons.Rounded.Add, contentDescription = "Log Visit") }
+                androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showAddVisit = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("Log Visit") })
             }
         },
     ) { padding ->

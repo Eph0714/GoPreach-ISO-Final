@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Server-side port of firestore.rules for every collection except the three drawing collections (see drawings.js).
  *
  * This is a FAITHFUL port: each `allow` below mirrors one `allow` in firestore.rules, including the places where that file
@@ -21,6 +21,7 @@ const ROLES_WIDE = ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'SERVICE_OVER
 const ROLES_APP_SETTINGS = ROLES_REPORTS;
 
 const nul = (v) => v ?? null;
+const ELDER_ROLES = ['COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY', 'REGULAR_ELDER'];
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 const live = (doc) => (doc && !doc.deleted ? doc.data : null);
 
@@ -134,7 +135,7 @@ const chatAllowsRead = (h, chat) => h.sa || chatParticipant(h, chat) || h.canMan
  * forwardRequests/publisherForwardRequests/houseHolderAssignments (cross-congregation by design), and global lookups.
  */
 const CONGREGATION_SCOPED_READS = new Set([
-  'interestedPeople', 'monthlyReports', 'roleAssignments', 'coFieldServiceReportEvents', 'coReceivedReports', 'meetingAttendance', 'meetingAttendanceEvents', 'congregationComparativeReports', 'comparativeReportHistory', 'comparativeReportRemarks', 'groups', 'mapPins', 'territoryAssignments',
+  'interestedPeople', 'monthlyReports', 'roleAssignments', 'coFieldServiceReportEvents', 'coReceivedReports', 'coAttendanceReportEvents', 'coAttendanceReports', 'publisherCategoryHistory', 'meetingAttendance', 'meetingAttendanceEvents', 'congregationComparativeReports', 'comparativeReportHistory', 'comparativeReportRemarks', 'groups', 'mapPins', 'territoryAssignments',
   'publisherTerritoryAssignments', 'territoryAssignmentBarangays',
 ]);
 
@@ -191,7 +192,7 @@ async function baseRead(h, actor, grant, collection, id, data, get) { // match /
     case 'coReceivedReports':
       return h.isCircuitOverseerFor(nul(data.congregationId)) || h.canSubmitFieldServiceFor(nul(data.congregationId));
     // Which received reports a Circuit Overseer has opened: only that overseer sees their own marks.
-    case 'coReportReads':
+    case 'coReportReads': case 'coAttendanceReads':
       return nul(data.coPersonId) === h.me;
     // Meeting attendance: its own congregation (any member), or the Circuit Overseer of that congregation.
     case 'meetingAttendance':
@@ -205,7 +206,17 @@ async function baseRead(h, actor, grant, collection, id, data, get) { // match /
         (h.isCircuitOverseerFor(nul(data.congregationId)) && ['SUBMITTED', 'RETURNED', 'RECEIVED'].includes(data.status));
     case 'comparativeReportHistory': case 'comparativeReportRemarks':
       return h.isCircuitOverseerFor(nul(data.congregationId)) || h.canManageReportsAsCongregationRole(nul(data.congregationId));
-    case 'coFieldServiceMonthStatus': return true;
+    case 'coFieldServiceMonthStatus': case 'coAttendanceMonthStatus': return true;
+    // The Meeting Attendance workflow mirrors the Field Service Report one: the frozen copy of a sent month and its audit trail are read by
+    // the Circuit Overseer of that congregation and by the congregation's own senders.
+    case 'coAttendanceReports': case 'coAttendanceReportEvents':
+      return h.isCircuitOverseerFor(nul(data.congregationId)) || h.canSubmitFieldServiceFor(nul(data.congregationId));
+    case 'announcements': return announcementVisible(h, data);
+    case 'announcementReads': {
+      if (nul(data.personId) === h.me) return true;
+      const a = live(await get('announcements', data.announcementId));
+      return !!a && a.recipientScope != null && (nul(a.createdByPersonId) === h.me || h.isCircuitOverseerFor(nul(a.congregationId)));
+    }
     case 'groupChats': return chatAllowsRead(h, data);
     case 'presence': return h.inMyActiveCongregation(nul(data.congregationId));
     case 'dashboardModuleLayouts': return id === h.me;
@@ -292,7 +303,7 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
 
     case 'monthlyReports': return writeMonthlyReports(h, { op, next, old, verdict });
 
-    case 'coFieldServiceMonthStatus': return writeMonthStatus(h, { id, next, old, isCreate, isUpdate, verdict });
+    case 'coFieldServiceMonthStatus': case 'coAttendanceMonthStatus': return writeMonthStatus(h, { id, next, old, isCreate, isUpdate, verdict });
 
     case 'meetingAttendance': return writeAttendance(h, { id, next, old, isCreate, isUpdate, isDelete, verdict });
 
@@ -323,14 +334,24 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
     }
 
     case 'coReceivedReports': return await writeReceivedReport(h, { id, next, isCreate, verdict });
+    case 'coAttendanceReports': return await writeAttendanceSnapshot(h, { id, next, isCreate, verdict });
+    case 'publisherCategoryHistory': return writeCategoryHistory(h, { next, isCreate, verdict });
 
-    case 'coReportReads':
+    case 'announcements': return await writeAnnouncement(h, { next, old, isCreate, isDelete, verdict });
+    case 'announcementReads': {
+      if (isDelete) return deny('Read marks are not deleted');
+      if (nul(next.personId) !== h.me || id !== `${h.me}_${next.announcementId}`) return deny('You mark only your own reads');
+      const a = live(await get('announcements', next.announcementId));
+      return verdict(!!a && a.recipientScope != null && announcementVisible(h, a), 'You can only mark an announcement addressed to you');
+    }
+
+    case 'coReportReads': case 'coAttendanceReads':
       return verdict(
         !isDelete && nul(next.coPersonId) === h.me && id === `${h.me}_${next.receivedReportId}` && h.isCircuitOverseerFor(nul(next.congregationId)),
         'A Circuit Overseer marks only their own reads, for a congregation they hold',
       );
 
-    case 'coFieldServiceReportEvents':
+    case 'coFieldServiceReportEvents': case 'coAttendanceReportEvents':
       return verdict(isCreate && nul(next.userId) === h.me && (h.canSubmitFieldServiceFor(nul(next.congregationId)) || h.isCircuitOverseerFor(nul(next.congregationId))), 'History is append-only');
 
     case 'preachingTimeRecords':
@@ -350,6 +371,10 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       return verdict(h.canManageGroupChatsFor(old?.congregationId));
 
     case 'interestedPeople':
+      // "Allow Capture Image" off: no new or changed supporting image (existing ones stay as they are).
+      if (!isDelete && !same(next.supportingImages ?? [], old?.supportingImages ?? []) && !(await captureImageAllowed(get))) {
+        return deny('Image capture is turned off by the Super Admin');
+      }
       if (isCreate) return verdict(await h.inMyActiveCongregationByNameOrId(nul(next.congregationId)), 'Other congregation');
       if (isUpdate) {
         return verdict((await h.inMyActiveCongregationByNameOrId(nul(old.congregationId))) || h.canManagePublisherReportsFor(nul(next.congregationId)), 'Other congregation');
@@ -367,6 +392,12 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       return verdict(h.canManageCreditHourCategories(), 'Only admins manage categories');
 
     case 'appSettings':
+      // Only the Super Admin (who returns early above) may change "Allow Capture Image"; everyone else leaves it as it is.
+      if (!isDelete && (next.allowCaptureImage ?? false) !== (old?.allowCaptureImage ?? false)) return deny('Only the Super Admin changes Allow Capture Image');
+      // The Session Timeout is one setting for every phone: only the Super Admin changes it (a missing value is the default: on, 5 minutes).
+      if (!isDelete && ((next.sessionTimeoutEnabled ?? true) !== (old?.sessionTimeoutEnabled ?? true) || (next.sessionTimeoutMinutes ?? 5) !== (old?.sessionTimeoutMinutes ?? 5))) {
+        return deny('Only the Super Admin changes the Session Timeout');
+      }
       return verdict(actor.known && ROLES_APP_SETTINGS.includes(actor.adminRole), 'Only Super Admin, Admins and Elders change settings');
 
     default:
@@ -382,6 +413,67 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       // SIGNED_IN_ONLY collections and the catch-all: any known signed-in user.
       return ok();
   }
+}
+
+/**
+ * Announcements written by a Circuit Overseer carry `recipientScope` (CONGREGATION or SELECTED_ELDERS); the original admin announcements do not and keep
+ * their old behaviour. A targeted-style announcement is visible to its sender, to the Circuit Overseer of its congregation and to the Super-Admin always,
+ * and to everyone else only once PUBLISHED: the whole congregation, or just the elders named in recipientIds. Drafts and archived ones are never shown to recipients.
+ */
+function announcementVisible(h, data) {
+  if (data?.recipientScope == null) return true;
+  if (nul(data.createdByPersonId) === h.me) return true;
+  if (h.isCircuitOverseerFor(nul(data.congregationId))) return true;
+  if (data.status !== 'PUBLISHED') return false;
+  if (data.recipientScope === 'SELECTED_ELDERS') return Array.isArray(data.recipientIds) && data.recipientIds.includes(h.me);
+  return h.actor.known && !h.grant.has && h.actor.congregationId != null && h.actor.congregationId === nul(data.congregationId);
+}
+
+const ANNOUNCEMENT_STATUSES = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
+
+async function writeAnnouncement(h, { next, old, isCreate, isDelete, verdict }) {
+  const styled = (d) => d != null && d.recipientScope != null;
+  if (isDelete) {
+    if (!styled(old)) return ok();
+    return verdict(nul(old.createdByPersonId) === h.me || h.isCircuitOverseerFor(nul(old.congregationId)), 'Only the sender or the Circuit Overseer of this congregation can delete it');
+  }
+  if (!styled(next)) return styled(old) ? deny('A targeted announcement cannot be turned into a general one') : ok();
+  const cong = nul(next.congregationId);
+  if (cong == null || !h.isCircuitOverseerFor(cong)) return deny('Only the Circuit Overseer of this congregation can publish announcements to it');
+  if (isCreate) {
+    if (nul(next.createdByPersonId) !== h.me) return deny('An announcement is created as yourself');
+  } else {
+    if (!styled(old)) return deny('An existing general announcement cannot be converted');
+    for (const k of ['congregationId', 'createdByPersonId', 'createdAt']) if (!same(next[k], old[k])) return deny(k + ' cannot be changed');
+    if (old.status === 'PUBLISHED' && next.status === 'DRAFT') return deny('A published announcement is archived, not turned back into a draft');
+  }
+  const title = String(next.title ?? '').trim();
+  const details = String(next.details ?? '').trim();
+  if (!title || title.length > 200) return deny('A title of up to 200 characters is required');
+  // A draft may still be incomplete (no details yet, no elder chosen yet); anything published must be complete.
+  const draft = next.status === 'DRAFT';
+  if (details.length > 20000 || (!draft && !details)) return deny('Details of up to 20,000 characters are required');
+  if (!ANNOUNCEMENT_STATUSES.includes(next.status)) return deny('Unknown status');
+  const ids = next.recipientIds ?? [];
+  if (!Array.isArray(ids) || ids.some((x) => typeof x !== 'string')) return deny('Bad recipient list');
+  if (next.recipientScope === 'CONGREGATION') {
+    if (ids.length > 0) return deny('An announcement to the whole congregation has no named recipients');
+  } else if (next.recipientScope === 'SELECTED_ELDERS') {
+    if ((ids.length === 0 && next.status !== 'DRAFT') || ids.length > 200 || new Set(ids).size !== ids.length) return deny('Choose at least one elder');
+    for (const personId of ids) {
+      const p = live(await h.get('people', personId));
+      // Every recipient must be an elder of THIS congregation (checked here, not only in the app).
+      if (!p || nul(p.activeCongregationId) !== cong || !ELDER_ROLES.includes(nul(p.activeAdminRole))) return deny('Every recipient must be an elder of the selected congregation');
+    }
+  } else return deny('Unknown recipient scope');
+  const files = next.attachments ?? [];
+  if (!Array.isArray(files) || files.length > 20 || files.some((f) => !f || typeof f.id !== 'string' || f.id.length > 100 || typeof f.name !== 'string' || f.name.length > 200)) return deny('Bad attachment list');
+  return ok();
+}
+
+/** The Super Admin's "Allow Capture Image" switch (appSettings/global); off when it was never set. */
+async function captureImageAllowed(get) {
+  return live(await get('appSettings', 'global'))?.allowCaptureImage === true;
 }
 
 function writeGroups(h, { next, old, isCreate, isUpdate, isDelete, verdict }) {
@@ -427,7 +519,7 @@ async function writeRoleAssignments(h, { next, old, isCreate, isUpdate, isDelete
   return verdict(!g.has && groupFieldsOnly && slot, 'Not allowed to edit this role assignment');
 }
 
-const MONTH_LOCKED = 'This Field Service Month has been submitted to the Circuit Overseer and is locked';
+const MONTH_LOCKED = 'This Field Service Month has been received by the Circuit Overseer and is locked';
 const MS_8H = 8 * 3600 * 1000;
 
 /** First instant of the (UTC+8) service month containing [ms] — how periodMonth is stored. */
@@ -439,15 +531,20 @@ function monthStartOf(ms) {
 const statusDoc = async (get, congregationId, periodMonth) =>
   congregationId == null || periodMonth == null ? null : live(await get('coFieldServiceMonthStatus', `${congregationId}_${Math.trunc(Number(periodMonth))}`));
 
-/** Submitted or Received: the month's records are frozen for everyone but the Super Admin. */
+/**
+ * Received: the month's records are frozen for everyone but the Super Admin (while a snapshot is only Sent / awaiting receipt the live
+ * records stay editable). A Cancelled month that was Received keeps its lock - cancelling never silently unlocks it; only the Circuit
+ * Overseer returning it for editing does.
+ */
 async function fsMonthLocked(get, congregationId, periodMonth) {
-  return ['SUBMITTED', 'RECEIVED'].includes((await statusDoc(get, congregationId, periodMonth))?.status);
+  const s = await statusDoc(get, congregationId, periodMonth);
+  return s?.status === 'RECEIVED' || (s?.status === 'CANCELLED' && s?.cancelledFromStatus === 'RECEIVED');
 }
 const fsDayLocked = (get, congregationId, dayMillis) => (dayMillis == null ? false : fsMonthLocked(get, congregationId, monthStartOf(dayMillis)));
 
 /** The Circuit Overseer sees a month only once it was submitted. */
 async function coMonthVisible(get, congregationId, periodMonth) {
-  return ['SUBMITTED', 'RECEIVED', 'RETURNED'].includes((await statusDoc(get, congregationId, periodMonth))?.status);
+  return ['SUBMITTED', 'RECEIVED', 'RETURNED', 'CANCELLED'].includes((await statusDoc(get, congregationId, periodMonth))?.status);
 }
 
 const inCongOf = (actor, cong) => actor.congregationId != null && actor.congregationId === cong;
@@ -471,9 +568,13 @@ function attendanceValid(d) {
   return d.roundingMode === 'ROUNDED' ? Math.abs(Number(d.officialAttendance) - Math.floor(mean + 0.5)) < 0.0001 : Math.abs(Number(d.officialAttendance) - mean) <= 0.0051;
 }
 
+/**
+ * Received: the month's attendance is frozen for everyone but the Super Admin (while a snapshot is only Sent / awaiting receipt the live records
+ * stay editable). A Cancelled month that was Received keeps its lock; only the Circuit Overseer returning it for editing unlocks it.
+ */
 async function monthFrozen(get, congregationId, serviceMonth) {
-  const s = live(await get('congregationMonthlyStatistics', `${congregationId}_${Math.trunc(Number(serviceMonth))}`));
-  return s?.snapshotStatus === 'RECEIVED';
+  const s = live(await get('coAttendanceMonthStatus', `${congregationId}_${Math.trunc(Number(serviceMonth))}`));
+  return s?.status === 'RECEIVED' || (s?.status === 'CANCELLED' && s?.cancelledFromStatus === 'RECEIVED');
 }
 
 async function writeAttendance(h, { id, next, old, isCreate, isUpdate, isDelete, verdict }) {
@@ -485,7 +586,7 @@ async function writeAttendance(h, { id, next, old, isCreate, isUpdate, isDelete,
   if (nul(next.updatedBy) !== h.me) return deny('Records are written as yourself');
   if (!attendanceValid(next)) return deny('The attendance counts or their calculation are not valid');
   if (isUpdate && (old.congregationId !== next.congregationId || old.meetingType !== next.meetingType || Number(old.meetingDate) !== Number(next.meetingDate))) return deny('Congregation, meeting type and date cannot change');
-  if (await monthFrozen(h.get, next.congregationId, next.serviceMonth)) return deny('This month\'s statistics were received by the Circuit Overseer and are frozen');
+  if (await monthFrozen(h.get, next.congregationId, next.serviceMonth)) return deny('This month\'s attendance was received by the Circuit Overseer and is locked');
   return ok();
 }
 
@@ -528,6 +629,24 @@ function writeComparativeReport(h, { id, next, old, isCreate, isUpdate, isDelete
 
 const MAX_RECEIVED_ROWS = 800;
 
+const PUBLISHER_CATEGORIES = [
+  'REGULAR_PIONEER', 'SPECIAL_PIONEER', 'AUXILIARY_PIONEER', 'REGULAR_PUBLISHER', 'UNBAPTIZED_PUBLISHER',
+  'IRREGULAR_PUBLISHER', 'INACTIVE_PUBLISHER', 'REPROOF_PUBLISHER', 'REMOVED_PUBLISHER',
+];
+
+/**
+ * A publisher's service-category history is append-only: entries are added by whoever manages that congregation's publishers,
+ * recorded as themselves, and never edited or deleted. An Admin-confirmed entry covers exactly one month.
+ */
+function writeCategoryHistory(h, { next, isCreate, verdict }) {
+  if (!isCreate) return deny('Category history is never edited or deleted');
+  if (typeof next.publisherPersonId !== 'string' || next.publisherPersonId === '') return deny('The publisher is missing');
+  if (!PUBLISHER_CATEGORIES.includes(next.category)) return deny('Unknown service category');
+  if (!Number.isFinite(Number(next.effectiveFrom))) return deny('The effective month is missing');
+  if (next.effectiveThrough != null && Number(next.effectiveThrough) !== Number(next.effectiveFrom)) return deny('A confirmation covers exactly one month');
+  return verdict(h.canManagePublisherReportsFor(nul(next.congregationId)) && nul(next.recordedByPersonId) === h.me, 'Only whoever manages the congregation records its category history, as themselves');
+}
+
 /** The frozen copy of a month's report, written once with the send: one document per congregation + month + send number. */
 async function writeReceivedReport(h, { id, next, isCreate, verdict }) {
   if (!isCreate) return deny('A received report is never edited or deleted');
@@ -539,6 +658,19 @@ async function writeReceivedReport(h, { id, next, isCreate, verdict }) {
   const status = live(await h.get('coFieldServiceMonthStatus', `${cong}_${month}`));
   if (!status || status.status !== 'SUBMITTED' || Number(status.version) !== version) return deny('A received report follows the send that created it');
   return verdict(h.canSubmitFieldServiceFor(cong) && nul(next.submittedByPersonId) === h.me, 'Only the congregation sending the report saves its copy');
+}
+
+/** The frozen copy of a sent Meeting Attendance month, written once with the send (the twin of writeReceivedReport). */
+async function writeAttendanceSnapshot(h, { id, next, isCreate, verdict }) {
+  if (!isCreate) return deny('A received attendance snapshot is never edited or deleted');
+  const cong = nul(next.congregationId);
+  const month = Math.trunc(Number(next.periodMonth));
+  const version = Math.trunc(Number(next.version));
+  if (id !== `${cong}_${month}_${version}`) return deny('The id must be congregation + month + send number');
+  if (!Array.isArray(next.rows) || next.rows.length > 400) return deny('The attendance rows are missing or too many');
+  const status = live(await h.get('coAttendanceMonthStatus', `${cong}_${month}`));
+  if (!status || status.status !== 'SUBMITTED' || Number(status.version) !== version) return deny('A received attendance snapshot follows the send that created it');
+  return verdict(h.canSubmitFieldServiceFor(cong) && nul(next.submittedByPersonId) === h.me, 'Only the congregation sending the attendance saves its copy');
 }
 
 async function writeStatistics(h, { id, next, old, isCreate, isUpdate, verdict }) {
@@ -556,6 +688,7 @@ async function writeStatistics(h, { id, next, old, isCreate, isUpdate, verdict }
 
 const SEND_KEYS = ['status', 'version', 'submittedAt', 'submittedByPersonId', 'submittedByName', 'updatedAt'];
 const UNDO_KEYS = ['status', 'coRemarks', 'coRemarksAt', 'coRemarksByName', 'undoneAt', 'undoneByPersonId', 'undoneByName', 'updatedAt'];
+const CANCEL_KEYS = ['status', 'cancelledAt', 'cancelledByPersonId', 'cancelledByName', 'cancelReason', 'cancelledFromStatus', 'updatedAt'];
 const CO_KEYS = ['status', 'receivedAt', 'receivedByPersonId', 'receivedByName', 'returnedAt', 'returnedByPersonId', 'returnedByName',
   'returnReason', 'coRemarks', 'coRemarksAt', 'coRemarksByName', 'updatedAt'];
 
@@ -574,14 +707,21 @@ function writeMonthStatus(h, { id, next, old, isCreate, isUpdate, verdict }) {
   const changed = affectedKeys(next, old);
   const cong = nul(old.congregationId);
   if (h.canSubmitFieldServiceFor(cong)) {
-    if (['NOT_SUBMITTED', 'RETURNED'].includes(old.status) && next.status === 'SUBMITTED' && notFuture(old.periodMonth) && changed.every((k) => SEND_KEYS.includes(k))) return ok();
+    if (['NOT_SUBMITTED', 'RETURNED', 'CANCELLED', 'SUBMITTED'].includes(old.status) && next.status === 'SUBMITTED' && notFuture(old.periodMonth) &&
+      Number(next.version) === Number(old.version) + 1 && changed.every((k) => SEND_KEYS.includes(k))) return ok();
     if (old.status === 'SUBMITTED' && next.status === 'NOT_SUBMITTED' && nul(next.coRemarks) == null && changed.every((k) => UNDO_KEYS.includes(k))) return ok();
   }
   if (h.isCircuitOverseerFor(cong)) {
-    const moves = (old.status === 'SUBMITTED' && ['RECEIVED', 'RETURNED'].includes(next.status)) ||
-      (old.status === 'RECEIVED' && next.status === 'RETURNED') ||
-      (['SUBMITTED', 'RECEIVED', 'RETURNED'].includes(old.status) && next.status === old.status);
+    const reason = (v) => typeof v === 'string' && v.trim() !== '';
+    const moves = (old.status === 'SUBMITTED' && next.status === 'RECEIVED') ||
+      ((old.status === 'SUBMITTED' || old.status === 'RECEIVED') && next.status === 'RETURNED' && reason(next.returnReason)) ||
+      (['SUBMITTED', 'RECEIVED', 'RETURNED', 'CANCELLED'].includes(old.status) && next.status === old.status);
     if (moves && changed.every((k) => CO_KEYS.includes(k))) return ok();
+    // Cancel a submission: needs a reason and remembers what it was cancelled from (a Received month stays locked); the version never changes.
+    if (['SUBMITTED', 'RECEIVED'].includes(old.status) && next.status === 'CANCELLED' && reason(next.cancelReason) &&
+      next.cancelledFromStatus === old.status && Number(next.version) === Number(old.version) && changed.every((k) => CANCEL_KEYS.includes(k))) return ok();
+    // A cancelled month the overseer wants corrected is returned for editing (which unlocks it).
+    if (old.status === 'CANCELLED' && next.status === 'RETURNED' && reason(next.returnReason) && changed.every((k) => CO_KEYS.includes(k))) return ok();
     if (old.status === 'SUBMITTED' && next.status === 'NOT_SUBMITTED' && nul(next.coRemarks) == null && changed.every((k) => UNDO_KEYS.includes(k))) return ok();
   }
   return deny('That change to the report status is not allowed');

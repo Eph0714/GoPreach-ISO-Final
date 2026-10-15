@@ -1,5 +1,13 @@
 package com.emfitsolutions.gopreach.ui.screens.bibletext
 
+import androidx.compose.material3.OutlinedButton
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.CloudDownload
 import com.emfitsolutions.gopreach.platform.rememberPlatformActions
 import android.net.Uri
 import com.emfitsolutions.gopreach.ui.components.RecordFound
@@ -67,6 +75,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,6 +105,10 @@ import com.emfitsolutions.gopreach.data.export.BibleTextExporter
 import com.emfitsolutions.gopreach.data.export.IncomingBibleTextImportHolder
 import com.emfitsolutions.gopreach.data.model.BibleTextCategory
 import com.emfitsolutions.gopreach.data.model.BibleTextRecord
+import com.emfitsolutions.gopreach.data.model.BIBLE_TEXT_KIND_NOTE
+import com.emfitsolutions.gopreach.data.model.isNote
+import com.emfitsolutions.gopreach.data.model.sortKey
+import androidx.compose.material.icons.rounded.StickyNote2
 import com.emfitsolutions.gopreach.data.model.BibleTextSubtopic
 import com.emfitsolutions.gopreach.data.model.LEGACY_EVENT_PLACEHOLDER
 import com.emfitsolutions.gopreach.data.model.Person
@@ -110,7 +128,7 @@ import androidx.compose.ui.window.DialogProperties
 /** Spec §11 — the Publisher may either search across every field at once, or
  * pin the search to one specific one. */
 private enum class BibleSearchBy(val label: String) {
-    ALL("All"), EVENT("Event"), THEME_TOPIC("Theme/Topic"), SPEAKER("Speaker"), REMARKS("Remarks")
+    ALL("All"), EVENT("Event"), THEME_TOPIC("Theme/Topic"), SPEAKER("Speaker"), SUB_TOPIC("Sub Topic"), REMARKS("Notes / Bible Text")
 }
 
 /** One Event plus its own Bible Text children, resolved once per composition
@@ -125,9 +143,14 @@ private data class EventWithTexts(
  * book id if the book somehow isn't in the reference data (a language/book
  * pairing removed after the record was saved). */
 private fun BibleTextRecord.referenceLabel(): String {
+    if (isNote()) return "Note"
     val book = NwtBibleReferenceData.book(bibleVersionId, languageId, bibleBookId)
     return "${book?.name ?: bibleBookId} $chapter:$verses"
 }
+
+/** A Bible Text matches by its reference (book chapter:verses), its remarks, or - for a Note - the note text. */
+private fun BibleTextRecord.matches(query: String): Boolean =
+    remarks.contains(query, ignoreCase = true) || verseText.contains(query, ignoreCase = true) || referenceLabel().contains(query, ignoreCase = true)
 
 private val BibleTextCategory.eventLabel: String get() = event.ifBlank { LEGACY_EVENT_PLACEHOLDER }
 
@@ -259,12 +282,14 @@ private fun EventListScreen(
                 BibleSearchBy.EVENT -> item.event.eventLabel.contains(query, ignoreCase = true)
                 BibleSearchBy.THEME_TOPIC -> item.event.name.contains(query, ignoreCase = true)
                 BibleSearchBy.SPEAKER -> item.event.speaker?.contains(query, ignoreCase = true) == true
-                BibleSearchBy.REMARKS -> item.texts.any { it.remarks.contains(query, ignoreCase = true) }
+                BibleSearchBy.SUB_TOPIC -> item.event.subtopics.any { it.name.contains(query, ignoreCase = true) }
+                BibleSearchBy.REMARKS -> item.texts.any { it.matches(query) }
                 BibleSearchBy.ALL ->
                     item.event.eventLabel.contains(query, ignoreCase = true) ||
                         item.event.name.contains(query, ignoreCase = true) ||
                         item.event.speaker?.contains(query, ignoreCase = true) == true ||
-                        item.texts.any { it.remarks.contains(query, ignoreCase = true) || it.referenceLabel().contains(query, ignoreCase = true) }
+                        item.event.subtopics.any { it.name.contains(query, ignoreCase = true) } ||
+                        item.texts.any { it.matches(query) }
             }
         }.sortedByDescending { it.event.updatedAt }
     }
@@ -360,6 +385,7 @@ private fun EventListScreen(
                 }
             }
 
+            val viewMode = rememberRecordViewMode("bible_text_events")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
@@ -375,7 +401,17 @@ private fun EventListScreen(
                         )
                     }
                 } else {
-                    items(filtered, key = { it.event.id }) { item ->
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, filtered, { it.event.id },
+                        listOf(
+                                UniversalColumn("Event", 220.dp) { it.event.name.ifBlank { it.event.eventLabel } },
+                                UniversalColumn("Date / Label", 190.dp) { it.event.eventLabel },
+                                UniversalColumn("Speaker", 170.dp) { it.event.speaker.orEmpty() },
+                                UniversalColumn("Bible Texts", 110.dp) { it.texts.size.toString() },
+                        ),
+                        onRowClick = { onOpenEvent(it.event.id) },
+                    ) { item ->
                         EventCard(item = item, onClick = { onOpenEvent(item.event.id) }, onDelete = { pendingDeleteEvent = item })
                     }
                 item(key = "end-summary") { com.emfitsolutions.gopreach.ui.components.EndSummary(listOf("Total Records" to filtered.size.toString()), Modifier.padding(top = 8.dp)) }
@@ -439,8 +475,8 @@ private fun bibleTextReportTable(items: List<EventWithTexts>): ReportTable {
                 item.event.name,
                 item.event.speaker ?: "—",
                 text.referenceLabel(),
+                text.verseText,
                 text.remarks,
-                formatRecordTimestamp(text.createdAt),
             )
         }
     }
@@ -448,7 +484,7 @@ private fun bibleTextReportTable(items: List<EventWithTexts>): ReportTable {
         title = "My Bible Text Record",
         count = rows.size,
         countLabel = "Total Bible Texts",
-        columns = listOf("Event", "Theme/Topic", "Speaker", "Reference", "Remarks", "Date Added"),
+        columns = listOf("Event", "Theme/Topic", "Speaker", "Reference", "Verse Text", "Remarks"),
         rows = rows,
     )
 }
@@ -557,6 +593,8 @@ private fun EventDetailScreen(
     // flipped on, by whichever "+" the Publisher tapped (the Event-level one
     // at the top of the Bible Texts section, or one specific subtopic's own).
     var addTextSubtopicId by remember { mutableStateOf<String?>(null) }
+    var showAddNote by remember { mutableStateOf(false) }
+    var addNoteSubtopicId by remember { mutableStateOf<String?>(null) }
     var showAddVideo by remember { mutableStateOf(false) }
     var pendingEditText by remember { mutableStateOf<BibleTextRecord?>(null) }
     var pendingDeleteText by remember { mutableStateOf<BibleTextRecord?>(null) }
@@ -662,7 +700,7 @@ private fun EventDetailScreen(
             // make it smaller").
             item {
                 val textsBySubtopic = remember(eventWithTexts.texts) { eventWithTexts.texts.groupBy { it.subtopicId } }
-                val uncategorized = textsBySubtopic[null].orEmpty().sortedByDescending { it.createdAt }
+                val uncategorized = textsBySubtopic[null].orEmpty().sortedByDescending { it.sortKey() }
                 val topLevelSubtopics = remember(event.subtopics) { event.subtopics.filter { it.parentId == null }.sortedWith(compareBy({ it.order }, { it.createdAt })) }
                 OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -680,9 +718,12 @@ private fun EventDetailScreen(
                                 TextButton(onClick = { selectedTextIds = emptySet() }) { Text("Cancel") }
                             }
                         } else {
-                            SectionHeader(icon = Icons.AutoMirrored.Rounded.MenuBook, title = "Bible Texts", count = eventWithTexts.texts.size) {
+                            SectionHeader(icon = Icons.AutoMirrored.Rounded.MenuBook, title = "Bible Texts & Notes", count = eventWithTexts.texts.size) {
                                 IconButton(onClick = { addSubtopicParentId = null; showAddSubtopic = true }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Rounded.CreateNewFolder, contentDescription = "Add Sub Topic", modifier = Modifier.size(20.dp))
+                                }
+                                IconButton(onClick = { addNoteSubtopicId = null; showAddNote = true }, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Rounded.StickyNote2, contentDescription = "Add Note", modifier = Modifier.size(20.dp))
                                 }
                                 IconButton(onClick = { addTextSubtopicId = null; showAddText = true }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Rounded.Add, contentDescription = "Add Bible Text", modifier = Modifier.size(20.dp))
@@ -690,21 +731,24 @@ private fun EventDetailScreen(
                             }
                         }
                         if (eventWithTexts.texts.isEmpty() && event.subtopics.isEmpty()) {
-                            Text("No Bible texts yet. Tap + to add one.", style = MaterialTheme.typography.bodySmall)
+                            Text("No Bible texts or notes yet. Tap + to add one.", style = MaterialTheme.typography.bodySmall)
                         }
                         if (uncategorized.isNotEmpty()) {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                uncategorized.forEach { text ->
-                                    BibleTextCard(
-                                        text = text,
-                                        selectionMode = selectionMode,
-                                        selected = text.id in selectedTextIds,
-                                        onEdit = { pendingEditText = text },
-                                        onDelete = { pendingDeleteText = text },
-                                        onToggleSelect = { toggleTextSelection(text.id) },
-                                        onEnterSelection = { selectedTextIds = setOf(text.id) },
-                                    )
-                                }
+                            ReorderableTexts(
+                                texts = uncategorized,
+                                selectionMode = selectionMode,
+                                onReorder = viewModel::reorderRecords,
+                                onEnterSelection = { selectedTextIds = setOf(it) },
+                            ) { text, dragModifier ->
+                                BibleTextCard(
+                                    text = text,
+                                    selectionMode = selectionMode,
+                                    selected = text.id in selectedTextIds,
+                                    onEdit = { pendingEditText = text },
+                                    onDelete = { pendingDeleteText = text },
+                                    onToggleSelect = { toggleTextSelection(text.id) },
+                                    dragModifier = dragModifier,
+                                )
                             }
                         }
                         topLevelSubtopics.forEach { subtopic ->
@@ -716,9 +760,11 @@ private fun EventDetailScreen(
                                 selectionMode = selectionMode,
                                 selectedTextIds = selectedTextIds,
                                 onAddText = { addTextSubtopicId = it; showAddText = true },
+                                onAddNote = { addNoteSubtopicId = it; showAddNote = true },
                                 onAddChildSubtopic = { addSubtopicParentId = it; showAddSubtopic = true },
                                 onRename = { pendingEditSubtopic = it },
                                 onDelete = { pendingDeleteSubtopic = it },
+                                onReorder = viewModel::reorderRecords,
                                 onEditText = { pendingEditText = it },
                                 onDeleteText = { pendingDeleteText = it },
                                 onToggleSelect = ::toggleTextSelection,
@@ -777,9 +823,24 @@ private fun EventDetailScreen(
             onDismiss = { showAddText = false },
         )
     }
+    if (showAddNote) {
+        NoteDialog(
+            existing = null,
+            onSave = { note ->
+                val now = System.currentTimeMillis()
+                viewModel.saveRecord(BibleTextRecord(publisherPersonId = publisherPersonId, categoryId = event.id, subtopicId = addNoteSubtopicId, kind = BIBLE_TEXT_KIND_NOTE, remarks = note, createdAt = now, updatedAt = now))
+                showToast("Note added successfully."); showAddNote = false
+            },
+            onDismiss = { showAddNote = false },
+        )
+    }
     val toEditText = pendingEditText
     if (toEditText != null) {
-        BibleTextRecordDialog(
+        if (toEditText.isNote()) NoteDialog(
+            existing = toEditText,
+            onSave = { viewModel.saveRecord(toEditText.copy(remarks = it, updatedAt = System.currentTimeMillis())); showToast("Note updated successfully."); pendingEditText = null },
+            onDismiss = { pendingEditText = null },
+        ) else BibleTextRecordDialog(
             existing = toEditText,
             eventId = event.id,
             publisherPersonId = publisherPersonId,
@@ -1036,9 +1097,11 @@ private fun SubtopicGroup(
     selectionMode: Boolean,
     selectedTextIds: Set<String>,
     onAddText: (subtopicId: String) -> Unit,
+    onAddNote: (subtopicId: String) -> Unit,
     onAddChildSubtopic: (parentId: String) -> Unit,
     onRename: (BibleTextSubtopic) -> Unit,
     onDelete: (BibleTextSubtopic) -> Unit,
+    onReorder: (List<BibleTextRecord>) -> Unit,
     onEditText: (BibleTextRecord) -> Unit,
     onDeleteText: (BibleTextRecord) -> Unit,
     onToggleSelect: (String) -> Unit,
@@ -1047,7 +1110,7 @@ private fun SubtopicGroup(
     onMoveDown: (BibleTextSubtopic) -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val texts = textsBySubtopic[subtopic.id].orEmpty().sortedByDescending { it.createdAt }
+    val texts = textsBySubtopic[subtopic.id].orEmpty().sortedByDescending { it.sortKey() }
     val children = remember(allSubtopics, subtopic.id) { allSubtopics.filter { it.parentId == subtopic.id }.sortedWith(compareBy({ it.order }, { it.createdAt })) }
     val siblings = remember(allSubtopics, subtopic.parentId) { allSubtopics.filter { it.parentId == subtopic.parentId }.sortedWith(compareBy({ it.order }, { it.createdAt })) }
     val siblingIndex = siblings.indexOfFirst { it.id == subtopic.id }
@@ -1071,6 +1134,9 @@ private fun SubtopicGroup(
             // (plus Add Bible Text) are now their own icon buttons in the
             // header row instead of sitting inside a "⋮" menu; only the
             // less-common Move Up/Down stay in an overflow menu.
+            IconButton(onClick = { onAddNote(subtopic.id) }, modifier = Modifier.size(30.dp)) {
+                Icon(Icons.Rounded.StickyNote2, contentDescription = "Add Note to ${subtopic.name}", modifier = Modifier.size(18.dp))
+            }
             IconButton(onClick = { onAddText(subtopic.id) }, modifier = Modifier.size(30.dp)) {
                 Icon(Icons.Rounded.Add, contentDescription = "Add Bible Text to ${subtopic.name}", modifier = Modifier.size(18.dp))
             }
@@ -1102,7 +1168,7 @@ private fun SubtopicGroup(
         if (texts.isEmpty() && children.isEmpty()) {
             Text("No Bible texts yet.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
-            texts.forEach { text ->
+            ReorderableTexts(texts = texts, selectionMode = selectionMode, onReorder = onReorder, onEnterSelection = onEnterSelection) { text, dragModifier ->
                 BibleTextCard(
                     text = text,
                     selectionMode = selectionMode,
@@ -1110,7 +1176,7 @@ private fun SubtopicGroup(
                     onEdit = { onEditText(text) },
                     onDelete = { onDeleteText(text) },
                     onToggleSelect = { onToggleSelect(text.id) },
-                    onEnterSelection = { onEnterSelection(text.id) },
+                    dragModifier = dragModifier,
                 )
             }
         }
@@ -1123,9 +1189,11 @@ private fun SubtopicGroup(
                 selectionMode = selectionMode,
                 selectedTextIds = selectedTextIds,
                 onAddText = onAddText,
+                onAddNote = onAddNote,
                 onAddChildSubtopic = onAddChildSubtopic,
                 onRename = onRename,
                 onDelete = onDelete,
+                onReorder = onReorder,
                 onEditText = onEditText,
                 onDeleteText = onDeleteText,
                 onToggleSelect = onToggleSelect,
@@ -1151,18 +1219,16 @@ private fun BibleTextCard(
     selectionMode: Boolean = false,
     selected: Boolean = false,
     onToggleSelect: () -> Unit = {},
-    onEnterSelection: () -> Unit = {},
+    dragModifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val actions = rememberPlatformActions()
     val showToast = rememberActionToast()
+    val isNote = text.isNote()
     val bookNumber = NwtBibleReferenceData.book(text.bibleVersionId, text.languageId, text.bibleBookId)?.order
     val jwLocale = NwtBibleReferenceData.language(text.languageId)?.jwLocale
     Card(
-        modifier = Modifier.fillMaxWidth().combinedClickable(
-            onClick = { if (selectionMode) onToggleSelect() },
-            onLongClick = { if (!selectionMode) onEnterSelection() },
-        ),
+        modifier = Modifier.fillMaxWidth().clickable(enabled = selectionMode) { onToggleSelect() }.then(dragModifier),
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(start = 12.dp, top = 8.dp, end = 4.dp, bottom = 4.dp)) {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -1171,18 +1237,15 @@ private fun BibleTextCard(
                 }
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Icon(Icons.AutoMirrored.Rounded.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
+                        Icon(if (isNote) Icons.Rounded.StickyNote2 else Icons.AutoMirrored.Rounded.MenuBook, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
                         Text(text.referenceLabel(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                        NwtBibleReferenceData.version(text.bibleVersionId)?.let {
-                            Text("· ${it.name}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
                     }
-                    if (text.remarks.isNotBlank()) {
-                        Text(text.remarks, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    val preview = text.verseText.ifBlank { text.remarks }
+                    if (preview.isNotBlank()) {
+                        Text(preview, style = MaterialTheme.typography.bodySmall, maxLines = if (isNote) 6 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
-                    Text("Added: ${formatRecordTimestamp(text.createdAt)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                if (bookNumber != null && jwLocale != null) {
+                if (!isNote && bookNumber != null && jwLocale != null) {
                     IconButton(
                         onClick = { if (!openInJwLibrary(context, jwLocale, bookNumber, text.chapter, text.verses)) showToast("Couldn't open JW Library.") },
                         modifier = Modifier.size(36.dp),
@@ -1347,8 +1410,6 @@ private fun isValidVerseList(normalized: String): Boolean {
     }
 }
 
-/** Progress of the jw.org verse-text lookup in the Add/Edit dialog. */
-private enum class VerseLookup { IDLE, LOADING, FAILED }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1396,6 +1457,7 @@ private fun BibleTextRecordDialog(
     // carried over to a book it might not even have that many chapters in.
     var chapter by remember { mutableStateOf(existing?.chapter?.takeIf { it > 0 }) }
     var versesText by remember { mutableStateOf(existing?.verses.orEmpty()) }
+    var verseText by remember { mutableStateOf(existing?.verseText.orEmpty()) }
     var remarks by remember { mutableStateOf(existing?.remarks.orEmpty()) }
 
     // Bug fix: a publisher citing more than one verse in the same chapter
@@ -1419,45 +1481,165 @@ private fun BibleTextRecordDialog(
     // perfectly valid "1".
     val versesNormalized = normalizeVerses(versesText)
     val verseRangeValid = isValidVerseList(versesNormalized)
-    // "Add the real verses in the remarks" — once a book, chapter and valid
-    // verses are chosen, the New World Translation text for them is looked up
-    // on jw.org and put in Remarks (in the chosen language; needs internet). It only
-    // fills Remarks when that's blank or still holds a previous automatic
-    // fill, so text the publisher typed is never overwritten — the "Insert
-    // verse text" button is the explicit way to replace it. A failed lookup
-    // just leaves Remarks to be typed; nothing here blocks saving.
+    // Verse Text: the scripture itself, imported on request or typed. Nothing is filled in automatically - an import runs only when the
+    // publisher picks one of the three sources below, it never overwrites text already there without asking, and the result can be
+    // reviewed and edited before saving. Remarks stay the publisher's own note.
     val verseTextViewModel: BibleVerseTextViewModel = koinViewModel()
     val showToast = rememberActionToast()
     val clipboardManager = LocalClipboardManager.current
     val verseScope = rememberCoroutineScope()
-    var verseStatus by remember { mutableStateOf(VerseLookup.IDLE) }
-    var autoFilledRemarks by remember { mutableStateOf<String?>(null) }
+    var importState by remember { mutableStateOf(VerseImportState.IDLE) }
+    var pendingJwOrgReplace by remember { mutableStateOf(false) }
+    var pendingPaste by remember { mutableStateOf<String?>(null) }
+    val verseFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     val canLookUpVerses = selectedBook != null && chapter != null && verseRangeValid && language != null
-    suspend fun lookUpVerseText(overwrite: Boolean) {
+
+    // The reference (book, chapter, verses, language) is the SOURCE of an import. [importedText] is the Verse Text exactly as an import put
+    // it there, so clearing the source can remove imported text without ever touching text the publisher typed or edited, or Remarks.
+    var importedText by remember { mutableStateOf<String?>(null) }
+    var importedFor by remember { mutableStateOf<String?>(null) }
+    var importJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    fun referenceKey() = "$bookId|$chapter|${normalizeVerses(versesText)}|$languageId"
+
+    suspend fun importFromJwOrg() {
         val book = selectedBook ?: return
         val chapterNumber = chapter ?: return
         val jwLocale = language?.jwLocale ?: return
-        verseStatus = VerseLookup.LOADING
+        val sourceAtStart = referenceKey()
+        val verseTextAtStart = verseText
+        importState = VerseImportState.LOADING
         val text = verseTextViewModel.fetchVerses(jwLocale, book.order, chapterNumber, normalizeVerses(versesText))
         coroutineContext.ensureActive()
-        if (text == null) {
-            verseStatus = VerseLookup.FAILED
+        // A slow answer for a reference that has since been cleared or changed, or that arrives after the publisher edited Verse Text,
+        // is dropped: it must never repopulate the field.
+        if (referenceKey() != sourceAtStart || verseText != verseTextAtStart) {
+            if (importState == VerseImportState.LOADING) importState = VerseImportState.IDLE
             return
         }
-        if (overwrite || remarks.isBlank() || remarks == autoFilledRemarks) {
-            remarks = text
-            autoFilledRemarks = text
+        if (text.isNullOrBlank()) {
+            importState = VerseImportState.FAILED
+            return
         }
-        verseStatus = VerseLookup.IDLE
+        verseText = text
+        importedText = text
+        importedFor = sourceAtStart
+        importState = VerseImportState.IMPORTED
     }
-    LaunchedEffect(bookId, chapter, versesText, languageId) {
-        val unchangedSavedReference = existing != null && bookId == existing.bibleBookId && chapter == existing.chapter && versesText == existing.verses && languageId == existing.languageId
-        if (!canLookUpVerses || unchangedSavedReference) {
-            verseStatus = VerseLookup.IDLE
-            return@LaunchedEffect
+    fun startJwOrgImport() {
+        importJob?.cancel()
+        importJob = verseScope.launch { importFromJwOrg() }
+    }
+    fun requestJwOrgImport() {
+        if (verseText.isBlank()) startJwOrgImport() else pendingJwOrgReplace = true
+    }
+    // JW Library has no public API, content provider or callback that returns verse text to another app, so a silent background import is not
+    // possible (reading its private data or screen is off limits). The closest supported handoff is started only by the publisher's tap:
+    // JW Library briefly opens at the verse, the verse is copied there, and when GoPreach is back in front it looks at the clipboard ONCE - never
+    // continuously - and offers the copied text for review. Whatever was already on the clipboard is not offered, only something newly copied,
+    // and nothing is inserted or called a success until the publisher confirms real text.
+    var armedFor by remember { mutableStateOf<String?>(null) }
+    var clipboardBefore by remember { mutableStateOf("") }
+    fun tryJwLibraryImport() {
+        if (!isJwLibraryInstalled(context)) {
+            importState = VerseImportState.LIBRARY_FAILED
+            return
         }
-        delay(700) // let the publisher finish typing the verses
-        lookUpVerseText(overwrite = false)
+        val book = selectedBook
+        val chapterNumber = chapter
+        val jwLocale = language?.jwLocale
+        clipboardBefore = clipboardManager.getText()?.text?.replace("\r", "")?.trim().orEmpty() // only to tell later whether something NEW was copied
+        armedFor = referenceKey()
+        val opened = book != null && chapterNumber != null && jwLocale != null &&
+            openInJwLibrary(context, jwLocale, book.order, chapterNumber, normalizeVerses(versesText))
+        if (opened) importState = VerseImportState.LIBRARY_WAITING
+        else { armedFor = null; importState = VerseImportState.LIBRARY_FAILED }
+    }
+    // A verse shared from JW Library (Share -> GoPreach) lands here while this form is open: cleaned of its link, shown for confirmation, never
+    // inserted unseen. It replaces the clipboard check for that request.
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        com.emfitsolutions.gopreach.data.export.IncomingSharedVerseText.consumerActive = true
+        onDispose { com.emfitsolutions.gopreach.data.export.IncomingSharedVerseText.consumerActive = false }
+    }
+    // JW Library's Share usually sends just a jw.org link for the verse. GoPreach reads the reference out of that link (book, chapter, verses,
+    // language), fills the reference fields and imports the verse text from JW.org; if the share also carries the verse text itself, that text is
+    // offered for confirmation instead. A link that is not a single-chapter Bible link is not guessed at.
+    val latestRequestJwOrgImport by androidx.compose.runtime.rememberUpdatedState({ requestJwOrgImport() })
+    LaunchedEffect(Unit) {
+        com.emfitsolutions.gopreach.data.export.IncomingSharedVerseText.text.collect { raw ->
+            if (raw == null) return@collect
+            armedFor = null
+            val link = com.emfitsolutions.gopreach.domain.JwBibleLink.parse(raw)
+            val cleaned = com.emfitsolutions.gopreach.domain.SharedVerseText.clean(raw)
+            if (link != null) {
+                val sharedLanguage = NwtBibleReferenceData.languages.firstOrNull { it.jwLocale.equals(link.locale, ignoreCase = true) }
+                    ?: NwtBibleReferenceData.language(languageId)
+                val sharedBook = sharedLanguage?.let { NwtBibleReferenceData.booksFor(version.id, it.id).firstOrNull { b -> b.order == link.book } }
+                if (sharedLanguage != null && sharedBook != null) {
+                    languageId = sharedLanguage.id
+                    bookId = sharedBook.id
+                    chapter = link.chapter
+                    versesText = link.verses
+                    showingBookList = false
+                    if (cleaned != null) pendingPaste = cleaned
+                    else {
+                        delay(200) // let the new reference take effect first
+                        latestRequestJwOrgImport()
+                    }
+                } else {
+                    showToast("That verse link could not be matched to a Bible book here, so nothing was added.")
+                }
+            } else if (cleaned == null) {
+                showToast("That share had no verse text, so nothing was added.")
+            } else {
+                pendingPaste = cleaned
+            }
+            importState = if (importState == VerseImportState.LOADING) importState else VerseImportState.IDLE
+            com.emfitsolutions.gopreach.data.export.IncomingSharedVerseText.consume()
+        }
+    }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME && armedFor != null) {
+                val requestedFor = armedFor
+                armedFor = null // one check per request
+                verseScope.launch {
+                    delay(350) // let the window regain focus: the clipboard is only readable by the app in front
+                    if (pendingPaste != null) return@launch // a verse shared from JW Library already arrived
+                    if (requestedFor != referenceKey()) { importState = VerseImportState.IDLE; return@launch }
+                    val copiedNow = clipboardManager.getText()?.text?.replace("\r", "")?.trim().orEmpty()
+                    if (copiedNow.isNotEmpty() && copiedNow != clipboardBefore) {
+                        pendingPaste = copiedNow
+                        importState = VerseImportState.IDLE
+                    } else {
+                        importState = VerseImportState.LIBRARY_NOTHING_COPIED
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    // Keeps Verse Text in step with its source: a change of source cancels an import still running for the old one, and clearing the source
+    // takes imported, unedited Verse Text with it (typed or edited text, and Remarks, are left alone).
+    LaunchedEffect(bookId, chapter, versesText, languageId) {
+        importJob?.cancel()
+        importJob = null
+        if (importState == VerseImportState.LOADING) importState = VerseImportState.IDLE
+        if (versesText.isBlank() && importedText != null && verseText == importedText) {
+            verseText = ""
+            importedText = null
+            importedFor = null
+            importState = VerseImportState.IDLE
+        }
+    }
+    fun pasteCopiedText() {
+        val copied = clipboardManager.getText()?.text?.replace("\r", "")?.trim().orEmpty()
+        when {
+            copied.isEmpty() -> showToast("Nothing copied yet. Copy the verse in JW Library first, then tap here.")
+            verseText.isBlank() -> { verseText = copied; importedText = copied; importedFor = referenceKey(); importState = VerseImportState.IMPORTED }
+            else -> pendingPaste = copied
+        }
     }
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -1495,6 +1677,7 @@ private fun BibleTextRecordDialog(
                 chapter = chapter ?: 0,
                 verses = currentVerses,
                 categoryId = eventId,
+                verseText = verseText.trim(),
                 remarks = remarks.trim(),
                 updatedAt = now,
             ),
@@ -1511,11 +1694,8 @@ private fun BibleTextRecordDialog(
         hasUnsavedChanges = bookId != existing?.bibleBookId?.ifBlank { null } ||
             languageId != (existing?.languageId?.ifBlank { null } ?: NwtBibleReferenceData.languages.first().id) ||
             chapter != existing?.chapter?.takeIf { it > 0 } ||
-            versesText != existing?.verses.orEmpty() || remarks != existing?.remarks.orEmpty(),
+            versesText != existing?.verses.orEmpty() || verseText != existing?.verseText.orEmpty() || remarks != existing?.remarks.orEmpty(),
     ) {
-        // The verse text put in Remarks is always this version (the jw.org
-        // Online Bible's "New World Translation of the Holy Scriptures").
-        Text(version.name, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
         LabeledDropdown(
             label = "Bible Language",
             selectedLabel = language?.name ?: languageId,
@@ -1604,63 +1784,159 @@ private fun BibleTextRecordDialog(
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth(),
         )
-        when (verseStatus) {
-            VerseLookup.LOADING -> Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Text("Getting the verse text from jw.org…", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 8.dp))
-            }
-            VerseLookup.FAILED -> Text(
-                "Couldn't get the verse text. It needs an internet connection the first time a chapter is used — or open it in JW Library and paste it, or type it in Remarks.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
+        // ---- Verse Text: pick where the scripture comes from ----
+        Text("Verse Text", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        if (!canLookUpVerses) {
+            Text(
+                "Choose the Bible book, chapter and verses above to import the verse text, or type it yourself.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            VerseLookup.IDLE -> Unit
         }
-        if (canLookUpVerses) {
-            TextButton(onClick = { verseScope.launch { lookUpVerseText(overwrite = true) } }, enabled = verseStatus != VerseLookup.LOADING) {
-                Icon(Icons.Rounded.AutoStories, contentDescription = null, modifier = Modifier.padding(end = 8.dp).size(18.dp))
-                Text("Insert verse text in Remarks")
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedButton(onClick = ::requestJwOrgImport, enabled = canLookUpVerses && importState != VerseImportState.LOADING, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Rounded.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("  Import from JW.org", modifier = Modifier.weight(1f))
             }
-            // Read the verse in the JW Library app (works offline if that Bible is
-            // downloaded there); GoPreach can't read JW Library's storage, so the
-            // text comes back through the copy/paste button below.
-            TextButton(
-                onClick = {
-                    val book = selectedBook
-                    val chapterNumber = chapter
-                    val jwLocale = language?.jwLocale
-                    val opened = book != null && chapterNumber != null && jwLocale != null &&
-                        openInJwLibrary(context, jwLocale, book.order, chapterNumber, normalizeVerses(versesText))
-                    if (!opened) showToast("Couldn't open JW Library.")
-                },
+            OutlinedButton(onClick = ::tryJwLibraryImport, enabled = canLookUpVerses, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Rounded.AutoStories, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("  Import from JW Library", modifier = Modifier.weight(1f))
+            }
+            OutlinedButton(
+                onClick = { importState = VerseImportState.IDLE; runCatching { verseFocus.requestFocus() } },
+                modifier = Modifier.fillMaxWidth(),
             ) {
-                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.padding(end = 8.dp).size(18.dp))
-                Text("Open verse in JW Library")
+                Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                Text("  Enter Verse Text Manually", modifier = Modifier.weight(1f))
             }
         }
-        // Puts whatever was just copied (for example a verse copied in JW Library)
-        // into Remarks — replaces it when it's empty, otherwise adds it on a new
-        // line.
-        TextButton(
-            onClick = {
-                val copied = clipboardManager.getText()?.text?.replace("\r", "")?.trim().orEmpty()
-                if (copied.isEmpty()) {
-                    showToast("Nothing copied yet. Copy a verse first, then tap here.")
-                } else {
-                    remarks = if (remarks.isBlank()) copied else remarks.trimEnd() + "\n" + copied
-                }
-            },
+        androidx.compose.animation.AnimatedVisibility(
+            visible = importState != VerseImportState.IDLE,
+            enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically(),
+            exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.shrinkVertically(),
         ) {
-            Icon(Icons.Rounded.ContentPaste, contentDescription = null, modifier = Modifier.padding(end = 8.dp).size(18.dp))
-            Text("Paste copied text into Remarks")
+            val failedColor = MaterialTheme.colorScheme.error
+            Column(
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                when (importState) {
+                    VerseImportState.LOADING -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text("Getting the verse text from JW.org...", style = MaterialTheme.typography.bodySmall)
+                    }
+                    VerseImportState.IMPORTED -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                        Text("Verse text added below. Review and edit it before saving.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    VerseImportState.FAILED -> {
+                        Text(
+                            "Couldn't get this verse from JW.org. The verse may not be available there for this language, or there is no internet connection. Nothing was changed.",
+                            style = MaterialTheme.typography.bodySmall, color = failedColor,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(onClick = ::startJwOrgImport) { Text("Retry") }
+                            TextButton(onClick = { importState = VerseImportState.IDLE; runCatching { verseFocus.requestFocus() } }) { Text("Enter it manually") }
+                        }
+                    }
+                    VerseImportState.LIBRARY_WAITING -> {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Text("Waiting for the verse from JW Library...", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                        }
+                        Text(
+                            "JW Library can't send its Bible text to GoPreach by itself. Easiest: select the verse there, tap Share and choose GoPreach - GoPreach reads the verse from the shared link and imports it. (Or tap Copy and come back.)",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        TextButton(enabled = canLookUpVerses, onClick = ::requestJwOrgImport) { Text("Import from JW.org instead") }
+                    }
+                    VerseImportState.LIBRARY_NOTHING_COPIED -> {
+                        Text("Nothing new was copied, so nothing was imported.", style = MaterialTheme.typography.bodySmall, color = failedColor)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = ::tryJwLibraryImport) { Text("Try again") }
+                            TextButton(enabled = canLookUpVerses, onClick = ::requestJwOrgImport) { Text("Import from JW.org") }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = ::pasteCopiedText) { Text("Use copied text") }
+                            TextButton(onClick = { importState = VerseImportState.IDLE; runCatching { verseFocus.requestFocus() } }) { Text("Enter manually") }
+                        }
+                    }
+                    VerseImportState.LIBRARY_FAILED -> {
+                        Text("JW Library isn't installed on this phone (or couldn't be reached), so there is nothing to import from it. Nothing was imported. You can import from JW.org instead, or enter the verse text yourself.", style = MaterialTheme.typography.bodySmall, color = failedColor)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(enabled = canLookUpVerses, onClick = ::requestJwOrgImport) { Text("Import from JW.org") }
+                            TextButton(onClick = { importState = VerseImportState.IDLE; runCatching { verseFocus.requestFocus() } }) { Text("Enter it manually") }
+                        }
+                    }
+                    VerseImportState.IDLE -> Unit
+                }
+            }
+        }
+        OutlinedTextField(
+            value = verseText,
+            onValueChange = { verseText = it },
+            label = { Text("Verse Text") },
+            placeholder = { Text("The scripture text") },
+            minLines = 4,
+            visualTransformation = VisualTransformation.None,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp).focusRequester(verseFocus),
+        )
+        if (importedText != null && verseText == importedText && importedFor != null && importedFor != referenceKey() && versesText.isNotBlank()) {
+            Text(
+                "This Verse Text was imported for the earlier reference. Import it again for the new one, or edit it.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+            )
+        }
+        // A record saved before Verse Text existed kept its text in Remarks: it is left exactly where it was; the publisher may move it.
+        if (existing != null && !existing.isNote() && existing.verseText.isBlank() && remarks.isNotBlank() && verseText.isBlank()) {
+            Text(
+                "This record's earlier text is in Remarks. If it is the verse text, move it to Verse Text.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            TextButton(onClick = { verseText = remarks; remarks = "" }) { Text("Move Remarks to Verse Text") }
         }
         OutlinedTextField(
             value = remarks,
             onValueChange = { remarks = it },
             label = { Text("Remarks (optional)") },
+            placeholder = { Text("Your own notes or comments") },
+            minLines = 2,
             visualTransformation = VisualTransformation.None,
-            modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 72.dp),
         )
+        if (pendingJwOrgReplace) {
+            AlertDialog(
+                onDismissRequest = { pendingJwOrgReplace = false },
+                title = { Text("Replace Verse Text?") },
+                text = { Text("The Verse Text field already has text. Replace it with the text from JW.org?") },
+                confirmButton = { TextButton(onClick = { pendingJwOrgReplace = false; startJwOrgImport() }) { Text("Replace") } },
+                dismissButton = { TextButton(onClick = { pendingJwOrgReplace = false }) { Text("Keep my text") } },
+            )
+        }
+        pendingPaste?.let { copied ->
+            val hasText = verseText.isNotBlank()
+            AlertDialog(
+                onDismissRequest = { pendingPaste = null },
+                title = { Text(if (hasText) "Replace or add the copied text?" else "Use the copied text?") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("This is the text received. Check it is the verse you want:", style = MaterialTheme.typography.bodySmall)
+                        Text(copied.take(600) + if (copied.length > 600) "..." else "", style = MaterialTheme.typography.bodyMedium)
+                        if (hasText) Text("The Verse Text field already has text.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { verseText = copied; importedText = copied; importedFor = referenceKey(); importState = VerseImportState.IMPORTED; pendingPaste = null }) {
+                        Text(if (hasText) "Replace" else "Use this text")
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        TextButton(onClick = { pendingPaste = null }) { Text("Cancel") }
+                        if (hasText) TextButton(onClick = { verseText = verseText.trimEnd() + "\n" + copied; importedText = null; importedFor = null; importState = VerseImportState.IMPORTED; pendingPaste = null }) { Text("Add below") }
+                    }
+                },
+            )
+        }
     }
 }
 
@@ -1695,3 +1971,88 @@ private fun LabeledDropdown(
         }
     }
 }
+
+/** Add/Edit a free-text Note kept in an Event next to its Bible Texts. */
+@Composable
+private fun NoteDialog(existing: BibleTextRecord?, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    var note by remember { mutableStateOf(existing?.remarks.orEmpty()) }
+    var error by remember { mutableStateOf<String?>(null) }
+    FormDialog(
+        onDismissRequest = onDismiss,
+        title = if (existing == null) "Add Note" else "Edit Note",
+        onConfirm = { if (note.isBlank()) error = "Note is required." else onSave(note.trim()) },
+        confirmLabel = if (existing == null) "Save Note" else "Save",
+        errorMessage = error,
+        hasUnsavedChanges = note != existing?.remarks.orEmpty(),
+    ) {
+        OutlinedTextField(
+            value = note,
+            onValueChange = { note = it; error = null },
+            label = { Text("Note") },
+            minLines = 4,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/**
+ * Long-press a Bible Text or Note, then drag it up or down to rearrange the sequence. A long-press released
+ * without dragging still starts multi-select (as before). The new order is saved when the finger lifts.
+ */
+@Composable
+private fun ReorderableTexts(
+    texts: List<BibleTextRecord>,
+    selectionMode: Boolean,
+    onReorder: (List<BibleTextRecord>) -> Unit,
+    onEnterSelection: (String) -> Unit,
+    item: @Composable (BibleTextRecord, Modifier) -> Unit,
+) {
+    var order by remember(texts) { mutableStateOf(texts) }
+    val heights = remember { mutableMapOf<String, Int>() }
+    var draggingId by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
+    val gap = with(androidx.compose.ui.platform.LocalDensity.current) { 4.dp.toPx() }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        order.forEach { text ->
+            androidx.compose.runtime.key(text.id) {
+                val dragging = draggingId == text.id
+                val dragModifier = if (selectionMode) Modifier else Modifier.pointerInput(text.id) {
+                    var moved = 0f
+                    detectDragGesturesAfterLongPress(
+                        onDragStart = { draggingId = text.id; dragOffset = 0f; moved = 0f },
+                        onDrag = { change, amount ->
+                            change.consume()
+                            moved += kotlin.math.abs(amount.x) + kotlin.math.abs(amount.y)
+                            dragOffset += amount.y
+                            val index = order.indexOfFirst { it.id == text.id }
+                            val next = order.getOrNull(index + 1)
+                            val prev = order.getOrNull(index - 1)
+                            if (next != null && dragOffset > (heights[next.id] ?: 0) / 2f) {
+                                dragOffset -= (heights[next.id] ?: 0) + gap
+                                order = order.toMutableList().also { java.util.Collections.swap(it, index, index + 1) }
+                            } else if (prev != null && dragOffset < -(heights[prev.id] ?: 0) / 2f) {
+                                dragOffset += (heights[prev.id] ?: 0) + gap
+                                order = order.toMutableList().also { java.util.Collections.swap(it, index, index - 1) }
+                            }
+                        },
+                        onDragEnd = {
+                            if (moved < 12f) onEnterSelection(text.id)
+                            else if (order.map { it.id } != texts.map { it.id }) onReorder(order)
+                            draggingId = null; dragOffset = 0f
+                        },
+                        onDragCancel = { order = texts; draggingId = null; dragOffset = 0f },
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .onGloballyPositioned { heights[text.id] = it.size.height }
+                        .zIndex(if (dragging) 1f else 0f)
+                        .graphicsLayer { translationY = if (dragging) dragOffset else 0f; alpha = if (dragging) 0.9f else 1f },
+                ) { item(text, dragModifier) }
+            }
+        }
+    }
+}
+
+/** Where the Verse Text import stands (shown in a small animated panel under the three import choices). */
+private enum class VerseImportState { IDLE, LOADING, IMPORTED, FAILED, LIBRARY_WAITING, LIBRARY_NOTHING_COPIED, LIBRARY_FAILED }

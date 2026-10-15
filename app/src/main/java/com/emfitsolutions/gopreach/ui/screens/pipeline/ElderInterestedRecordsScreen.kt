@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
 import androidx.compose.foundation.clickable
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -127,23 +131,30 @@ fun ElderInterestedRecordsScreen(
                 visualTransformation = VisualTransformation.None,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
-                Text("Show Inactive")
-            }
+            androidx.compose.material3.FilterChip(selected = showInactive, onClick = { showInactive = !showInactive }, label = { Text("Include inactive") }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             if (people.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     RecordFound(0)
                     Text("No ${stage.label()} records found in this scope.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
+                val viewMode = rememberRecordViewMode("elder_interested")
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item { RecordFound(people.size) }
-                    items(people, key = { it.id }) { person ->
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, people, { it.id },
+                        listOf(
+                                UniversalColumn("Name", 200.dp) { it.name },
+                                UniversalColumn("Address", 260.dp) { it.address },
+                                UniversalColumn("Status", 90.dp) { if (it.status == RecordStatus.INACTIVE) "Inactive" else "Active" },
+                        ),
+                        onRowClick = { selectedPerson = it },
+                    ) { person ->
                         val publisherName by remember(person.publisherPersonId) { viewModel.personName(person.publisherPersonId) }.collectAsStateWithLifecycle(initialValue = null)
                         Card(modifier = Modifier.fillMaxWidth().clickable { selectedPerson = person }) {
                             Column(modifier = Modifier.padding(16.dp)) {

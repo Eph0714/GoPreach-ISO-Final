@@ -49,6 +49,7 @@ class CongregationStatisticsBuilder(
             auxiliaryPioneerCount = publishers.count { it.second == PublisherCategory.AUXILIARY_PIONEER },
             regularPioneerCount = publishers.count { it.second == PublisherCategory.REGULAR_PIONEER },
             unbaptizedPublisherCount = publishers.count { it.second == PublisherCategory.UNBAPTIZED_PUBLISHER },
+            specialPioneerCount = publishers.count { it.second == PublisherCategory.SPECIAL_PIONEER },
             averageMidweekAttendance = midweek.average,
             averageWeekendAttendance = weekend.average,
             midweekMeetingsRecorded = midweek.recorded,

@@ -1,5 +1,25 @@
-package com.emfitsolutions.gopreach.ui.components
+﻿package com.emfitsolutions.gopreach.ui.components
 
+import androidx.compose.material.icons.rounded.HowToReg
+import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.CompareArrows
+import androidx.compose.material.icons.rounded.Key
+import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.VpnKey
+import androidx.compose.material.icons.rounded.AltRoute
+import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.SupervisorAccount
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.runtime.mutableStateMapOf
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.app_name
 import com.emfitsolutions.gopreach.shared.resources.home_dashboard_header
@@ -184,11 +204,18 @@ fun GoPreachSidePanelContent(
     /** Super-Admin, Admin, Service Overseer, Secretary and Coordinator Elder may enter a field service record on a publisher's behalf. */
     canEnterManualFieldService: Boolean = false,
     canManageMeetingAttendance: Boolean = false,
+    /** The roles that send the Field Service Report to the Circuit Overseer may also review what they sent. */
+    canViewSentReports: Boolean = false,
     /** Reports every module this session may open, so Quick Access can resolve (and permission-check) cards copied from here. */
     onItemsAvailable: (List<SideItem>) -> Unit = {},
     /** Long-press-and-drag a module toward Quick Access; null disables dragging. */
     dragState: com.emfitsolutions.gopreach.ui.screens.home.QuickAccessDragState? = null,
     onDragStarted: () -> Unit = {},
+    /** The signed-in user, shown compactly at the top of the panel (nothing sensitive: name, active role, scope, picture). */
+    userName: String = "",
+    roleLabel: String = "",
+    scopeLabel: String = "",
+    profileImageUrl: String? = null,
 ) {
     // "Admin Dashboard Menu Reorganization" spec — the drawer's existing
     // collapsible-section treeview (this composable already had exactly
@@ -258,7 +285,8 @@ fun GoPreachSidePanelContent(
             // tile grid gets hidden next.
             if (isCircuitOverseer) {
                 add(SideItem("Congregations", Icons.Rounded.AccountBalance, Destinations.CIRCUIT_CONGREGATIONS))
-                add(SideItem("Circuit Report", Icons.Rounded.BarChart, Destinations.CIRCUIT_REPORT))
+                add(SideItem("Received Reports", Icons.Rounded.Inbox, Destinations.RECEIVED_REPORTS))
+                add(SideItem("Announcements", Icons.Rounded.Campaign, Destinations.CO_ANNOUNCEMENTS))
                 add(SideItem("Publishers", Icons.Rounded.People, Destinations.circuitPublishers()))
                 add(SideItem("Elders & Ministerial Servants", Icons.Rounded.PersonAdd, Destinations.circuitLeaders()))
                 add(SideItem("Report Submission", Icons.Rounded.Assessment, Destinations.REPORT_SUBMISSION))
@@ -266,13 +294,13 @@ fun GoPreachSidePanelContent(
                 add(SideItem("Comparative Report", Icons.Rounded.Assessment, Destinations.CONGREGATION_COMPARATIVE))
             }
             if (canManageMeetingAttendance) {
-                add(SideItem("Report Submission", Icons.Rounded.Assessment, Destinations.REPORT_SUBMISSION))
                 add(SideItem("Meeting Attendance", Icons.Rounded.Groups, Destinations.MEETING_ATTENDANCE))
-                add(SideItem("Congregation Comparative", Icons.Rounded.Assessment, Destinations.CONGREGATION_COMPARATIVE))
             }
             // The Circuit Overseer's dashboard is their Main Form (and the Circuit Dashboard above) — the general Dashboard is not offered to them.
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_dashboard_header), Icons.Rounded.BarChart, Destinations.DASHBOARD_REPORTS))
-            if (canViewFieldServiceReport) add(SideItem("Field Service Report", Icons.Rounded.Assessment, if (isCircuitOverseer) Destinations.CIRCUIT_FS_REPORTS else Destinations.FIELD_SERVICE_REPORT))
+            // The Circuit Overseer reaches the Field Service Report through Received Reports (above), not as a separate module.
+            if (canViewFieldServiceReport && !isCircuitOverseer) add(SideItem("Field Service Report", Icons.Rounded.Assessment, Destinations.FIELD_SERVICE_REPORT))
+            if (canViewSentReports && !isCircuitOverseer) add(SideItem("My Submitted Reports", Icons.Rounded.Inbox, Destinations.SENT_REPORTS))
             if (canEnterManualFieldService) add(SideItem("Manual Field Service Record", Icons.Rounded.EditNote, Destinations.MANUAL_FIELD_SERVICE))
             if (canViewDeletedRecords) add(SideItem("Deleted Records", Icons.Rounded.RestoreFromTrash, Destinations.DELETED_RECORDS))
             // "Consolidate 'Forward Request' Modules for Super Admin" — one
@@ -340,78 +368,110 @@ fun GoPreachSidePanelContent(
     val availableItems = sections.flatMap { it.items }
     LaunchedEffect(availableItems.map { it.route }) { onItemsAvailable(availableItems) }
 
+    // The same design system for every role: the modules this session is authorized to see (decided above, unchanged) are shown under
+    // CONTROL PANEL / INPUT / RECORD / REPORTS / MANAGEMENT / SETTINGS / TOOLS - a group a role has no modules in is simply not shown.
+    // Every group starts COLLAPSED and each is toggled on its own; nothing here expands one group because another was opened or because
+    // a module was visited.
+    val grouped = NavGroup.entries.mapNotNull { group ->
+        availableItems.filter { navGroupOf(it.route) == group }.map { it.withStandardIcon() }.takeIf { it.isNotEmpty() }?.let { group to it }
+    }
+    val expanded = remember { mutableStateMapOf<NavGroup, Boolean>() }
+
     ModalDrawerSheet {
-        Text(
-            stringResource(Res.string.app_name),
-            style = MaterialTheme.typography.titleLarge,
-            modifier = Modifier.padding(16.dp),
+        NavProfileHeader(
+            appName = stringResource(Res.string.app_name),
+            userName = userName,
+            roleLabel = roleLabel,
+            scopeLabel = scopeLabel,
+            profileImageUrl = profileImageUrl,
         )
         HorizontalDivider()
-        LazyColumn {
-            items(sections) { section -> SidePanelSection(section, activeRoute, onNavigate, dragState, onDragStarted) }
-            item {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                NavigationDrawerItem(
-                    label = { SideItemLabel("Settings") },
-                    icon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
-                    selected = activeRoute == Destinations.SETTINGS || activeRoute == Destinations.ACCOUNT_SETTINGS,
-                    onClick = { onNavigate(Destinations.SETTINGS) },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                )
-                if (onSwitchToPublisher != null) {
-                    NavigationDrawerItem(
-                        label = { SideItemLabel(stringResource(Res.string.side_ministry_report_app)) },
-                        icon = { Icon(Icons.Rounded.SwapHoriz, contentDescription = null) },
-                        selected = false,
-                        onClick = onSwitchToPublisher,
-                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                    )
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(grouped, key = { it.first }) { (group, groupItems) ->
+                NavGroupSection(
+                    group = group,
+                    expanded = expanded[group] == true,
+                    containsActive = groupItems.any { it.route == activeRoute },
+                    itemCount = groupItems.size,
+                    onToggle = { expanded[group] = expanded[group] != true },
+                ) {
+                    groupItems.forEach { item -> SideDrawerItem(item, group, activeRoute, onNavigate, dragState, onDragStarted) }
                 }
-                NavigationDrawerItem(
-                    label = { SideItemLabel(stringResource(Res.string.side_sign_out)) },
-                    icon = { Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null) },
-                    selected = false,
-                    onClick = onSignOut,
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding),
-                )
             }
+        }
+        // Footer: secondary actions, kept apart from the navigation groups; Sign out is visually distinct so it is not tapped by accident.
+        HorizontalDivider()
+        Column(Modifier.padding(vertical = 4.dp)) {
+            FooterRow(Icons.Rounded.Settings, "Settings", selected = activeRoute == Destinations.SETTINGS || activeRoute == Destinations.ACCOUNT_SETTINGS) { onNavigate(Destinations.SETTINGS) }
+            if (onSwitchToPublisher != null) FooterRow(Icons.Rounded.SwapHoriz, stringResource(Res.string.side_ministry_report_app), selected = false, onClick = onSwitchToPublisher)
+            FooterRow(Icons.AutoMirrored.Rounded.Logout, stringResource(Res.string.side_sign_out), selected = false, danger = true, onClick = onSignOut)
         }
     }
 }
 
-@Composable
-private fun SidePanelSection(
-    section: SideSection,
-    activeRoute: String?,
-    onNavigate: (String) -> Unit,
-    dragState: com.emfitsolutions.gopreach.ui.screens.home.QuickAccessDragState?,
-    onDragStarted: () -> Unit,
-) {
-    var expanded by remember(section.title) { mutableStateOf(true) }
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        ) {
-            Text(section.title, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
-            IconButton(onClick = { expanded = !expanded }) {
-                Icon(if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore, contentDescription = null)
-            }
-        }
-        if (expanded) {
-            section.items.forEach { item ->
-                SideDrawerItem(item, activeRoute, onNavigate, dragState, onDragStarted)
-            }
-        }
-    }
+/**
+ * Where a module is shown. This is only a display decision - authorization is made by the caller's own booleans before an item ever reaches
+ * the panel, and the route is never changed. A module not listed here falls under TOOLS so every item always belongs to a group.
+ */
+private fun navGroupOf(route: String): NavGroup = when (route) {
+    Destinations.DASHBOARD_REPORTS -> NavGroup.CONTROL_PANEL
+
+    Destinations.MANUAL_FIELD_SERVICE, Destinations.MEETING_ATTENDANCE, Destinations.MEETING_ASSIGNMENTS, Destinations.PUBLISHER_ASSIGNMENT -> NavGroup.INPUT
+
+    Destinations.SCOPED_INTERESTED_RECORDS, Destinations.HOUSEHOLDER_VISIT_HISTORY, Destinations.FORWARD_REQUESTS, Destinations.DELETED_RECORDS,
+    Destinations.CONTACT_RECORD, Destinations.USER_LOGS, Destinations.CIRCUIT_CONGREGATIONS,
+    Destinations.circuitPublishers(), Destinations.circuitLeaders() -> NavGroup.RECORD
+
+    Destinations.FIELD_SERVICE_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.CIRCUIT_REPORTS_INBOX, Destinations.CIRCUIT_REPORT,
+    Destinations.RECEIVED_REPORTS, Destinations.RECEIVED_SNAPSHOTS, Destinations.SENT_REPORTS, Destinations.RECEIVED_ATTENDANCE,
+    Destinations.REPORT_SUBMISSION, Destinations.COMPARATIVE_REPORT, Destinations.CONGREGATION_COMPARATIVE -> NavGroup.REPORTS
+
+    Destinations.MANAGE_CONGREGATIONS, Destinations.MANAGE_ADMINS, Destinations.MANAGE_ELDERS, Destinations.MANAGE_MINISTERIAL_SERVANTS,
+    Destinations.MANAGE_GROUPS, Destinations.MANAGE_PUBLISHERS, Destinations.MANAGE_TERRITORY_ASSIGNMENTS, Destinations.ACCOUNT_MANAGEMENT,
+    Destinations.MANAGE_USERS, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_CIRCUIT_CODES, Destinations.MANAGE_CIRCUIT_OVERSEERS,
+    Destinations.CIRCUIT_ASSIGNMENT -> NavGroup.MANAGEMENT
+
+    Destinations.CONTROL_PANEL, Destinations.THEME_COLOR_SETTINGS, Destinations.SESSION_TIMEOUT_SETTING, Destinations.CREDIT_HOUR_CATEGORIES -> NavGroup.SETTINGS
+
+    else -> NavGroup.TOOLS
 }
 
-/** Every drawer item's label — one line, ellipsized rather than wrapped, so
- * a longer entry (e.g. "Appearance & App Logo", "Share Location Settings")
- * never wraps into NavigationDrawerItem's fixed-height row and gets its
- * second line silently clipped. */
+/** One consistent, function-based icon per module: the duplicates and look-alikes of the old drawer are replaced; the destination is untouched. */
+private fun SideItem.withStandardIcon(): SideItem {
+    val icon = when (route) {
+        Destinations.MANAGE_ELDERS -> Icons.Rounded.SupervisorAccount
+        Destinations.MANAGE_MINISTERIAL_SERVANTS -> Icons.Rounded.Badge
+        Destinations.circuitLeaders() -> Icons.Rounded.SupervisorAccount
+        Destinations.CIRCUIT_ASSIGNMENT -> Icons.Rounded.AltRoute
+        Destinations.MANAGE_CIRCUIT_CODES -> Icons.Rounded.VpnKey
+        Destinations.CREDIT_HOUR_CATEGORIES -> Icons.Rounded.Category
+        Destinations.ACCOUNT_MANAGEMENT -> Icons.Rounded.Key
+        Destinations.CONGREGATION_COMPARATIVE, Destinations.COMPARATIVE_REPORT -> Icons.Rounded.CompareArrows
+        Destinations.CIRCUIT_REPORTS_INBOX, Destinations.RECEIVED_REPORTS -> Icons.Rounded.Inbox
+        Destinations.MEETING_ATTENDANCE -> Icons.Rounded.HowToReg
+        else -> this.icon
+    }
+    return if (icon === this.icon) this else copy(icon = icon)
+}
+
 @Composable
-private fun SideItemLabel(text: String) {
-    Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun FooterRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, selected: Boolean, danger: Boolean = false, onClick: () -> Unit) {
+    val tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 1.dp)
+            .heightIn(min = 46.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }
 
 /** One side-panel entry. Tap navigates; long-press-and-drag lifts it toward the Quick Access grid (the drawer closes so the
@@ -419,6 +479,7 @@ private fun SideItemLabel(text: String) {
 @Composable
 private fun SideDrawerItem(
     item: SideItem,
+    group: NavGroup,
     activeRoute: String?,
     onNavigate: (String) -> Unit,
     dragState: com.emfitsolutions.gopreach.ui.screens.home.QuickAccessDragState?,
@@ -428,7 +489,6 @@ private fun SideDrawerItem(
     var lifted by remember { mutableStateOf(false) }
     val scale by androidx.compose.animation.core.animateFloatAsState(if (lifted) 1.06f else 1f, androidx.compose.animation.core.tween(140), label = "sideLift")
     var modifier = Modifier
-        .padding(NavigationDrawerItemDefaults.ItemPadding)
         .graphicsLayer { scaleX = scale; scaleY = scale }
         .onGloballyPositioned { coords = it }
     if (dragState != null) {
@@ -456,9 +516,10 @@ private fun SideDrawerItem(
             )
         }
     }
-    NavigationDrawerItem(
-        label = { SideItemLabel(item.label) },
-        icon = { Icon(item.icon, contentDescription = null) },
+    NavMenuRow(
+        icon = item.icon,
+        label = item.label,
+        group = group,
         selected = activeRoute == item.route,
         onClick = { onNavigate(item.route) },
         modifier = modifier,

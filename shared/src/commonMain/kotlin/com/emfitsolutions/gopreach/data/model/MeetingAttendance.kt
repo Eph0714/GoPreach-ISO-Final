@@ -110,6 +110,8 @@ data class CongregationMonthlyStatistics(
     val auxiliaryPioneerCount: Int = 0,
     val regularPioneerCount: Int = 0,
     val unbaptizedPublisherCount: Int = 0,
+    /** Null for snapshots saved before this was recorded (never 0): the Circuit Overview then has no special-pioneer figure for that month. */
+    val specialPioneerCount: Int? = null,
     /** Null when no meeting of that type was recorded that month (never 0). */
     val averageMidweekAttendance: Double? = null,
     val averageWeekendAttendance: Double? = null,

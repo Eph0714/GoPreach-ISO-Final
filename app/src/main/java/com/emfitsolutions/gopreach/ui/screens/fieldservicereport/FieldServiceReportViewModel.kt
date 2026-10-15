@@ -16,6 +16,7 @@ import com.emfitsolutions.gopreach.data.repository.GroupRepository
 import com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
+import com.emfitsolutions.gopreach.data.repository.messageOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -149,6 +150,10 @@ class FieldServiceReportViewModel(
     private val appSettingsRepository: com.emfitsolutions.gopreach.data.repository.AppSettingsRepository,
     private val statisticsBuilder: com.emfitsolutions.gopreach.data.repository.CongregationStatisticsBuilder,
     private val attendanceRepository: com.emfitsolutions.gopreach.data.repository.MeetingAttendanceRepository,
+    private val categoryHistoryRepository: com.emfitsolutions.gopreach.data.repository.PublisherCategoryHistoryRepository,
+    private val coReceivedRepository: com.emfitsolutions.gopreach.data.repository.CoReceivedReportRepository,
+    private val circuitCodeRepository: com.emfitsolutions.gopreach.data.repository.CircuitCodeRepository,
+    private val serverClock: com.emfitsolutions.gopreach.data.remote.ServerClock,
 ) : ViewModel() {
 
     val congregations: Flow<List<Congregation>> = congregationRepository.observeAll()
@@ -166,6 +171,15 @@ class FieldServiceReportViewModel(
     /** The workflow status of [congregationId]'s [month]; null = never submitted (Not Submitted). */
     fun submissionFor(congregationId: String?, month: Long): Flow<com.emfitsolutions.gopreach.data.model.CoMonthStatus?> =
         coReportRepository.observeStatuses().map { list -> if (congregationId == null) null else list.firstOrNull { it.id == com.emfitsolutions.gopreach.data.model.coReportId(congregationId, month) } }
+
+    /** Every month's workflow status of [congregationId] (a month with no entry has not been sent). */
+    fun submissionsFor(congregationId: String?): Flow<List<com.emfitsolutions.gopreach.data.model.CoMonthStatus>> =
+        coReportRepository.observeStatuses().map { list -> if (congregationId == null) emptyList() else list.filter { it.congregationId == congregationId } }
+
+    /** [publisherOverview] for several months at once (month start -> overview). */
+    fun publisherOverviews(congregationId: String?, months: List<Long>): Flow<Map<Long, PublisherOverview>> =
+        if (months.isEmpty()) kotlinx.coroutines.flow.flowOf(emptyMap())
+        else combine(months.map { publisherOverview(congregationId, it) }) { list -> months.zip(list).toMap() }
 
     /** Every month of [congregationId] the Circuit Overseer may see (Submitted / Received / Returned), newest first. */
     fun visibleMonthsFor(congregationId: String?): Flow<List<com.emfitsolutions.gopreach.data.model.CoMonthStatus>> =
@@ -203,23 +217,223 @@ class FieldServiceReportViewModel(
         )
     }
 
-    /** The month's whole-congregation table exactly as the sheet shows it right now: the Circuit Overseer's frozen copy. Null if it cannot be built (the send still goes). */
-    private suspend fun receivedCopyOf(congregationId: String, month: Long): com.emfitsolutions.gopreach.data.model.CoReceivedReport? = runCatching {
+    private fun previousMonth(month: Long): Long = Calendar.getInstance().apply { timeInMillis = month; add(Calendar.MONTH, -1) }.timeInMillis
+
+    private fun statusLabel(category: PublisherCategory): String = StatusColumn.of(category)?.label ?: category.name
+
+    /**
+     * What sending [month] involves, worked out before anything is sent. Each publisher's category is the one that applied IN that
+     * month (their own report for the month, an Admin confirmation, or the recorded category history) - never the current profile;
+     * a publisher with nothing on record is listed in [MonthSnapshotPlan.needs] for the Admin to confirm.
+     */
+    suspend fun planMonth(congregationId: String, month: Long): MonthSnapshotPlan {
+        val assignments = roleAssignmentRepository.observeAll().first()
+        val people = personRepository.observeAll().first().associateBy { it.id }
+        val reports = monthlyReportRepository.observeAll().first()
+        val history = categoryHistoryRepository.observeAll().first()
+        val currentCategory = mutableMapOf<String, PublisherCategory>()
+        val members = assignments
+            .filter { it.status == RoleAssignmentStatus.ACTIVE && it.congregationId == congregationId }
+            .mapNotNull { a ->
+                val category = (a.resolvedRoleTypeOrNull() as? RoleType.Publisher)?.category ?: return@mapNotNull null
+                if (category == PublisherCategory.REMOVED_PUBLISHER) null else people[a.personId]?.also { currentCategory[it.id] = category }
+            }
+            .distinctBy { it.id }
+        val previous = previousMonth(month)
+        val resolved = members.associate { it.id to com.emfitsolutions.gopreach.domain.PublisherCategoryResolver.resolve(it.id, month, reports, history) }
+        val needs = members.filter { resolved[it.id]?.category == null }
+            .sortedWith(compareBy({ it.lastName.lowercase() }, { it.firstName.lowercase() }))
+            .map { CategoryNeed(it.id, it.lastName.trim() + ", " + it.firstName.trim(), month, currentCategory[it.id]) }
+        val changes = members.mapNotNull { p ->
+            val now = resolved[p.id]?.category ?: return@mapNotNull null
+            val before = com.emfitsolutions.gopreach.domain.PublisherCategoryResolver.resolve(p.id, previous, reports, history).category ?: return@mapNotNull null
+            if (before == now) null
+            else com.emfitsolutions.gopreach.data.model.CoCategoryChange(p.id, p.lastName.trim() + ", " + p.firstName.trim(), statusLabel(before), statusLabel(now))
+        }.sortedBy { it.name.lowercase() }
+        return MonthSnapshotPlan(month, members.size, resolved, needs, changes)
+    }
+
+    /**
+     * The month's whole-congregation table exactly as the sheet shows it right now, with each publisher under the category they
+     * had in THAT month: the Circuit Overseer's frozen snapshot. Null if it cannot be built (the send is then refused, never made without it).
+     */
+    private suspend fun snapshotOf(
+        congregationId: String, month: Long, plan: MonthSnapshotPlan,
+        categories: Map<String, PublisherCategory>, confirmedBy: Map<String, String>, preparedByRole: String,
+    ): com.emfitsolutions.gopreach.data.model.CoReceivedReport? = runCatching {
         val congregation = congregations.first().firstOrNull { it.id == congregationId } ?: return@runCatching null
-        val sheet = sheetsFor(groupsFor(congregationId).first(), month, month, congregation).first().firstOrNull() ?: return@runCatching null
+        val sheet = sheetsFor(groupsFor(congregationId).first(), month, month, congregation, categories).first().firstOrNull() ?: return@runCatching null
+        val assignedCo = circuitCodeRepository.observeLinks().first()[congregationId]?.circuitOverseerPersonId?.takeIf { it.isNotBlank() }
         com.emfitsolutions.gopreach.data.model.CoReceivedReport(
             congregationId = congregationId, congregationName = congregation.name, periodMonth = month,
             rows = sheet.rows.map { r ->
-                com.emfitsolutions.gopreach.data.model.CoReceivedRow(r.number, r.status.label, r.name, r.reportsCount, r.hours, r.bibleStudies, r.remarks)
+                val category = categories[r.personId]
+                val source = if (r.personId in confirmedBy) com.emfitsolutions.gopreach.data.model.CategorySource.ADMIN_CONFIRMED
+                else plan.resolved[r.personId]?.source ?: com.emfitsolutions.gopreach.data.model.CategorySource.UNCONFIRMED
+                com.emfitsolutions.gopreach.data.model.CoReceivedRow(
+                    number = r.number, status = r.status.label, name = r.name, reportsCount = r.reportsCount, hours = r.hours,
+                    bibleStudies = r.bibleStudies, remarks = r.remarks, personId = r.personId, category = category?.name.orEmpty(),
+                    categorySource = source.name, categoryConfirmedByPersonId = confirmedBy[r.personId],
+                )
             },
+            categoryChanges = plan.changes,
+            preparedByRole = preparedByRole,
+            assignedCoPersonId = assignedCo,
+            schemaVersion = SNAPSHOT_SCHEMA_VERSION,
         )
     }.getOrNull()
 
-    suspend fun submitMonth(congregationId: String, month: Long, actorPersonId: String): com.emfitsolutions.gopreach.data.repository.CircuitResult {
+    /** The Circuit Overseer this congregation is assigned to (their name), or null when none is assigned. */
+    fun assignedOverseerName(congregationId: String?): Flow<String?> =
+        combine(circuitCodeRepository.observeLinks(), personRepository.observeAll()) { links, people ->
+            val id = congregationId?.let { links[it]?.circuitOverseerPersonId }?.takeIf { it.isNotBlank() }
+            id?.let { people.firstOrNull { p -> p.id == it }?.fullName }
+        }
+
+    /** The service months a user may report: every month up to and including the current one, by the SERVER's date (never just the device clock). */
+    suspend fun serverNow(): com.emfitsolutions.gopreach.data.remote.ServerClock.Reading = serverClock.read()
+
+    /**
+     * The live month as it would be sent right now (no confirmations asked, no history written), to see whether it differs from a sent
+     * snapshot. A publisher whose category is unknown keeps the category the sent snapshot used for them.
+     */
+    private suspend fun liveSnapshotOf(congregationId: String, month: Long, plan: MonthSnapshotPlan, sent: com.emfitsolutions.gopreach.data.model.CoReceivedReport?) =
+        snapshotOf(
+            congregationId, month, plan,
+            plan.resolved.mapNotNull { (id, r) -> r.category?.let { id to it } }.toMap() +
+                plan.needs.mapNotNull { n ->
+                    val kept = sent?.rows?.firstOrNull { it.personId == n.personId }?.category?.takeIf { it.isNotBlank() }?.let { runCatching { PublisherCategory.valueOf(it) }.getOrNull() }
+                    (kept ?: n.current)?.let { n.personId to it }
+                },
+            emptyMap(), "",
+        )
+
+    /** True when the live report for [month] differs from the snapshot already sent ([sent]) - the "Changes Since Submission" indicator. */
+    suspend fun hasChangesSince(congregationId: String, month: Long, sent: com.emfitsolutions.gopreach.data.model.CoReceivedReport): Boolean {
+        val live = liveSnapshotOf(congregationId, month, planMonth(congregationId, month), sent) ?: return false
+        return com.emfitsolutions.gopreach.domain.SnapshotComparison.compare(sent, live)?.hasChanges == true
+    }
+
+    /** The months among [months] that are Sent to CO (awaiting receipt) whose live report has changed since that snapshot was sent. Recomputed whenever the live data changes. */
+    fun changesSince(congregationId: String?, months: List<Long>): Flow<Set<Long>> =
+        if (congregationId == null || months.isEmpty()) kotlinx.coroutines.flow.flowOf(emptySet())
+        else combine(
+            monthlyReportRepository.observeAll(), roleAssignmentRepository.observeAll(), categoryHistoryRepository.observeAll(),
+            coReceivedRepository.observeReports(), coReportRepository.observeStatuses(),
+        ) { _, _, _, copies, statuses -> copies to statuses }.map { (copies, statuses) ->
+            months.filter { m ->
+                val st = statuses.firstOrNull { it.id == com.emfitsolutions.gopreach.data.model.coReportId(congregationId, m) }
+                if (st == null || st.status != com.emfitsolutions.gopreach.data.model.CoReportStatus.SUBMITTED) return@filter false
+                val sent = copies.firstOrNull { it.congregationId == congregationId && it.periodMonth == m && it.version == st.version } ?: return@filter false
+                runCatching { hasChangesSince(congregationId, m, sent) }.getOrDefault(false)
+            }.toSet()
+        }
+
+    /**
+     * Checks every selected month on its own BEFORE anything is sent: eligibility (not a future month by the server's date), whether it
+     * is already received, awaiting receipt (and whether it changed), returned or cancelled, whether it has any report data, and whether
+     * the "every publisher must submit" rule blocks it. One month failing never affects the others.
+     */
+    suspend fun validateMonths(congregationId: String, months: List<Long>): List<MonthValidation> {
+        val now = serverNow().now
+        val statuses = coReportRepository.observeStatuses().first()
+        val copies = coReceivedRepository.observeReports().first()
+        val requireAll = requireAllPublishersSubmitted.first()
+        return months.distinct().sorted().map { month ->
+            val st = statuses.firstOrNull { it.id == com.emfitsolutions.gopreach.data.model.coReportId(congregationId, month) }
+            val status = st?.status ?: com.emfitsolutions.gopreach.data.model.CoReportStatus.NOT_SUBMITTED
+            val version = st?.version ?: 0
+            fun result(check: MonthCheck, message: String, needs: Int = 0) = MonthValidation(month, check, status, version, message, needs)
+            if (com.emfitsolutions.gopreach.data.model.isFutureServiceMonth(month, now)) return@map result(MonthCheck.FUTURE, "A future month cannot be reported.")
+            if (status == com.emfitsolutions.gopreach.data.model.CoReportStatus.RECEIVED) {
+                return@map result(MonthCheck.ALREADY_RECEIVED, "Already received by the Circuit Overseer (version " + version + "). Only the Circuit Overseer can return it for editing.")
+            }
+            val plan = planMonth(congregationId, month)
+            if (plan.publisherCount == 0) return@map result(MonthCheck.NO_DATA, "No active publishers, so there is no report to send for this month.")
+            val overview = publisherOverview(congregationId, month).first()
+            if (requireAll && overview.notSubmitted > 0) {
+                return@map result(MonthCheck.PUBLISHERS_PENDING, overview.notSubmitted.toString() + " publisher(s) have not submitted their report, and sending is set to wait for everyone.")
+            }
+            val needs = plan.needs.size
+            val needsNote = if (needs > 0) " $needs publisher categor" + (if (needs == 1) "y needs" else "ies need") + " your confirmation." else ""
+            when (status) {
+                com.emfitsolutions.gopreach.data.model.CoReportStatus.SUBMITTED -> {
+                    val sent = copies.firstOrNull { it.congregationId == congregationId && it.periodMonth == month && it.version == version }
+                    val changed = sent != null && runCatching { hasChangesSince(congregationId, month, sent) }.getOrDefault(true)
+                    if (sent != null && !changed) result(MonthCheck.NO_CHANGES, "Version $version is awaiting receipt and the live report has not changed since - nothing new to send.")
+                    else result(MonthCheck.SEND_UPDATE, "Version $version is awaiting receipt; the live report has changed since. An updated snapshot (version " + (version + 1) + ") will be sent." + needsNote, needs)
+                }
+                com.emfitsolutions.gopreach.data.model.CoReportStatus.RETURNED ->
+                    result(MonthCheck.RESEND_AFTER_RETURN, "Returned for editing" + (st?.returnReason?.let { ": $it" } ?: "") + ". The corrected report will be sent as version " + (version + 1) + "." + needsNote, needs)
+                com.emfitsolutions.gopreach.data.model.CoReportStatus.CANCELLED ->
+                    result(MonthCheck.RESEND_AFTER_CANCEL, "The previous submission was cancelled" + (st?.cancelReason?.let { ": $it" } ?: "") + ". It will be sent again as version " + (version + 1) + "." + needsNote, needs)
+                else -> result(MonthCheck.READY, "Ready to send as version 1." + needsNote, needs)
+            }
+        }
+    }
+
+    /**
+     * Sends ONE month as an independent snapshot. [confirmations] are the categories the Admin confirmed for publishers with nothing
+     * on record for this month; they are saved to the category history and the audit log, and recorded in the snapshot itself.
+     * [expectedVersion] is the version of the month that was validated: if the month has moved on nothing is sent, so a repeated tap or
+     * retry can never create a duplicate version. Refused (nothing sent) while any publisher's category is still unknown.
+     */
+    suspend fun submitMonth(
+        congregationId: String, month: Long, actorPersonId: String,
+        confirmations: Map<String, PublisherCategory> = emptyMap(),
+        expectedVersion: Int? = null,
+    ): com.emfitsolutions.gopreach.data.repository.CircuitResult {
+        val plan = planMonth(congregationId, month)
+        val stillUnknown = plan.needs.filter { it.personId !in confirmations }
+        if (stillUnknown.isNotEmpty()) {
+            return com.emfitsolutions.gopreach.data.repository.CircuitResult.Conflict(
+                "Confirm the " + monthLabel(month) + " service category of " + stillUnknown.size + " publisher" + (if (stillUnknown.size == 1) "" else "s") + " before sending.",
+            )
+        }
+        val actor = actorFor(actorPersonId)
+        val confirmedNow = plan.needs.associate { it.personId to confirmations.getValue(it.personId) }
+        confirmedNow.forEach { (personId, category) ->
+            categoryHistoryRepository.confirm(personId, congregationId, month, category, actorPersonId, note = "Confirmed while sending the " + monthLabel(month) + " report")
+            auditLogRepository.log(
+                actorPersonId = actorPersonId, action = "CONFIRM_PUBLISHER_CATEGORY_FOR_SNAPSHOT", targetType = "Person", targetId = personId,
+                congregationId = congregationId, details = "Month " + monthLabel(month) + ": confirmed " + category,
+            )
+        }
+        val categories = plan.resolved.mapNotNull { (id, r) -> r.category?.let { id to it } }.toMap() + confirmedNow
+        val snapshot = snapshotOf(congregationId, month, plan, categories, confirmedNow.keys.associateWith { actorPersonId }, actor.role)
+            ?: return com.emfitsolutions.gopreach.data.repository.CircuitResult.Error("The " + monthLabel(month) + " snapshot could not be prepared, so nothing was sent.")
         // The month's historical statistics (publishers, pioneers, elders, reports, meeting attendance) are saved with the submission.
         val existing = attendanceRepository.observeStatistics().first().firstOrNull { it.id == attendanceRepository.statisticsIdFor(congregationId, month) }
         val stats = runCatching { statisticsBuilder.build(congregationId, month, actorPersonId, existing) }.getOrNull()
-        return coReportService.submit(congregationId, month, actorFor(actorPersonId), stats, receivedCopyOf(congregationId, month))
+        return coReportService.submit(congregationId, month, actor, stats, snapshot, expectedVersion)
+    }
+
+    /**
+     * Sends several months, each as its own independent snapshot, one after another, and reports every month on its own. [expectedVersions]
+     * is the version each month had when it was validated; a month that has moved on since is skipped (never sent twice), so a retry after a
+     * partial failure only re-sends what failed and a double tap cannot duplicate a snapshot.
+     */
+    suspend fun submitMonths(
+        congregationId: String, months: List<Long>, actorPersonId: String,
+        confirmations: Map<Long, Map<String, PublisherCategory>> = emptyMap(),
+        expectedVersions: Map<Long, Int> = emptyMap(),
+    ): List<MonthSendResult> = months.map { month ->
+        val id = com.emfitsolutions.gopreach.data.model.coReportId(congregationId, month)
+        val before = coReportRepository.observeStatuses().first().firstOrNull { it.id == id }
+        val expected = expectedVersions[month]
+        if (expected != null && (before?.version ?: 0) != expected) {
+            MonthSendResult(month, MonthSendState.ALREADY_SENT, "Already sent as version " + (before?.version ?: 0) + " - not sent again.", before?.version, before?.submittedAt)
+        } else {
+            val problem = runCatching { submitMonth(congregationId, month, actorPersonId, confirmations[month].orEmpty(), expected) }
+                .fold(
+                    onSuccess = { it.messageOrNull() },
+                    onFailure = { it.message ?: "Couldn't send this month." },
+                )
+            if (problem == null) {
+                val after = coReportRepository.observeStatuses().first().firstOrNull { it.id == id }
+                MonthSendResult(month, MonthSendState.SENT, null, after?.version, after?.submittedAt)
+            } else MonthSendResult(month, MonthSendState.FAILED, problem, before?.version, null)
+        }
     }
 
     suspend fun undoSubmission(congregationId: String, month: Long, actorPersonId: String) =
@@ -434,6 +648,9 @@ class FieldServiceReportViewModel(
          * (every FS Group's publishers together, plus any publisher without a group). [groups] are then only used to
          * name each publisher's FS Group in the Remarks. */
         wholeCongregation: Congregation? = null,
+        /** For a CO snapshot: the category each publisher had IN the month (publisher id -> category). A publisher missing from it falls back to the
+         * live behaviour; the snapshot builder only ever passes a complete map, so a current profile is never used as a guess. */
+        categoryOverride: Map<String, PublisherCategory>? = null,
     ): Flow<List<FieldServiceReportSheet>> =
         combine(
             roleAssignmentRepository.observeAll(),
@@ -481,7 +698,9 @@ class FieldServiceReportViewModel(
                             .map { (_, list) -> list.maxByOrNull { it.submittedAt ?: it.lastEditedAt ?: 0L }!! }
                             .sortedBy { it.periodMonth }
                         // The status of the latest report in the period; otherwise their current one.
-                        val status = StatusColumn.of(own.lastOrNull()?.category ?: assignedCategory) ?: StatusColumn.of(assignedCategory)
+                        val status = categoryOverride?.get(person.id)?.let { StatusColumn.of(it) }
+                            ?: if (categoryOverride?.containsKey(person.id) == true) null
+                            else StatusColumn.of(own.lastOrNull()?.category ?: assignedCategory) ?: StatusColumn.of(assignedCategory)
                         Triple(person, own, status)
                     }
                     .filter { it.third != null }

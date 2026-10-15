@@ -1,4 +1,4 @@
-package com.emfitsolutions.gopreach.domain
+﻿package com.emfitsolutions.gopreach.domain
 
 import com.emfitsolutions.gopreach.data.model.CoMonthStatus
 import com.emfitsolutions.gopreach.data.model.CoReportStatus
@@ -64,6 +64,8 @@ object ReportSubmissionPlanner {
         includeFieldService: Boolean = true,
         includeAttendance: Boolean = true,
         includeComparative: Boolean = true,
+        /** The Meeting Attendance workflow status of each month (coAttendanceMonthStatus); a month with none falls back to its recorded meetings. */
+        attendanceStatuses: List<CoMonthStatus> = emptyList(),
     ): List<SubmissionItem> {
         val usable = months.filter { it <= monthStartNow }
         val out = mutableListOf<SubmissionItem>()
@@ -73,6 +75,7 @@ object ReportSubmissionPlanner {
                 CoReportStatus.SUBMITTED -> SubmissionStatus.SUBMITTED
                 CoReportStatus.RECEIVED -> SubmissionStatus.RECEIVED
                 CoReportStatus.RETURNED -> SubmissionStatus.RETURNED
+                CoReportStatus.CANCELLED -> SubmissionStatus.READY
                 CoReportStatus.NOT_SUBMITTED -> if (m < monthStartNow) SubmissionStatus.READY else SubmissionStatus.OPEN
             }
             out += SubmissionItem(
@@ -84,9 +87,11 @@ object ReportSubmissionPlanner {
             val recs = attendance.filter { it.congregationId == congregationId && it.serviceMonth == m && !it.deleted }
             val mid = recs.count { it.meetingType == MeetingType.MIDWEEK }
             val wk = recs.count { it.meetingType == MeetingType.WEEKEND }
-            val frozen = statistics.any { it.congregationId == congregationId && it.serviceMonth == m && it.isFrozen }
+            val st = attendanceStatuses.firstOrNull { it.congregationId == congregationId && it.periodMonth == m }
             val status = when {
-                frozen -> SubmissionStatus.RECEIVED
+                st?.status == CoReportStatus.SUBMITTED -> SubmissionStatus.SUBMITTED
+                st?.status == CoReportStatus.RECEIVED -> SubmissionStatus.RECEIVED
+                st?.status == CoReportStatus.RETURNED -> SubmissionStatus.RETURNED
                 mid > 0 && wk > 0 -> SubmissionStatus.READY
                 mid > 0 || wk > 0 -> SubmissionStatus.DRAFT
                 m < monthStartNow -> SubmissionStatus.NOT_STARTED
@@ -95,7 +100,7 @@ object ReportSubmissionPlanner {
             out += SubmissionItem(
                 SubmissionKind.ATTENDANCE, congregationId, "${monthLabel(m)} – Meeting Attendance", monthLabel(m), m, m, status,
                 detail = "Midweek $mid recorded · Weekend $wk recorded" + if (mid == 0 || wk == 0) " · Missing" else "",
-                updatedAt = recs.maxOfOrNull { it.updatedAt } ?: 0L,
+                remark = st?.returnReason ?: st?.coRemarks, updatedAt = maxOf(st?.updatedAt ?: 0L, recs.maxOfOrNull { it.updatedAt } ?: 0L),
             )
         }
         if (includeComparative && usable.isNotEmpty()) {

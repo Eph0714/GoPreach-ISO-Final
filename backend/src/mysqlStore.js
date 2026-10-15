@@ -20,6 +20,18 @@ export class MysqlStore {
       person_id VARCHAR(190) NOT NULL PRIMARY KEY, pw_hash VARCHAR(400) NOT NULL, disabled TINYINT(1) NOT NULL DEFAULT 0,
       created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, last_login BIGINT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    // Passkeys: only the PUBLIC key is stored. credential_id is WebAuthn's base64url id.
+    await pool.query(`CREATE TABLE IF NOT EXISTS passkeys (
+      credential_id VARCHAR(512) NOT NULL PRIMARY KEY,
+      person_id VARCHAR(190) NOT NULL,
+      public_key TEXT NOT NULL,
+      counter BIGINT NOT NULL DEFAULT 0,
+      transports VARCHAR(200) NULL,
+      name VARCHAR(100) NULL,
+      created_at BIGINT NOT NULL,
+      last_used_at BIGINT NULL,
+      KEY idx_person (person_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
     await pool.query(`CREATE TABLE IF NOT EXISTS refresh_tokens (
       token_hash CHAR(64) NOT NULL PRIMARY KEY, person_id VARCHAR(190) NOT NULL, auth_time BIGINT NOT NULL, expires_at BIGINT NOT NULL,
       KEY idx_person (person_id)
@@ -127,6 +139,16 @@ export class MysqlStore {
     return rows.length ? { mime: rows[0].mime, data: rows[0].data } : null;
   }
 
+  async getFileByPath(path) {
+    const [rows] = await this.pool.query('SELECT mime, data FROM file_blobs WHERE path = ? LIMIT 1', [path]);
+    return rows.length ? { mime: rows[0].mime, data: rows[0].data } : null;
+  }
+
+  async getFileOwner(path) {
+    const [rows] = await this.pool.query('SELECT owner FROM file_blobs WHERE path = ? LIMIT 1', [path]);
+    return rows.length ? rows[0].owner : null;
+  }
+
   async deleteFile(path) { await this.pool.query('DELETE FROM file_blobs WHERE path = ?', [path]); }
 
   // ---- sign-in accounts ----
@@ -144,6 +166,40 @@ export class MysqlStore {
 
   async setPassword(personId, pwHash) {
     await this.pool.query('UPDATE accounts SET pw_hash = ?, updated_at = ? WHERE person_id = ?', [pwHash, Date.now(), personId]);
+  }
+
+  // ---- passkeys ----
+  static passkeyRow(r) {
+    return {
+      credentialId: r.credential_id, personId: r.person_id, publicKey: r.public_key, counter: Number(r.counter),
+      transports: r.transports ? JSON.parse(r.transports) : [], name: r.name, createdAt: Number(r.created_at), lastUsedAt: r.last_used_at == null ? null : Number(r.last_used_at),
+    };
+  }
+
+  async addPasskey(p) {
+    await this.pool.query(
+      'INSERT INTO passkeys (credential_id, person_id, public_key, counter, transports, name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [p.credentialId, p.personId, p.publicKey, p.counter, JSON.stringify(p.transports ?? []), p.name ?? null, p.createdAt],
+    );
+  }
+
+  async getPasskey(credentialId) {
+    const [rows] = await this.pool.query('SELECT * FROM passkeys WHERE credential_id = ?', [credentialId]);
+    return rows.length ? MysqlStore.passkeyRow(rows[0]) : null;
+  }
+
+  async listPasskeys(personId) {
+    const [rows] = await this.pool.query('SELECT * FROM passkeys WHERE person_id = ? ORDER BY created_at', [personId]);
+    return rows.map(MysqlStore.passkeyRow);
+  }
+
+  async updatePasskeyCounter(credentialId, counter) {
+    await this.pool.query('UPDATE passkeys SET counter = ?, last_used_at = ? WHERE credential_id = ?', [counter, Date.now(), credentialId]);
+  }
+
+  async deletePasskey(personId, credentialId) {
+    const [res] = await this.pool.query('DELETE FROM passkeys WHERE credential_id = ? AND person_id = ?', [credentialId, personId]);
+    return res.affectedRows === 1;
   }
 
   async touchLogin(personId) { await this.pool.query('UPDATE accounts SET last_login = ? WHERE person_id = ?', [Date.now(), personId]); }

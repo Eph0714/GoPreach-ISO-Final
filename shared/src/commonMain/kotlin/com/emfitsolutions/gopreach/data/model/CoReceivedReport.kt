@@ -13,6 +13,24 @@ data class CoReceivedRow(
     val hours: Double? = null,
     val bibleStudies: Int? = null,
     val remarks: String = "",
+    /** The publisher this line is about (so two sends of the same month can be compared line by line). Empty on copies sent before this existed. */
+    val personId: String = "",
+    /** The service category [PublisherCategory] name that applied to this publisher IN this month (empty on older copies). */
+    val category: String = "",
+    /** How that category was determined: a [CategorySource] name (empty on older copies). */
+    val categorySource: String = "",
+    /** The Admin who confirmed the category for this month when [categorySource] is ADMIN_CONFIRMED. */
+    val categoryConfirmedByPersonId: String? = null,
+)
+
+/** A publisher whose service category in this snapshot's month differs from the month before (what changed, for the Circuit Overseer). */
+@kotlinx.serialization.Serializable
+data class CoCategoryChange(
+    val personId: String = "",
+    val name: String = "",
+    /** The status label of the previous month ("Pub", "AP", "RP", ...). */
+    val from: String = "",
+    val to: String = "",
 )
 
 /**
@@ -34,7 +52,21 @@ data class CoReceivedReport(
     val submittedByPersonId: String = "",
     val submittedByName: String = "",
     val rows: List<CoReceivedRow> = emptyList(),
+    /** Publishers whose category in this month differs from the previous month. */
+    val categoryChanges: List<CoCategoryChange> = emptyList(),
+    /** The congregation's own report this snapshot was taken from (congregation id + month), so every send of the month is traceable to it. */
+    val originalReportId: String = "",
+    /** The Circuit Overseer the congregation was assigned to when it was sent. */
+    val assignedCoPersonId: String? = null,
+    /** Which layout / calculation rules the snapshot was produced under, kept so an old snapshot is always read the way it was made. */
+    val schemaVersion: Int = 1,
+    /** Who prepared the send and in which role (the same person as [submittedByPersonId]; kept with the frozen copy for the history). */
+    val preparedByRole: String = "",
 ) {
+    /** How many lines carry each status label ("Pub", "AP", "RP", ...), in the order of first appearance. */
+    val countByStatus: Map<String, Int> get() = rows.groupingBy { it.status }.eachCount()
+    val categoriesConfirmedByAdmin: Int get() = rows.count { it.categorySource == "ADMIN_CONFIRMED" }
+
     val publisherCount: Int get() = rows.size
     val participatedCount: Int get() = rows.count { it.bibleStudies != null }
     val totalHours: Double get() = rows.sumOf { it.hours ?: 0.0 }

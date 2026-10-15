@@ -1,4 +1,4 @@
-package com.emfitsolutions.gopreach.ui.screens.attendance
+﻿package com.emfitsolutions.gopreach.ui.screens.attendance
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -145,7 +145,7 @@ fun ReportSubmissionScreen(
     val months = remember(applied) { generateSequence(applied.first) { shiftMonth(it, 1) }.takeWhile { it <= applied.second }.take(120).toList() }
     val planned = ReportSubmissionPlanner.plan(
         congregation?.id.orEmpty(), months, thisMonth, ::monthName, sources.statuses, sources.attendance, sources.statistics, sources.comparative,
-        includeAttendance = !isCo,
+        attendanceStatuses = sources.attendanceStatuses,
     ).let { l -> if (isCo) l.filter { it.status in setOf(SubmissionStatus.SUBMITTED, SubmissionStatus.RETURNED, SubmissionStatus.RECEIVED) } else l }
     val folderSummary = ReportSubmissionPlanner.summarize(planned)
 

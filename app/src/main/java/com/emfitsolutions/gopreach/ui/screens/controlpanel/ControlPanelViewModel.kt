@@ -98,5 +98,22 @@ class ControlPanelViewModel(
         }
     }
 
+    /** Super-Admin only: re-checked here, not just by the screen showing the checkbox. [onResult] gets null on success. */
+    fun saveAllowCaptureImage(allowed: Boolean, actorPersonId: String, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            val role = com.emfitsolutions.gopreach.domain.PermissionChecker.highestAdminRole(roleAssignmentRepository.observeForPerson(actorPersonId).first())
+            if (role != com.emfitsolutions.gopreach.data.model.AdminRole.SUPER_ADMIN) {
+                onResult("Only the Super Admin can change this setting.")
+                return@launch
+            }
+            try {
+                appSettingsRepository.saveAllowCaptureImage(allowed, actorPersonId)
+                onResult(null)
+            } catch (e: Exception) {
+                onResult(e.localizedMessage ?: "Couldn't save the setting.")
+            }
+        }
+    }
+
     fun orphanCleanupResultShown() = _uiState.update { it.copy(orphanCleanupResult = null) }
 }

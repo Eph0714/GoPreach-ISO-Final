@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.deletedrecords
 
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -79,6 +83,7 @@ fun DeletedRecordsScreen(
     val toast = rememberActionToast()
     val scope = rememberCoroutineScope()
     val dateFormat = remember { SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()) }
+    val viewMode = rememberRecordViewMode("deleted_records")
 
     // Anything past its retention period is removed when this screen opens (when that setting is on).
     LaunchedEffect(access, settings.trashAutoDeleteEnabled, settings.trashRetentionDays) { viewModel.purgeExpired(access) }
@@ -155,7 +160,19 @@ fun DeletedRecordsScreen(
                     )
                 }
             }
-            items(filtered, key = { it.id }) { record ->
+            item { RecordViewToggle(viewMode) }
+            recordItems(
+                viewMode, filtered, { it.id },
+                listOf(
+                    UniversalColumn<com.emfitsolutions.gopreach.data.model.DeletedRecord>("Record", 200.dp) { it.label },
+                    UniversalColumn("Type", 130.dp) { it.recordType },
+                    UniversalColumn("Module", 160.dp) { it.module },
+                    UniversalColumn("Congregation", 160.dp) { congregationName[it.congregationId].orEmpty() },
+                    UniversalColumn("Deleted By", 150.dp) { it.deletedByName },
+                    UniversalColumn("Date Deleted", 150.dp) { dateFormat.format(java.util.Date(it.deletedAt)) },
+                ),
+                onRowClick = { restoreTarget = it },
+            ) { record ->
                 DeletedRecordCard(
                     record = record,
                     congregation = congregationName[record.congregationId],

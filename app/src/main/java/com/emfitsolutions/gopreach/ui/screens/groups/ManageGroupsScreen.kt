@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.groups
 
 import androidx.compose.foundation.verticalScroll
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.background
@@ -131,20 +135,12 @@ fun ManageGroupsScreen(
         },
         floatingActionButton = {
             if (canAddOrRemove) {
-                FloatingActionButton(onClick = { showCreateDialog = true }) {
-                    Icon(Icons.Rounded.Add, contentDescription = "New Field Service Group")
-                }
+                androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showCreateDialog = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("New Field Service Group") })
             }
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
-                Text("Show Inactive")
-            }
+            androidx.compose.material3.FilterChip(selected = showInactive, onClick = { showInactive = !showInactive }, label = { Text("Include inactive") }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             if (fixedCongregationId == null) {
                 CongregationFilterDropdown(
                     congregations = congregations,
@@ -164,96 +160,55 @@ fun ManageGroupsScreen(
                 Text("No field service groups yet. Tap + to add one.", style = MaterialTheme.typography.bodyMedium)
             }
         } else {
+            val viewMode = rememberRecordViewMode("groups")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { RecordFound(rows.size) }
-                items(rows, key = { it.group.id }) { row ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    // "Same Group = Same Color" — the same
-                                    // swatch the Territory Map/Group Report
-                                    // use for this Group (GroupColorPalette
-                                    // is the shared source both read).
-                                    Box(
-                                        modifier = Modifier.size(14.dp)
-                                            .clip(CircleShape)
-                                            .background(GroupColorPalette.parseHex(row.group.color ?: GroupColorPalette.UNASSIGNED_COLOR)),
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(row.group.name, style = MaterialTheme.typography.titleMedium)
-                                }
-                                if (!readOnly) {
-                                    Row {
-                                        IconButton(onClick = { pendingEdit = row.group }) {
-                                            Icon(Icons.Rounded.Edit, contentDescription = "Edit field service group")
-                                        }
-                                        if (!canAddOrRemove) {
-                                            // group-level user: edit own group only
-                                        } else if (row.group.status == RecordStatus.ACTIVE) {
-                                            IconButton(onClick = { pendingDelete = row.group }) {
-                                                Icon(Icons.Rounded.Delete, contentDescription = "Delete field service group")
-                                            }
-                                        } else {
-                                            IconButton(onClick = { viewModel.setStatus(row.group, RecordStatus.ACTIVE, currentPersonId) }) {
-                                                Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Reactivate")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            if (row.group.status == RecordStatus.INACTIVE) {
-                                Text("Inactive", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                            }
-                            Text(
-                                "${RegularElderRole.GROUP_OVERSEER.displayLabel()}: ${row.overseerName ?: "Unassigned"}",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text(
-                                "${RegularElderRole.GROUP_SERVANT.displayLabel()}: ${row.servantName ?: "Unassigned"}",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            Text(
-                                "${RegularElderRole.GROUP_ASSISTANT.displayLabel()}: ${row.assistantName ?: "Unassigned"}",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            if (row.group.regularElderPersonId != null && !row.group.isComplete) {
-                                Text(
-                                    "Existing assignment on file — open Edit to place them in a role.",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.secondary,
-                                )
-                            }
-                            if (!row.group.isComplete) {
-                                val missing = row.group.missingRoles().joinToString(", ") { it.displayLabel() }
-                                Card(
-                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                                ) {
-                                    Column(modifier = Modifier.padding(8.dp)) {
-                                        Text(
-                                            "Field Service Group Assignment Incomplete",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onErrorContainer,
-                                        )
-                                        Text(
-                                            "Missing: $missing",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onErrorContainer,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
+                item {
+                    Text(
+                        "${rows.size} " + if (rows.size == 1) "group" else "groups",
+                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                item { RecordViewToggle(viewMode) }
+                recordItems(
+                    viewMode, rows, { it.group.id },
+                    listOf(
+                            UniversalColumn<com.emfitsolutions.gopreach.ui.screens.groups.GroupRow>("Group", 170.dp) { it.group.name },
+                            UniversalColumn("Overseer", 170.dp) { it.overseerName ?: "Unassigned" },
+                            UniversalColumn("Servant", 170.dp) { it.servantName ?: "Unassigned" },
+                            UniversalColumn("Assistant", 170.dp) { it.assistantName ?: "Unassigned" },
+                            UniversalColumn("Status", 90.dp) { if (it.group.status == RecordStatus.ACTIVE) "Active" else "Inactive" },
+                    ),
+                    onRowClick = { pendingEdit = it.group },
+                ) { row ->
+                    com.emfitsolutions.gopreach.ui.screens.elders.PersonRecordCard(
+                        name = row.group.name,
+                        detail = listOf(
+                            "${RegularElderRole.GROUP_OVERSEER.displayLabel()}: ${row.overseerName ?: "Unassigned"}",
+                            "${RegularElderRole.GROUP_SERVANT.displayLabel()}: ${row.servantName ?: "Unassigned"}",
+                            "${RegularElderRole.GROUP_ASSISTANT.displayLabel()}: ${row.assistantName ?: "Unassigned"}",
+                        ).joinToString("\n"),
+                        active = row.group.status == RecordStatus.ACTIVE,
+                        readOnly = readOnly,
+                        hasTemporarySignIn = false,
+                        avatarColor = GroupColorPalette.parseHex(row.group.color ?: GroupColorPalette.UNASSIGNED_COLOR),
+                        // "Same Group = Same Color": the same swatch the Territory Map and Group Report use for this group.
+                        note = when {
+                            !row.group.isComplete -> "Assignment incomplete - missing: " + row.group.missingRoles().joinToString(", ") { it.displayLabel() } +
+                                if (row.group.regularElderPersonId != null) ". Existing assignment on file - open Edit to place them in a role." else ""
+                            else -> null
+                        },
+                        onEdit = { pendingEdit = row.group },
+                        // A group-level user edits their own group only: no delete or restore for them.
+                        canRemove = canAddOrRemove,
+                        onDelete = { pendingDelete = row.group },
+                        onRestore = { viewModel.setStatus(row.group, RecordStatus.ACTIVE, currentPersonId) },
+                        onShowSignIn = {},
+                        menuExtras = {},
+                    )
                 }
             }
         }

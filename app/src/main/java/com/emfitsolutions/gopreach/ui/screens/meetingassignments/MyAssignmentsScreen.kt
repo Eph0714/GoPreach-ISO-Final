@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.meetingassignments
 
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -79,13 +83,22 @@ fun MyAssignmentsScreen(
                 )
             }
         } else {
+            val viewMode = rememberRecordViewMode("my_assignments")
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { RecordFound(rows.size) }
-                items(rows, key = { it.rowKey() }) { row -> MyAssignmentCard(row, dateFormat) }
+                item { RecordViewToggle(viewMode) }
+                recordItems(
+                    viewMode, rows, { it.rowKey() },
+                    listOf(
+                            UniversalColumn("Meeting", 200.dp) { when (it) { is MyAssignmentRow.Midweek -> "Midweek Meeting"; is MyAssignmentRow.PublicTalk -> "Public Talk and Watchtower"; is MyAssignmentRow.Cart -> "Cart" } },
+                            UniversalColumn("When", 190.dp) { when (it) { is MyAssignmentRow.Midweek -> formatWeekRange(it.weekStart); is MyAssignmentRow.PublicTalk -> dateFormat.format(Date(it.row.date)); is MyAssignmentRow.Cart -> dateFormat.format(Date(it.row.date)) } },
+                            UniversalColumn("Assignment / Role", 260.dp) { when (it) { is MyAssignmentRow.Midweek -> it.particular; is MyAssignmentRow.PublicTalk -> it.matchedRoles.joinToString(", "); is MyAssignmentRow.Cart -> "" } },
+                    ),
+                ) { row -> MyAssignmentCard(row, dateFormat) }
             }
         }
     }

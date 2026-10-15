@@ -16,6 +16,7 @@ import com.emfitsolutions.gopreach.data.model.FUTURE_MONTH_MESSAGE
 import com.emfitsolutions.gopreach.data.model.coReportId
 import com.emfitsolutions.gopreach.data.model.isFutureServiceMonth
 import com.emfitsolutions.gopreach.data.remote.PushOp
+import com.emfitsolutions.gopreach.data.remote.PushResult
 import com.emfitsolutions.gopreach.data.remote.SyncApi
 import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
@@ -39,6 +40,25 @@ internal class ServerWriter(
 
     inline fun <reified T> op(collection: String, id: String, value: T) =
         Op(collection, id, DocJson.parseToJsonElement(DocJson.encode(value)) as JsonObject)
+
+    /**
+     * Like [push], but also returns what the server said about EACH op (null when the request never completed). The server judges every op
+     * in its own transaction, so a batch can be accepted in part: callers that need "all or nothing" use this to notice and repair that.
+     */
+    suspend fun pushChecked(ops: List<Op>): Pair<CircuitResult, List<PushResult>?> {
+        if (!connectivity.isOnline()) return CircuitResult.Offline() to null
+        return try {
+            val results = api.push(ops.map { PushOp(it.collection, it.id, if (it.delete) "delete" else "set", it.json) })
+            val bad = results.firstOrNull { !it.isOk }
+            val outcome = when {
+                bad == null -> CircuitResult.Success
+                else -> CircuitResult.Conflict(bad.reason?.takeIf { it.isNotBlank() } ?: "The server did not accept part of that change. Reload and try again.")
+            }
+            outcome to results
+        } catch (e: Exception) {
+            CircuitResult.Error(e.message ?: "Couldn't reach the server. Please try again.") to null
+        }
+    }
 
     /** Pushes [ops] in order; null = all accepted, otherwise the message to show. */
     suspend fun push(ops: List<Op>): CircuitResult {
@@ -79,13 +99,16 @@ class BackendCoFieldServiceReportService(
 
     private suspend fun statsDoc(id: String) = offline.get<CongregationMonthlyStatistics>(stats, id)
 
-    override suspend fun submit(congregationId: String, periodMonth: Long, actor: SubmissionActor, statistics: CongregationMonthlyStatistics?, received: com.emfitsolutions.gopreach.data.model.CoReceivedReport?): CircuitResult {
+    override suspend fun submit(congregationId: String, periodMonth: Long, actor: SubmissionActor, statistics: CongregationMonthlyStatistics?, received: com.emfitsolutions.gopreach.data.model.CoReceivedReport?, expectedVersion: Int?): CircuitResult {
         if (isFutureServiceMonth(periodMonth, nowMillis())) return CircuitResult.Conflict(FUTURE_MONTH_MESSAGE)
         val id = coReportId(congregationId, periodMonth)
         val now = nowMillis()
         val existing = offline.get<CoMonthStatus>(statuses, id)
         val from = existing?.status ?: CoReportStatus.NOT_SUBMITTED
-        if (existing != null && !from.canSend) return CircuitResult.Conflict("This month is already ${from.label.lowercase()} — it cannot be submitted again.")
+        if (expectedVersion != null && (existing?.version ?: 0) != expectedVersion) {
+            return CircuitResult.Conflict("This month was already sent as version ${existing?.version ?: 0} - nothing was sent again. Refresh and check its status.")
+        }
+        if (existing != null && !(from.canSend || from.canSendUpdate)) return CircuitResult.Conflict("This month is already ${from.label.lowercase()} — it cannot be submitted again.")
         val next = (existing ?: CoMonthStatus(id = id, congregationId = congregationId, periodMonth = periodMonth)).copy(
             status = CoReportStatus.SUBMITTED, version = (existing?.version ?: 0) + 1, submittedAt = now, submittedByPersonId = actor.personId, submittedByName = actor.name, updatedAt = now,
         )
@@ -94,11 +117,28 @@ class BackendCoFieldServiceReportService(
             if (statistics != null) add(writer.op(stats, id, statistics))
             if (received != null) {
                 val copyId = "${id}_${next.version}"
-                add(writer.op(CoReceivedReportRepository.REPORTS, copyId, received.copy(id = copyId, congregationId = congregationId, periodMonth = periodMonth, version = next.version, submittedAt = now, submittedByPersonId = actor.personId, submittedByName = actor.name)))
+                add(writer.op(CoReceivedReportRepository.REPORTS, copyId, received.copy(id = copyId, congregationId = congregationId, periodMonth = periodMonth, version = next.version, submittedAt = now, submittedByPersonId = actor.personId, submittedByName = actor.name, originalReportId = id)))
             }
-            add(event(id, next, actor, if (from == CoReportStatus.RETURNED) "Corrected report submitted" else "Report submitted to the Circuit Overseer", from, CoReportStatus.SUBMITTED, null, null))
+            add(event(id, next, actor, when (from) { CoReportStatus.RETURNED -> "Corrected report submitted (version ${next.version})"; CoReportStatus.SUBMITTED -> "Updated snapshot sent while awaiting receipt (version ${next.version})"; CoReportStatus.CANCELLED -> "Report sent again after cancellation (version ${next.version})"; else -> "Report submitted to the Circuit Overseer (version ${next.version})" }, from, CoReportStatus.SUBMITTED, null, null))
         }
-        return writer.push(ops).also { if (it is CircuitResult.Success) offline.cacheFromServer(statuses, id, next) }
+        val (outcome, results) = writer.pushChecked(ops)
+        if (outcome is CircuitResult.Success) { offline.cacheFromServer(statuses, id, next); return outcome }
+        if (results == null || results.getOrNull(0)?.isOk != true) return outcome // nothing was committed (the status is the first op)
+
+        // The month's status was accepted but another part was not. Try the rejected parts once more; a month must never be left "sent" with no
+        // frozen copy of the report, so if the copy still cannot be saved the send is taken back and the sender is told nothing was sent.
+        val failed = ops.indices.filter { results.getOrNull(it)?.isOk != true }
+        val retry = writer.pushChecked(failed.map { ops[it] }).second
+        val stillFailed = failed.filterIndexed { n, _ -> retry?.getOrNull(n)?.isOk != true }
+        if (stillFailed.isEmpty()) { offline.cacheFromServer(statuses, id, next); return CircuitResult.Success }
+        val copyId = "${id}_${next.version}"
+        if (received != null && stillFailed.any { ops[it].collection == CoReceivedReportRepository.REPORTS && ops[it].id == copyId }) {
+            offline.cacheFromServer(statuses, id, next)
+            undoSubmission(congregationId, periodMonth, actor)
+            return CircuitResult.Conflict("The report's snapshot could not be saved on the server, so this month was NOT sent. Nothing changed - please check your connection and send it again.")
+        }
+        offline.cacheFromServer(statuses, id, next)
+        return outcome
     }
 
     override suspend fun undoSubmission(congregationId: String, periodMonth: Long, actor: SubmissionActor): CircuitResult {
@@ -114,8 +154,9 @@ class BackendCoFieldServiceReportService(
             undoneAt = now, undoneByPersonId = actor.personId, undoneByName = actor.name, updatedAt = now,
         )
         val ops = buildList {
-            statsDoc(id)?.let { add(writer.op(stats, id, it.copy(snapshotStatus = CoReportStatus.NOT_SUBMITTED.name, updatedAt = now))) }
+            // The month's status goes first: the server accepts a statistics snapshot only when it matches the status already saved.
             add(writer.op(statuses, id, next))
+            statsDoc(id)?.let { add(writer.op(stats, id, it.copy(snapshotStatus = CoReportStatus.NOT_SUBMITTED.name, updatedAt = now))) }
             add(event(id, s, actor, "Report sending undone", s.status, CoReportStatus.NOT_SUBMITTED, null, s.coRemarks))
         }
         return writer.push(ops).also { if (it is CircuitResult.Success) offline.cacheFromServer(statuses, id, next) }
@@ -123,9 +164,12 @@ class BackendCoFieldServiceReportService(
 
     private suspend fun review(
         reportId: String, actor: SubmissionActor, action: String, to: CoReportStatus?, allowedFrom: Set<CoReportStatus>,
-        remarks: String?, change: (CoMonthStatus, Long) -> CoMonthStatus,
+        remarks: String?, expectedVersion: Int? = null, change: (CoMonthStatus, Long) -> CoMonthStatus,
     ): CircuitResult {
         val s = offline.get<CoMonthStatus>(statuses, reportId) ?: return CircuitResult.Conflict("This month has not been submitted.")
+        if (expectedVersion != null && s.version != expectedVersion) {
+            return CircuitResult.Conflict("A newer version (version ${s.version}) of this report has been sent since you opened version $expectedVersion. Review the new version first.")
+        }
         if (s.status !in allowedFrom) return CircuitResult.Conflict("This month is ${s.status.label.lowercase()} — that action isn't available now.")
         val now = nowMillis()
         val target = to ?: s.status
@@ -140,26 +184,35 @@ class BackendCoFieldServiceReportService(
         return writer.push(ops).also { if (it is CircuitResult.Success) offline.cacheFromServer(statuses, reportId, next) }
     }
 
-    override suspend fun receive(reportId: String, remarks: String?, actor: SubmissionActor): CircuitResult {
+    override suspend fun receive(reportId: String, remarks: String?, actor: SubmissionActor, expectedVersion: Int?): CircuitResult {
         val note = remarks?.trim()?.takeIf { it.isNotEmpty() }
-        return review(reportId, actor, "Report received by the Circuit Overseer", CoReportStatus.RECEIVED, setOf(CoReportStatus.SUBMITTED), note) { s, now ->
+        return review(reportId, actor, "Report received by the Circuit Overseer", CoReportStatus.RECEIVED, setOf(CoReportStatus.SUBMITTED), note, expectedVersion) { s, now ->
             s.copy(receivedAt = now, receivedByPersonId = actor.personId, receivedByName = actor.name).let {
                 if (note != null) it.copy(coRemarks = note, coRemarksAt = now, coRemarksByName = actor.name) else it
             }
         }
     }
 
-    override suspend fun returnForCorrection(reportId: String, reason: String, actor: SubmissionActor): CircuitResult {
+    override suspend fun returnForCorrection(reportId: String, reason: String, actor: SubmissionActor, expectedVersion: Int?): CircuitResult {
         val why = reason.trim()
-        if (why.isEmpty()) return CircuitResult.Conflict("Please enter the CO Remarks explaining what needs to be corrected.")
-        return review(reportId, actor, "Report returned for correction", CoReportStatus.RETURNED, setOf(CoReportStatus.SUBMITTED, CoReportStatus.RECEIVED), why) { s, now ->
+        if (why.isEmpty()) return CircuitResult.Conflict("Please enter the reason explaining what needs to be corrected.")
+        return review(reportId, actor, "Report returned for editing", CoReportStatus.RETURNED, setOf(CoReportStatus.SUBMITTED, CoReportStatus.RECEIVED), why, expectedVersion) { s, now ->
             s.copy(returnedAt = now, returnedByPersonId = actor.personId, returnedByName = actor.name, returnReason = why, coRemarks = why, coRemarksAt = now, coRemarksByName = actor.name)
+        }
+    }
+
+    override suspend fun cancelSubmission(reportId: String, reason: String, actor: SubmissionActor, expectedVersion: Int?): CircuitResult {
+        val why = reason.trim()
+        if (why.isEmpty()) return CircuitResult.Conflict("Please enter the reason for cancelling this submission.")
+        val current = offline.get<CoMonthStatus>(statuses, reportId)
+        return review(reportId, actor, "Submission cancelled by the Circuit Overseer", CoReportStatus.CANCELLED, setOf(CoReportStatus.SUBMITTED, CoReportStatus.RECEIVED), why, expectedVersion) { s, now ->
+            s.copy(cancelledAt = now, cancelledByPersonId = actor.personId, cancelledByName = actor.name, cancelReason = why, cancelledFromStatus = (current ?: s).status.name)
         }
     }
 
     override suspend fun saveRemarks(reportId: String, remarks: String, actor: SubmissionActor): CircuitResult {
         val note = remarks.trim().ifEmpty { null }
-        return review(reportId, actor, "CO remarks updated", null, setOf(CoReportStatus.SUBMITTED, CoReportStatus.RECEIVED, CoReportStatus.RETURNED), note) { s, now ->
+        return review(reportId, actor, "CO remarks updated", null, setOf(CoReportStatus.SUBMITTED, CoReportStatus.RECEIVED, CoReportStatus.RETURNED, CoReportStatus.CANCELLED), note) { s, now ->
             s.copy(coRemarks = note, coRemarksAt = now, coRemarksByName = actor.name)
         }
     }

@@ -59,6 +59,20 @@ class CircuitOverviewTest {
     }
 
     @Test
+    fun `every figure is compared with the previous month, and only when both months are known for all congregations`() {
+        fun full(id: String, month: Long, pubs: Int, elders: Int, special: Int?) = snap(id, month, pubs).copy(
+            elderCount = elders, regularPioneerCount = 2, auxiliaryPioneerCount = 3, unbaptizedPublisherCount = 1, specialPioneerCount = special,
+        )
+        val o = build(month = 2, stats = listOf(full("a", 2, 12, 5, 2), full("b", 2, 20, 4, 1), full("a", 1, 10, 4, 1), full("b", 1, 18, 4, 1)))
+        assertEquals(9, o.totals.elders); assertEquals(1, o.totals.eldersChange)
+        assertEquals(0, o.totals.regularPioneersChange); assertEquals(0, o.totals.auxiliaryPioneersChange); assertEquals(0, o.totals.unbaptizedChange)
+        assertEquals(3, o.totals.specialPioneers); assertEquals(1, o.totals.specialPioneersChange)
+        // snapshots saved before special pioneers were recorded give no special-pioneer change (never a guess)
+        val old = build(month = 2, stats = listOf(full("a", 2, 12, 5, 2), full("b", 2, 20, 4, 1), full("a", 1, 10, 4, null), full("b", 1, 18, 4, null)))
+        assertNull(old.totals.specialPioneersChange); assertEquals(1, old.totals.eldersChange)
+    }
+
+    @Test
     fun `report standings and the action list`() {
         val o = build(
             month = 2,

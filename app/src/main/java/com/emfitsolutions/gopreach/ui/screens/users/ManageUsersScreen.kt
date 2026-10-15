@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.users
 
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,17 +82,20 @@ fun ManageUsersScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddNew) { Icon(Icons.Rounded.Add, contentDescription = "Add User") }
+            androidx.compose.material3.ExtendedFloatingActionButton(
+                onClick = onAddNew,
+                icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
+                text = { Text("Add User") },
+            )
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
-                Text("Show Inactive")
-            }
+            androidx.compose.material3.FilterChip(
+                selected = showInactive,
+                onClick = { showInactive = !showInactive },
+                label = { Text("Include inactive") },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
         if (users.isEmpty()) {
             Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
                 RecordFound(0)
@@ -98,71 +105,51 @@ fun ManageUsersScreen(
                 )
             }
         } else {
+                val viewMode = rememberRecordViewMode("manage_users")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item { RecordFound(users.size) }
-                items(users, key = { it.person.id }) { row ->
-                    var menuOpen by remember { mutableStateOf(false) }
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(row.person.fullName, style = MaterialTheme.typography.titleMedium)
-                                Text("Circuit Overseer", style = MaterialTheme.typography.bodySmall)
-                                Text(
-                                    "@${row.person.username}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                item {
+                    Text(
+                        "${users.size} " + if (users.size == 1) "user" else "users",
+                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, users, { it.person.id },
+                        listOf(
+                            UniversalColumn<com.emfitsolutions.gopreach.ui.screens.users.RestrictedUserRow>("Name", 200.dp) { it.person.fullName },
+                            UniversalColumn("Username", 150.dp) { it.person.username },
+                            UniversalColumn("Status", 110.dp) { it.person.accountStatus.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+                            UniversalColumn("Permissions", 110.dp) { (it.grant?.resolvedPermissions?.size ?: 0).toString() },
+                        ),
+                        onRowClick = { onEdit(it.person.id) },
+                    ) { row ->
+                    val status = row.person.accountStatus
+                    com.emfitsolutions.gopreach.ui.screens.elders.PersonRecordCard(
+                        name = row.person.fullName,
+                        detail = "Circuit Overseer · @${row.person.username}",
+                        active = status == AccountStatus.ACTIVE,
+                        readOnly = false,
+                        hasTemporarySignIn = false,
+                        chips = listOf("${row.grant?.resolvedPermissions?.size ?: 0} permissions") +
+                            (if (status == AccountStatus.SUSPENDED) listOf("Suspended") else emptyList()),
+                        onEdit = { onEdit(row.person.id) },
+                        onDelete = { pendingDelete = row },
+                        onRestore = { viewModel.setAccountStatus(row, AccountStatus.ACTIVE, currentPersonId) },
+                        onShowSignIn = {},
+                        menuExtras = { dismiss ->
+                            AccountStatus.entries.filter { it != status && it != AccountStatus.INACTIVE }.forEach { target ->
+                                DropdownMenuItem(
+                                    text = { Text("Set ${target.name.lowercase()}") },
+                                    onClick = { dismiss(); viewModel.setAccountStatus(row, target, currentPersonId) },
                                 )
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    AssistChip(onClick = {}, label = { Text("${row.grant?.resolvedPermissions?.size ?: 0} permissions") })
-                                    StatusChip(row.person.accountStatus)
-                                }
                             }
-                            Row {
-                                IconButton(onClick = { onEdit(row.person.id) }) {
-                                    Icon(Icons.Rounded.Edit, contentDescription = "Edit access")
-                                }
-                                if (row.person.accountStatus == AccountStatus.ACTIVE) {
-                                    IconButton(onClick = { pendingDelete = row }) {
-                                        Icon(Icons.Rounded.Delete, contentDescription = "Delete")
-                                    }
-                                } else {
-                                    IconButton(onClick = { viewModel.setAccountStatus(row, AccountStatus.ACTIVE, currentPersonId) }) {
-                                        Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Reactivate")
-                                    }
-                                }
-                                Box {
-                                    IconButton(onClick = { menuOpen = true }) {
-                                        Icon(
-                                            when (row.person.accountStatus) {
-                                                AccountStatus.ACTIVE -> Icons.Rounded.CheckCircle
-                                                AccountStatus.INACTIVE -> Icons.Rounded.Block
-                                                AccountStatus.SUSPENDED -> Icons.Rounded.PauseCircle
-                                            },
-                                            contentDescription = "Change status (currently ${row.person.accountStatus})",
-                                        )
-                                    }
-                                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                                        AccountStatus.entries.forEach { status ->
-                                            DropdownMenuItem(
-                                                text = { Text(status.name) },
-                                                onClick = {
-                                                    menuOpen = false
-                                                    viewModel.setAccountStatus(row, status, currentPersonId)
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                        },
+                    )
                 }
             }
         }

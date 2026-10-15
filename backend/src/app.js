@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { loadActor, authorizeWrite, canReadRow, loadGrant } from './policy/index.js';
 import { rateLimit } from './rateLimit.js';
 import { mountFiles } from './files.js';
+import { mountAnnouncementFiles } from './announcementFiles.js';
 import { mountPresence } from './presence.js';
 import { mountAccounts } from './accounts.js';
 import { saveGroupTerritory, removeGroupTerritory, removeAssignment, validateSave } from './territory.js';
@@ -39,6 +40,8 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   app.get('/v1/health', (req, res) => res.json({ ok: true, ...health() }));
 
   const auth = authenticate({ devMode: devAuth, secret: authOptions.secret });
+  // The authoritative date and time (never the caller's device clock): used to decide which service months may be reported.
+  app.post('/v1/time', auth, (req, res) => res.json({ now: Date.now() }));
 
   // ---- No login needed ---------------------------------------------------------------------------------------------
   // Firestore let anyone read `people` and create password-reset requests, because a person cannot sign in before the app
@@ -104,6 +107,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   app.post('/v1/territory/remove', auth, territory(removeAssignment));
 
   mountFiles(app, store, auth);
+  mountAnnouncementFiles(app, store, auth);
   mountPresence(app, store, auth);
   mountAccounts(app, store, auth, authOptions);
 

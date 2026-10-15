@@ -1,4 +1,4 @@
-package com.emfitsolutions.gopreach.ui.screens.attendance
+﻿package com.emfitsolutions.gopreach.ui.screens.attendance
 
 import androidx.lifecycle.ViewModel
 import com.emfitsolutions.gopreach.data.model.CoMonthStatus
@@ -22,6 +22,7 @@ data class SubmissionSources(
     val attendance: List<MeetingAttendance> = emptyList(),
     val statistics: List<CongregationMonthlyStatistics> = emptyList(),
     val comparative: List<ComparativeReport> = emptyList(),
+    val attendanceStatuses: List<CoMonthStatus> = emptyList(),
 )
 
 class ReportSubmissionViewModel(
@@ -36,12 +37,13 @@ class ReportSubmissionViewModel(
         .map { list -> list.filter { it.status == RecordStatus.ACTIVE }.sortedBy { it.name } }
 
     fun sources(congregationId: String?): Flow<SubmissionSources> = combine(
-        coReports.observeStatuses(), attendance.observeAll(), attendance.observeStatistics(), comparative.observeReports(),
-    ) { st, att, stats, cmp ->
+        coReports.observeStatuses(), attendance.observeAll(), attendance.observeStatistics(), comparative.observeReports(), attendance.observeAttendanceStatuses(),
+    ) { st, att, stats, cmp, attSt ->
         if (congregationId == null) SubmissionSources()
         else SubmissionSources(
             st.filter { it.congregationId == congregationId }, att.filter { it.congregationId == congregationId },
             stats.filter { it.congregationId == congregationId }, cmp.filter { it.congregationId == congregationId },
+            attSt.filter { it.congregationId == congregationId },
         )
     }
 }

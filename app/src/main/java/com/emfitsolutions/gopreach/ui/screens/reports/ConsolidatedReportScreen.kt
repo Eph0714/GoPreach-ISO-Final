@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
 import com.emfitsolutions.gopreach.shared.resources.Res
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.shared.resources.action_close
 import com.emfitsolutions.gopreach.shared.resources.consolidated_bible_studies_return_visits
 import com.emfitsolutions.gopreach.shared.resources.consolidated_bible_study_records
@@ -168,6 +172,7 @@ fun ConsolidatedReportScreen(
             )
         },
     ) { padding ->
+        val viewMode = rememberRecordViewMode("consolidated")
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
@@ -219,7 +224,20 @@ fun ConsolidatedReportScreen(
                 item { Text(stringResource(Res.string.consolidated_no_publishers_found), style = MaterialTheme.typography.bodyMedium) }
             }
             item { RecordFound(uiState.visibleEntries.size) }
-            items(uiState.visibleEntries, key = { it.person.id }) { entry ->
+            item { RecordViewToggle(viewMode) }
+            recordItems(
+                viewMode, uiState.visibleEntries, { it.person.id },
+                listOf(
+                        UniversalColumn("Publisher", 200.dp) { it.person.fullName },
+                        UniversalColumn("Category", 160.dp) { it.category.displayName },
+                        UniversalColumn("Congregation", 170.dp) { it.congregationName },
+                        UniversalColumn("Bible Studies", 100.dp) { it.bibleStudiesCount.toString() },
+                        UniversalColumn("Return Visits", 100.dp) { it.returnVisitsCount.toString() },
+                        UniversalColumn("Hours", 80.dp) { "%.1f".format(it.preachingHours) },
+                        UniversalColumn("Participated", 110.dp) { it.participatedInMinistry?.let { p -> if (p) "Yes" else "No" } ?: "" },
+                ),
+                onRowClick = { selectedPublisherId = it.person.id },
+            ) { entry ->
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { selectedPublisherId = entry.person.id },

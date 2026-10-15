@@ -1,4 +1,4 @@
-package com.emfitsolutions.gopreach.ui.screens.attendance
+﻿package com.emfitsolutions.gopreach.ui.screens.attendance
 
 import androidx.lifecycle.ViewModel
 import com.emfitsolutions.gopreach.data.model.AttendanceRounding
@@ -35,9 +35,9 @@ class MeetingAttendanceViewModel(
         list.firstOrNull { it.congregationId == congregationId }?.roundingMode ?: AttendanceRounding.ROUNDED
     }
 
-    /** The congregation's months whose statistics were received (frozen): their attendance is history. */
-    fun frozenMonths(congregationId: String?): Flow<Set<Long>> = repository.observeStatistics().map { list ->
-        list.filter { it.congregationId == congregationId && it.isFrozen }.map { it.serviceMonth }.toSet()
+    /** The congregation's months whose attendance the Circuit Overseer received: locked until it is returned. */
+    fun frozenMonths(congregationId: String?): Flow<Set<Long>> = repository.observeAttendanceStatuses().map { list ->
+        list.filter { it.congregationId == congregationId && it.isLocked }.map { it.periodMonth }.toSet()
     }
 
     fun statisticsFor(congregationId: String?): Flow<List<CongregationMonthlyStatistics>> = repository.observeStatistics().map { list ->

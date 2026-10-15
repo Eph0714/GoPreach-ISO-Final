@@ -24,6 +24,14 @@ interface SyncApi {
     /** Best-effort delete of the file stored under [path]. */
     suspend fun deleteFile(path: String) { throw UnsupportedOperationException("deleteFile is not available") }
 
+    /** Uploads one attachment of a Circuit Overseer announcement; returns the server's { id, name, mime, size }. Throws with the server's reason when refused. */
+    suspend fun uploadAnnouncementFile(announcementId: String, name: String, bytes: ByteArray, mime: String): JsonObject = throw UnsupportedOperationException("announcement files are not available")
+
+    /** Downloads one attachment (the server checks that the caller may read the announcement). */
+    suspend fun downloadAnnouncementFile(announcementId: String, fileId: String): ByteArray = throw UnsupportedOperationException("announcement files are not available")
+
+    suspend fun deleteAnnouncementFile(announcementId: String, fileId: String) { throw UnsupportedOperationException("announcement files are not available") }
+
     /** The sign-in screen's public username lookup (no login yet): the person record with its id, or null. */
     suspend fun lookupUsername(username: String): JsonObject? = null
 }

@@ -1,6 +1,25 @@
 package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import com.emfitsolutions.gopreach.data.model.ReportStatus as RS
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
+import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.ViewList
+import androidx.compose.material.icons.rounded.CompareArrows
+import androidx.compose.material.icons.rounded.ShowChart
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
+import androidx.compose.material.icons.rounded.LockClock
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RemoveCircleOutline
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.ChevronLeft
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.sp
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
 import androidx.compose.foundation.background
@@ -222,7 +241,7 @@ fun FieldServiceReportScreen(
     val ready = if (compareMode) compareSheets.takeIf { it.isNotEmpty() } else singleReady
 
     // List View: every report in the period with its lock state.
-    var listView by rememberSaveable { mutableStateOf(false) }
+    var listView by rememberSaveable { mutableStateOf(true) }
 
     // Table View entry: Add / Edit / Delete a publisher record of the month, for the active role scope only.
     val manual: com.emfitsolutions.gopreach.ui.screens.manualreport.ManualFieldServiceViewModel = koinViewModel()
@@ -254,6 +273,7 @@ fun FieldServiceReportScreen(
         if (backToPicker) { pickedCongregationId = null; if (restricted) CircuitScopeStore.selectCongregation(null); selectedGroupId = ALL_GROUPS; query = "" } else onBack()
     }
     androidx.activity.compose.BackHandler(enabled = backToPicker) { goBack() }
+    var shareMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -263,17 +283,26 @@ fun FieldServiceReportScreen(
                     IconButton(onClick = goBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
                 },
                 actions = {
-                    IconButton(enabled = congregationId != null && !compareMode && !listView, onClick = { tableOnly = true }) {
-                        Icon(Icons.Rounded.OpenInFull, contentDescription = "View the table full screen")
-                    }
                     IconButton(onClick = { fullScreen = !fullScreen }) {
                         Icon(if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, contentDescription = if (fullScreenActive) "Show filters" else "Full screen")
                     }
-                    IconButton(enabled = ready != null, onClick = { ready?.let { FieldServiceReportExporter.shareExcel(context, it) } }) {
-                        Icon(Icons.Rounded.TableChart, contentDescription = "Export to Excel")
-                    }
-                    IconButton(enabled = ready != null, onClick = { ready?.let { FieldServiceReportExporter.printPdf(context, it, if (compareMode && periodA != null && periodB != null) comparativeGraphHtml(periodA.label(), periodB.label(), metricsAState.map { m -> m.monthStart }, metricsBState.map { m -> m.monthStart }, fsMetrics, fsMetrics[graphIndex.coerceIn(0, fsMetrics.lastIndex)]) else null) } }) {
-                        Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Print or save as PDF")
+                    Box {
+                        IconButton(onClick = { shareMenu = true }) { Icon(Icons.Rounded.IosShare, contentDescription = "Export and view options") }
+                        androidx.compose.material3.DropdownMenu(expanded = shareMenu, onDismissRequest = { shareMenu = false }) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Export to Excel") }, enabled = ready != null, leadingIcon = { Icon(Icons.Rounded.TableChart, contentDescription = null) },
+                                onClick = { shareMenu = false; ready?.let { FieldServiceReportExporter.shareExcel(context, it) } },
+                            )
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Print / Save as PDF") }, enabled = ready != null, leadingIcon = { Icon(Icons.Rounded.PictureAsPdf, contentDescription = null) },
+                                onClick = { shareMenu = false; ready?.let { FieldServiceReportExporter.printPdf(context, it, if (compareMode && periodA != null && periodB != null) comparativeGraphHtml(periodA.label(), periodB.label(), metricsAState.map { m -> m.monthStart }, metricsBState.map { m -> m.monthStart }, fsMetrics, fsMetrics[graphIndex.coerceIn(0, fsMetrics.lastIndex)]) else null) } },
+                            )
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("View the table full screen") }, enabled = congregationId != null && !compareMode && !listView,
+                                leadingIcon = { Icon(Icons.Rounded.OpenInFull, contentDescription = null) },
+                                onClick = { shareMenu = false; tableOnly = true },
+                            )
+                        }
                     }
                 },
             )
@@ -297,19 +326,23 @@ fun FieldServiceReportScreen(
                         onSelected = { pickedCongregationId = it; if (restricted) CircuitScopeStore.selectCongregation(it); selectedGroupId = ALL_GROUPS },
                     )
                 }
-                SimpleDropdown(
-                    label = "FS Group",
-                    selectedLabel = if (showingAll) "All FS Groups" else groups.firstOrNull { it.id == selectedGroupId }?.name.orEmpty(),
-                    options = (if (groupScopeId == null) listOf(ALL_GROUPS to "All FS Groups") else emptyList()) + groups.map { it.id to it.name },
-                    onSelected = { selectedGroupId = it },
-                )
-                if (showingAll) {
-                    SimpleDropdown(
-                        label = "Group by",
-                        selectedLabel = if (groupByCongregation) "Congregation" else "FS Group",
-                        options = listOf("group" to "FS Group", "congregation" to "Congregation"),
-                        onSelected = { groupByCongregation = it == "congregation" },
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Box(Modifier.weight(1f)) {
+                        SimpleDropdown(
+                            label = "FS Group",
+                            selectedLabel = if (showingAll) "All FS Groups" else groups.firstOrNull { it.id == selectedGroupId }?.name.orEmpty(),
+                            options = (if (groupScopeId == null) listOf(ALL_GROUPS to "All FS Groups") else emptyList()) + groups.map { it.id to it.name },
+                            onSelected = { selectedGroupId = it },
+                        )
+                    }
+                    if (showingAll) Box(Modifier.weight(1f)) {
+                        SimpleDropdown(
+                            label = "Group by",
+                            selectedLabel = if (groupByCongregation) "Congregation" else "FS Group",
+                            options = listOf("group" to "FS Group", "congregation" to "Congregation"),
+                            onSelected = { groupByCongregation = it == "congregation" },
+                        )
+                    }
                 }
                 if (compareMode) {
                     // Two month RANGES to compare, e.g. Feb 2025 to Oct 2025 against Mar 2026 to Sep 2026 (the same month twice = one month).
@@ -320,27 +353,32 @@ fun FieldServiceReportScreen(
                         onApply = { a, b -> periods = a to b },
                     )
                 } else {
-                // One month at a time (e.g. September 2026).
-                SimpleDropdown(
-                    label = "Month",
-                    selectedLabel = labelOf(fromMonth),
-                    options = (if (coMode) visibleMonths.map { it.periodMonth } else months).map { it.toString() to labelOf(it) },
-                    onSelected = { key -> fromMonth = key.toLong(); toMonth = fromMonth },
+                // One month at a time (e.g. September 2026), with arrows to the previous / next month and the full list one tap away.
+                val monthKeys = (if (coMode) visibleMonths.map { it.periodMonth } else months).distinct().sortedDescending()
+                val at = monthKeys.indexOf(fromMonth)
+                MonthStepper(
+                    label = labelOf(fromMonth),
+                    options = monthKeys.map { it.toString() to labelOf(it) },
+                    onPick = { key -> fromMonth = key.toLong(); toMonth = fromMonth },
+                    onOlder = if (at >= 0 && at < monthKeys.lastIndex) ({ fromMonth = monthKeys[at + 1]; toMonth = fromMonth }) else null,
+                    onNewer = if (at > 0) ({ fromMonth = monthKeys[at - 1]; toMonth = fromMonth }) else null,
                 )
                 }
             }
-                if (!fullScreenActive && !tableOnly && !(restricted && congregationId == null)) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = 16.dp)) {
-                    if (compareMode) {
-                        FilterChip(selected = compareView == "report", onClick = { compareView = "report" }, label = { Text("Report View") })
-                        FilterChip(selected = compareView == "list", onClick = { compareView = "list" }, label = { Text("List View") })
-                        FilterChip(selected = compareView == "graph", onClick = { compareView = "graph" }, label = { Text("Line Graph") })
-                    } else {
-                        FilterChip(selected = !listView, onClick = { listView = false }, label = { Text("Report View") })
-                        FilterChip(selected = listView, onClick = { listView = true }, label = { Text("List View") })
+                if (!fullScreenActive && !tableOnly && !(restricted && congregationId == null)) Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val mainIndex = if (compareMode) 2 else if (listView) 1 else 0
+                    ViewSegments(listOf("Report" to Icons.Rounded.TableChart, "List" to Icons.Rounded.ViewList, "Compare" to Icons.Rounded.CompareArrows), mainIndex) { picked ->
+                        when (picked) {
+                            0 -> { compareMode = false; listView = false }
+                            1 -> { compareMode = false; listView = true }
+                            else -> { compareMode = true; listView = false }
+                        }
                     }
-                    FilterChip(selected = compareMode, onClick = { compareMode = !compareMode; if (compareMode) listView = false }, label = { Text("Compare Periods") })
+                    if (compareMode) ViewSegments(listOf("Report" to Icons.Rounded.TableChart, "List" to Icons.Rounded.ViewList, "Line Graph" to Icons.Rounded.ShowChart), listOf("report", "list", "graph").indexOf(compareView).coerceAtLeast(0)) { picked ->
+                        compareView = listOf("report", "list", "graph")[picked]
+                    }
                 }
-            if (!tableOnly && coMode && congregationId != null && !compareMode && !listView) {
+            if (!tableOnly && coMode && congregationId != null && !compareMode) {
                 visibleMonths.firstOrNull { it.periodMonth == fromMonth }?.let { st ->
                     CoReviewPanel(
                         status = st,
@@ -375,7 +413,9 @@ fun FieldServiceReportScreen(
                     )
                 }
             }
-            if (!tableOnly && canSendToCircuit && !restricted && congregationId != null && showingAll && groupByCongregation && fromMonth == toMonth && !compareMode && !listView) {
+            // Sending is about the whole congregation's month(s) - the panel picks its own months - so it shows in Report View and List View alike,
+            // whichever FS Group, grouping or month is on screen.
+            if (!tableOnly && canSendToCircuit && !restricted && congregationId != null && !compareMode) {
                 val congregation = congregations.firstOrNull { it.id == congregationId }
                 if (congregation != null) {
                     SendToCircuitPanel(
@@ -662,7 +702,7 @@ private fun statusText(report: com.emfitsolutions.gopreach.data.model.MonthlyRep
     com.emfitsolutions.gopreach.data.model.ReportStatus.ACCESS_GRANTED -> "Unlocked · edit access granted"
 }
 
-/** One line per report: who, which month, their numbers and lock state, with Lock / Unlock for admins. */
+/** One card per report: who, their numbers and lock state at a glance, with clear Lock / Unlock / Approve / Reject / Reverse buttons for admins. */
 @Composable
 private fun ReportListView(
     entries: List<FieldServiceReportListItem>,
@@ -676,85 +716,159 @@ private fun ReportListView(
     onReverse: (FieldServiceReportListItem) -> Unit = {},
     summary: List<List<String>> = emptyList(),
 ) {
-    val lockable = entries.count {
-        it.report?.status == com.emfitsolutions.gopreach.data.model.ReportStatus.SUBMITTED ||
-            it.report?.status == com.emfitsolutions.gopreach.data.model.ReportStatus.CORRECTED
-    }
+    val lockable = entries.count { it.report?.status == RS.SUBMITTED || it.report?.status == RS.CORRECTED }
+    val reported = entries.count { it.report != null }
+    val lockedCount = entries.count { it.report?.status == RS.POSTED }
     androidx.compose.foundation.lazy.LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        item(key = "glance") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                GlanceTile("Reported", reported.toString(), Color(0xFF1565C0), Modifier.weight(1f))
+                GlanceTile("Locked", lockedCount.toString(), Color(0xFF1B6E2B), Modifier.weight(1f))
+                GlanceTile("No report", (entries.size - reported).toString(), Color(0xFF757575), Modifier.weight(1f))
+            }
+        }
         if (canManageLocks && lockable > 0) {
             item(key = "lock-all") {
-                androidx.compose.material3.OutlinedButton(onClick = onLockAll, modifier = Modifier.fillMaxWidth()) {
-                    Text("Lock all submitted ($lockable)")
-                }
+                com.emfitsolutions.gopreach.ui.components.co.CoButton(
+                    "Lock all submitted ($lockable)", onLockAll, kind = com.emfitsolutions.gopreach.ui.components.co.CoKind.Primary,
+                    icon = Icons.Rounded.Lock, fillWidth = true,
+                )
             }
         }
         item { RecordFound(entries.size) }
         items(entries, key = { it.key }) { item ->
             val report = item.report
-            val locked = report?.status == com.emfitsolutions.gopreach.data.model.ReportStatus.POSTED
-            val canLock = report?.status == com.emfitsolutions.gopreach.data.model.ReportStatus.SUBMITTED ||
-                report?.status == com.emfitsolutions.gopreach.data.model.ReportStatus.CORRECTED
-            val tint = when {
-                report == null -> Color(0xFF757575)
-                locked -> Color(0xFF1B6E2B)
-                else -> Color(0xFF1565C0)
+            val locked = report?.status == RS.POSTED
+            val canLock = report?.status == RS.SUBMITTED || report?.status == RS.CORRECTED
+            val (tint, icon) = when (report?.status) {
+                null -> Color(0xFF757575) to Icons.Rounded.RemoveCircleOutline
+                RS.POSTED -> Color(0xFF1B6E2B) to Icons.Rounded.Lock
+                RS.SUBMITTED, RS.CORRECTED -> Color(0xFF1565C0) to Icons.Rounded.CheckCircle
+                RS.ACCESS_REQUESTED -> Color(0xFFEF6C00) to Icons.Rounded.LockClock
+                RS.RETURNED -> Color(0xFFEF6C00) to Icons.AutoMirrored.Rounded.Undo
+                else -> Color(0xFF6A1B9A) to Icons.Rounded.EditNote
             }
-            androidx.compose.material3.Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(item.publisherName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Box(modifier = Modifier.background(tint.copy(alpha = 0.14f), androidx.compose.foundation.shape.RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 4.dp)) {
-                            Text(statusText(report), style = MaterialTheme.typography.labelMedium, color = tint, fontWeight = FontWeight.SemiBold)
+            com.emfitsolutions.gopreach.ui.components.co.CoCard(
+                Modifier.fillMaxWidth(),
+                accent = if (report?.status == RS.ACCESS_REQUESTED) com.emfitsolutions.gopreach.ui.components.co.coPalette().warning else null,
+            ) {
+                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.size(38.dp).background(tint.copy(alpha = 0.14f), androidx.compose.foundation.shape.CircleShape), contentAlignment = Alignment.Center) {
+                            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
                         }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(item.publisherName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 2)
+                            Text(
+                                listOfNotNull(item.groupName, item.status?.label).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            statusText(report), style = MaterialTheme.typography.labelMedium, color = tint, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.background(tint.copy(alpha = 0.14f), androidx.compose.foundation.shape.RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
                     }
-                    Text(
-                        listOfNotNull(item.groupName, item.monthLabel, item.status?.label).joinToString(" · "),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                     if (report != null) {
-                        val parts = buildList {
-                            if (item.status?.isPioneer == true) add("Hours " + (report.hoursRendered?.let { formatHours(it) } ?: "—"))
-                            add("Bible Studies " + report.bibleStudiesCount)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (item.status?.isPioneer == true) NumberPill("Hours", report.hoursRendered?.let { formatHours(it) } ?: "—")
+                            NumberPill("Bible Studies", report.bibleStudiesCount.toString())
                         }
-                        Text(parts.joinToString("  ·  "), style = MaterialTheme.typography.bodyMedium)
                         Text(report.status.publisherLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (report.status == com.emfitsolutions.gopreach.data.model.ReportStatus.ACCESS_REQUESTED) {
+                        if (report.status == RS.ACCESS_REQUESTED) {
                             Text("Reason: " + report.accessRequestReason.orEmpty().ifBlank { "—" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                         }
                         if (canManageLocks && actionsEnabled) {
                             val s = report.status
-                            Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                                if (s == com.emfitsolutions.gopreach.data.model.ReportStatus.ACCESS_REQUESTED) {
-                                    androidx.compose.material3.Button(onClick = { onApprove(item) }) { Text("Approve Access") }
-                                    androidx.compose.material3.OutlinedButton(onClick = { onReject(item) }) { Text("Reject") }
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                if (s == RS.ACCESS_REQUESTED) {
+                                    com.emfitsolutions.gopreach.ui.components.co.CoButton("Approve access", { onApprove(item) }, Modifier.weight(1f), kind = com.emfitsolutions.gopreach.ui.components.co.CoKind.Success, icon = Icons.Rounded.CheckCircle)
+                                    com.emfitsolutions.gopreach.ui.components.co.CoButton("Reject", { onReject(item) }, Modifier.weight(1f), kind = com.emfitsolutions.gopreach.ui.components.co.CoKind.Secondary, icon = Icons.Rounded.Close)
                                 }
-                                if (s == com.emfitsolutions.gopreach.data.model.ReportStatus.SUBMITTED || s == com.emfitsolutions.gopreach.data.model.ReportStatus.CORRECTED ||
-                                    s == com.emfitsolutions.gopreach.data.model.ReportStatus.POSTED || s == com.emfitsolutions.gopreach.data.model.ReportStatus.ACCESS_REQUESTED ||
-                                    s == com.emfitsolutions.gopreach.data.model.ReportStatus.ACCESS_GRANTED
-                                ) {
-                                    androidx.compose.material3.OutlinedButton(onClick = { onReverse(item) }) { Text("Reverse") }
+                                if (s == RS.SUBMITTED || s == RS.CORRECTED || s == RS.POSTED || s == RS.ACCESS_REQUESTED || s == RS.ACCESS_GRANTED) {
+                                    com.emfitsolutions.gopreach.ui.components.co.CoButton("Reverse", { onReverse(item) }, Modifier.weight(1f), kind = com.emfitsolutions.gopreach.ui.components.co.CoKind.Secondary, icon = Icons.AutoMirrored.Rounded.Undo)
                                 }
                             }
                         }
                         if (canManageLocks && (locked || canLock)) {
-                            Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.End) {
-                                if (locked) {
-                                    androidx.compose.material3.OutlinedButton(onClick = { onUnlock(item) }) { Text("Unlock to edit") }
-                                } else {
-                                    androidx.compose.material3.Button(onClick = { onLock(item) }) { Text("Lock") }
-                                }
-                            }
+                            if (locked) com.emfitsolutions.gopreach.ui.components.co.CoButton("Unlock to edit", { onUnlock(item) }, kind = com.emfitsolutions.gopreach.ui.components.co.CoKind.Secondary, icon = Icons.Rounded.LockOpen, fillWidth = true)
+                            else com.emfitsolutions.gopreach.ui.components.co.CoButton("Lock", { onLock(item) }, kind = com.emfitsolutions.gopreach.ui.components.co.CoKind.Primary, icon = Icons.Rounded.Lock, fillWidth = true)
                         }
                     }
                 }
             }
         }
         if (summary.isNotEmpty()) item(key = "end-summary") { SummaryCard(summary) }
+    }
+}
+
+@Composable
+private fun GlanceTile(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+    Column(
+        modifier.background(color.copy(alpha = 0.10f), androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(value, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = color)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun NumberPill(label: String, value: String) {
+    Row(
+        Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(50)).padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold)
+    }
+}
+
+/** "‹ September 2026 ›": arrows to the previous / next month the report can show; tapping the name opens the full list of months. */
+@Composable
+private fun MonthStepper(label: String, options: List<Pair<String, String>>, onPick: (String) -> Unit, onOlder: (() -> Unit)?, onNewer: (() -> Unit)?) {
+    var open by remember { mutableStateOf(false) }
+    androidx.compose.material3.Card(
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(enabled = onOlder != null, onClick = { onOlder?.invoke() }) { Icon(Icons.Rounded.ChevronLeft, contentDescription = "Previous month") }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                androidx.compose.material3.TextButton(onClick = { open = true }) {
+                    Icon(Icons.Rounded.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Text("  " + label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+                androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    options.forEach { (key, text) -> androidx.compose.material3.DropdownMenuItem(text = { Text(text) }, onClick = { open = false; onPick(key) }) }
+                }
+            }
+            IconButton(enabled = onNewer != null, onClick = { onNewer?.invoke() }) { Icon(Icons.Rounded.ChevronRight, contentDescription = "Next month") }
+        }
+    }
+}
+
+/** A row of connected buttons where exactly one is selected (Report | List | Compare). */
+@Composable
+private fun ViewSegments(items: List<Pair<String, androidx.compose.ui.graphics.vector.ImageVector>>, selected: Int, onSelect: (Int) -> Unit) {
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+    Row(Modifier.fillMaxWidth().clip(shape).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)) {
+        items.forEachIndexed { index, (text, icon) ->
+            val on = index == selected
+            Row(
+                Modifier.weight(1f).background(if (on) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                    .clickable { onSelect(index) }.padding(vertical = 10.dp),
+                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("  " + text, style = MaterialTheme.typography.labelLarge, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1,
+                    color = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }
 

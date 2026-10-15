@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -69,13 +73,23 @@ fun PublisherForwardRequestsScreen(
                 Text("No pending records forwarded to you.", style = MaterialTheme.typography.bodyMedium)
             }
         } else {
+            val viewMode = rememberRecordViewMode("publisher_forward_requests")
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { RecordFound(requests.size) }
-                items(requests, key = { it.id }) { request ->
+                item { RecordViewToggle(viewMode) }
+                recordItems(
+                    viewMode, requests, { it.id },
+                    listOf(
+                            UniversalColumn("Householder", 200.dp) { it.personNameSnapshot },
+                            UniversalColumn("From", 180.dp) { it.fromPublisherNameSnapshot },
+                            UniversalColumn("Requested", 170.dp) { formatRecordTimestamp(it.requestedAt) },
+                    ),
+                    onRowClick = { selected = it },
+                ) { request ->
                     val personFlow = remember(request.interestedPersonId) { viewModel.personFor(request.interestedPersonId) }
                     val person by personFlow.collectAsStateWithLifecycle(initialValue = null)
                     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {

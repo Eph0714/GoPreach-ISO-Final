@@ -2,6 +2,13 @@ package com.emfitsolutions.gopreach.ui.screens.circuit
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.FieldServiceReportExporter
+import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.FieldServiceReportRow
+import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.FieldServiceReportSheet
+import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.SheetTable
+import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.StatusColumn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -70,6 +77,7 @@ fun ReceivedReportsScreen(
     onOpenLiveReport: (congregationId: String, month: Long) -> Unit,
     viewModel: ReceivedReportsViewModel = koinViewModel(),
     people: CircuitPeopleViewModel = koinViewModel(),
+    inbox: CircuitReportsInboxViewModel = koinViewModel(),
 ) {
     val congregations by remember(currentPersonId) { people.congregations(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val launchedWith = remember { ReceivedReportsLaunch.take() }
@@ -82,6 +90,8 @@ fun ReceivedReportsScreen(
     val selected = validCongregation(congregations, CircuitScopeStore.congregation)
     var openId by rememberSaveable { mutableStateOf(launchedWith) }
     var fullScreen by rememberSaveable { mutableStateOf(false) }
+    // The opened snapshot is shown as its report table, its details, or compared with the earlier send of the same month.
+    var viewMode by rememberSaveable(openId) { mutableStateOf("report") }
     CoFullScreenEffect(fullScreen)
     BackHandler(enabled = fullScreen) { fullScreen = false }
     BackHandler(enabled = !fullScreen && openId != null) { openId = null }
@@ -89,7 +99,7 @@ fun ReceivedReportsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (openId != null) "Received Report" else "Received Reports") },
+                title = { Text(if (openId != null) "Submitted CO Snapshot" else "Received Reports") },
                 navigationIcon = { IconButton(onClick = { if (openId != null) openId = null else onBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
                 actions = { if (selected != null) CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
             )
@@ -110,7 +120,21 @@ fun ReceivedReportsScreen(
         if (open != null) {
             // Opening a report is what marks it read.
             LaunchedEffect(open.id) { runCatching { viewModel.markRead(currentPersonId, open) } }
+            val openStatus by remember(open.id) { inbox.status(open.congregationId, open.periodMonth) }.collectAsStateWithLifecycle(initialValue = null)
+            val openHistory by remember(open.id) { inbox.history(open.congregationId, open.periodMonth) }.collectAsStateWithLifecycle(initialValue = emptyList())
+            val earlier = previousSendOf(open, versionsOfOpen)
+            val diff = earlier?.let { com.emfitsolutions.gopreach.domain.SnapshotComparison.compare(it, open) }
             Column(Modifier.fillMaxSize().padding(padding)) {
+                openStatus?.let { st ->
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            CoStatusBadge(st.status.workflowLabel, badgeKind(st.status))
+                            Text("Current version: " + st.version, style = MaterialTheme.typography.labelMedium)
+                        }
+                        if (open.version == st.version) SnapshotActions(st, open.congregationName, currentPersonId, inbox)
+                        else Text("This is an earlier version, kept as history. Actions apply to version " + st.version + ".", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 if (versionsOfOpen.size > 1) {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         versionsOfOpen.forEach { v ->
@@ -118,7 +142,16 @@ fun ReceivedReportsScreen(
                         }
                     }
                 }
-                ReceivedReportTable(open, modifier = Modifier.weight(1f))
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = viewMode == "report", onClick = { viewMode = "report" }, label = { Text("Report") })
+                    FilterChip(selected = viewMode == "details", onClick = { viewMode = "details" }, label = { Text("Snapshot Details") })
+                    if (diff != null) FilterChip(selected = viewMode == "compare", onClick = { viewMode = "compare" }, label = { Text("Compare with send ${diff.previous.version}") })
+                }
+                when {
+                    viewMode == "details" -> SnapshotDetailsPanel(open, monthName(open.periodMonth), modifier = Modifier.weight(1f), history = openHistory)
+                    viewMode == "compare" && diff != null -> SnapshotComparisonPanel(diff, monthName(open.periodMonth), modifier = Modifier.weight(1f))
+                    else -> ReceivedReportTable(open, modifier = Modifier.weight(1f))
+                }
             }
             return@Scaffold
         }
@@ -170,12 +203,49 @@ private fun openMonthOf(reportId: String?): Long = reportId?.substringBeforeLast
 
 private fun formatHoursText(hours: Double): String = if (hours % 1.0 == 0.0) hours.toLong().toString() else "%.1f".format(hours)
 
-/** The frozen table with the mandatory end-of-report summary, Print / PDF and Excel. */
+/** The frozen snapshot as the congregation's Field Service Report sheet (UP / Pub / AP / RP blocks, yellow Total row), exactly as it was sent. */
+internal fun CoReceivedReport.toSheet(): FieldServiceReportSheet {
+    val lines = rows.map { r ->
+        FieldServiceReportRow(
+            number = r.number, status = StatusColumn.entries.firstOrNull { it.label == r.status } ?: StatusColumn.PUB, name = r.name,
+            reportsCount = r.reportsCount, hours = r.hours, bibleStudies = r.bibleStudies, remarks = r.remarks, personId = r.personId,
+        )
+    }
+    val present = lines.map { it.status }.toSet()
+    val columns = StatusColumn.entries.filter { it.alwaysShown || it in present }
+    return FieldServiceReportSheet(
+        groupName = congregationName, monthLabel = monthName(periodMonth), isRange = false, overseer = "", servant = "", assistant = "",
+        reportColumns = columns, hourColumns = columns.filter { it.isPioneer }, rows = lines,
+        officerRows = listOf("Congregation:" to congregationName, "Submitted CO Snapshot:" to "Send $version · ${stamp(submittedAt)}"),
+    )
+}
+
+/** The frozen snapshot: the congregation's sheet by default (with Print / PDF and Excel), or the searchable list with its end-of-report summary. */
 @Composable
-private fun ReceivedReportTable(report: CoReceivedReport, modifier: Modifier = Modifier) {
+internal fun ReceivedReportTable(report: CoReceivedReport, modifier: Modifier = Modifier) {
+    var asList by rememberSaveable(report.id) { mutableStateOf(false) }
+    val sheet = remember(report) { report.toSheet() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Column(modifier) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !asList, onClick = { asList = false }, label = { Text("Sheet") })
+            FilterChip(selected = asList, onClick = { asList = true }, label = { Text("List") })
+        }
+        if (!asList) {
+            Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.OutlinedButton(onClick = { FieldServiceReportExporter.printPdf(context, listOf(sheet)) }) { Text("Print / PDF") }
+                androidx.compose.material3.OutlinedButton(onClick = { FieldServiceReportExporter.shareExcel(context, listOf(sheet)) }) { Text("Excel") }
+            }
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) { SheetTable(sheet) }
+        } else ReceivedReportList(report, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun ReceivedReportList(report: CoReceivedReport, modifier: Modifier = Modifier) {
     UniversalReport(
         title = "Field Service Report",
-        details = listOf("Congregation" to report.congregationName, "Month" to monthName(report.periodMonth), "Send" to "${report.version} · ${stamp(report.submittedAt)}"),
+        details = listOf("Congregation" to report.congregationName, "Month" to monthName(report.periodMonth), "Submitted CO Snapshot" to "Send ${report.version} · ${stamp(report.submittedAt)}"),
         items = report.rows,
         key = { it.number.toString() + it.name },
         columns = listOf(

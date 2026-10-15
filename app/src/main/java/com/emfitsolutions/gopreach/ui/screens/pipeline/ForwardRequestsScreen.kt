@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -182,15 +186,27 @@ fun ForwardRequestsScreen(
                 Text("No forward requests.", style = MaterialTheme.typography.bodyMedium)
             }
         } else {
+            val viewMode = rememberRecordViewMode("forward_requests")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { RecordFound(requests.size + publisherRequests.size) }
+                item { RecordViewToggle(viewMode) }
                 if (requests.isNotEmpty()) {
                     item { Text("To Other Congregation", style = MaterialTheme.typography.titleSmall) }
-                    items(requests, key = { it.id }) { request ->
+                    recordItems(
+                        viewMode, requests, { it.id },
+                        listOf(
+                            UniversalColumn("Householder", 200.dp) { it.personNameSnapshot },
+                            UniversalColumn("From", 240.dp) { "${it.fromPublisherNameSnapshot} · ${it.fromCongregationNameSnapshot}" },
+                            UniversalColumn("To Congregation", 190.dp) { it.toCongregationNameSnapshot },
+                            UniversalColumn("Requested", 170.dp) { formatRecordTimestamp(it.requestedAt) },
+                            UniversalColumn("Status", 110.dp) { statusLabel(it.status) },
+                        ),
+                        onRowClick = { selected = it },
+                    ) { request ->
                         val personFlow = remember(request.interestedPersonId) { viewModel.personFor(request.interestedPersonId) }
                         val person by personFlow.collectAsStateWithLifecycle(initialValue = null)
                         Card(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
@@ -231,7 +247,16 @@ fun ForwardRequestsScreen(
                 }
                 if (publisherRequests.isNotEmpty()) {
                     item { Text(if (isSuperAdmin) "To Other Publisher" else "To Other Publisher (view only)", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 8.dp)) }
-                    items(publisherRequests, key = { it.id }) { request ->
+                    recordItems(
+                        viewMode, publisherRequests, { it.id },
+                        listOf(
+                            UniversalColumn("Householder", 200.dp) { it.personNameSnapshot },
+                            UniversalColumn("From", 190.dp) { it.fromPublisherNameSnapshot },
+                            UniversalColumn("To Publisher", 190.dp) { it.toPublisherNameSnapshot },
+                            UniversalColumn("Requested", 170.dp) { formatRecordTimestamp(it.requestedAt) },
+                            UniversalColumn("Status", 110.dp) { statusLabel(it.status) },
+                        ),
+                    ) { request ->
                         PublisherForwardRequestRow(
                             request = request,
                             isSuperAdmin = isSuperAdmin,

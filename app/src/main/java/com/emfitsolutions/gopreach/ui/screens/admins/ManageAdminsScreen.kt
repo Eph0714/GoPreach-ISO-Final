@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.admins
 
 import androidx.compose.foundation.clickable
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import com.emfitsolutions.gopreach.ui.components.NameFieldsInOrder
 import androidx.compose.foundation.layout.Arrangement
@@ -102,19 +106,20 @@ fun ManageAdminsScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onAddNew) {
-                Icon(Icons.Rounded.Add, contentDescription = "Enroll Admin")
-            }
+            androidx.compose.material3.ExtendedFloatingActionButton(
+                onClick = onAddNew,
+                icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
+                text = { Text("Add Admin") },
+            )
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
-                Text("Show Inactive")
-            }
+            androidx.compose.material3.FilterChip(
+                selected = showInactive,
+                onClick = { showInactive = !showInactive },
+                label = { Text("Include inactive") },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
             CongregationFilterDropdown(
                 congregations = congregations,
                 selectedCongregationId = congregationFilter,
@@ -132,50 +137,40 @@ fun ManageAdminsScreen(
                 Text("No admins enrolled yet. Tap + to enroll one.", style = MaterialTheme.typography.bodyMedium)
             }
         } else {
+                val viewMode = rememberRecordViewMode("manage_admins")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { RecordFound(admins.size) }
-                items(admins, key = { it.person.id }) { row ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(enabled = row.person.isTemporaryCredential) { lookupTarget = row.person },
-                    ) {
-                        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(row.person.fullName, style = MaterialTheme.typography.titleMedium)
-                                Text("Congregation: ${row.congregationName}", style = MaterialTheme.typography.bodySmall)
-                                Text("Contact: ${row.person.contact}", style = MaterialTheme.typography.bodySmall)
-                                Text(
-                                    if (row.isActive) "Active" else "Inactive",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = if (row.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                                )
-                                if (row.person.isTemporaryCredential) {
-                                    Text(
-                                        "Tap to view temporary sign-in",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.secondary,
-                                    )
-                                }
-                            }
-                            IconButton(onClick = { pendingEdit = row }) {
-                                Icon(Icons.Rounded.Edit, contentDescription = "Edit")
-                            }
-                            if (row.isActive) {
-                                IconButton(onClick = { pendingDeactivate = row }) {
-                                    Icon(Icons.Rounded.Delete, contentDescription = "Delete")
-                                }
-                            } else {
-                                IconButton(onClick = { viewModel.setActive(row.assignment, true, currentPersonId) }) {
-                                    Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Restore")
-                                }
-                            }
-                        }
-                    }
+                item {
+                    Text(
+                        "${admins.size} " + if (admins.size == 1) "record" else "records",
+                        style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                    item { RecordViewToggle(viewMode) }
+                    recordItems(
+                        viewMode, admins, { it.person.id },
+                        listOf(
+                            UniversalColumn<com.emfitsolutions.gopreach.ui.screens.admins.AdminRow>("Name", 200.dp) { it.person.fullName },
+                            UniversalColumn("Congregation", 180.dp) { it.congregationName },
+                            UniversalColumn("Contact", 150.dp) { it.person.contact },
+                            UniversalColumn("Status", 100.dp) { if (it.isActive) "Active" else "Inactive" },
+                        ),
+                        onRowClick = { pendingEdit = it },
+                    ) { row ->
+                    com.emfitsolutions.gopreach.ui.screens.elders.PersonRecordCard(
+                        name = row.person.fullName,
+                        detail = listOf(row.congregationName, row.person.contact).filter { it.isNotBlank() }.joinToString(" · "),
+                        active = row.isActive,
+                        readOnly = false,
+                        hasTemporarySignIn = row.person.isTemporaryCredential,
+                        onEdit = { pendingEdit = row },
+                        onDelete = { pendingDeactivate = row },
+                        onRestore = { viewModel.setActive(row.assignment, true, currentPersonId) },
+                        onShowSignIn = { lookupTarget = row.person },
+                    )
                 }
             }
         }

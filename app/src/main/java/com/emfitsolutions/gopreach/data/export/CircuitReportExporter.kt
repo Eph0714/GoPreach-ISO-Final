@@ -37,7 +37,7 @@ object CircuitReportExporter {
             append(".head div{font-size:12px;margin:1px 0} .meta{color:#444;margin:6px 0 8px 0}")
             append("table{border-collapse:collapse;width:100%} th,td{border:1px solid #000;padding:3px 6px;text-align:left}")
             append("th{background:#e6e6e6} td.n,th.n{text-align:right} tr{page-break-inside:avoid} tr.total td{font-weight:bold;background:#f2f2f2}")
-            append("</style></head><body><h2>CIRCUIT REPORT</h2><div class=\"head\">")
+            append("</style></head><body><h2>CIRCUIT ATTENDANCE REPORT</h2><div class=\"head\">")
             append("<div><b>Circuit:</b> ").append(e(header.circuit)).append("</div>")
             append("<div><b>Circuit Overseer:</b> ").append(e(header.overseer)).append("</div>")
             append("<div><b>Total Congregations:</b> ").append(header.totalCongregations).append("</div></div>")
@@ -55,7 +55,7 @@ object CircuitReportExporter {
             summaryOf(header, total).forEach { (k, v) -> append("<tr><td>").append(e(k)).append("</td><td style=\"text-align:right;font-weight:bold\">").append(e(v)).append("</td></tr>") }
             append("</table><div class=\"meta\">Generated: ").append(e(stamp())).append("</div></body></html>")
         }
-        ReportPrinter.printHtml(context, "Circuit Report - ${header.circuit}", html, PrintOptions(OrientationMode.LANDSCAPE))
+        ReportPrinter.printHtml(context, "Circuit Attendance Report - ${header.circuit}", html, PrintOptions(OrientationMode.LANDSCAPE))
     }
 
     fun shareExcel(context: Context, header: CircuitReportHeader, rows: List<CircuitReportRow>, total: CircuitReportRow, syncNote: String?) {
@@ -66,7 +66,7 @@ object CircuitReportExporter {
         fun text(c: Int, s: String, style: Int = 0) = "<c r=\"${col(c)}$r\" s=\"$style\" t=\"inlineStr\"><is><t xml:space=\"preserve\">${esc(s)}</t></is></c>"
         fun number(c: Int, v: String, style: Int = 0) = v.toIntOrNull()?.let { "<c r=\"${col(c)}$r\" s=\"$style\"><v>$it</v></c>" } ?: text(c, v, style)
         fun row(vararg cells: String) { xml.append("<row r=\"$r\">").append(cells.joinToString("")).append("</row>") }
-        r++; row(text(0, "CIRCUIT REPORT", 1))
+        r++; row(text(0, "CIRCUIT ATTENDANCE REPORT", 1))
         r++; row(text(0, "Circuit:", 1), text(1, header.circuit))
         r++; row(text(0, "Circuit Overseer:", 1), text(1, header.overseer))
         r++; row(text(0, "Total Congregations:", 1), text(1, header.totalCongregations.toString()))
@@ -104,7 +104,7 @@ object CircuitReportExporter {
                 put("_rels/.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
                     "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>")
                 put("xl/workbook.xml", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" " +
-                    "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Circuit Report\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>")
+                    "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"Circuit Attendance Report\" sheetId=\"1\" r:id=\"rId1\"/></sheets></workbook>")
                 put("xl/_rels/workbook.xml.rels", "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
                     "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>" +
                     "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/></Relationships>")
@@ -121,6 +121,6 @@ object CircuitReportExporter {
             putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        context.startActivity(Intent.createChooser(intent, "Share Circuit Report"))
+        context.startActivity(Intent.createChooser(intent, "Share Circuit Attendance Report"))
     }
 }

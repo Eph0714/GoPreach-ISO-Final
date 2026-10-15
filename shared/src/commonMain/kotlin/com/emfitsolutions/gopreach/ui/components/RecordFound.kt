@@ -22,8 +22,7 @@ fun recordFoundText(count: Int): String = "Record Found: $count"
 fun RecordFound(count: Int, modifier: Modifier = Modifier) {
     Text(
         text = recordFoundText(count),
-        style = MaterialTheme.typography.labelLarge,
-        fontWeight = FontWeight.Bold,
+        style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
     )

@@ -34,6 +34,7 @@ private data class AdminBundle(
     val reports: List<MonthlyReport>,
     val announcements: List<Announcement>,
     val schedules: List<Schedule>,
+    val circuitStatuses: List<com.emfitsolutions.gopreach.data.model.CoMonthStatus> = emptyList(),
 )
 
 /**
@@ -59,6 +60,7 @@ class NotificationItemsProvider(
     private val scheduleRepository: ScheduleRepository,
     private val personRepository: PersonRepository,
     private val householderAssignmentRepository: HouseholderAssignmentRepository,
+    private val coReportRepository: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository,
 ) {
     private val periodFormat = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
 
@@ -83,8 +85,9 @@ class NotificationItemsProvider(
                 AdminBundle(forwards, publisherForwards, reports, announcements, schedules)
             },
             personRepository.observeAll(),
-        ) { bundle, people ->
-            buildAdminItems(bundle, people, congregationIds, includeMonthlyReports)
+            coReportRepository.observeStatuses(),
+        ) { bundle, people, statuses ->
+            buildAdminItems(bundle.copy(circuitStatuses = statuses), people, congregationIds, includeMonthlyReports)
         }
 
     private fun buildAdminItems(
@@ -137,15 +140,37 @@ class NotificationItemsProvider(
                 }
         }
 
+        // The Circuit Overseer's decisions on a congregation's Circuit Report: received, returned for editing (with the reason), cancelled (with the reason).
+        if (includeMonthlyReports) {
+            bundle.circuitStatuses
+                .filter { it.status in listOf(com.emfitsolutions.gopreach.data.model.CoReportStatus.RECEIVED, com.emfitsolutions.gopreach.data.model.CoReportStatus.RETURNED, com.emfitsolutions.gopreach.data.model.CoReportStatus.CANCELLED) }
+                .filter { congregationIds == null || it.congregationId in congregationIds }
+                .forEach { st ->
+                    val decided = when (st.status) {
+                        com.emfitsolutions.gopreach.data.model.CoReportStatus.RECEIVED -> Triple("received by the Circuit Overseer", st.receivedAt, null)
+                        com.emfitsolutions.gopreach.data.model.CoReportStatus.RETURNED -> Triple("returned for editing", st.returnedAt, st.returnReason)
+                        else -> Triple("cancelled by the Circuit Overseer", st.cancelledAt, st.cancelReason)
+                    }
+                    items += NotificationItem(
+                        id = "co_" + st.id + "_" + st.status.name + "_" + st.version + "_" + (decided.second ?: 0L),
+                        category = NotificationCategory.MONTHLY_REPORT,
+                        title = "Circuit Report " + decided.first + ": " + periodFormat.format(Date(st.periodMonth)),
+                        subtitle = decided.third?.takeIf { it.isNotBlank() }?.let { "Reason: " + it } ?: ("Version " + st.version),
+                        timestamp = decided.second ?: st.updatedAt,
+                        route = Destinations.FIELD_SERVICE_REPORT,
+                    )
+                }
+        }
+
         bundle.announcements
-            .filter { congregationIds == null || it.congregationId in congregationIds }
+            .filter { (congregationIds == null || it.congregationId in congregationIds) && it.notifiable() }
             .forEach { a ->
                 items += NotificationItem(
                     id = a.id,
                     category = NotificationCategory.ANNOUNCEMENT,
                     title = "New Announcement: ${a.title}",
-                    subtitle = a.details,
-                    timestamp = a.createdAt,
+                    subtitle = a.notificationPreview(),
+                    timestamp = a.publishedAt ?: a.createdAt,
                     route = Destinations.MANAGE_ANNOUNCEMENTS,
                 )
             }
@@ -205,14 +230,14 @@ class NotificationItemsProvider(
                 }
 
             announcements
-                .filter { it.congregationId == congregationId }
+                .filter { it.congregationId == congregationId && it.notifiable() }
                 .forEach { a ->
                     items += NotificationItem(
                         id = a.id,
                         category = NotificationCategory.ANNOUNCEMENT,
                         title = "New Announcement: ${a.title}",
-                        subtitle = a.details,
-                        timestamp = a.createdAt,
+                        subtitle = a.notificationPreview(),
+                        timestamp = a.publishedAt ?: a.createdAt,
                         route = Destinations.PUBLISHER_ANNOUNCEMENTS,
                     )
                 }
@@ -233,3 +258,9 @@ class NotificationItemsProvider(
             items.sortedByDescending { it.timestamp }.take(50)
         }
 }
+
+/** A Circuit Overseer announcement notifies only once published and while it is still active (not a draft, archived or expired one). */
+private fun Announcement.notifiable(): Boolean = !isCircuitOverseerStyle || (status == Announcement.STATUS_PUBLISHED && lifecycle(System.currentTimeMillis()) == com.emfitsolutions.gopreach.data.model.AnnouncementLifecycle.ACTIVE)
+
+/** What the notification may show: the original announcements show their text; a Circuit Overseer announcement never puts its content in a preview. */
+private fun Announcement.notificationPreview(): String = if (isCircuitOverseerStyle) "From the Circuit Overseer. Open Announcements to read it." else details

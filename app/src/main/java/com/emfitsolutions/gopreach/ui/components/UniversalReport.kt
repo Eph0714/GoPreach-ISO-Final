@@ -26,6 +26,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -86,6 +88,8 @@ fun <T> UniversalReport(
     onRowClick: ((T) -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(16.dp),
     trailingActions: @Composable () -> Unit = {},
+    /** First-time-friendly layout: just a search box and one Options button (filters, view, sort, Print / Excel stay one tap away). */
+    compact: Boolean = true,
 ) {
     val context = LocalContext.current
     var query by rememberSaveable(title) { mutableStateOf("") }
@@ -105,6 +109,7 @@ fun <T> UniversalReport(
     }.let { l -> sorts.firstOrNull { it.id == sortId }?.let { s -> l.sortedWith(s.comparator) } ?: l }
     val summaryRows = summary(shown)
     val filtering = query.isNotBlank() || chosen.isNotEmpty()
+    var showOptions by rememberSaveable(title) { mutableStateOf(false) }
 
     fun exportData() = TableReportData(
         title = title,
@@ -122,6 +127,51 @@ fun <T> UniversalReport(
         // ---- header ----
         item(key = "ur-header") {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              if (compact) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = query, onValueChange = { query = it }, singleLine = true, placeholder = { Text("Search") },
+                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                        trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
+                        modifier = Modifier.weight(1f),
+                    )
+                    androidx.compose.material3.FilledTonalIconButton(onClick = { showOptions = !showOptions }) {
+                        androidx.compose.material3.BadgedBox(badge = { if (chosen.isNotEmpty()) androidx.compose.material3.Badge() }) {
+                            Icon(Icons.Rounded.Tune, contentDescription = "Filters, view and export")
+                        }
+                    }
+                }
+                Text(
+                    (if (shown.size == items.size) "${items.size}" else "${shown.size} of ${items.size}") + if (items.size == 1) " record" else " records",
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                androidx.compose.animation.AnimatedVisibility(visible = showOptions) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        filters.forEach { f ->
+                            Text(f.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                FilterChip(selected = chosen[f.id] == null, onClick = { choose(f.id, "") }, label = { Text("All") })
+                                f.options.filter { it.first.isNotEmpty() }.forEach { (value, label) ->
+                                    FilterChip(selected = chosen[f.id] == value, onClick = { choose(f.id, if (chosen[f.id] == value) "" else value) }, label = { Text(label) })
+                                }
+                            }
+                        }
+                        Text("View and order", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilterChip(selected = !table, onClick = { table = false }, label = { Text("List") })
+                            FilterChip(selected = table, onClick = { table = true }, label = { Text("Table") })
+                            sorts.forEach { s -> FilterChip(selected = sortId == s.id, onClick = { sortId = s.id }, label = { Text(s.label) }) }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CoButton("Print / PDF", { TableReportExporter.print(context, exportData()) }, kind = CoKind.Secondary, icon = Icons.Rounded.Print, enabled = shown.isNotEmpty())
+                            CoButton("Excel", { TableReportExporter.shareExcel(context, exportData()) }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart, enabled = shown.isNotEmpty())
+                            trailingActions()
+                        }
+                        if (filtering) OutlinedButton(onClick = { query = ""; chosenRaw = "" }) { Text("Clear all") }
+                    }
+                }
+              } else {
                 Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 details.forEach { (k, v) -> Text("$k: $v", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 Text(
@@ -157,6 +207,7 @@ fun <T> UniversalReport(
                     CoButton("Excel", { TableReportExporter.shareExcel(context, exportData()) }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart, enabled = shown.isNotEmpty())
                     trailingActions()
                 }
+              }
             }
         }
         // ---- records ----

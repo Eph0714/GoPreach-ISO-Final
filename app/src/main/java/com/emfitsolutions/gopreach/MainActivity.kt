@@ -187,5 +187,14 @@ class MainActivity : AppCompatActivity() {
         if (intent?.action == Intent.ACTION_VIEW) {
             intent.data?.let { IncomingBibleTextImportHolder.set(it) }
         }
+        // A verse shared from JW Library (Share -> GoPreach): only an open Add / Edit Bible Verse form can receive it, and it still asks the
+        // publisher to confirm the text before it is used. With no such form open nothing is kept and the user is told what to do.
+        if (intent?.action == Intent.ACTION_SEND && intent.type?.startsWith("text/") == true) {
+            val shared = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (!shared.isNullOrBlank() && !com.emfitsolutions.gopreach.data.export.IncomingSharedVerseText.offer(shared)) {
+                android.widget.Toast.makeText(this, "To add a shared verse, open Add Bible Verse in GoPreach first, then share the verse again.", android.widget.Toast.LENGTH_LONG).show()
+            }
+            setIntent(Intent(this, MainActivity::class.java)) // so a rotation or restart does not replay this share
+        }
     }
 }

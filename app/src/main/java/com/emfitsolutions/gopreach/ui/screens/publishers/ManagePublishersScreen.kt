@@ -1,6 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.publishers
 
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
+import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
+import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordItems
+import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.platform.AppPermission
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
@@ -247,30 +251,42 @@ fun ManagePublishersScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
-            RecordFound(rows.size, Modifier.padding(horizontal = 16.dp))
             // Print / Excel / PDF all use the same rows as the list below (current search, filter, group, status).
             val context = androidx.compose.ui.platform.LocalContext.current
             var exportKind by remember { mutableStateOf<String?>(null) }
-            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-            androidx.compose.foundation.layout.FlowRow(
+            var exportMenu by remember { mutableStateOf(false) }
+            Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                listOf(
-                    Triple("Print", Icons.Rounded.Print, "print"),
-                    Triple("Export Excel", Icons.Rounded.TableChart, "excel"),
-                    Triple("Export PDF", Icons.Rounded.PictureAsPdf, "pdf"),
-                ).forEach { (label, icon, kind) ->
-                    androidx.compose.material3.OutlinedButton(
-                        onClick = { exportKind = kind },
+                Text(
+                    "${rows.size} " + if (rows.size == 1) "publisher" else "publishers",
+                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                androidx.compose.material3.FilterChip(
+                    selected = showInactive,
+                    onClick = { showInactive = !showInactive },
+                    label = { Text("Include removed") },
+                )
+                Box {
+                    androidx.compose.material3.FilledTonalIconButton(
+                        onClick = { exportMenu = true },
                         enabled = rows.isNotEmpty() || allRows.isNotEmpty(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
-                        modifier = Modifier.height(34.dp),
-                    ) {
-                        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(label, fontSize = 12.sp)
+                    ) { Icon(Icons.Rounded.Print, contentDescription = "Print or export") }
+                    androidx.compose.material3.DropdownMenu(expanded = exportMenu, onDismissRequest = { exportMenu = false }) {
+                        listOf(
+                            Triple("Print", Icons.Rounded.Print, "print"),
+                            Triple("Export Excel", Icons.Rounded.TableChart, "excel"),
+                            Triple("Export PDF", Icons.Rounded.PictureAsPdf, "pdf"),
+                        ).forEach { (label, icon, kind) ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(label) },
+                                leadingIcon = { Icon(icon, contentDescription = null) },
+                                onClick = { exportMenu = false; exportKind = kind },
+                            )
+                        }
                     }
                 }
             }
@@ -299,13 +315,6 @@ fun ManagePublishersScreen(
                     },
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Checkbox(checked = showInactive, onCheckedChange = { showInactive = it })
-                Text("Show Inactive (Removed)")
-            }
         if (rows.isEmpty()) {
             Column(
                 modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -320,80 +329,59 @@ fun ManagePublishersScreen(
                 }
             }
         } else {
+            val viewMode = rememberRecordViewMode("publishers")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(rows, key = { it.person.id }) { row ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(row.person.fullName, style = MaterialTheme.typography.titleMedium)
-                                Row {
-                                    if (row.person.isTemporaryCredential && !readOnly) {
-                                        IconButton(onClick = { lookupTarget = row.person }) {
-                                            Icon(
-                                                Icons.Rounded.Key,
-                                                contentDescription = "View temporary sign-in",
-                                                tint = MaterialTheme.colorScheme.secondary,
-                                            )
-                                        }
-                                    }
-                                    if (!readOnly) {
-                                        IconButton(onClick = { pendingEdit = row }) {
-                                            Icon(Icons.Rounded.Edit, contentDescription = "Edit")
-                                        }
-                                        if (row.category != PublisherCategory.REMOVED_PUBLISHER) {
-                                            IconButton(onClick = { pendingDelete = row }) {
-                                                Icon(Icons.Rounded.Delete, contentDescription = "Delete")
-                                            }
-                                        } else {
-                                            IconButton(
-                                                onClick = {
-                                                    viewModel.changeCategory(row, PublisherCategory.REGULAR_PUBLISHER, currentPersonId)
-                                                    showToast("\"${row.person.fullName}\" reactivated.")
-                                                },
-                                            ) {
-                                                Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Reactivate")
-                                            }
-                                        }
-                                    }
+                item { RecordViewToggle(viewMode) }
+                recordItems(
+                    viewMode, rows, { it.person.id },
+                    listOf(
+                            UniversalColumn("Name", 200.dp) { it.person.fullName },
+                            UniversalColumn("Category", 160.dp) { it.category.displayName },
+                            UniversalColumn("Group", 150.dp) { it.groupName },
+                            UniversalColumn("Contact", 140.dp) { it.person.contact },
+                            UniversalColumn("Remarks", 200.dp) { it.person.remarks.orEmpty() },
+                    ),
+                    onRowClick = { pendingEdit = it },
+                ) { row ->
+                    com.emfitsolutions.gopreach.ui.screens.elders.PersonRecordCard(
+                        name = row.person.fullName,
+                        detail = listOfNotNull(
+                            row.groupName.takeIf { it.isNotBlank() },
+                            row.person.contact.takeIf { it.isNotBlank() },
+                            row.person.remarks?.takeIf { it.isNotBlank() },
+                        ).joinToString(" · "),
+                        active = row.category != PublisherCategory.REMOVED_PUBLISHER,
+                        readOnly = readOnly,
+                        hasTemporarySignIn = row.person.isTemporaryCredential && !readOnly,
+                        chips = listOf(row.category.displayName),
+                        // A heads-up only; nothing merges or deletes automatically - the admin reviews both records.
+                        note = row.possibleDuplicateOf?.let { "Possible duplicate of \"$it\" - review both records." },
+                        onEdit = { pendingEdit = row },
+                        onDelete = { pendingDelete = row },
+                        onRestore = {
+                            viewModel.changeCategory(row, PublisherCategory.REGULAR_PUBLISHER, currentPersonId)
+                            showToast("\"${row.person.fullName}\" reactivated.")
+                        },
+                        onShowSignIn = { lookupTarget = row.person },
+                        menuExtras = { dismiss ->
+                            if (!readOnly) {
+                                PublisherCategory.entries.filter { it != row.category && it != PublisherCategory.REMOVED_PUBLISHER }.forEach { target ->
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Set " + target.displayName) },
+                                        onClick = {
+                                            dismiss()
+                                            viewModel.changeCategory(row, target, currentPersonId)
+                                            showToast("Publisher Status Category updated successfully.")
+                                        },
+                                    )
                                 }
                             }
-                            Text("Group: ${row.groupName}", style = MaterialTheme.typography.bodySmall)
-                            Text("Contact: ${row.person.contact}", style = MaterialTheme.typography.bodySmall)
-                            row.person.remarks?.takeIf { it.isNotBlank() }?.let { Text("Remarks: $it", style = MaterialTheme.typography.bodySmall) }
-                            if (row.possibleDuplicateOf != null) {
-                                // "Check if there are duplicate names,
-                                // evaluate it if they are the same person" —
-                                // a heads-up only; nothing here merges or
-                                // deletes anything automatically. The admin
-                                // reviews both records (Edit/Delete icons
-                                // above) and decides.
-                                Text(
-                                    "⚠ Possible duplicate of \"${row.possibleDuplicateOf}\" — review both records.",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            if (readOnly) {
-                                ReadOnlyField("Category", row.category.displayName)
-                            } else {
-                                CategoryDropdown(
-                                    selected = row.category,
-                                    onSelected = { newCategory ->
-                                        viewModel.changeCategory(row, newCategory, currentPersonId)
-                                        showToast("Publisher Status Category updated successfully.")
-                                    },
-                                )
-                            }
-                        }
-                    }
+                        },
+                    )
                 }
                 // The mandatory end-of-report Summary: only the publishers listed above (after the congregation, search and filters).
                 item(key = "end-summary") { PublisherSummaryCard(PublisherSummary.rows(rows), Modifier.padding(top = 8.dp)) }

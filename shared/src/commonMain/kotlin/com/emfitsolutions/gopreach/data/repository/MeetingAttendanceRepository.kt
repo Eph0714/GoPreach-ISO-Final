@@ -1,6 +1,8 @@
-package com.emfitsolutions.gopreach.data.repository
+﻿package com.emfitsolutions.gopreach.data.repository
 
 import com.emfitsolutions.gopreach.data.model.AttendanceRounding
+import com.emfitsolutions.gopreach.data.model.CoMonthStatus
+import com.emfitsolutions.gopreach.data.model.isMonthLocked
 import com.emfitsolutions.gopreach.data.model.CongregationMonthlyStatistics
 import com.emfitsolutions.gopreach.data.model.MeetingAttendance
 import com.emfitsolutions.gopreach.data.model.MeetingAttendanceEvent
@@ -33,7 +35,7 @@ sealed class AttendanceResult {
 }
 
 const val FROZEN_MONTH_MESSAGE =
-    "This month's statistics were received by the Circuit Overseer and are now historical. Its attendance can no longer be changed."
+    "This month's attendance was received by the Circuit Overseer and is locked. It can be changed again only if the Circuit Overseer returns it."
 
 /**
  * Weekly meeting attendance, offline-first like every other collection: records are saved to the device at once and synchronized when
@@ -49,6 +51,8 @@ class MeetingAttendanceRepository(
     fun observeSettings(): Flow<List<MeetingAttendanceSettings>> = offline.observeCollection(SETTINGS)
     fun observeEvents(): Flow<List<MeetingAttendanceEvent>> = offline.observeCollection<MeetingAttendanceEvent>(EVENTS).map { it.sortedByDescending { e -> e.at } }
     fun observeStatistics(): Flow<List<CongregationMonthlyStatistics>> = offline.observeCollection(STATISTICS)
+    /** The Meeting Attendance workflow status of every month (Sent / Received / Returned ...): Received locks that month's attendance. */
+    fun observeAttendanceStatuses(): Flow<List<CoMonthStatus>> = offline.observeCollection(CoAttendanceRepository.STATUSES)
 
     fun idFor(congregationId: String, type: MeetingType, meetingDate: Long) = "${congregationId}_${type.name}_$meetingDate"
     fun statisticsIdFor(congregationId: String, serviceMonth: Long) = "${congregationId}_$serviceMonth"
@@ -62,7 +66,7 @@ class MeetingAttendanceRepository(
             if (r.deleted) " · DELETED" else ""
 
     private suspend fun frozen(congregationId: String, serviceMonth: Long): Boolean =
-        observeStatistics().first().any { it.id == statisticsIdFor(congregationId, serviceMonth) && it.isFrozen }
+        isMonthLocked(observeAttendanceStatuses().first(), congregationId, serviceMonth)
 
     private suspend fun audit(
         congregationId: String, recordId: String, action: String, actor: SubmissionActor, previous: String?, new: String?, reason: String?,
@@ -130,7 +134,7 @@ class MeetingAttendanceRepository(
         )
         var changed = 0
         if (recalculateHistory) {
-            val frozenMonths = observeStatistics().first().filter { it.congregationId == congregationId && it.isFrozen }.map { it.serviceMonth }.toSet()
+            val frozenMonths = observeAttendanceStatuses().first().filter { it.congregationId == congregationId && it.isLocked }.map { it.periodMonth }.toSet()
             observeAll().first().filter { it.congregationId == congregationId && !it.deleted && it.serviceMonth !in frozenMonths && it.roundingMode != mode }.forEach { r ->
                 val updated = AttendanceCalculator.recalculated(r, mode).copy(updatedBy = actor.personId, updatedAt = nowMillis())
                 offline.save(ATTENDANCE, r.id, updated)

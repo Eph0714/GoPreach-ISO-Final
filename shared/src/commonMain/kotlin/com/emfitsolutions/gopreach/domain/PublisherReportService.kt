@@ -133,7 +133,7 @@ class PublisherReportService(
         val freshMinutes = (if (preachingMinutes > 0) preachingMinutes else plannerMinutes) + creditMinutes
         val systemMinutes = if (isPioneer) freshMinutes else null
 
-        val keepStored = existing != null && (useStoredValues || existing.status == ReportStatus.POSTED)
+        val keepStored = existing != null && (useStoredValues || existing.status == ReportStatus.POSTED || existing.status == ReportStatus.DRAFT)
         val totalMinutes = if (keepStored) (((existing!!.hoursRendered ?: 0.0) * 60)).roundToLong().toInt() else freshMinutes
 
         // The Credit Hour names go into the Remarks.
