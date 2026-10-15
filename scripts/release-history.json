@@ -39,6 +39,13 @@
     "versionCode": 199,
     "date": "2026-10-08",
     "channel": "direct (legacy key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.139.0",
+    "versionCode": 200,
+    "date": "2026-10-15",
+    "channel": "direct (legacy key)",
     "status": "Current"
   }
 ]
