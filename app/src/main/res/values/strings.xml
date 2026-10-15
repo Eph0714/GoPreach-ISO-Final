@@ -72,6 +72,8 @@
     <string name="home_tile_share_my_location_subtitle">Share Live Location</string>
     <string name="home_tile_find_location_title">Find Location</string>
     <string name="home_tile_find_location_subtitle">Get Directions</string>
+    <string name="home_tile_weather_title">Weather</string>
+    <string name="home_tile_weather_subtitle">Forecast and conditions</string>
     <string name="home_tile_territory_map_title">Territory Map</string>
     <string name="home_tile_territory_map_subtitle">All Saved Locations</string>
     <string name="home_tile_meeting_cart_assignment_title">Meeting and Cart Assignment</string>

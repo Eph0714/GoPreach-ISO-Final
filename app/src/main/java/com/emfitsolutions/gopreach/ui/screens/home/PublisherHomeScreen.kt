@@ -35,7 +35,9 @@ import com.emfitsolutions.gopreach.shared.resources.home_tile_announcement_title
 import com.emfitsolutions.gopreach.shared.resources.home_tile_bible_study_subtitle
 import com.emfitsolutions.gopreach.shared.resources.home_tile_bible_study_title
 import com.emfitsolutions.gopreach.shared.resources.home_tile_find_location_subtitle
+import com.emfitsolutions.gopreach.shared.resources.home_tile_weather_subtitle
 import com.emfitsolutions.gopreach.shared.resources.home_tile_find_location_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_weather_title
 import com.emfitsolutions.gopreach.shared.resources.home_tile_forwarded_to_me_subtitle
 import com.emfitsolutions.gopreach.shared.resources.home_tile_forwarded_to_me_title
 import com.emfitsolutions.gopreach.shared.resources.home_tile_group_chat_subtitle
@@ -128,6 +130,7 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Navigation
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.PeopleAlt
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PersonSearch
@@ -412,6 +415,7 @@ fun PublisherHomeScreen(
             com.emfitsolutions.gopreach.ui.components.AlarmRingingBanner()
             com.emfitsolutions.gopreach.ui.components.OfflineSessionBanner()
             PublisherWelcomeHeader(
+                weatherFooter = { com.emfitsolutions.gopreach.ui.screens.weather.WeatherSummaryLine(currentPersonId, onClick = { onNavigate(Destinations.WEATHER) }) },
                 greetingName = session.person?.firstName?.takeIf { it.isNotBlank() } ?: "there",
                 fullName = session.person?.fullName ?: "—",
                 profileImageUrl = session.person?.profileImageUrl,
@@ -780,6 +784,7 @@ private fun PublisherWelcomeHeader(
     // Availability); see ProfileMenuButton's own doc comment on why this
     // was missing before.
     onOpenAccountSettings: () -> Unit,
+    weatherFooter: @Composable () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -853,6 +858,7 @@ private fun PublisherWelcomeHeader(
                 if (subtitle.isNotBlank()) {
                     Text(subtitle, color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.bodyMedium)
                 }
+                Box(Modifier.padding(top = 6.dp, bottom = 4.dp)) { weatherFooter() }
                 // Preserves the pre-existing behavior exactly (only "Online"
                 // ever shows for the online case, no sync suffix) — this is
                 // just the same three pieces now sourced from strings.xml.
@@ -1022,6 +1028,7 @@ private fun publisherModuleTiles(
     add(PublisherModuleTile(DashboardModuleId.MY_CALENDAR, stringResource(Res.string.home_tile_my_calendar_title), stringResource(Res.string.home_tile_my_calendar_subtitle), Icons.Rounded.CalendarMonth, Destinations.CALENDAR))
     add(PublisherModuleTile(DashboardModuleId.SHARE_MY_LOCATION, stringResource(Res.string.home_tile_share_my_location_title), stringResource(Res.string.home_tile_share_my_location_subtitle), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
     add(PublisherModuleTile(DashboardModuleId.FIND_LOCATION, stringResource(Res.string.home_tile_find_location_title), stringResource(Res.string.home_tile_find_location_subtitle), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
+    add(PublisherModuleTile(DashboardModuleId.WEATHER, stringResource(Res.string.home_tile_weather_title), stringResource(Res.string.home_tile_weather_subtitle), Icons.Rounded.WbSunny, Destinations.WEATHER))
     // "Add the Territory Module in Publisher. The publisher can see all
     // the location but cannot edit or delete, view only" — the screen
     // itself has no edit/delete actions for anyone anymore (see

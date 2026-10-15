@@ -20,6 +20,30 @@ class ReportSubmissionPlannerTest {
     ) = ReportSubmissionPlanner.plan("c", months, monthStartNow = 3, monthLabel = label, statuses = statuses, attendance = att, statistics = emptyList(), comparative = cmp)
 
     @Test
+    fun `attendance months follow their own workflow status and carry the overseer reason`() {
+        fun rec(month: Long, type: MeetingType) = MeetingAttendance(id = "c_${type}_$month", congregationId = "c", meetingType = type, meetingDate = month, serviceMonth = month)
+        val att = listOf(1L, 2L, 3L).flatMap { listOf(rec(it, MeetingType.MIDWEEK), rec(it, MeetingType.WEEKEND)) }
+        val items = ReportSubmissionPlanner.plan(
+            "c", listOf(1, 2, 3, 4), monthStartNow = 3, monthLabel = label, statuses = emptyList(), attendance = att, statistics = emptyList(), comparative = emptyList(),
+            attendanceStatuses = listOf(
+                CoMonthStatus(congregationId = "c", periodMonth = 1, status = CoReportStatus.RECEIVED),
+                CoMonthStatus(congregationId = "c", periodMonth = 2, status = CoReportStatus.RETURNED, returnReason = "Check the weekend"),
+                CoMonthStatus(congregationId = "c", periodMonth = 3, status = CoReportStatus.SUBMITTED),
+            ),
+        ).filter { it.kind == SubmissionKind.ATTENDANCE }
+        assertEquals(SubmissionStatus.RECEIVED, items.first { it.periodStart == 1L }.status)
+        assertEquals(SubmissionStatus.RETURNED, items.first { it.periodStart == 2L }.status)
+        assertEquals("Check the weekend", items.first { it.periodStart == 2L }.remark)
+        assertEquals(SubmissionStatus.SUBMITTED, items.first { it.periodStart == 3L }.status)
+        assertTrue(items.none { it.periodStart == 4L }, "a future month is not listed")
+        // no workflow status yet: both meetings recorded = ready to send; only one = still a draft
+        val ready = ReportSubmissionPlanner.plan("c", listOf(1), monthStartNow = 3, monthLabel = label, statuses = emptyList(), attendance = att.filter { it.serviceMonth == 1L }, statistics = emptyList(), comparative = emptyList())
+        assertEquals(SubmissionStatus.READY, ready.first { it.kind == SubmissionKind.ATTENDANCE }.status)
+        val draft = ReportSubmissionPlanner.plan("c", listOf(1), monthStartNow = 3, monthLabel = label, statuses = emptyList(), attendance = listOf(rec(1, MeetingType.MIDWEEK)), statistics = emptyList(), comparative = emptyList())
+        assertEquals(SubmissionStatus.DRAFT, draft.first { it.kind == SubmissionKind.ATTENDANCE }.status)
+    }
+
+    @Test
     fun `future months never appear and the month in progress is open, not due`() {
         val items = plan().filter { it.kind == SubmissionKind.FIELD_SERVICE }
         assertEquals(listOf(3L, 2L, 1L), items.map { it.periodStart })

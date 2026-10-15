@@ -28,12 +28,12 @@ object AcceptedComparative {
     enum class MonthState(val label: String) {
         ACCEPTED("Accepted"),
         /** Sent by the congregation but not yet marked Received by the overseer. */
-        AWAITING("Awaiting acceptance"),
+        AWAITING("Awaiting receipt"),
         RETURNED("Returned for correction"),
         CANCELLED("Cancelled by the Circuit Overseer"),
-        NOT_SENT("No snapshot sent"),
+        NOT_SENT("Not sent"),
         /** Marked Received, but the frozen copy is not on file (a month received before copies were kept). */
-        NO_COPY("Accepted - copy not on file"),
+        NO_COPY("Report copy not on file"),
     }
 
     /** What is known about one service month of the congregation. [report] is the accepted snapshot (only when [state] is ACCEPTED). */
@@ -107,19 +107,21 @@ object AcceptedComparative {
         val hasAnyData: Boolean get() = periods.any { it.available > 0 }
     }
 
+    private fun periodName(i: Int) = when (i) { 0 -> "The first period"; 1 -> "The second period"; else -> "Period ${i + 1}" }
+
     /** Why the chosen periods cannot be compared (null = fine). Periods must be ordered, not in the future, and must not overlap. */
     fun validate(periods: List<Period>, monthStartNow: Long, monthsOf: (Period) -> Int): String? {
         if (periods.size < 2) return "Choose at least two reporting periods."
         if (periods.size > MAX_PERIODS) return "At most $MAX_PERIODS periods can be compared."
         periods.forEachIndexed { i, p ->
-            val name = "Period " + ('A' + i)
+            val name = periodName(i)
             if (p.from > p.to) return "$name: the From month cannot be after the To month."
             if (p.to > monthStartNow) return "$name: future months cannot be selected."
             if (monthsOf(p) > MAX_MONTHS_PER_PERIOD) return "$name: a period can include at most $MAX_MONTHS_PER_PERIOD months."
         }
         for (i in periods.indices) for (j in i + 1 until periods.size) {
             if (periods[i].from <= periods[j].to && periods[j].from <= periods[i].to) {
-                return "Period ${'A' + i} and Period ${'A' + j} must not overlap."
+                return "${periodName(i)} and ${periodName(j).replaceFirstChar { it.lowercase() }} must not overlap."
             }
         }
         return null
@@ -145,6 +147,8 @@ object AcceptedComparative {
         known: List<MonthInput>,
         next: (Long) -> Long,
         monthLabel: (Long) -> String,
+        /** What the compared reports are called: "received" for the Circuit Overseer, "sent" for a congregation's own admins. */
+        noun: String = "received",
     ): Result {
         val byMonth = known.associateBy { it.month }
         val results = periods.mapIndexed { index, period ->
@@ -174,23 +178,23 @@ object AcceptedComparative {
         val warnings = buildList {
             results.forEach { r ->
                 when {
-                    r.available == 0 -> add("Period ${r.letter} (${r.label}): none of its ${r.expected} months has an accepted snapshot, so it has no figures.")
-                    !r.complete -> add("Period ${r.letter} (${r.label}): only ${r.available} of ${r.expected} months have an accepted snapshot - missing: ${r.missing.joinToString(", ", transform = monthLabel)}. Its figures use only the accepted months.")
+                    r.available == 0 -> add("${r.label}: none of its ${r.expected} months has a $noun report, so it has no figures.")
+                    !r.complete -> add("${r.label}: only ${r.available} of ${r.expected} months have a $noun report - missing: ${r.missing.joinToString(", ", transform = monthLabel)}. Its figures use only those months.")
                 }
             }
             val lengths = results.map { it.expected }.distinct()
             if (lengths.size > 1) add("The periods have different lengths (${results.joinToString(" vs ") { it.expected.toString() }} months): compare monthly averages, not totals.")
             val coverage = results.filter { it.available > 0 }.map { it.available }.distinct()
-            if (coverage.size > 1 && lengths.size == 1) add("The periods have different numbers of accepted months (${results.joinToString(" vs ") { it.available.toString() }}): compare monthly averages, not totals.")
-            if (results.any { it.distinctApproximate }) add("Distinct-person counts for some snapshots are matched by name because those snapshots were sent before publisher ids were kept.")
+            if (coverage.size > 1 && lengths.size == 1) add("The periods have different numbers of months with a $noun report (${results.joinToString(" vs ") { it.available.toString() }}): compare monthly averages, not totals.")
+            if (results.any { it.distinctApproximate }) add("Distinct-person counts for some reports are matched by name because those reports were sent before publisher ids were kept.")
         }
 
-        val comparison = comparisonTable(results)
-        val monthly = monthlyTable(results, monthLabel)
+        val comparison = comparisonTable(results, noun)
+        val monthly = monthlyTable(results, monthLabel, noun)
         val notes = listOf(
-            "Calculation: headcounts are monthly counts - each period shows the monthly average over its accepted months, never a sum of headcounts. Bible Studies and hours are additive - each period shows its total and its monthly average. A month without an accepted snapshot is missing: it shows - and is not counted as zero.",
-        ) + (if (results.size == 2) listOf("Difference = Period B - Period A. % Change = (B - A) / A x 100; N/A when Period A is zero or a value is unavailable.") else listOf("Each period is calculated independently; the periods are shown side by side."))
-        val summary = summaryTable(results, comparison)
+            "Calculation: headcounts are monthly counts - each period shows the monthly average over its $noun months, never a sum of headcounts. Bible Studies and hours are additive - each period shows its total and its monthly average. A month without a $noun report is missing: it shows - and is not counted as zero.",
+        ) + (if (results.size == 2) listOf("Difference = ${results[1].label} - ${results[0].label}. % Change = ((second period - first period) / first period) x 100; N/A when the first period's value is zero or a value is unavailable.") else listOf("Each period is calculated independently; the periods are shown side by side."))
+        val summary = summaryTable(results, comparison, noun)
         return Result(congregationName, results, warnings, comparison, monthly, summary, notes)
     }
 
@@ -228,9 +232,9 @@ object AcceptedComparative {
         else -> (if (p > 0) "+" else "-") + oneDecimal(abs(p)) + "%"
     }
 
-    private fun comparisonTable(results: List<PeriodResult>): List<List<String>> {
+    private fun comparisonTable(results: List<PeriodResult>, noun: String): List<List<String>> {
         val two = results.size == 2
-        val header = listOf("Metric") + results.map { "Period ${it.letter} (${it.available}/${it.expected} months)" } + (if (two) listOf("Difference", "% Change") else emptyList())
+        val header = listOf("Metric") + results.map { "${it.label} (${it.available}/${it.expected} months)" } + (if (two) listOf("Difference", "% Change") else emptyList())
         fun row(label: String, values: List<Double?>, metric: Metric, total: Boolean): List<String> {
             val cells = values.map { show(it, metric, total) }
             val extra = if (two) listOf(signed(difference(values[0], values[1]), metric, total), pct(percentChange(values[0], values[1]))) else emptyList()
@@ -243,17 +247,17 @@ object AcceptedComparative {
         }
         val distinct = results.map { it.distinctReporters?.toDouble() }
         rows += row("Distinct people who reported" + if (results.any { it.distinctApproximate }) " (approx.)" else "", distinct, Metric.REPORTING, total = true)
-        rows += listOf("Accepted months") + results.map { "${it.available} of ${it.expected}" } + (if (two) listOf("", "") else emptyList())
+        rows += listOf("Months with a $noun report") + results.map { "${it.available} of ${it.expected}" } + (if (two) listOf("", "") else emptyList())
         return listOf(header) + rows
     }
 
-    private fun monthlyTable(results: List<PeriodResult>, monthLabel: (Long) -> String): List<List<String>> {
-        val cols = listOf("Period / Month", "Snapshot", "Publishers", "Regular Pioneers", "Auxiliary Pioneers", "Bible Studies", "Hours")
+    private fun monthlyTable(results: List<PeriodResult>, monthLabel: (Long) -> String, noun: String): List<List<String>> {
+        val cols = listOf("Period / Month", "Status", "Publishers", "Regular Pioneers", "Auxiliary Pioneers", "Bible Studies", "Hours")
         val out = mutableListOf(cols)
         results.forEach { r ->
-            out += listOf("Period ${r.letter}: ${r.label} (${r.expected} months, ${r.available} accepted)") + List(cols.size - 1) { "" }
+            out += listOf("${r.label} (${r.expected} months, ${r.available} $noun)") + List(cols.size - 1) { "" }
             r.rows.forEach { row ->
-                val status = if (row.accepted) "Accepted - send ${row.input.report?.version ?: ""}" else row.input.state.label
+                val status = if (row.accepted) noun.replaceFirstChar { it.uppercase() } else row.input.state.label
                 fun cell(m: Metric) = if (row.accepted) show(row.values[m], m, total = true) else "-"
                 out += listOf(monthLabel(row.month), status, cell(Metric.PUBLISHERS), cell(Metric.REGULAR_PIONEERS), cell(Metric.AUXILIARY_PIONEERS), cell(Metric.BIBLE_STUDIES), cell(Metric.HOURS))
             }
@@ -261,17 +265,17 @@ object AcceptedComparative {
         return out
     }
 
-    private fun summaryTable(results: List<PeriodResult>, comparison: List<List<String>>): List<List<String>> {
+    private fun summaryTable(results: List<PeriodResult>, comparison: List<List<String>>, noun: String): List<List<String>> {
         val out = mutableListOf(listOf("Metric", "Value"))
         results.forEach { r ->
-            out += listOf("Period ${r.letter}", "${r.label} - ${r.expected} months, ${r.available} accepted" + if (r.missing.isNotEmpty()) ", ${r.missing.size} missing" else "")
+            out += listOf(r.label, "${r.expected} months, ${r.available} $noun" + if (r.missing.isNotEmpty()) ", ${r.missing.size} missing" else "")
         }
         if (results.size == 2) {
             comparison.drop(1).filter { it.size >= 5 && (it[0].endsWith(" - total") || it[0].endsWith(" - monthly average")) }.forEach { r ->
                 out += listOf(r[0] + " difference", r[3] + if (r[4] != "N/A") " (" + r[4] + ")" else "")
             }
         }
-        out += listOf("Months without an accepted snapshot", results.sumOf { it.missing.size }.toString())
+        out += listOf("Months without a $noun report", results.sumOf { it.missing.size }.toString())
         return out
     }
 }

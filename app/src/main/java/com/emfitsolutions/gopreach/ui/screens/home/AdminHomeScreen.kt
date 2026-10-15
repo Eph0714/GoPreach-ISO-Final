@@ -19,6 +19,7 @@ import com.emfitsolutions.gopreach.shared.resources.home_exit_message
 import com.emfitsolutions.gopreach.shared.resources.home_exit_title
 import com.emfitsolutions.gopreach.shared.resources.home_nav_calendar
 import com.emfitsolutions.gopreach.shared.resources.home_tile_find_location_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_weather_title
 import com.emfitsolutions.gopreach.shared.resources.home_tile_meeting_cart_assignment_title
 import com.emfitsolutions.gopreach.shared.resources.role_label_admin_fallback
 import com.emfitsolutions.gopreach.shared.resources.side_account_management
@@ -64,6 +65,7 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.ManageAccounts
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Navigation
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Password
 import androidx.compose.material.icons.rounded.Settings
@@ -593,6 +595,7 @@ fun AdminHomeScreen(
                     isOnline = isOnline,
                     pendingSyncCount = pendingSyncCount,
                     compact = role == AdminRole.CIRCUIT_OVERSEER,
+                    footer = { com.emfitsolutions.gopreach.ui.screens.weather.WeatherSummaryLine(currentPersonId, onClick = { onNavigate(Destinations.WEATHER) }) },
                     leadingAction = {
                         IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
                             Icon(Icons.Rounded.Menu, contentDescription = "Menu", tint = Color.White)
@@ -650,6 +653,7 @@ fun AdminHomeScreen(
                             if (canManagePublishersAndGroups) add(QuickAction(stringResource(Res.string.dashboard_quick_action_publishers), Icons.Rounded.People) { onNavigate(Destinations.MANAGE_PUBLISHERS) })
                             if (canManagePublishersAndGroups) add(QuickAction(stringResource(Res.string.side_groups), Icons.Rounded.Groups) { onNavigate(Destinations.MANAGE_GROUPS) })
                             if (role != null) add(QuickAction(stringResource(Res.string.home_nav_calendar), Icons.Rounded.CalendarMonth) { onNavigate(Destinations.CALENDAR) })
+                            if (role != null) add(QuickAction(stringResource(Res.string.home_tile_weather_title), Icons.Rounded.WbSunny) { onNavigate(Destinations.WEATHER) })
                         }
                     },
                 )
@@ -720,7 +724,7 @@ fun AdminHomeScreen(
                                     if (canManageTerritoryAssignments) add(QuickAccessItem.TERRITORY_ASSIGNMENT)
                                     if (canViewTerritoryMap) add(QuickAccessItem.TERRITORY_MAP)
                                     if (canManageHouseholderAssignment) add(QuickAccessItem.PUBLISHER_ASSIGNMENT)
-                                    if (canManageHouseholderAssignment) add(QuickAccessItem.COMPARATIVE_REPORT)
+                                    if (role in setOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY)) add(QuickAccessItem.COMPARATIVE_REPORT)
                                     if (canEnrollPublisher) addAll(listOf(QuickAccessItem.PUBLISHER_MODULE, QuickAccessItem.REGULAR_PIONEERS, QuickAccessItem.AUXILIARY_PIONEERS, QuickAccessItem.SPECIAL_PIONEERS, QuickAccessItem.UNBAPTIZED_PUBLISHERS))
                                     if (canViewFieldServiceGroupReport) add(QuickAccessItem.FIELD_SERVICE_REPORT)
                                     if (canManageRegularEldersForDrawer) add(QuickAccessItem.TOTAL_ELDERS)
@@ -775,6 +779,7 @@ fun AdminHomeScreen(
                                 DashboardTile(stringResource(Res.string.side_group_chat_setting), Icons.Rounded.Chat, { onNavigate(Destinations.GROUP_CHAT_SETTING) })
                                 DashboardTile(stringResource(Res.string.dashboard_tile_share_location), Icons.Rounded.LocationOn, { onNavigate(Destinations.SHARE_LOCATION) })
                                 DashboardTile(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, { onNavigate(Destinations.FIND_LOCATION) })
+                                DashboardTile(stringResource(Res.string.home_tile_weather_title), Icons.Rounded.WbSunny, { onNavigate(Destinations.WEATHER) })
                                 DashboardTile(stringResource(Res.string.home_nav_calendar), Icons.Rounded.CalendarMonth, { onNavigate(Destinations.CALENDAR) })
                             }
                         }

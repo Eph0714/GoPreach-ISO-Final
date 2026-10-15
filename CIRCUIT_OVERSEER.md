@@ -239,3 +239,12 @@ The Meeting Attendance of a service month goes to the Circuit Overseer by exactl
 * **Report Submission** shows each attendance month's real status (Submitted, Correction Required, Received) for the admin and the Circuit Overseer.
 * Server: new collections are covered in `backend/src/policy/rules.js` and `backend/test/rules.test.js`; `firestore.rules` (the old Firebase rules)
   was not extended because the app talks to the backend.
+
+## Comparative Report for a congregation's own admins
+
+The Circuit Overseer's Comparative Report screen (`AcceptedComparativeScreen`) is also the admin app's **Comparative Report** (side panel > Reports, and the home quick-access tile), with `adminMode = true`:
+
+* **Who**: Admin, Coordinator Elder, Service Overseer, Secretary (their own congregation only, locked) and the Super-Admin (chooses a congregation).
+* **Data**: the frozen snapshots the congregation SENT to its Circuit Overseer (Submitted or Received, the version that counts), Field Service and Circuit Attendance - so the admin compares exactly what the overseer was given. Wording says "sent" instead of "received"; nothing else differs (report type cards, two real-named periods, Graph / List / Details, automatic summary, Read Report, Print / PDF / Excel).
+* **Server**: no new rules - senders already read `coReceivedReports`, `coAttendanceReports` and the status documents of their own congregation.
+* The older admin tool that compares Searching / Return Visit / Bible Study counts is now called **Searching & Study Comparison** in the side panel (same screen, same route).

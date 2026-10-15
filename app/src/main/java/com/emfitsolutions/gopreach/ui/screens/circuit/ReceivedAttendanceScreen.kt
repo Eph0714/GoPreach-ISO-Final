@@ -1,4 +1,4 @@
-﻿package com.emfitsolutions.gopreach.ui.screens.circuit
+package com.emfitsolutions.gopreach.ui.screens.circuit
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
@@ -67,6 +67,15 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Carries "open this attendance snapshot" from the Comparative Report to the Circuit Attendance Report screen (set just before navigating). */
+object ReceivedAttendanceLaunch {
+    var pendingReportId: String? = null
+    fun take(): String? = pendingReportId.also { pendingReportId = null }
+}
+
+/** The congregation id inside a snapshot id ("{congregationId}_{month}_{version}"). */
+internal fun congregationOfSnapshotId(snapshotId: String): String = snapshotId.substringBeforeLast('_').substringBeforeLast('_')
+
 private fun monthName(millis: Long): String = SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date(millis))
 private fun stamp(millis: Long): String = SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault()).format(Date(millis))
 private fun figure(v: Double?): String = v?.let { AttendanceCalculator.formatTwo(it).removeSuffix("0").removeSuffix(".0").removeSuffix(".") } ?: "—"
@@ -93,8 +102,11 @@ fun ReceivedAttendanceScreen(
     people: CircuitPeopleViewModel = koinViewModel(),
 ) {
     val congregations by remember(currentPersonId) { people.congregations(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val launchedWith = remember { ReceivedAttendanceLaunch.take() }
+    // Arriving from a Comparative Report month card: that snapshot's congregation is chosen and the snapshot opens.
+    remember(launchedWith) { launchedWith?.let { CircuitScopeStore.selectCongregation(congregationOfSnapshotId(it)) }; 0 }
     val selected = validCongregation(congregations, CircuitScopeStore.congregation)
-    var openId by rememberSaveable { mutableStateOf<String?>(null) }
+    var openId by rememberSaveable { mutableStateOf(launchedWith) }
     BackHandler(enabled = openId != null) { openId = null }
 
     Scaffold(
@@ -128,17 +140,9 @@ fun ReceivedAttendanceScreen(
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             CoStatusBadge(st.status.workflowLabel, badge(st.status))
-                            Text("Current version: " + st.version, style = MaterialTheme.typography.labelMedium)
                         }
                         if (open.version == st.version) AttendanceSnapshotActions(st, open.congregationName, currentPersonId, viewModel)
-                        else Text("This is an earlier version, kept as history. Actions apply to version " + st.version + ".", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                if (versionsOfOpen.size > 1) {
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        versionsOfOpen.forEach { v ->
-                            FilterChip(selected = v.id == open.id, onClick = { openId = v.id }, label = { Text("Send ${v.version}" + if (v.id == versionsOfOpen.first().id) " (latest)" else "") })
-                        }
+                        else Text("This is an earlier send, kept as history. Actions apply to the latest send.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 AttendanceSnapshotSheet(open, Modifier.weight(1f))
@@ -164,7 +168,7 @@ fun ReceivedAttendanceScreen(
                             CoStatusBadge(m.status.status.label, badge(m.status.status))
                         }
                         val sent = copy?.submittedAt ?: m.status.submittedAt
-                        if (sent > 0) Text("Version ${m.status.version} · sent ${stamp(sent)}" + (copy?.submittedByName?.takeIf { it.isNotBlank() }?.let { " by $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (sent > 0) Text("Sent ${stamp(sent)}" + (copy?.submittedByName?.takeIf { it.isNotBlank() }?.let { " by $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (copy != null) Text("Midweek ${figure(copy.average(MeetingType.MIDWEEK))} · Weekend ${figure(copy.average(MeetingType.WEEKEND))}", style = MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -219,11 +223,10 @@ private fun AttendanceSnapshotActions(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Congregation: $congregationName", fontWeight = FontWeight.SemiBold)
                     Text("Reporting month: " + monthName(status.periodMonth))
-                    Text("Snapshot version: " + status.version)
                     Text(
                         when (action) {
-                            AttendanceAction.RECEIVE -> "Confirm you reviewed exactly this version. This month's attendance is locked for the congregation's admins until you return it."
-                            AttendanceAction.RETURN -> "The congregation is told why, and this month's attendance is unlocked so it can be corrected and sent again as a new version. This snapshot stays on record unchanged."
+                            AttendanceAction.RECEIVE -> "Confirm you reviewed this report. This month's attendance is locked for the congregation's admins until you return it."
+                            AttendanceAction.RETURN -> "The congregation is told why, and this month's attendance is unlocked so it can be corrected and sent again as a new report. This snapshot stays on record unchanged."
                             AttendanceAction.CANCEL -> "The submission is cancelled but its snapshot and history are kept. This does not unlock the month; to have it corrected, use Return to Congregation."
                         },
                         style = MaterialTheme.typography.bodySmall,
@@ -268,13 +271,13 @@ private val averageFill = Color(0xFFFFFF00)
 
 /** The frozen attendance as the congregation sent it: a Midweek block and a Weekend block, each with its parts, average and official figure, then the monthly averages. */
 @Composable
-internal fun AttendanceSnapshotSheet(report: CoAttendanceSnapshot, modifier: Modifier = Modifier) {
+internal fun AttendanceSnapshotSheet(report: CoAttendanceSnapshot, modifier: Modifier = Modifier, showVersion: Boolean = false) {
     val context = LocalContext.current
     val dateFmt = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
     fun official(r: CoAttendanceRow) = AttendanceCalculator.display(r.officialAttendance, r.roundingMode)
     fun exportData() = TableReportData(
         title = "Meeting Attendance Report",
-        details = listOf("Congregation" to report.congregationName, "Month" to monthName(report.periodMonth), "Submitted CO Snapshot" to "Send ${report.version} · ${stamp(report.submittedAt)}"),
+        details = listOf("Congregation" to report.congregationName, "Month" to monthName(report.periodMonth), "Submitted" to ((if (showVersion) "Send ${report.version} · " else "") + stamp(report.submittedAt))),
         recordsFound = report.rows.size.toString(),
         table = listOf(listOf("Date", "Meeting", "Treasures", "Apply Yourself", "Living as Christians", "Public Meeting", "Watchtower Study", "Official Attendance")) +
             report.rows.sortedBy { it.meetingDate }.map { r ->
@@ -295,7 +298,7 @@ internal fun AttendanceSnapshotSheet(report: CoAttendanceSnapshot, modifier: Mod
 
     Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(report.congregationName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text("Meeting Attendance for " + monthName(report.periodMonth) + " · Send ${report.version} · ${stamp(report.submittedAt)}", style = MaterialTheme.typography.bodySmall)
+        Text("Meeting Attendance for " + monthName(report.periodMonth) + (if (showVersion) " · Send ${report.version}" else "") + " · ${stamp(report.submittedAt)}", style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { TableReportExporter.print(context, exportData()) }) { Icon(Icons.Rounded.Print, contentDescription = null); Text("  Print / PDF") }
             OutlinedButton(onClick = { TableReportExporter.shareExcel(context, exportData()) }) { Icon(Icons.Rounded.TableChart, contentDescription = null); Text("  Excel") }

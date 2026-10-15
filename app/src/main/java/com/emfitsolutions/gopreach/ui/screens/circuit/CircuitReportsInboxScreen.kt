@@ -1,4 +1,4 @@
-﻿package com.emfitsolutions.gopreach.ui.screens.circuit
+package com.emfitsolutions.gopreach.ui.screens.circuit
 
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
@@ -92,7 +92,12 @@ fun CircuitReportsInboxScreen(
 ) {
     val congregations by remember(currentPersonId) { people.congregations(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val ids = remember(congregations) { congregations.map { it.id }.toSet() }
-    val items by remember(ids, currentPersonId) { viewModel.items(ids, currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val allItems by remember(ids, currentPersonId) { viewModel.items(ids, currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    // A congregation is ALWAYS chosen first, every time this section is opened: nothing is listed (or loaded for display) before that, and
+    // only the chosen congregation's reports are ever shown, so reports of different congregations can never be mixed.
+    var chosenId by rememberSaveable { mutableStateOf<String?>(null) }
+    val chosen = congregations.firstOrNull { it.id == chosenId }
+    val items = if (chosen == null) emptyList() else allItems.filter { it.status.congregationId == chosen.id }
     var filter by rememberSaveable { mutableStateOf(InboxFilter.ALL.name) }
     var query by rememberSaveable { mutableStateOf("") }
     val nameOf = { id: String -> congregations.firstOrNull { it.id == id }?.name ?: id }
@@ -116,7 +121,19 @@ fun CircuitReportsInboxScreen(
             )
         },
     ) { padding ->
+        if (chosen == null) {
+            SelectCongregationPrompt(
+                congregations = congregations, onSelect = { chosenId = it; filter = InboxFilter.ALL.name; query = "" },
+                modifier = Modifier.padding(padding),
+                hint = "Choose a congregation to review the Field Service Reports it sent you.",
+            )
+            return@Scaffold
+        }
         Column(Modifier.fillMaxSize().padding(padding)) {
+            SelectedCongregationBar(
+                chosen.name, onChange = { chosenId = null; filter = InboxFilter.ALL.name; query = "" },
+                title = "Field Service Report", modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            )
             OutlinedTextField(
                 value = query, onValueChange = { query = it }, singleLine = true,
                 placeholder = { Text("Search congregation, month, year or status") },
@@ -151,7 +168,6 @@ fun CircuitReportsInboxScreen(
                                 UniversalColumn("Congregation", 200.dp) { nameOf(it.status.congregationId) },
                                 UniversalColumn("Reporting Month", 150.dp) { monthName(it.status.periodMonth) },
                                 UniversalColumn("Status", 150.dp) { it.status.status.workflowLabel },
-                                UniversalColumn("Version", 80.dp) { it.status.version.toString() },
                                 UniversalColumn("Submitted", 180.dp) { stamp(it.report?.submittedAt ?: it.status.submittedAt) },
                                 UniversalColumn("Last Action", 180.dp) { stamp(it.lastActionAt) },
                         ),
@@ -167,7 +183,7 @@ fun CircuitReportsInboxScreen(
                                 }
                                 Text("Field Service Report - " + monthName(s.periodMonth), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                                 Text(
-                                    "Submitted " + stamp(item.report?.submittedAt ?: s.submittedAt) + " by " + (item.report?.submittedByName?.takeIf { it.isNotBlank() } ?: s.submittedByName) + " - Version " + s.version,
+                                    "Submitted " + stamp(item.report?.submittedAt ?: s.submittedAt) + " by " + (item.report?.submittedByName?.takeIf { it.isNotBlank() } ?: s.submittedByName),
                                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Text("Last action " + stamp(item.lastActionAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -182,9 +198,9 @@ fun CircuitReportsInboxScreen(
                                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         Text("Snapshot not available", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                                         Text(
-                                            "Version " + s.version + " of " + monthName(s.periodMonth) + " was sent from an older version of the app, which did not save the report's frozen copy, " +
-                                                "so there is nothing here to open. Use Return for Editing: the congregation sends " + monthName(s.periodMonth) + " again from the current app, " +
-                                                "and that new version arrives here with its full snapshot.",
+                                            monthName(s.periodMonth) + " was sent from an older version of the app, which did not save the report's frozen copy, " +
+                                                "so there is nothing here to open. Use Return to Congregation: the congregation sends " + monthName(s.periodMonth) + " again from the current app, " +
+                                                "and that new send arrives here with its full snapshot.",
                                             style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
@@ -250,11 +266,10 @@ fun SnapshotActions(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Congregation: $congregationName", fontWeight = FontWeight.SemiBold)
                     Text("Reporting month: " + monthName(status.periodMonth))
-                    Text("Snapshot version: " + status.version)
                     Text(
                         when (action) {
                             PendingAction.RECEIVE -> "Once accepted, this month is locked for the congregation's admins and publishers until you return it."
-                            PendingAction.RETURN -> "The congregation is told why, and its live report is unlocked so it can be corrected and sent again as a new version. This snapshot stays on record unchanged."
+                            PendingAction.RETURN -> "The congregation is told why, and its live report is unlocked so it can be corrected and sent again as a new report. This snapshot stays on record unchanged."
                             PendingAction.CANCEL -> "The submission is cancelled but its snapshot and history are kept. This does not unlock the congregation's report; to have it corrected, use Return for Editing."
                         },
                         style = MaterialTheme.typography.bodySmall,

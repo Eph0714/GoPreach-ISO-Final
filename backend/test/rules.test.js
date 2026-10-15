@@ -618,3 +618,30 @@ test('attendance workflow: senders send, undo and re-send; the overseer receives
   assert.equal(await set('coB', 'coAttendanceReportEvents', 'ae1', { reportId: id, congregationId: 'congB', userId: 'coB' }), true, 'the overseer logs its own action');
   assert.equal(await set('coB', 'coAttendanceReportEvents', 'ae2', { reportId: id, congregationId: 'congB', userId: 'secB' }), false, 'events are written as yourself');
 });
+
+// ---- Audit: sent report copies stay inside their congregation ---------------------------------------------------------
+
+test('sent report copies (field service and attendance) and read marks: only that congregation\'s overseer and senders; nobody crosses congregations', async () => {
+  const month = 1790784000000;
+  const id = `congB_${month}_1`;
+  const idA = `congA_${month}_1`;
+  const copy = (cong) => ({ congregationId: cong, periodMonth: month, version: 1, rows: [] });
+  for (const c of ['coReceivedReports', 'coAttendanceReports']) {
+    await put(c, id, copy('congB'));
+    await put(c, idA, copy('congA'));
+    assert.equal(await reads('coB', c, id), true, `${c}: the overseer of congB reads congB's copy`);
+    assert.equal(await reads('adminB', c, id), true, `${c}: a congB sender reads its own copy`);
+    assert.equal(await reads('adminA', c, id), false, `${c}: another congregation's admin does not`);
+    assert.equal(await reads('pubB', c, id), false, `${c}: a publisher does not`);
+    assert.equal(await reads('coB', c, idA), false, `${c}: an overseer does not read a congregation outside their grant`);
+    assert.equal(await set('adminB', c, id, { ...copy('congB'), rows: [{}] }), false, `${c}: a stored copy is never edited`);
+    assert.equal(await del('adminB', c, id), false, `${c}: a stored copy is never deleted`);
+  }
+  // read marks belong to one person
+  await put('coAttendanceReads', `coB_${id}`, { coPersonId: 'coB', receivedReportId: id, congregationId: 'congB' });
+  assert.equal(await reads('coB', 'coAttendanceReads', `coB_${id}`), true, 'an overseer reads their own mark');
+  assert.equal(await reads('restricted', 'coAttendanceReads', `coB_${id}`), false, 'nobody else does');
+  assert.equal(await set('coB', 'coAttendanceReads', `coB_${id}`, { coPersonId: 'coB', receivedReportId: id, congregationId: 'congB' }), true, 'an overseer marks their own read');
+  assert.equal(await set('coB', 'coAttendanceReads', `coB_${idA}`, { coPersonId: 'coB', receivedReportId: idA, congregationId: 'congA' }), false, 'not for a congregation outside the grant');
+  assert.equal(await set('adminB', 'coAttendanceReads', `coB_${id}`, { coPersonId: 'coB', receivedReportId: id, congregationId: 'congB' }), false, 'nobody marks reads for someone else');
+});

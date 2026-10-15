@@ -129,23 +129,15 @@ fun ReceivedReportsScreen(
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             CoStatusBadge(st.status.workflowLabel, badgeKind(st.status))
-                            Text("Current version: " + st.version, style = MaterialTheme.typography.labelMedium)
                         }
                         if (open.version == st.version) SnapshotActions(st, open.congregationName, currentPersonId, inbox)
-                        else Text("This is an earlier version, kept as history. Actions apply to version " + st.version + ".", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
-                if (versionsOfOpen.size > 1) {
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        versionsOfOpen.forEach { v ->
-                            FilterChip(selected = v.id == open.id, onClick = { openId = v.id }, label = { Text("Send ${v.version}" + if (v.id == versionsOfOpen.first().id) " (latest)" else "") })
-                        }
+                        else Text("This is an earlier send, kept as history. Actions apply to the latest send.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = viewMode == "report", onClick = { viewMode = "report" }, label = { Text("Report") })
                     FilterChip(selected = viewMode == "details", onClick = { viewMode = "details" }, label = { Text("Snapshot Details") })
-                    if (diff != null) FilterChip(selected = viewMode == "compare", onClick = { viewMode = "compare" }, label = { Text("Compare with send ${diff.previous.version}") })
+                    if (diff != null) FilterChip(selected = viewMode == "compare", onClick = { viewMode = "compare" }, label = { Text("Changes since the previous send") })
                 }
                 when {
                     viewMode == "details" -> SnapshotDetailsPanel(open, monthName(open.periodMonth), modifier = Modifier.weight(1f), history = openHistory)
@@ -204,7 +196,7 @@ private fun openMonthOf(reportId: String?): Long = reportId?.substringBeforeLast
 private fun formatHoursText(hours: Double): String = if (hours % 1.0 == 0.0) hours.toLong().toString() else "%.1f".format(hours)
 
 /** The frozen snapshot as the congregation's Field Service Report sheet (UP / Pub / AP / RP blocks, yellow Total row), exactly as it was sent. */
-internal fun CoReceivedReport.toSheet(): FieldServiceReportSheet {
+internal fun CoReceivedReport.toSheet(showVersion: Boolean = false): FieldServiceReportSheet {
     val lines = rows.map { r ->
         FieldServiceReportRow(
             number = r.number, status = StatusColumn.entries.firstOrNull { it.label == r.status } ?: StatusColumn.PUB, name = r.name,
@@ -216,15 +208,15 @@ internal fun CoReceivedReport.toSheet(): FieldServiceReportSheet {
     return FieldServiceReportSheet(
         groupName = congregationName, monthLabel = monthName(periodMonth), isRange = false, overseer = "", servant = "", assistant = "",
         reportColumns = columns, hourColumns = columns.filter { it.isPioneer }, rows = lines,
-        officerRows = listOf("Congregation:" to congregationName, "Submitted CO Snapshot:" to "Send $version · ${stamp(submittedAt)}"),
+        officerRows = listOf("Congregation:" to congregationName, "Submitted:" to ((if (showVersion) "Send $version · " else "") + stamp(submittedAt))),
     )
 }
 
 /** The frozen snapshot: the congregation's sheet by default (with Print / PDF and Excel), or the searchable list with its end-of-report summary. */
 @Composable
-internal fun ReceivedReportTable(report: CoReceivedReport, modifier: Modifier = Modifier) {
+internal fun ReceivedReportTable(report: CoReceivedReport, modifier: Modifier = Modifier, showVersion: Boolean = false) {
     var asList by rememberSaveable(report.id) { mutableStateOf(false) }
-    val sheet = remember(report) { report.toSheet() }
+    val sheet = remember(report, showVersion) { report.toSheet(showVersion) }
     val context = androidx.compose.ui.platform.LocalContext.current
     Column(modifier) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -237,15 +229,15 @@ internal fun ReceivedReportTable(report: CoReceivedReport, modifier: Modifier = 
                 androidx.compose.material3.OutlinedButton(onClick = { FieldServiceReportExporter.shareExcel(context, listOf(sheet)) }) { Text("Excel") }
             }
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp)) { SheetTable(sheet) }
-        } else ReceivedReportList(report, Modifier.weight(1f))
+        } else ReceivedReportList(report, Modifier.weight(1f), showVersion)
     }
 }
 
 @Composable
-private fun ReceivedReportList(report: CoReceivedReport, modifier: Modifier = Modifier) {
+private fun ReceivedReportList(report: CoReceivedReport, modifier: Modifier = Modifier, showVersion: Boolean = false) {
     UniversalReport(
         title = "Field Service Report",
-        details = listOf("Congregation" to report.congregationName, "Month" to monthName(report.periodMonth), "Submitted CO Snapshot" to "Send ${report.version} · ${stamp(report.submittedAt)}"),
+        details = listOf("Congregation" to report.congregationName, "Month" to monthName(report.periodMonth), "Submitted" to ((if (showVersion) "Send ${report.version} · " else "") + stamp(report.submittedAt))),
         items = report.rows,
         key = { it.number.toString() + it.name },
         columns = listOf(

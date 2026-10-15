@@ -1,4 +1,4 @@
-﻿package com.emfitsolutions.gopreach.ui.navigation
+package com.emfitsolutions.gopreach.ui.navigation
 
 /**
  * All navigation routes in the app. Grouped by the phase that introduces them
@@ -109,6 +109,8 @@ object Destinations {
     const val RECEIVED_ATTENDANCE = "received_attendance"
     // A congregation's own view of the Field Service Report snapshots it sent to the Circuit Overseer ("My Submitted Reports" in the admin app).
     const val SENT_REPORTS = "sent_reports"
+    // The Circuit-Overseer-style Comparative Report for a congregation's own admins: their congregation only, from the reports they sent.
+    const val ADMIN_COMPARATIVE = "admin_comparative"
     // The Circuit Overseer's announcements to a congregation or to chosen elders of it, with attachments.
     const val CO_ANNOUNCEMENTS = "co_announcements"
     // Weekly meeting attendance, and the congregation's two-period comparison (reports, headcounts, attendance) built from monthly snapshots.
@@ -233,6 +235,8 @@ object Destinations {
     // "Find Location" — manual-GPS-entry route finder (walking/driving/
     // bicycling/transit), Publisher-context.
     const val FIND_LOCATION = "find_location"
+    // Weather forecast and current conditions - available to every signed-in role.
+    const val WEATHER = "weather"
 
     const val SETTINGS = "settings"
 

@@ -168,7 +168,7 @@ class BackendCoFieldServiceReportService(
     ): CircuitResult {
         val s = offline.get<CoMonthStatus>(statuses, reportId) ?: return CircuitResult.Conflict("This month has not been submitted.")
         if (expectedVersion != null && s.version != expectedVersion) {
-            return CircuitResult.Conflict("A newer version (version ${s.version}) of this report has been sent since you opened version $expectedVersion. Review the new version first.")
+            return CircuitResult.Conflict("The congregation has sent a newer report since you opened this one. Open the latest one and review it first.")
         }
         if (s.status !in allowedFrom) return CircuitResult.Conflict("This month is ${s.status.label.lowercase()} — that action isn't available now.")
         val now = nowMillis()

@@ -1,4 +1,4 @@
-﻿package com.emfitsolutions.gopreach.ui.components
+package com.emfitsolutions.gopreach.ui.components
 
 import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.Inbox
@@ -25,6 +25,7 @@ import com.emfitsolutions.gopreach.shared.resources.app_name
 import com.emfitsolutions.gopreach.shared.resources.home_dashboard_header
 import com.emfitsolutions.gopreach.shared.resources.home_nav_calendar
 import com.emfitsolutions.gopreach.shared.resources.home_tile_find_location_title
+import com.emfitsolutions.gopreach.shared.resources.home_tile_weather_title
 import com.emfitsolutions.gopreach.shared.resources.home_tile_meeting_cart_assignment_title
 import com.emfitsolutions.gopreach.shared.resources.side_account_management
 import com.emfitsolutions.gopreach.shared.resources.side_account_settings
@@ -85,6 +86,7 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.ManageAccounts
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.Navigation
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Password
 import androidx.compose.material.icons.rounded.Settings
@@ -301,6 +303,7 @@ fun GoPreachSidePanelContent(
             // The Circuit Overseer reaches the Field Service Report through Received Reports (above), not as a separate module.
             if (canViewFieldServiceReport && !isCircuitOverseer) add(SideItem("Field Service Report", Icons.Rounded.Assessment, Destinations.FIELD_SERVICE_REPORT))
             if (canViewSentReports && !isCircuitOverseer) add(SideItem("My Submitted Reports", Icons.Rounded.Inbox, Destinations.SENT_REPORTS))
+            if (canViewSentReports && !isCircuitOverseer) add(SideItem("Comparative Report", Icons.Rounded.Assessment, Destinations.ADMIN_COMPARATIVE))
             if (canEnterManualFieldService) add(SideItem("Manual Field Service Record", Icons.Rounded.EditNote, Destinations.MANUAL_FIELD_SERVICE))
             if (canViewDeletedRecords) add(SideItem("Deleted Records", Icons.Rounded.RestoreFromTrash, Destinations.DELETED_RECORDS))
             // "Consolidate 'Forward Request' Modules for Super Admin" — one
@@ -317,7 +320,7 @@ fun GoPreachSidePanelContent(
             // derivation of this flag for the exact access set).
             if (canManageHouseholderAssignment) {
                 add(SideItem(stringResource(Res.string.side_publisher_assignment), Icons.Rounded.AssignmentInd, Destinations.PUBLISHER_ASSIGNMENT))
-                add(SideItem("Comparative Report", Icons.Rounded.BarChart, Destinations.COMPARATIVE_REPORT))
+                add(SideItem("Searching & Study Comparison", Icons.Rounded.BarChart, Destinations.COMPARATIVE_REPORT))
             }
             if (canViewInterestedPeopleScope) add(SideItem(stringResource(Res.string.side_interested_records_scoped), Icons.Rounded.Groups, Destinations.SCOPED_INTERESTED_RECORDS))
             // "The super admin can see all congregation Search[ing]/Bible
@@ -347,6 +350,7 @@ fun GoPreachSidePanelContent(
             if (canManageTerritories) add(SideItem(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.side_share_location_settings), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
+            add(SideItem(stringResource(Res.string.home_tile_weather_title), Icons.Rounded.WbSunny, Destinations.WEATHER))
             if (canViewUserLogs) add(SideItem(stringResource(Res.string.side_user_logs), Icons.Rounded.History, Destinations.USER_LOGS))
             if (canViewContactRecord) add(SideItem(stringResource(Res.string.side_contact_record), Icons.Rounded.Contacts, Destinations.CONTACT_RECORD))
             // "Theme Color Settings — Simplified User Experience" (spec §16/
@@ -423,7 +427,7 @@ private fun navGroupOf(route: String): NavGroup = when (route) {
     Destinations.circuitPublishers(), Destinations.circuitLeaders() -> NavGroup.RECORD
 
     Destinations.FIELD_SERVICE_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.CIRCUIT_REPORTS_INBOX, Destinations.CIRCUIT_REPORT,
-    Destinations.RECEIVED_REPORTS, Destinations.RECEIVED_SNAPSHOTS, Destinations.SENT_REPORTS, Destinations.RECEIVED_ATTENDANCE,
+    Destinations.RECEIVED_REPORTS, Destinations.RECEIVED_SNAPSHOTS, Destinations.SENT_REPORTS, Destinations.RECEIVED_ATTENDANCE, Destinations.ADMIN_COMPARATIVE,
     Destinations.REPORT_SUBMISSION, Destinations.COMPARATIVE_REPORT, Destinations.CONGREGATION_COMPARATIVE -> NavGroup.REPORTS
 
     Destinations.MANAGE_CONGREGATIONS, Destinations.MANAGE_ADMINS, Destinations.MANAGE_ELDERS, Destinations.MANAGE_MINISTERIAL_SERVANTS,
@@ -446,7 +450,7 @@ private fun SideItem.withStandardIcon(): SideItem {
         Destinations.MANAGE_CIRCUIT_CODES -> Icons.Rounded.VpnKey
         Destinations.CREDIT_HOUR_CATEGORIES -> Icons.Rounded.Category
         Destinations.ACCOUNT_MANAGEMENT -> Icons.Rounded.Key
-        Destinations.CONGREGATION_COMPARATIVE, Destinations.COMPARATIVE_REPORT -> Icons.Rounded.CompareArrows
+        Destinations.CONGREGATION_COMPARATIVE, Destinations.COMPARATIVE_REPORT, Destinations.ADMIN_COMPARATIVE -> Icons.Rounded.CompareArrows
         Destinations.CIRCUIT_REPORTS_INBOX, Destinations.RECEIVED_REPORTS -> Icons.Rounded.Inbox
         Destinations.MEETING_ATTENDANCE -> Icons.Rounded.HowToReg
         else -> this.icon

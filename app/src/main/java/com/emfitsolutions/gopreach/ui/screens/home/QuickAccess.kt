@@ -44,6 +44,7 @@ import androidx.compose.material.icons.rounded.PinDrop
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.WorkspacePremium
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -108,10 +109,11 @@ enum class QuickAccessItem(
 ) {
     TERRITORY_ASSIGNMENT("Territory Assignment", "Manage and assign territories", Icons.Rounded.PinDrop, Color(0xFF00897B), false, Destinations.MANAGE_TERRITORY_ASSIGNMENTS),
     TERRITORY_MAP("Territory Map", "View territory locations", Icons.Rounded.Map, Color(0xFF558B2F), false, Destinations.MANAGE_TERRITORIES_BASE),
+    WEATHER("Weather", "Forecast and conditions", Icons.Rounded.WbSunny, Color(0xFFF9A825), false, Destinations.WEATHER),
     PUBLISHER_ASSIGNMENT("Publisher Assignment", "Manage Searching, Return Visit, Bible Study and Publisher assignments", Icons.Rounded.AssignmentInd, Color(0xFF3F51B5), false, Destinations.PUBLISHER_ASSIGNMENT),
     PUBLISHER_MODULE("Publisher Module", "Manage publishers", Icons.Rounded.Groups, Color(0xFF1E88E5), false, Destinations.MANAGE_PUBLISHERS),
     FIELD_SERVICE_REPORT("Field Service Report", "Open the field service report", Icons.Rounded.Assessment, Color(0xFFEF6C00), false, Destinations.FIELD_SERVICE_REPORT),
-    COMPARATIVE_REPORT("Comparative Report", "Compare report periods", Icons.AutoMirrored.Rounded.CompareArrows, Color(0xFF6D4C41), false, Destinations.COMPARATIVE_REPORT),
+    COMPARATIVE_REPORT("Comparative Report", "Compare report periods", Icons.AutoMirrored.Rounded.CompareArrows, Color(0xFF6D4C41), false, Destinations.ADMIN_COMPARATIVE),
     REGULAR_PIONEERS("Regular Pioneers", "Regular pioneer records", Icons.Rounded.Star, Color(0xFFC79100), true, Destinations.MANAGE_PUBLISHERS, PublisherCategory.REGULAR_PIONEER),
     AUXILIARY_PIONEERS("Auxiliary Pioneer", "Auxiliary pioneer records", Icons.Rounded.EventAvailable, Color(0xFF8E24AA), true, Destinations.MANAGE_PUBLISHERS, PublisherCategory.AUXILIARY_PIONEER),
     SPECIAL_PIONEERS("Special Pioneers", "Special pioneer records", Icons.Rounded.WorkspacePremium, Color(0xFFD81B60), true, Destinations.MANAGE_PUBLISHERS, PublisherCategory.SPECIAL_PIONEER),

@@ -61,17 +61,16 @@ fun SnapshotDetailsPanel(report: CoReceivedReport, monthLabel: String, modifier:
         SectionCard("Submitted CO Snapshot") {
             Text("Congregation: " + report.congregationName)
             Text("Reporting month: $monthLabel")
-            Text("Snapshot: send " + report.version)
             Text("Submitted: " + fmtStamp(report.submittedAt) + if (report.submittedByName.isNotBlank()) " by " + report.submittedByName else "")
             Text(
                 "A frozen copy of the congregation's report at the time it was sent. Later changes to the congregation's live records do not change it.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (history.isNotEmpty()) SectionCard("Version history") {
+        if (history.isNotEmpty()) SectionCard("History") {
             history.forEach { e ->
                 Text(
-                    fmtStamp(e.at) + " - " + e.action + " (" + e.userName + (if (e.userRole.isNotBlank()) ", " + e.userRole.replace('_', ' ').lowercase() else "") + ") - version " + e.version +
+                    fmtStamp(e.at) + " - " + e.action.replace(Regex("\\s*\\(version \\d+\\)"), "") + " (" + e.userName + (if (e.userRole.isNotBlank()) ", " + e.userRole.replace('_', ' ').lowercase() else "") + ")" +
                         (e.remarks?.takeIf { it.isNotBlank() }?.let { " - Reason / remarks: $it" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                 )
@@ -102,10 +101,10 @@ fun SnapshotDetailsPanel(report: CoReceivedReport, monthLabel: String, modifier:
 @Composable
 fun SnapshotComparisonPanel(diff: SnapshotDiff, monthLabel: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        SectionCard("Send " + diff.current.version + " compared with send " + diff.previous.version) {
+        SectionCard("Latest send compared with the previous send") {
             Text("Reporting month: $monthLabel (the same month in both)", fontWeight = FontWeight.SemiBold)
-            Text("Previous: send " + diff.previous.version + " - submitted " + fmtStamp(diff.previous.submittedAt), style = MaterialTheme.typography.bodySmall)
-            Text("New: send " + diff.current.version + " - submitted " + fmtStamp(diff.current.submittedAt), style = MaterialTheme.typography.bodySmall)
+            Text("Previous send - submitted " + fmtStamp(diff.previous.submittedAt), style = MaterialTheme.typography.bodySmall)
+            Text("Latest send - submitted " + fmtStamp(diff.current.submittedAt), style = MaterialTheme.typography.bodySmall)
             if (!diff.hasChanges) Text("No differences between the two sends.", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
         }
         SectionCard("Totals") {

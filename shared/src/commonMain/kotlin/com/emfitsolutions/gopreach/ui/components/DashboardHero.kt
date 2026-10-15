@@ -46,6 +46,8 @@ fun DashboardHero(
     leadingAction: (@Composable () -> Unit)? = null,
     /** A slimmer header (smaller greeting and role line, tighter spacing) — the Circuit Overseer's. */
     compact: Boolean = false,
+    /** An optional line under the role label (the dashboard weather line). */
+    footer: (@Composable () -> Unit)? = null,
 ) {
     Box(
         modifier = Modifier
@@ -95,6 +97,7 @@ fun DashboardHero(
                         style = if (compact) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
                     )
                 }
+                if (footer != null) Box(Modifier.padding(top = if (compact) 4.dp else 8.dp)) { footer() }
             }
 
             if (quickActions.isNotEmpty()) {

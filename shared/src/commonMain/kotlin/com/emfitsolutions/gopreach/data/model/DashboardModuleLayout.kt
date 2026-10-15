@@ -39,6 +39,7 @@ enum class DashboardModuleId {
     MY_CALENDAR,
     SHARE_MY_LOCATION,
     FIND_LOCATION,
+    WEATHER,
     TERRITORY_MAP,
     MEETING_CART_ASSIGNMENT,
     MY_ASSIGNMENTS,
@@ -72,7 +73,9 @@ enum class DashboardModuleId {
  * consulted for it; "Reset Dashboard Layout" (spec §9) is what actually
  * clears an existing customization back to this all-Side-Panel default.
  */
-fun DashboardModuleId.defaultLocation(): DashboardModuleLocation = DashboardModuleLocation.SIDE_PANEL
+// Weather is the one module that starts on the Main Form (dashboard Quick Access) for everyone; it can still be moved like any other.
+fun DashboardModuleId.defaultLocation(): DashboardModuleLocation =
+    if (this == DashboardModuleId.WEATHER) DashboardModuleLocation.MAIN_FORM else DashboardModuleLocation.SIDE_PANEL
 
 /**
  * "Publishers App – Customizable Module Navigation Redesign" spec §5/§6/§21

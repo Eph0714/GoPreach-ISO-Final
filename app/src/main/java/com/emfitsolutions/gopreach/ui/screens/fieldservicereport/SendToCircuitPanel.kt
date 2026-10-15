@@ -1,4 +1,4 @@
-﻿package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
+package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
 import com.emfitsolutions.gopreach.data.model.displayName
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
@@ -526,7 +526,7 @@ fun CoReviewPanel(
             Text("$congregationName — $monthLabel", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             Text("Status: ${status.status.label}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
             Text(
-                "Submitted ${stamp.format(Date(status.submittedAt))} by ${status.submittedByName}" + if (status.version > 1) " (sent ${status.version} times)" else "",
+                "Submitted ${stamp.format(Date(status.submittedAt))} by ${status.submittedByName}",
                 style = MaterialTheme.typography.bodySmall,
             )
             if (status.status == CoReportStatus.RECEIVED && status.receivedAt != null) {
@@ -543,7 +543,7 @@ fun CoReviewPanel(
                 // The Circuit Overseer account's one button system: the main action full width, the other two share the next row.
                 if (status.status == CoReportStatus.SUBMITTED) {
                     CoButton(
-                        "Mark Received", { run { viewModel.receiveMonth(status.id, remarks, actorPersonId) } },
+                        "Mark as Received", { run { viewModel.receiveMonth(status.id, remarks, actorPersonId) } },
                         kind = CoKind.Success, icon = Icons.Rounded.CheckCircle, enabled = !busy, fillWidth = true,
                     )
                 }
@@ -582,7 +582,7 @@ fun CoReviewPanel(
     if (returning) {
         AlertDialog(
             onDismissRequest = { returning = false },
-            title = { Text("Return for correction") },
+            title = { Text("Return to Congregation") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("The congregation will be able to correct this month's records and send it again. Explain what needs to be corrected:")

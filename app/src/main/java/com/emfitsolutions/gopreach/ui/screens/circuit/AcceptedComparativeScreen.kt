@@ -1,5 +1,23 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.rounded.Headphones
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import com.emfitsolutions.gopreach.domain.ComparisonNarration
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material.icons.rounded.Assessment
+import androidx.compose.material.icons.rounded.HowToReg
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.emfitsolutions.gopreach.domain.AttendanceComparative
+import com.emfitsolutions.gopreach.domain.ComparisonSummary
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -89,14 +107,259 @@ private data class PeriodDraft(val from: Long? = null, val to: Long? = null) {
 
 private val periodColors = listOf(Color(0xFF1E88E5), Color(0xFFF2B705), Color(0xFF2E7D32), Color(0xFF8E24AA), Color(0xFFE53935), Color(0xFF00897B))
 
-private enum class ResultView(val label: String) { REPORT("Report"), SUMMARY("Comparison"), MONTHLY("Monthly Breakdown"), CHARTS("Charts") }
+private enum class ComparisonView(val label: String) { GRAPH("Graph"), LIST("List"), DETAILS("Details") }
+
+/** The two kinds of comparison the Circuit Overseer can generate. */
+private enum class CompareType(val label: String, val blurb: String, val icon: ImageVector) {
+    FIELD_SERVICE("Field Service Report", "Publishers, pioneers, hours and Bible studies", Icons.Rounded.Assessment),
+    ATTENDANCE("Circuit Attendance Report", "Midweek and Weekend meeting attendance", Icons.Rounded.HowToReg),
+}
+
+@Composable
+private fun ComparisonTypeCards(selected: CompareType?, compact: Boolean, onSelect: (CompareType) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        CompareType.entries.forEach { t ->
+            val on = t == selected
+            Surface(
+                onClick = { onSelect(t) }, shape = RoundedCornerShape(16.dp),
+                color = if (on) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                border = BorderStroke(if (on) 2.dp else 1.dp, if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.weight(1f),
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(t.icon, contentDescription = null, modifier = Modifier.size(28.dp), tint = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(t.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    if (!compact) Text(t.blurb, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+/** First period = dark grey, second period = GoPreach's medium yellow (the same on screen and in the printed graph). */
+private val firstBarColor = Color(0xFF3A3A3A)
+private val secondBarColor = Color(0xFFF2B705)
+
+/** The selected congregation and both reporting periods, prominent above every comparison. */
+@Composable
+private fun PeriodsHeader(congregation: String, first: String, second: String) {
+    CoCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(congregation, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(12.dp).clip(CircleShape).background(firstBarColor))
+                Text("  $first", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(12.dp).clip(CircleShape).background(secondBarColor))
+                Text("  $second", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+/** "▲ +6 (+5.0%)": increased = yellow, decreased = dark grey, unchanged = outlined, so the three read apart at a glance. */
+@Composable
+private fun ChangeChip(r: ComparisonSummary.Row) {
+    val label = if (r.direction == ComparisonSummary.Direction.UNAVAILABLE) "No data" else r.changeText + (r.percent?.let { "  " + r.percentText } ?: "")
+    val (container, content) = when (r.direction) {
+        ComparisonSummary.Direction.INCREASED -> secondBarColor.copy(alpha = 0.35f) to MaterialTheme.colorScheme.onSurface
+        ComparisonSummary.Direction.DECREASED -> firstBarColor to Color.White
+        else -> Color.Transparent to MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Surface(
+        shape = RoundedCornerShape(50), color = container,
+        border = if (container == Color.Transparent) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
+    ) { Text(label, Modifier.padding(horizontal = 10.dp, vertical = 3.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = content, maxLines = 1) }
+}
+
+@Composable
+private fun BarLine(value: Double?, top: Double, color: Color, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.weight(1f).height(18.dp).clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+            if (value != null && top > 0.0) {
+                Box(Modifier.fillMaxWidth((value / top).toFloat().coerceIn(0f, 1f).let { if (value > 0.0) it.coerceAtLeast(0.02f) else 0f }).fillMaxHeight().background(color))
+            }
+        }
+        Text(text, Modifier.width(56.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+    }
+}
+
+/** Graph view: one pair of bars per figure, each pair on its own scale starting at zero, with the real values written on them. */
+@Composable
+private fun ComparisonBarsView(summary: ComparisonSummary.Result) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        summary.rows.forEach { r ->
+            val top = maxOf(r.first ?: 0.0, r.second ?: 0.0)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(r.name, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    ChangeChip(r)
+                }
+                BarLine(r.first, top, firstBarColor, r.firstText)
+                BarLine(r.second, top, secondBarColor, r.secondText)
+            }
+        }
+        summary.unavailableNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+
+/** List view: Metric | previous | current | change (with the percentage underneath) - compact enough for a phone, the same table that is printed. */
+@Composable
+private fun ComparisonListView(summary: ComparisonSummary.Result) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Bottom) {
+            Text("Metric", Modifier.weight(1.5f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(summary.firstLabel, Modifier.weight(1f).padding(horizontal = 6.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, maxLines = 2)
+            Text(summary.secondLabel, Modifier.weight(1f).padding(horizontal = 6.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, textAlign = TextAlign.End, maxLines = 2)
+            Text("Change", Modifier.weight(1.1f), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+        }
+        HorizontalDivider()
+        summary.rows.forEach { r ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(r.name, Modifier.weight(1.5f), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(r.firstText, Modifier.weight(1f).padding(horizontal = 6.dp), style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.End)
+                Text(r.secondText, Modifier.weight(1f).padding(horizontal = 6.dp), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, textAlign = TextAlign.End)
+                Column(Modifier.weight(1.1f), horizontalAlignment = Alignment.End) {
+                    Text(r.changeText, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    if (r.direction != ComparisonSummary.Direction.UNAVAILABLE) Text(r.percentText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        }
+        summary.unavailableNote?.let { Text(it, Modifier.padding(top = 6.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+
+/** The automatic Comparison Summary shown after every generated comparison (see [ComparisonSummary]). */
+@Composable
+private fun ComparisonSummaryView(summary: ComparisonSummary.Result) {
+    CoCard(Modifier.fillMaxWidth(), accent = secondBarColor) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Comparison Summary", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            summary.paragraphs.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
+        }
+    }
+}
 
 /**
- * Circuit Overseer -> Comparative Report: a report generator. The overseer chooses a congregation and any number of reporting
- * periods (any range, any length, across years); on Generate the whole report - period labels, month counts, snapshot coverage,
- * monthly rows, statistics, differences, charts, warnings, and what Print / PDF / Excel produce - is rebuilt from the ACCEPTED
- * monthly snapshots of exactly those periods. Changing the congregation or any period discards the previous report at once, so
- * nothing stale can be shown or exported. See [AcceptedComparative] for the calculation rules.
+ * "Read Report": the generated comparison read aloud by the phone's own speech engine (see [ReportNarrator]), with Play / Pause / Resume / Stop /
+ * Read Again, a speed choice, a clear state, and the same words as readable text. It lives only while the report is on screen, so changing the
+ * type, congregation or periods (or leaving the screen) stops and releases the narration, and the next report gets its own text.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ReadReportPanel(narrator: ReportNarrator, script: List<String>) {
+    var open by rememberSaveable { mutableStateOf(false) }
+    var showText by rememberSaveable { mutableStateOf(false) }
+    val state = narrator.state
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            onClick = { open = true; narrator.play() },
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = secondBarColor, contentColor = Color.Black),
+            shape = RoundedCornerShape(14.dp),
+        ) {
+            Icon(Icons.Rounded.Headphones, contentDescription = null, modifier = Modifier.size(22.dp))
+            Text("  Read Report", fontWeight = FontWeight.Bold)
+        }
+        if (open) {
+            CoCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(state.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        if (state == NarrationState.PLAYING || state == NarrationState.PAUSED) {
+                            Text("${narrator.index + 1} of ${narrator.count}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(enabled = state != NarrationState.PLAYING && state != NarrationState.UNAVAILABLE, onClick = { narrator.play() }) {
+                            Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp)); Text(if (state == NarrationState.PAUSED) "  Resume" else "  Play")
+                        }
+                        OutlinedButton(enabled = state == NarrationState.PLAYING, onClick = { narrator.pause() }) {
+                            Icon(Icons.Rounded.Pause, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Pause")
+                        }
+                        OutlinedButton(enabled = state == NarrationState.PLAYING || state == NarrationState.PAUSED, onClick = { narrator.stop() }) {
+                            Icon(Icons.Rounded.Stop, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Stop")
+                        }
+                        OutlinedButton(enabled = state != NarrationState.UNAVAILABLE, onClick = { narrator.readAgain() }) {
+                            Icon(Icons.Rounded.Replay, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Read Again")
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Speed", style = MaterialTheme.typography.labelLarge)
+                        listOf(0.75f to "0.75x", 1.0f to "1x", 1.25f to "1.25x", 1.5f to "1.5x").forEach { (value, label) ->
+                            FilterChip(selected = narrator.rate == value, onClick = { narrator.changeRate(value) }, label = { Text(label) })
+                        }
+                    }
+                    narrator.message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = { showText = !showText }) { Text(if (showText) "Hide text" else "Show text") }
+                    if (showText) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            script.forEachIndexed { i, line ->
+                                Text(
+                                    line, style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = if (state != NarrationState.STOPPED && i == narrator.index) FontWeight.Bold else FontWeight.Normal,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+private fun periodLines(periods: List<Pair<String, Pair<Int, Int>>>, noun: String) =
+    periods.map { (label, counts) -> label to "${counts.first} of ${counts.second} month${if (counts.second == 1) "" else "s"} $noun" }
+
+private fun fieldServiceExport(
+    congregationName: String, result: AcceptedComparative.Result, sheets: List<ConsolidatedSheet>, summary: ComparisonSummary.Result, view: ComparisonView,
+    author: String, noun: String,
+) = ComparativeReportData(
+    congregationName = congregationName,
+    periodA = "", periodB = "",
+    generatedBy = author,
+    generatedAt = SimpleDateFormat("MMMM d, yyyy h:mm a", Locale.getDefault()).format(Date()),
+    calculationMode = "",
+    comparison = summary.table(),
+    monthly = if (view == ComparisonView.DETAILS) result.monthly else emptyList(),
+    notes = emptyList(),
+    title = "Field Service Report Comparison",
+    periodLines = periodLines(result.periods.map { it.label to (it.available to it.expected) }, noun),
+    comparisonHeading = "Comparison",
+    monthlyHeading = "Monthly Breakdown",
+    sheets = if (view == ComparisonView.DETAILS) sheets else emptyList(),
+    summaryParagraphs = summary.paragraphs,
+    graph = if (view == ComparisonView.GRAPH) summary.rows else emptyList(),
+    footnotes = listOfNotNull(summary.unavailableNote),
+)
+
+private fun attendanceExport(congregationName: String, r: AttendanceComparative.Result, view: ComparisonView, author: String, noun: String, dayLabel: (Long) -> String) = ComparativeReportData(
+    congregationName = congregationName,
+    periodA = "", periodB = "",
+    generatedBy = author,
+    generatedAt = SimpleDateFormat("MMMM d, yyyy h:mm a", Locale.getDefault()).format(Date()),
+    calculationMode = "",
+    comparison = r.comparison,
+    monthly = if (view == ComparisonView.DETAILS) r.monthly else emptyList(),
+    extraTables = if (view == ComparisonView.DETAILS) r.periods.flatMap { AttendanceComparative.sheetTables(it, dayLabel) } else emptyList(),
+    notes = emptyList(),
+    title = "Circuit Attendance Report Comparison",
+    periodLines = periodLines(r.periods.map { it.label to (it.available to it.expected) }, noun),
+    comparisonHeading = "Comparison",
+    monthlyHeading = "Monthly Breakdown",
+    summaryParagraphs = r.summary.paragraphs,
+    graph = if (view == ComparisonView.GRAPH) r.summary.rows else emptyList(),
+    footnotes = listOfNotNull(r.summary.unavailableNote),
+)
+
+/**
+ * Circuit Overseer -> Comparative Report: report type first (Field Service Report or Circuit Attendance Report), then the congregation, then
+ * the two reporting periods. On Generate the whole report - actual period labels, month counts, snapshot coverage, figures, differences,
+ * warnings, the automatic Comparison Summary, and what Print / PDF / Excel produce - is rebuilt from the ACCEPTED monthly snapshots of exactly
+ * those periods. Changing the type, the congregation or any period discards the previous report at once, so nothing stale can be shown or exported.
+ * See [AcceptedComparative], [AttendanceComparative] and [ComparisonSummary] for the calculation rules.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -105,50 +368,93 @@ fun AcceptedComparativeScreen(
     onBack: () -> Unit,
     onOpenSnapshot: (reportId: String) -> Unit,
     onOpenSubmittedReports: () -> Unit,
+    /** Opens a month's frozen attendance snapshot (the month cards of the Details view). */
+    onOpenAttendanceSnapshot: (reportId: String) -> Unit = {},
+    /** True for a congregation's own admins: the same report and screen, limited to their congregation and to the reports they have SENT to the Circuit Overseer. */
+    adminMode: Boolean = false,
+    /** The admin's own congregation (locked); null for the Super-Admin, who chooses. Only used in [adminMode]. */
+    adminCongregationId: String? = null,
     viewModel: AcceptedComparativeViewModel = koinViewModel(),
     people: CircuitPeopleViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
-    val congregations by remember(currentPersonId) { people.congregations(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
-    val selected = validCongregation(congregations, CircuitScopeStore.congregation)
+    val noun = if (adminMode) "sent" else "received"
+    val author = if (adminMode) "Congregation Admin" else "Circuit Overseer"
+    val adminCongregations by remember(adminMode, adminCongregationId) { viewModel.congregationsFor(adminCongregationId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val circuitCongregations by remember(currentPersonId, adminMode) {
+        if (adminMode) kotlinx.coroutines.flow.flowOf(emptyList()) else people.congregations(currentPersonId)
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val congregations = if (adminMode) adminCongregations else circuitCongregations
+    var adminPicked by rememberSaveable { mutableStateOf<String?>(null) }
+    val selected = if (adminMode) congregations.firstOrNull { it.id == (adminCongregationId ?: adminPicked) } else validCongregation(congregations, CircuitScopeStore.congregation)
+    fun chooseCongregation(id: String?) { if (adminMode) adminPicked = id else CircuitScopeStore.selectCongregation(id) }
     val monthFmt = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
     val monthLabel = { m: Long -> monthFmt.format(Date(m)) }
+    val dayFmt = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
+    val dayLabel = { d: Long -> dayFmt.format(Date(d)) }
     val monthOptions = remember { (0 downTo -59).map { monthAt(it) } } // this month back five years
     val thisMonth = remember { monthAt(0) }
+    var typeName by rememberSaveable { mutableStateOf<String?>(null) }
+    val type = typeName?.let { CompareType.valueOf(it) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Comparative Report") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
-                actions = { TextButton(onClick = onOpenSubmittedReports) { Text("Submitted by congregations") } },
+                actions = { if (!adminMode && type != null) TextButton(onClick = onOpenSubmittedReports) { Text("Submitted by congregations") } },
             )
         },
     ) { padding ->
+        if (type == null) {
+            Column(Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("What do you want to compare?", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(if (adminMode) "Choose the report type. Only the months you have sent to the Circuit Overseer are used." else "Choose the report type. Only the months you have marked as received are used.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                ComparisonTypeCards(null, compact = false) { typeName = it.name }
+            }
+            return@Scaffold
+        }
         if (selected == null) {
-            SelectCongregationPrompt(
-                congregations = congregations, onSelect = { CircuitScopeStore.selectCongregation(it) }, modifier = Modifier.padding(padding),
-                hint = "Choose a congregation to compare its accepted monthly reports.",
-            )
+            Column(Modifier.fillMaxSize().padding(padding)) {
+                Column(Modifier.padding(16.dp)) { ComparisonTypeCards(type, compact = true) { typeName = it.name } }
+                SelectCongregationPrompt(
+                    congregations = congregations, onSelect = { chooseCongregation(it) }, modifier = Modifier.weight(1f),
+                    hint = "Choose a congregation to compare its $noun reports.",
+                )
+            }
             return@Scaffold
         }
 
-        // Everything below belongs to ONE congregation: choosing another starts from scratch.
+        // Everything below belongs to ONE congregation and ONE report type: choosing another starts from scratch.
         val drafts = remember(selected.id) { mutableStateListOf(PeriodDraft(), PeriodDraft()) }
-        var generated by remember(selected.id) { mutableStateOf<List<Period>?>(null) }
-        var view by rememberSaveable(selected.id) { mutableStateOf(ResultView.REPORT.name) }
-        var chartMetric by rememberSaveable(selected.id) { mutableStateOf(Metric.PUBLISHERS.name) }
-        val months by remember(selected.id) { viewModel.months(selected.id) }.collectAsStateWithLifecycle(initialValue = emptyList())
+        var generated by remember(selected.id, typeName) { mutableStateOf<List<Period>?>(null) }
+        var viewName by rememberSaveable(selected.id) { mutableStateOf(ComparisonView.LIST.name) }
+        val comparisonView = ComparisonView.valueOf(viewName)
+        val months by remember(selected.id) { viewModel.months(selected.id, includeSent = adminMode) }.collectAsStateWithLifecycle(initialValue = emptyList())
+        val attendanceMonths by remember(selected.id) { viewModel.attendanceMonths(selected.id, includeSent = adminMode) }.collectAsStateWithLifecycle(initialValue = emptyList())
 
         val allComplete = drafts.all { it.complete }
         val problem = if (allComplete) {
             AcceptedComparative.validate(drafts.map { it.toPeriod() }, thisMonth) { AcceptedComparative.monthsOf(it, ::nextMonth).size }
         } else null
         // The report is derived from the generated periods and the accepted snapshots; any change to the selection clears it first.
-        val result = generated?.let { AcceptedComparative.build(selected.name, it, months, ::nextMonth, monthLabel) }
-
+        val result = if (type == CompareType.FIELD_SERVICE) generated?.let { AcceptedComparative.build(selected.name, it, months, ::nextMonth, monthLabel, noun) } else null
+        val attendanceResult = if (type == CompareType.ATTENDANCE) generated?.let { AttendanceComparative.build(selected.name, it[0], it[1], attendanceMonths, ::nextMonth, monthLabel, noun) } else null
         // Always consolidated as the whole congregation: one sheet per chosen period, like the Field Service Report.
         val sheets = result?.periods?.map { ConsolidatedSheets.of(selected.name, it, monthLabel) }.orEmpty()
+        val fieldServiceSummary = result?.let { ComparisonSummary.forFieldService(it, noun) }
+
+        // The narration lives here, outside the scrolling list: scrolling the player off screen must never stop or release the speech.
+        // Its text is rebuilt from the report on screen, and an empty text (the selection changed, no report) stops whatever was playing.
+        val narrationScript = (fieldServiceSummary ?: attendanceResult?.summary)?.let { ComparisonNarration.script(type.label, selected.name, it) }.orEmpty()
+        val narrator = remember { ReportNarrator(context, emptyList()) }
+        LaunchedEffect(narrationScript) { narrator.load(narrationScript) }
+        val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+        DisposableEffect(lifecycle) {
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, event -> if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) narrator.pause() }
+            lifecycle.addObserver(observer)
+            onDispose { lifecycle.removeObserver(observer); narrator.shutdown() }
+        }
 
         fun selectionChanged(block: () -> Unit) { generated = null; block() }
 
@@ -157,24 +463,31 @@ fun AcceptedComparativeScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { SelectedCongregationBar(selected.name, onChange = { CircuitScopeStore.selectCongregation(null) }, title = "Comparative Report") }
+            if (adminMode && adminCongregationId != null) {
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("COMPARATIVE REPORT", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        Text(selected.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else item { SelectedCongregationBar(selected.name, onChange = { chooseCongregation(null) }, title = "Comparative Report") }
+            item { ComparisonTypeCards(type, compact = true) { selectionChanged { typeName = it.name } } }
             item {
                 Text(
-                    "Choose the reporting periods to compare. Only months whose snapshot you have accepted (marked Received) are used.",
+                    if (adminMode) "Choose the two reporting periods to compare. Only months you have sent to the Circuit Overseer are used." else "Choose the two reporting periods to compare. Only months whose report you have marked as received are used.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
 
             itemsIndexed(drafts.toList()) { index, draft ->
-                val letter = ('A' + index).toString()
-                CoCard(Modifier.fillMaxWidth(), accent = periodColors[index % periodColors.size]) {
+                val tint = periodColors[index % periodColors.size]
+                CoCard(Modifier.fillMaxWidth(), accent = tint) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(14.dp).clip(CircleShape).background(periodColors[index % periodColors.size]))
-                            Text("  Period $letter", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                            if (drafts.size > 2) {
-                                IconButton(onClick = { selectionChanged { drafts.removeAt(index) } }) { Icon(Icons.Rounded.Close, contentDescription = "Remove Period $letter") }
-                            }
+                            Box(Modifier.size(14.dp).clip(CircleShape).background(tint))
+                            val title = if (draft.complete && draft.from!! <= draft.to!!) AcceptedComparative.periodLabel(draft.toPeriod(), monthLabel)
+                            else if (index == 0) "First reporting period" else "Second reporting period"
+                            Text("  $title", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                         }
                         SimpleDropdown(
                             label = "From month",
@@ -195,10 +508,12 @@ fun AcceptedComparativeScreen(
                         )
                         if (draft.complete && draft.from!! <= draft.to!!) {
                             val span = AcceptedComparative.monthsOf(draft.toPeriod(), ::nextMonth)
-                            val accepted = span.count { m -> months.any { it.month == m && it.state == MonthState.ACCEPTED } }
+                            val accepted = span.count { m ->
+                                if (type == CompareType.FIELD_SERVICE) months.any { it.month == m && it.state == MonthState.ACCEPTED }
+                                else attendanceMonths.any { it.month == m && it.state == MonthState.ACCEPTED }
+                            }
                             Text(
-                                AcceptedComparative.periodLabel(draft.toPeriod(), monthLabel) + " - " + span.size + (if (span.size == 1) " month" else " months") +
-                                    " - accepted snapshots: $accepted of ${span.size}",
+                                span.size.toString() + (if (span.size == 1) " month" else " months") + " - $noun reports: $accepted of ${span.size}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (accepted == span.size) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                             )
@@ -209,131 +524,71 @@ fun AcceptedComparativeScreen(
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (drafts.size < AcceptedComparative.MAX_PERIODS) {
-                        OutlinedButton(onClick = { selectionChanged { drafts.add(PeriodDraft()) } }, modifier = Modifier.fillMaxWidth()) {
-                            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text("  Add Comparison Period")
-                        }
-                    }
                     if (problem != null) Text(problem, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                    else if (!allComplete) Text("Choose the From and To months of every period.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else if (!allComplete) Text("Choose the From and To months of both periods.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Button(
                         enabled = allComplete && problem == null,
                         onClick = { generated = drafts.map { it.toPeriod() } },
                         modifier = Modifier.fillMaxWidth().height(52.dp),
-                    ) { Text("Generate Comparative Report", fontWeight = FontWeight.Bold) }
+                    ) { Text("Generate Comparison", fontWeight = FontWeight.Bold) }
                 }
             }
 
-            if (result != null) {
+            val summary = fieldServiceSummary ?: attendanceResult?.summary
+            if (summary != null) {
+                item { PeriodsHeader(selected.name, summary.firstLabel, summary.secondLabel) }
+                item { ReadReportPanel(narrator, narrationScript) }
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Comparative Report - ${selected.name}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(
-                            "Generated " + SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault()).format(Date()),
-                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ResultView.entries.forEach { v ->
-                                FilterChip(selected = view == v.name, onClick = { view = v.name }, label = { Text(v.label) })
-                            }
+                            ComparisonView.entries.forEach { v -> FilterChip(selected = viewName == v.name, onClick = { viewName = v.name }, label = { Text(v.label) }) }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { ComparativeStatisticsExporter.print(context, exportData(selected.name, result, sheets, monthLabel)) }) {
+                            fun exportNow() = if (result != null) fieldServiceExport(selected.name, result, sheets, summary, comparisonView, author, noun) else attendanceExport(selected.name, attendanceResult!!, comparisonView, author, noun, dayLabel)
+                            OutlinedButton(onClick = { ComparativeStatisticsExporter.print(context, exportNow()) }) {
                                 Icon(Icons.Rounded.Print, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Print / PDF")
                             }
-                            OutlinedButton(onClick = { ComparativeStatisticsExporter.shareExcel(context, exportData(selected.name, result, sheets, monthLabel)) }) {
+                            OutlinedButton(onClick = { ComparativeStatisticsExporter.shareExcel(context, exportNow()) }) {
                                 Icon(Icons.Rounded.TableChart, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Excel")
                             }
                         }
                     }
                 }
-                if (result.warnings.isNotEmpty()) {
-                    item {
-                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("Data coverage", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
-                                result.warnings.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer) }
+                when (comparisonView) {
+                    ComparisonView.GRAPH -> item { ComparisonBarsView(summary) }
+                    ComparisonView.LIST -> item { ComparisonListView(summary) }
+                    ComparisonView.DETAILS -> {
+                        if (result != null) {
+                            itemsIndexed(sheets) { index, sheet -> SheetView(sheet, periodColors[index % periodColors.size]) }
+                            itemsIndexed(result.periods) { index, p -> MonthlyPeriod(p, periodColors[index % periodColors.size], monthLabel, adminMode, onOpenSnapshot) }
+                        } else if (attendanceResult != null) {
+                            attendanceResult.periods.forEach { p ->
+                                AttendanceComparative.sheetTables(p, dayLabel).forEach { (title, rows) ->
+                                    item { Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) }
+                                    item { ReportGrid(rows, firstColumn = 190.dp, column = 100.dp) }
+                                }
                             }
+                            itemsIndexed(attendanceResult.periods) { index, p -> AttendanceMonthlyPeriod(p, periodColors[index % periodColors.size], monthLabel, adminMode, onOpenAttendanceSnapshot) }
                         }
                     }
                 }
-                when (ResultView.valueOf(view)) {
-                    ResultView.REPORT -> {
-                        itemsIndexed(sheets) { index, sheet -> SheetView(sheet, periodColors[index % periodColors.size]) }
-                        item { result.notes.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-                    }
-                    ResultView.SUMMARY -> {
-                        itemsIndexed(result.periods) { index, p -> PeriodSummaryCard(p, periodColors[index % periodColors.size]) }
-                        item { Text("Period Comparison", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) }
-                        item { ReportGrid(result.comparison) }
-                        item { result.notes.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
-                    }
-                    ResultView.MONTHLY -> {
-                        itemsIndexed(result.periods) { index, p -> MonthlyPeriod(p, periodColors[index % periodColors.size], monthLabel, onOpenSnapshot) }
-                    }
-                    ResultView.CHARTS -> {
-                        item {
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Metric.entries.forEach { m -> FilterChip(selected = chartMetric == m.name, onClick = { chartMetric = m.name }, label = { Text(m.label) }) }
-                            }
-                        }
-                        item { TrendChart(result, Metric.valueOf(chartMetric), monthLabel) }
-                    }
-                }
+                // The summary always closes the comparison, whichever view is open.
+                item { ComparisonSummaryView(summary) }
             }
         }
     }
 }
 
-private fun exportData(congregationName: String, result: AcceptedComparative.Result, sheets: List<ConsolidatedSheet>, monthLabel: (Long) -> String) = ComparativeReportData(
-    congregationName = congregationName,
-    periodA = "", periodB = "",
-    generatedBy = "Circuit Overseer",
-    generatedAt = SimpleDateFormat("MMMM d, yyyy h:mm a", Locale.getDefault()).format(Date()),
-    calculationMode = "",
-    comparison = result.comparison,
-    monthly = result.monthly,
-    notes = result.notes + result.warnings,
-    missingMonths = result.periods.flatMap { p -> p.missing.map { "Period ${p.letter}: ${monthLabel(it)}" } },
-    summary = result.summary,
-    title = "Comparative Report (accepted snapshots)",
-    periodLines = result.periods.map { "Period ${it.letter}" to "${it.label} - ${it.expected} months, ${it.available} accepted snapshots" + if (it.missing.isNotEmpty()) ", ${it.missing.size} missing" else "" },
-    comparisonHeading = "Period Comparison",
-    monthlyHeading = "Monthly Breakdown (accepted snapshots only)",
-    sheets = sheets,
-)
+
+
 
 @Composable
-private fun PeriodSummaryCard(p: AcceptedComparative.PeriodResult, color: Color) {
-    CoCard(Modifier.fillMaxWidth(), accent = color) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text("Period ${p.letter}: ${p.label}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text(
-                "${p.expected} months - accepted snapshots ${p.available} of ${p.expected}" + if (p.missing.isNotEmpty()) " - ${p.missing.size} missing" else "",
-                style = MaterialTheme.typography.bodySmall, color = if (p.complete) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-            )
-            if (p.available == 0) {
-                Text("No accepted snapshot in this period, so there are no figures to show.", style = MaterialTheme.typography.bodySmall)
-            } else {
-                fun avg(m: Metric) = p.figures.getValue(m).average?.let(AcceptedComparative::oneDecimal) ?: "-"
-                Text("Monthly average - Publishers ${avg(Metric.PUBLISHERS)} - Regular Pioneers ${avg(Metric.REGULAR_PIONEERS)} - Auxiliary Pioneers ${avg(Metric.AUXILIARY_PIONEERS)}", style = MaterialTheme.typography.bodySmall)
-                val studies = p.figures.getValue(Metric.BIBLE_STUDIES)
-                val hours = p.figures.getValue(Metric.HOURS)
-                Text("Bible Studies - total ${studies.total?.toLong()} (avg ${avg(Metric.BIBLE_STUDIES)}/month)", style = MaterialTheme.typography.bodySmall)
-                Text("Reported hours - total ${hours.total?.let(AcceptedComparative::oneDecimal)} (avg ${avg(Metric.HOURS)}/month)", style = MaterialTheme.typography.bodySmall)
-            }
-        }
-    }
-}
-
-@Composable
-private fun MonthlyPeriod(p: AcceptedComparative.PeriodResult, color: Color, monthLabel: (Long) -> String, onOpenSnapshot: (String) -> Unit) {
+private fun MonthlyPeriod(p: AcceptedComparative.PeriodResult, color: Color, monthLabel: (Long) -> String, adminModeLabel: Boolean, onOpenSnapshot: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(14.dp).clip(CircleShape).background(color))
             Text(
-                "  Period ${p.letter}: ${p.label} - ${p.expected} months, ${p.available} accepted",
+                "  ${p.label} - ${p.expected} months, ${p.available} accepted",
                 style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
             )
         }
@@ -343,7 +598,7 @@ private fun MonthlyPeriod(p: AcceptedComparative.PeriodResult, color: Color, mon
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(monthLabel(row.month), fontWeight = FontWeight.SemiBold)
                         Text(
-                            if (row.accepted) "Accepted - send ${row.input.report?.version}" else row.input.state.label,
+                            if (row.accepted) (if (adminModeLabel) "Sent" else "Received") else row.input.state.label,
                             style = MaterialTheme.typography.labelMedium,
                             color = if (row.accepted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                         )
@@ -364,6 +619,40 @@ private fun MonthlyPeriod(p: AcceptedComparative.PeriodResult, color: Color, mon
     }
 }
 
+/** The Details view of an attendance comparison: one card per month of a period - what it has, and "Open" for the frozen snapshot behind it. */
+@Composable
+private fun AttendanceMonthlyPeriod(p: AttendanceComparative.PeriodResult, color: Color, monthLabel: (Long) -> String, adminModeLabel: Boolean, onOpenSnapshot: (String) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(14.dp).clip(CircleShape).background(color))
+            Text("  ${p.label} - ${p.expected} months, ${p.available} with a report", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        }
+        p.rows.forEach { row ->
+            CoCard(Modifier.fillMaxWidth(), accent = if (row.accepted) null else MaterialTheme.colorScheme.error) {
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(monthLabel(row.month), fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (row.accepted) (if (adminModeLabel) "Sent" else "Received") else row.input.state.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (row.accepted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        )
+                        if (row.accepted) {
+                            fun avg(v: Double?) = v?.let { ComparisonSummary.number(it) } ?: "-"
+                            Text(
+                                "Midweek ${avg(row.midweekAverage)} (${row.midweekCount} meetings) - Weekend ${avg(row.weekendAverage)} (${row.weekendCount} meetings)",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        } else {
+                            Text("No figures - this month is not counted as zero.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    row.input.snapshot?.takeIf { row.accepted }?.let { s -> TextButton(onClick = { onOpenSnapshot(s.id) }) { Text("Open") } }
+                }
+            }
+        }
+    }
+}
 /** A table of already-formatted text (first row = headings), scrolling sideways when it is wide. */
 @Composable
 private fun ReportGrid(rows: List<List<String>>, firstColumn: Dp = 190.dp, column: Dp = 110.dp) {
@@ -389,51 +678,6 @@ private fun ReportGrid(rows: List<List<String>>, firstColumn: Dp = 190.dp, colum
  * "n/a"), never a zero-height one. With nothing to draw it says so instead of inventing values.
  */
 @OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun TrendChart(result: AcceptedComparative.Result, metric: Metric, monthLabel: (Long) -> String) {
-    data class Bar(val label: String, val value: Double?, val period: Int)
-    val bars = result.periods.flatMap { p -> p.rows.map { Bar(monthLabel(it.month), it.values[metric], p.index) } }
-    if (bars.none { it.value != null }) {
-        Text("There is no accepted data for \"${metric.label}\" in the selected periods, so there is nothing to chart.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        return
-    }
-    val max = bars.mapNotNull { it.value }.max().let { if (it <= 0.0) 1.0 else it }
-    val textColor = MaterialTheme.colorScheme.onSurface.toArgb()
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(metric.label + if (metric.additive) " (per month)" else " (monthly count)", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            result.periods.forEach { p ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(12.dp).clip(CircleShape).background(periodColors[p.index % periodColors.size]))
-                    Text("  Period ${p.letter}: ${p.label}", style = MaterialTheme.typography.labelSmall)
-                }
-            }
-        }
-        val barWidth = 52.dp
-        Box(Modifier.horizontalScroll(rememberScrollState())) {
-            androidx.compose.foundation.Canvas(Modifier.width(barWidth * bars.size).height(260.dp)) {
-                val w = barWidth.toPx()
-                val top = 22.dp.toPx()
-                val bottom = size.height - 40.dp.toPx()
-                val paint = android.graphics.Paint().apply { color = textColor; textSize = 11.dp.toPx(); textAlign = android.graphics.Paint.Align.CENTER; isAntiAlias = true }
-                bars.forEachIndexed { i, bar ->
-                    val cx = i * w + w / 2
-                    val v = bar.value
-                    if (v != null) {
-                        val h = ((v / max) * (bottom - top)).toFloat().coerceAtLeast(2f)
-                        drawRect(periodColors[bar.period % periodColors.size], topLeft = androidx.compose.ui.geometry.Offset(cx - w * 0.3f, bottom - h), size = androidx.compose.ui.geometry.Size(w * 0.6f, h))
-                        drawIntoCanvas { it.nativeCanvas.drawText(if (metric == Metric.HOURS) AcceptedComparative.oneDecimal(v) else v.toLong().toString(), cx, bottom - h - 4.dp.toPx(), paint) }
-                    } else {
-                        drawIntoCanvas { it.nativeCanvas.drawText("n/a", cx, bottom - 6.dp.toPx(), paint) }
-                    }
-                    drawIntoCanvas { it.nativeCanvas.drawText(bar.label, cx, bottom + 16.dp.toPx(), paint) }
-                }
-                drawLine(Color.Gray, androidx.compose.ui.geometry.Offset(0f, bottom), androidx.compose.ui.geometry.Offset(size.width, bottom), strokeWidth = 1.dp.toPx())
-            }
-        }
-        Text("A month without an accepted snapshot shows n/a - it is not counted as zero.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
 
 private val peachFill = Color(0xFFFCE4D6)
 private val blueFill = Color(0xFFBDD7EE)
@@ -477,12 +721,12 @@ private fun SheetView(sheet: ConsolidatedSheet, color: Color) {
         Text(sheet.reportTitle, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
         Text("Congregation: " + sheet.congregationName + "   -   FS Groups: Consolidated, all FS Groups", style = MaterialTheme.typography.bodySmall)
         Text(
-            "Accepted months: ${sheet.monthsAccepted} of ${sheet.monthsExpected}",
+            "Months with a report: ${sheet.monthsAccepted} of ${sheet.monthsExpected}",
             style = MaterialTheme.typography.bodySmall,
             color = if (sheet.monthsAccepted == sheet.monthsExpected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
         )
         if (sheet.rows.isEmpty()) {
-            Text("No accepted snapshot in this period, so there are no publishers to list.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("No report in this period, so there are no publishers to list.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             return@Column
         }
         Column(Modifier.horizontalScroll(rememberScrollState())) {

@@ -1,4 +1,4 @@
-﻿package com.emfitsolutions.gopreach.ui.screens.circuit
+package com.emfitsolutions.gopreach.ui.screens.circuit
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
@@ -60,10 +60,11 @@ fun SentReportsScreen(
     congregationsSource: FieldServiceReportViewModel = koinViewModel(),
 ) {
     val congregations by congregationsSource.congregations.collectAsStateWithLifecycle(initialValue = emptyList())
-    var picked by rememberSaveable { mutableStateOf<String?>(null) }
+    val launched = remember { SentReportsLaunch.take() }
+    var picked by rememberSaveable { mutableStateOf(launched.second?.let(::congregationOfSnapshotId)) }
     val congregation = congregations.firstOrNull { it.id == (fixedCongregationId ?: picked) }
-    var openId by rememberSaveable { mutableStateOf<String?>(null) }
-    var kind by rememberSaveable { mutableStateOf("fs") }
+    var openId by rememberSaveable { mutableStateOf(launched.second.takeIf { launched.first != "att" }) }
+    var kind by rememberSaveable { mutableStateOf(if (launched.first == "att") "att" else "fs") }
     BackHandler(enabled = openId != null) { openId = null }
 
     Scaffold(
@@ -92,7 +93,7 @@ fun SentReportsScreen(
                 }
             }
             if (kind == "att") {
-                SentAttendance(congregation.id, currentPersonId)
+                SentAttendance(congregation.id, currentPersonId, initialOpenId = launched.second.takeIf { launched.first == "att" })
                 return@Column
             }
             val months by remember(congregation.id) { viewModel.months(currentPersonId, congregation.id) }.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -119,7 +120,7 @@ fun SentReportsScreen(
                 status?.returnReason?.takeIf { status.status == CoReportStatus.RETURNED && it.isNotBlank() }?.let {
                     Text("Returned: $it", Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
-                ReceivedReportTable(open, Modifier.weight(1f))
+                ReceivedReportTable(open, Modifier.weight(1f), showVersion = true)
             } else {
                 LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     item {
@@ -147,6 +148,13 @@ fun SentReportsScreen(
     }
 }
 
+/** Carries "open this sent report" from the admin Comparative Report to My Submitted Reports (kind "fs" or "att" + the snapshot id). */
+object SentReportsLaunch {
+    var kind: String? = null
+    var reportId: String? = null
+    fun take(): Pair<String?, String?> = (kind to reportId).also { kind = null; reportId = null }
+}
+
 private fun badge(status: CoReportStatus): CoKind = when (status) {
     CoReportStatus.RECEIVED -> CoKind.Success
     CoReportStatus.RETURNED, CoReportStatus.CANCELLED -> CoKind.Warning
@@ -156,9 +164,9 @@ private fun badge(status: CoReportStatus): CoKind = when (status) {
 
 /** The Meeting Attendance months this congregation sent: the same list, versions and frozen sheet the Circuit Overseer sees (read only). */
 @Composable
-private fun SentAttendance(congregationId: String, currentPersonId: String, viewModel: ReceivedAttendanceViewModel = koinViewModel()) {
+private fun SentAttendance(congregationId: String, currentPersonId: String, initialOpenId: String? = null, viewModel: ReceivedAttendanceViewModel = koinViewModel()) {
     val months by remember(congregationId, currentPersonId) { viewModel.months(congregationId, currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
-    var openId by rememberSaveable { mutableStateOf<String?>(null) }
+    var openId by rememberSaveable { mutableStateOf(initialOpenId) }
     BackHandler(enabled = openId != null) { openId = null }
     val versions by remember(openId) {
         viewModel.versions(congregationId, openId?.substringBeforeLast('_')?.substringAfterLast('_')?.toLongOrNull() ?: 0L)
@@ -180,7 +188,7 @@ private fun SentAttendance(congregationId: String, currentPersonId: String, view
             status?.returnReason?.takeIf { status.status == CoReportStatus.RETURNED && it.isNotBlank() }?.let {
                 Text("Returned: $it", Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
-            AttendanceSnapshotSheet(open, Modifier.weight(1f))
+            AttendanceSnapshotSheet(open, Modifier.weight(1f), showVersion = true)
         }
         return
     }

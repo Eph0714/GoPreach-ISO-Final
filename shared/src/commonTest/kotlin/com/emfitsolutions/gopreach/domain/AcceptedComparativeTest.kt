@@ -93,7 +93,20 @@ class AcceptedComparativeTest {
         val r = build(listOf(Period(1, 1), Period(2, 2)), accepted(1, row(1, "a", "Pub"), row(2, "b", "Pub")), accepted(2, row(1, "a", "Pub"), row(2, "b", "Pub"), row(3, "c", "Pub")))
         val publishers = r.comparison.first { it[0] == "Publishers - monthly average" }
         assertEquals(listOf("Publishers - monthly average", "2.0", "3.0", "+1.0", "+50.0%"), publishers)
-        assertEquals(listOf("Metric", "Period A (1/1 months)", "Period B (1/1 months)", "Difference", "% Change"), r.comparison.first())
+        assertEquals(listOf("Metric", "M1 (1/1 months)", "M2 (1/1 months)", "Difference", "% Change"), r.comparison.first())
+    }
+
+    @Test
+    fun theWordingFollowsWhetherTheReportsWereReceivedOrSentAndNeverSaysAccepted() {
+        val known = arrayOf(accepted(1, row(1, "a", "Pub")))
+        val received = AcceptedComparative.build("Cong", listOf(Period(1, 2), Period(3, 3)), known.toList(), next, label)
+        val sent = AcceptedComparative.build("Cong", listOf(Period(1, 2), Period(3, 3)), known.toList(), next, label, noun = "sent")
+        assertTrue(received.monthly.any { it[1] == "Received" }, "monthly: ${received.monthly}")
+        assertTrue(sent.monthly.any { it[1] == "Sent" }, "monthly: ${sent.monthly}")
+        assertTrue(received.warnings.filter { it.contains(" report") }.let { it.isNotEmpty() && it.all { w -> w.contains("received report") } })
+        assertTrue(sent.warnings.filter { it.contains(" report") }.let { it.isNotEmpty() && it.all { w -> w.contains("sent report") } })
+        val all = (received.warnings + received.monthly.flatten() + received.comparison.flatten() + received.summary.flatten()).joinToString(" ")
+        assertTrue(!all.contains("ccepted") && !all.contains("snapshot"), "nothing the Circuit Overseer reads says Accepted: $all")
     }
 
     @Test
@@ -115,7 +128,7 @@ class AcceptedComparativeTest {
         val r = build(listOf(Period(1, 2), Period(5, 8)), accepted(1, row(1, "a", "Pub")))
         // 1 header + (1 heading + 2 months) + (1 heading + 4 months)
         assertEquals(1 + 3 + 5, r.monthly.size)
-        assertTrue(r.monthly[1][0].startsWith("Period A"))
+        assertTrue(r.monthly[1][0].startsWith("M1 - M2"))
         assertEquals(listOf("M1", "M2"), r.monthly.slice(2..3).map { it[0] }.let { listOf(it[0], it[1]) })
         assertEquals("-", r.monthly[3][2], "a month with no accepted snapshot shows a dash, never 0")
     }

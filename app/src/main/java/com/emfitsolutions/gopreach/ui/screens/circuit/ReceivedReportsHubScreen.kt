@@ -54,8 +54,6 @@ fun ReceivedReportsHubScreen(
     onBack: () -> Unit,
     onOpenFieldService: () -> Unit,
     onOpenCircuitAttendance: () -> Unit,
-    /** Opens the Comparative Report generator (null hides the card). */
-    onOpenComparative: (() -> Unit)? = null,
     viewModel: CircuitReportsInboxViewModel = koinViewModel(),
     people: CircuitPeopleViewModel = koinViewModel(),
     attendance: ReceivedAttendanceViewModel = koinViewModel(),
@@ -104,14 +102,6 @@ fun ReceivedReportsHubScreen(
                 ) {
                     if (newAttendance > 0) CoStatusBadge("$newAttendance new", CoKind.Danger)
                     CoStatusBadge("${congregations.size} congregation${if (congregations.size == 1) "" else "s"}", CoKind.Neutral)
-                }
-                if (onOpenComparative != null) CategoryCard(
-                    icon = Icons.Rounded.Assessment,
-                    title = "Comparative Report",
-                    description = "Compare a congregation's accepted reports across two month ranges.",
-                    onClick = onOpenComparative,
-                ) {
-                    CoStatusBadge("$received accepted", CoKind.Success)
                 }
             }
         }

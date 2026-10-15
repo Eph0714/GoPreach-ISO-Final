@@ -154,6 +154,12 @@ import com.emfitsolutions.gopreach.ui.screens.enrollment.MinisterialServantEnrol
 import com.emfitsolutions.gopreach.ui.screens.enrollment.PublisherEnrollmentViewModel
 import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.FieldServiceReportViewModel
 import com.emfitsolutions.gopreach.ui.screens.findlocation.FindLocationViewModel
+import com.emfitsolutions.gopreach.ui.screens.weather.WeatherViewModel
+import com.emfitsolutions.gopreach.ui.screens.weather.WeatherSummaryViewModel
+import com.emfitsolutions.gopreach.data.weather.OpenMeteoWeatherService
+import com.emfitsolutions.gopreach.data.weather.WeatherPreferences
+import com.emfitsolutions.gopreach.data.weather.CurrentPlaceResolver
+import com.emfitsolutions.gopreach.data.weather.WeatherService
 import com.emfitsolutions.gopreach.ui.screens.groupchat.GroupChatViewModel
 import com.emfitsolutions.gopreach.ui.screens.groups.ManageGroupsViewModel
 import com.emfitsolutions.gopreach.ui.screens.home.HomeViewModel
@@ -307,6 +313,9 @@ val appModule = module {
     single { com.emfitsolutions.gopreach.data.repository.ReportSubmissionPreferences(androidContext()) }
     singleOf(::CongregationStatisticsBuilder)
     singleOf(::NameOrderPreference)
+    singleOf(::WeatherPreferences)
+    singleOf(::CurrentPlaceResolver)
+    single<WeatherService> { OpenMeteoWeatherService(get()) }
     singleOf(::NotificationDismissedStore)
     singleOf(::NotificationSeenStore)
     singleOf(::NotificationSoundRepository)
@@ -421,6 +430,8 @@ val appModule = module {
     viewModelOf(::PublisherEnrollmentViewModel)
     viewModelOf(::FieldServiceReportViewModel)
     viewModelOf(::FindLocationViewModel)
+    viewModelOf(::WeatherViewModel)
+    viewModelOf(::WeatherSummaryViewModel)
     viewModelOf(::GroupChatViewModel)
     viewModelOf(::ManageGroupsViewModel)
     viewModelOf(::HomeViewModel)
