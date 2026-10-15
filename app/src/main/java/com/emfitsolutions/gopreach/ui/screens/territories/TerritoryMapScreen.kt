@@ -91,6 +91,12 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.rounded.NearMe
 import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.GpsFixed
+import androidx.compose.material.icons.rounded.GpsNotFixed
+import androidx.compose.material.icons.rounded.GpsOff
+import androidx.compose.material.icons.rounded.Navigation
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
@@ -204,12 +210,6 @@ fun TerritoryMapScreen(
     val isSuperAdmin = fixedCongregationId == null
 
     val coroutineScope = rememberCoroutineScope()
-    fun openGoogleMaps(lat: Double, lng: Double) {
-        // A plain search link, so a browser handles it if the Google Maps app is missing.
-        val uri = Uri.parse("https://www.google.com/maps/search/?api=1&query=$lat,$lng")
-        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-            .onFailure { toast("Couldn't open Google Maps.") }
-    }
 
     // "View Details" opens the same full detail + Visit History screen the
     // Pipeline module uses.
@@ -419,8 +419,15 @@ fun TerritoryMapScreen(
     var permissionAsked by rememberSaveable { mutableStateOf(false) }
     var locationIssue by remember { mutableStateOf<LocationIssue?>(null) }
     var locationRefreshKey by remember { mutableIntStateOf(0) }
-    val permissionLauncher = rememberPermissionRequester() { locationRefreshKey++ }
-    LaunchedEffect(locationRefreshKey) {
+    // Driving Mode (navigation aid only). It reuses the one live GPS stream below; it never opens a second one.
+    val driving = remember { com.emfitsolutions.gopreach.ui.components.map.DrivingModeState() }
+    var driveAfterPermission by remember { mutableStateOf(false) }
+    val permissionLauncher = rememberPermissionRequester() { granted ->
+        locationRefreshKey++
+        if (granted && driveAfterPermission) driving.start()
+        driveAfterPermission = false
+    }
+    LaunchedEffect(locationRefreshKey, driving.active) {
         if (!viewModel.hasLocationPermission()) {
             locationIssue = LocationIssue.NO_PERMISSION
             if (locationRefreshKey == 0) { permissionAsked = true; permissionLauncher.launch(AppPermission.LOCATION) }
@@ -435,7 +442,8 @@ fun TerritoryMapScreen(
         // Live updates only while this screen is visible; small moves are ignored.
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             runCatching {
-                viewModel.locationUpdates().collect { fix ->
+                viewModel.locationUpdates(fast = driving.active).collect { fix ->
+                    if (driving.active) driving.onFix(fix, com.emfitsolutions.gopreach.platform.nowMillis())
                     val prev = myLocation
                     if (prev == null || haversineMeters(prev.first, prev.second, fix.lat, fix.lng) >= MIN_MOVE_METERS) {
                         myLocation = fix.lat to fix.lng
@@ -445,6 +453,48 @@ fun TerritoryMapScreen(
                 }
             }
         }
+    }
+
+    // What the map shows as "you": while driving, only a fix that passed every check - never an estimate.
+    val driveSnap = driving.snapshot
+    val shownLocation = if (driving.active && driveSnap.hasPosition) driveSnap.lat!! to driveSnap.lng!! else myLocation
+    val shownAccuracy = if (driving.active && driveSnap.hasPosition) driveSnap.accuracyMeters else myAccuracy
+    val connectivity: com.emfitsolutions.gopreach.data.sync.ConnectivityObserver = org.koin.compose.koinInject()
+    var online by remember { mutableStateOf(connectivity.isOnline()) }
+    LaunchedEffect(connectivity) { connectivity.observe().collect { online = it } }
+    // In-app turn-by-turn guidance (needs Driving Mode). Route from the routing service; positions are the filtered Driving Mode fixes.
+    val routing: com.emfitsolutions.gopreach.data.navigation.RoutingService = org.koin.compose.koinInject()
+    val voiceGuide = remember { com.emfitsolutions.gopreach.data.navigation.VoiceGuide(context) }
+    DisposableEffect(voiceGuide) { onDispose { voiceGuide.shutdown() } }
+    val drivingPrefs: com.emfitsolutions.gopreach.platform.KeyValueStores = org.koin.compose.koinInject()
+    val guidance = remember {
+        val store = drivingPrefs.open("gopreach_driving")
+        com.emfitsolutions.gopreach.ui.components.map.TurnByTurnState(
+            routing, coroutineScope, voiceGuide,
+            initialVoiceOn = store.getBoolean("voice_on", true),
+            onVoiceChanged = { on -> store.edit().putBoolean("voice_on", on).apply() },
+        )
+    }
+    val routePoints = remember(guidance.route) { guidance.route?.points?.map { it.lat to it.lng } }
+    LaunchedEffect(driveSnap.lat, driveSnap.lng) {
+        val la = driveSnap.lat
+        val ln = driveSnap.lng
+        if (guidance.active && la != null && ln != null) guidance.onPosition(la, ln, driveSnap.accuracyMeters, driveSnap.speedKmh?.let { it / 3.6f }, online)
+    }
+    LaunchedEffect(driving.active) { if (!driving.active) guidance.stop() }
+
+    // A missing GPS signal must turn the status stale even when no fix arrives.
+    LaunchedEffect(driving.active) {
+        while (driving.active) {
+            kotlinx.coroutines.delay(1_000L)
+            driving.tick(com.emfitsolutions.gopreach.platform.nowMillis())
+        }
+    }
+    // The screen stays awake while navigating, and not a moment longer.
+    val hostView = androidx.compose.ui.platform.LocalView.current
+    DisposableEffect(driving.active) {
+        hostView.keepScreenOn = driving.active
+        onDispose { hostView.keepScreenOn = false }
     }
 
     // ---- Filters / ordering / view mode -----------------------------------
@@ -481,6 +531,44 @@ fun TerritoryMapScreen(
     fun requestLocationPermission() {
         permissionAsked = true
         permissionLauncher.launch(AppPermission.LOCATION)
+    }
+    // Driving Mode: a navigation aid only - it never edits territories, assignments, statuses or reports.
+    fun toggleDriving() {
+        when {
+            driving.active -> driving.stop()
+            drawingState.active -> toast("Finish or close Draw Mode before starting Driving Mode.")
+            !viewModel.hasLocationPermission() -> {
+                val activity = context as? Activity
+                val canAskAgain = activity == null || !permissionAsked ||
+                    androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION)
+                if (canAskAgain) {
+                    toast("Location permission is needed for Driving Mode.")
+                    driveAfterPermission = true
+                    requestLocationPermission()
+                } else {
+                    locationHelp = LocationIssue.NO_PERMISSION
+                }
+            }
+            !viewModel.isLocationServicesEnabled() -> locationHelp = LocationIssue.SERVICES_OFF
+            else -> driving.start()
+        }
+    }
+    fun startNavigation(name: String, lat: Double, lng: Double) {
+        if (!driving.active) toggleDriving()
+        if (!driving.active) return // permission / location services are being asked for first - tap Navigate again afterwards
+        val here = shownLocation ?: myLocation
+        when {
+            here == null -> toast("Waiting for your GPS location.")
+            !online -> toast("Turn-by-turn needs an internet connection to find the route.")
+            else -> {
+                guidance.start(com.emfitsolutions.gopreach.ui.components.map.GuidanceDestination(name, lat, lng), here.first, here.second)
+                toast("Guidance started. Follow road signs and traffic rules.")
+            }
+        }
+    }
+    // Driving Mode only belongs to the map: leaving the map view, or starting to draw, ends it (and so the faster GPS updates).
+    LaunchedEffect(viewMode, drawingState.active) {
+        if (driving.active && (viewMode != ViewMode.MAP || drawingState.active)) driving.stop()
     }
     fun recenter() {
         when {
@@ -823,8 +911,10 @@ fun TerritoryMapScreen(
                         records = recordsWithDistance,
                         selectedAreaId = selectedAreaId,
                         selectedRecordId = selectedRecordId,
-                        myLocation = myLocation,
-                        myAccuracyMeters = myAccuracy,
+                        myLocation = shownLocation,
+                        myAccuracyMeters = shownAccuracy,
+                        driving = driving,
+                        routePoints = routePoints,
                         focus = focus,
                         basemap = basemap,
                         reloadToken = reloadToken,
@@ -840,9 +930,9 @@ fun TerritoryMapScreen(
                                 selectBarangay(id)
                             }
                         },
-                        // Long-press asks: Create a Pin, or Open Google Maps at that exact spot.
+                        // Long-press asks what to do at that exact spot.
                         // For someone who may draw, a long press turns Drawing Mode on; everyone else keeps the old choice.
-                        // Long press: a small menu — Draw (only where the role allows it) and Open Google Maps.
+                        // Long press: a small menu - Draw (only where the role allows it), Start navigation, Street View and Open in Maps.
                         onLongPress = { lat, lng -> if (!drawingState.active && !readOnly) longPressPoint = lat to lng },
                         drawingState = drawingState,
                         drawingAccess = drawingAccess,
@@ -885,11 +975,73 @@ fun TerritoryMapScreen(
                             label = "My location",
                             onClick = { recenter() },
                         )
+                        MapToolButton(
+                            icon = Icons.Rounded.Navigation,
+                            label = if (driving.active) "Driving" else "Drive",
+                            description = if (driving.active) "Driving Mode is on. Tap to turn it off." else "Start Driving Mode: the map follows you and the arrow shows your direction of travel",
+                            active = driving.active,
+                            onClick = { toggleDriving() },
+                        )
+                        if (driving.active) {
+                            val q = driving.snapshot.quality
+                            MapToolButton(
+                                icon = when (q) {
+                                    com.emfitsolutions.gopreach.domain.navigation.GpsQuality.GOOD -> Icons.Rounded.GpsFixed
+                                    com.emfitsolutions.gopreach.domain.navigation.GpsQuality.ACQUIRING -> Icons.Rounded.GpsNotFixed
+                                    else -> Icons.Rounded.GpsOff
+                                },
+                                label = when (q) {
+                                    com.emfitsolutions.gopreach.domain.navigation.GpsQuality.GOOD -> driving.snapshot.accuracyMeters?.let { "GPS ±${it.toInt()}m" } ?: "GPS"
+                                    com.emfitsolutions.gopreach.domain.navigation.GpsQuality.ACQUIRING -> "Finding"
+                                    com.emfitsolutions.gopreach.domain.navigation.GpsQuality.WEAK -> "Weak GPS"
+                                    com.emfitsolutions.gopreach.domain.navigation.GpsQuality.STALE -> "No GPS"
+                                },
+                                description = "GPS status. " + driving.statusText(online),
+                                active = q == com.emfitsolutions.gopreach.domain.navigation.GpsQuality.WEAK || q == com.emfitsolutions.gopreach.domain.navigation.GpsQuality.STALE,
+                                onClick = { toast(driving.statusText(online)) },
+                            )
+                            MapToolButton(
+                                icon = Icons.Rounded.MyLocation,
+                                label = if (driving.following) "Following" else "Recenter",
+                                description = if (driving.following) "The map is following you. Tap to recenter." else "Following is paused. Tap to recenter on your position.",
+                                active = !driving.following,
+                                onClick = { if (driving.snapshot.hasPosition) driving.recenter() else toast("Waiting for a GPS location.") },
+                            )
+                            MapToolButton(
+                                icon = Icons.Rounded.Explore,
+                                label = if (driving.headingUp) "Heading up" else "North up",
+                                description = if (driving.headingUp) "The map turns with your direction of travel. Tap for north-up." else "North stays at the top. Tap for heading-up.",
+                                onClick = { driving.headingUp = !driving.headingUp },
+                            )
+                            MapToolButton(
+                                icon = if (guidance.voiceOn) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
+                                label = if (guidance.voiceOn) "Voice" else "Silent",
+                                description = if (guidance.voiceOn) "Spoken guidance is on. Tap to go silent." else "Spoken guidance is silent. Tap to turn the voice on.",
+                                active = !guidance.voiceOn,
+                                onClick = {
+                                    guidance.setVoice(!guidance.voiceOn)
+                                    toast(if (guidance.voiceOn) "Voice guidance on" else "Silent - instructions are shown on screen only")
+                                },
+                            )
+                        }
+                    }
+                    if (guidance.active) {
+                        com.emfitsolutions.gopreach.ui.components.map.GuidanceBanner(
+                            state = guidance,
+                            modifier = Modifier.align(Alignment.TopStart)
+                                .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top))
+                                .padding(10.dp).fillMaxWidth(0.8f),
+                        )
+                        com.emfitsolutions.gopreach.ui.components.map.GuidancePanel(
+                            state = guidance,
+                            onEnd = { guidance.stop() },
+                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                        )
                     }
                     // Full screen: the controls above the map are hidden, so keep the
                     // essentials floating on it — exit, which group this is, and the
                     // record-type filter.
-                    if (fullScreenActive) {
+                    if (fullScreenActive && !guidance.active) {
                         Column(
                             modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top)).padding(10.dp).fillMaxWidth(0.82f),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -916,7 +1068,7 @@ fun TerritoryMapScreen(
                             }
                         }
                     }
-                    if (datasetKey != null && !isLoading && mapLoadState == MapLoadState.LOADED && !drawingState.active && drawingState.selectedDrawingId == null) {
+                    if (datasetKey != null && !isLoading && mapLoadState == MapLoadState.LOADED && !drawingState.active && drawingState.selectedDrawingId == null && !guidance.active) {
                         Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
                             if (areas.isEmpty()) {
                                 MessageCard("No territories have been assigned to this FS Group yet.", Modifier.padding(12.dp))
@@ -1008,21 +1160,21 @@ fun TerritoryMapScreen(
             title = { Text("What would you like to do?") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("%.5f, %.5f".format(lat, lng), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    com.emfitsolutions.gopreach.ui.components.RecordLocationActions(lat = lat, lng = lng, name = null)
                     val here = com.emfitsolutions.gopreach.domain.map.GeoPoint(lat, lng)
                     val canDraw = congregationId != null && !isLoading && drawingAccess.canDrawAt(here, drawingTerritories, congregationId)
                     // Draw is offered only where this role may draw (inside the assigned territory for group-level users,
-                    // anywhere on their congregation's map for the wider roles); Open Google Maps is always available.
+                    // anywhere on their congregation's map for the wider roles); the map links are always available.
                     if (canDraw) {
                         Button(
                             onClick = { longPressPoint = null; drawingState.enter(here) },
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                         ) { Text("Draw") }
                     }
-                    OutlinedButton(
-                        onClick = { longPressPoint = null; openGoogleMaps(lat, lng) },
+                    Button(
+                        onClick = { longPressPoint = null; startNavigation("Selected place", lat, lng) },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
-                    ) { Text("Open Google Maps") }
+                    ) { Text("Start navigation") }
                     TextButton(onClick = { longPressPoint = null }, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
                 }
             },
@@ -1097,8 +1249,7 @@ fun TerritoryMapScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Text("%.5f, %.5f".format(pin.lat, pin.lng), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    OutlinedButton(onClick = { openGoogleMaps(pin.lat, pin.lng) }, modifier = Modifier.fillMaxWidth().height(48.dp)) { Text("Open Google Maps") }
+                    com.emfitsolutions.gopreach.ui.components.RecordLocationActions(lat = pin.lat, lng = pin.lng, name = null)
                     if (canDelete) {
                         OutlinedButton(
                             onClick = {
@@ -1177,12 +1328,7 @@ fun TerritoryMapScreen(
             item = sheetRecord,
             onDismiss = { sheetOpen = false },
             onViewDetails = { sheetOpen = false; detailsPerson = sheetRecord.record.person },
-            onNavigate = {
-                val r = sheetRecord.record
-                val uri = Uri.parse("geo:${r.lat},${r.lng}?q=${r.lat},${r.lng}(${Uri.encode(r.name)})")
-                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-                    .onFailure { toast("No navigation app found.") }
-            },
+            onGuide = { sheetOpen = false; startNavigation(sheetRecord.record.name, sheetRecord.record.lat, sheetRecord.record.lng) },
         )
     }
 }
@@ -1299,7 +1445,7 @@ private fun CenterState(content: @Composable () -> Unit) {
 
 /** Compact labelled map tool: a small icon over a one-word caption, so each button says what it does. */
 @Composable
-private fun MapToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, active: Boolean = false) {
+private fun MapToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, active: Boolean = false, description: String = label) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
@@ -1308,7 +1454,7 @@ private fun MapToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector,
         modifier = Modifier.width(58.dp).height(46.dp),
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp), tint = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
+            Icon(icon, contentDescription = description, modifier = Modifier.size(18.dp), tint = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
             Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -1541,38 +1687,44 @@ private fun GroupPickerDialog(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun RecordSheet(item: RecordWithDistance, onDismiss: () -> Unit, onViewDetails: () -> Unit, onNavigate: () -> Unit) {
+private fun RecordSheet(item: RecordWithDistance, onDismiss: () -> Unit, onViewDetails: () -> Unit, onGuide: () -> Unit) {
     val r = item.record
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(r.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.size(12.dp).clip(CircleShape).background(markerColor(r.type)))
-                Text(r.type.label, style = MaterialTheme.typography.titleMedium)
+            // Who, what kind of record, and how far.
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(r.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(markerColor(r.type)))
+                    Text(r.type.label, style = MaterialTheme.typography.titleSmall)
+                    Text("·", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (item.meters != null) "${formatDistance(item.meters)} away" else "Distance unavailable",
+                        style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary,
+                    )
+                }
             }
-            Text(
-                if (item.meters != null) "${formatDistance(item.meters)} away" else "Distance unavailable",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            // The few facts that matter on the road, each only when it exists.
             val currentAddress = listOfNotNull(r.barangay?.let { "Barangay $it" }, r.municipality, r.province).joinToString(", ")
-            Text("Place of Origin: " + r.person.address.ifBlank { "—" }, style = MaterialTheme.typography.bodyMedium)
-            Text("Current Address: " + currentAddress.ifBlank { "—" }, style = MaterialTheme.typography.bodyMedium)
-            r.person.contact?.takeIf { it.isNotBlank() }?.let { Text("Contact: $it", style = MaterialTheme.typography.bodyMedium) }
-            r.person.notes?.takeIf { it.isNotBlank() }?.let { Text("Notes: $it", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            r.groupName?.let { Text("FS Group: $it", style = MaterialTheme.typography.bodyMedium) }
-            r.territoryName?.let { Text("Territory: $it", style = MaterialTheme.typography.bodyMedium) }
-            Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onNavigate, modifier = Modifier.weight(1f).height(44.dp)) {
-                    Icon(Icons.Rounded.Directions, contentDescription = null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Navigate")
+            val where = currentAddress.ifBlank { r.person.address }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (where.isNotBlank()) Text(where, style = MaterialTheme.typography.bodyMedium)
+                listOfNotNull(r.groupName, r.territoryName).takeIf { it.isNotEmpty() }?.let {
+                    Text(it.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Button(onClick = onViewDetails, modifier = Modifier.weight(1f).height(44.dp)) {
-                    Icon(Icons.Rounded.Info, contentDescription = null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("View Details")
-                }
+                r.person.contact?.takeIf { it.isNotBlank() }?.let { Text("Contact: $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                r.person.notes?.takeIf { it.isNotBlank() }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, overflow = TextOverflow.Ellipsis) }
+            }
+            // Where it is: coordinates, Street View, Open in Maps.
+            com.emfitsolutions.gopreach.ui.components.RecordLocationActions(lat = r.lat, lng = r.lng, name = r.name)
+            Button(onClick = onGuide, modifier = Modifier.fillMaxWidth().height(50.dp)) {
+                Icon(Icons.Rounded.Directions, contentDescription = null, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Start navigation")
+            }
+            OutlinedButton(onClick = onViewDetails, modifier = Modifier.fillMaxWidth().height(46.dp)) {
+                Icon(Icons.Rounded.Info, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("View full details")
             }
         }
     }

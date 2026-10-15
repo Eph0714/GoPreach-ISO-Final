@@ -25,7 +25,13 @@ private fun onMain(block: () -> Unit) = dispatch_async(dispatch_get_main_queue()
 @OptIn(ExperimentalForeignApi::class)
 private fun CLLocation.toLatLng(): LatLng {
     val (lat, lng) = coordinate.useContents { latitude to longitude }
-    return LatLng(lat, lng, horizontalAccuracy.takeIf { it >= 0 }?.toFloat())
+    // course/speed are negative when CoreLocation has no valid value; course is the direction of travel, not the compass.
+    return LatLng(
+        lat, lng, horizontalAccuracy.takeIf { it >= 0 }?.toFloat(),
+        speedMps = speed.takeIf { it >= 0 }?.toFloat(),
+        bearingDeg = course.takeIf { it >= 0 }?.toFloat(),
+        timeMillis = (timestamp.timeIntervalSince1970 * 1000).toLong(),
+    )
 }
 
 private fun isAuthorized(status: CLAuthorizationStatus) =

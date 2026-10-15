@@ -2,7 +2,18 @@ package com.emfitsolutions.gopreach.data.location
 
 import kotlinx.coroutines.flow.Flow
 
-data class LatLng(val lat: Double, val lng: Double, val accuracyMeters: Float?)
+/**
+ * A GPS fix. [speedMps], [bearingDeg] (course of travel, degrees clockwise from true north, NOT the way the phone faces) and [timeMillis] (when the fix
+ * was taken, as device clock millis) are null/0 when the platform does not report them, so existing callers that only need a position are unaffected.
+ */
+data class LatLng(
+    val lat: Double,
+    val lng: Double,
+    val accuracyMeters: Float?,
+    val speedMps: Float? = null,
+    val bearingDeg: Float? = null,
+    val timeMillis: Long = 0L,
+)
 
 /**
  * The structured pieces of an on-device geocoder result used to pre-fill City / Municipality / Barangay when a publisher captures

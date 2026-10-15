@@ -33,6 +33,8 @@ val mapTilerApiKey: String = localProperties.getProperty("mapTilerApiKey", "")
 // local.properties as `mapillaryToken=MLY|...` (gitignored). Blank = Street View
 // tells the user it is not set up instead of failing.
 val mapillaryToken: String = localProperties.getProperty("mapillaryToken", "")
+// Google Maps Platform key for in-app Google Street View (Street View Static API + Maps Embed API enabled), as `googleMapsApiKey=...` in local.properties. Blank = Google is not used in-app.
+val googleMapsApiKey: String = localProperties.getProperty("googleMapsApiKey", "")
 
 android {
     namespace = "com.emfitsolutions.gopreach"
@@ -57,6 +59,7 @@ android {
         buildConfigField("String", "BACKEND_URL", "\"$backendUrl\"")
         buildConfigField("String", "MAPTILER_API_KEY", "\"$mapTilerApiKey\"")
         buildConfigField("String", "MAPILLARY_TOKEN", "\"$mapillaryToken\"")
+        buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsApiKey\"")
     }
 
     // Release signing. A production build is signed with GoPreach's own release key, read from

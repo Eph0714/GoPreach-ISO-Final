@@ -218,8 +218,14 @@ fun GoPreachNavGraph(
     // [session.person] is non-null) rather than on every later
     // recomposition/role-assignment update.
     val showSessionToast = rememberActionToast()
+    // Saved with the instance state, so a rotation or any other rebuild of the screen never repeats the welcome message.
+    val welcomedPersonId = androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf<String?>(null) }
     LaunchedEffect(session.person?.id) {
-        session.person?.let { showSessionToast("Login successful. Welcome, ${it.fullName}.") }
+        val person = session.person
+        if (person != null && welcomedPersonId.value != person.id) {
+            welcomedPersonId.value = person.id
+            showSessionToast("Login successful. Welcome, ${person.fullName}.")
+        }
     }
     LaunchedEffect(session.person?.id, session.isLoading) {
         if (!session.isLoading && session.person != null && session.roleOptions.isEmpty()) {

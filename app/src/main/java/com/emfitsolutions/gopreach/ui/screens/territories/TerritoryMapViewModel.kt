@@ -243,7 +243,9 @@ class TerritoryMapViewModel(
     /** Near-real-time: a fix every ~3 s while the screen is visible (collection
      * stops when it isn't), so the "You Are Here" dot follows the user as they
      * move. The caller ignores sub-2 m jitter. */
-    fun locationUpdates(): Flow<LatLng> = locationTracker.requestLocationUpdatesFlow(intervalMillis = 3_000L, minUpdateIntervalMillis = 1_000L)
+    fun locationUpdates(fast: Boolean = false): Flow<LatLng> =
+        if (fast) locationTracker.requestLocationUpdatesFlow(intervalMillis = 1_000L, minUpdateIntervalMillis = 500L) // Driving Mode: the same stream, asked more often
+        else locationTracker.requestLocationUpdatesFlow(intervalMillis = 3_000L, minUpdateIntervalMillis = 1_000L)
 }
 
 private object TerritoryAssignmentAreaFactory {

@@ -219,7 +219,7 @@ private fun InterestedPersonReadOnlyDialog(person: InterestedPerson, publisherNa
                 person.literaturePlace?.let { if (it.isNotBlank()) ReadOnlyRow("Literature Left At", it) }
                 person.contact?.let { if (it.isNotBlank()) ReadOnlyRow("Contact", it) }
                 if (person.hasGpsLocation) {
-                    ReadOnlyRow("GPS", "${person.gpsLat}, ${person.gpsLng}")
+                    com.emfitsolutions.gopreach.ui.components.RecordLocationActions(lat = person.gpsLat!!, lng = person.gpsLng!!, name = person.name)
                 }
                 ReadOnlyRow("Stage", person.pipelineStage.label())
                 ReadOnlyRow("Status", person.status.name)

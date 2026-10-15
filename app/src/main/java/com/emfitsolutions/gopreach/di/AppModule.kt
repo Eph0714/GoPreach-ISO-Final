@@ -159,6 +159,8 @@ import com.emfitsolutions.gopreach.ui.screens.weather.WeatherSummaryViewModel
 import com.emfitsolutions.gopreach.data.weather.OpenMeteoWeatherService
 import com.emfitsolutions.gopreach.data.weather.WeatherPreferences
 import com.emfitsolutions.gopreach.data.weather.CurrentPlaceResolver
+import com.emfitsolutions.gopreach.data.navigation.RoutingService
+import com.emfitsolutions.gopreach.data.navigation.ValhallaRoutingService
 import com.emfitsolutions.gopreach.data.weather.WeatherService
 import com.emfitsolutions.gopreach.ui.screens.groupchat.GroupChatViewModel
 import com.emfitsolutions.gopreach.ui.screens.groups.ManageGroupsViewModel
@@ -315,6 +317,7 @@ val appModule = module {
     singleOf(::NameOrderPreference)
     singleOf(::WeatherPreferences)
     singleOf(::CurrentPlaceResolver)
+    single<RoutingService> { ValhallaRoutingService(get()) }
     single<WeatherService> { OpenMeteoWeatherService(get()) }
     singleOf(::NotificationDismissedStore)
     singleOf(::NotificationSeenStore)

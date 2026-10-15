@@ -189,6 +189,10 @@ fun TerritoryMapCanvas(
     hideMarkers: Boolean = false,
     /** A numbered stack marker (several records at the same spot) was tapped: the ids of all its records. */
     onStackTap: (List<String>) -> Unit = {},
+    /** Driving Mode (a navigation aid): the arrow follows the GPS course and the camera follows the arrow. Null leaves the map exactly as it was. */
+    driving: com.emfitsolutions.gopreach.ui.components.map.DrivingModeState? = null,
+    /** The guided route to draw (lat, lng pairs), or null. */
+    routePoints: List<Pair<Double, Double>>? = null,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalContext.current.resources.displayMetrics.density
@@ -211,6 +215,8 @@ fun TerritoryMapCanvas(
         myAccuracyMeters = myAccuracyMeters,
         drawingLayers = true,
         recenterOnArrowTap = false,
+        drivingMode = driving?.active == true,
+        headingOverrideDeg = driving?.snapshot?.courseDeg,
         content = { m, styleVer ->
             MapDrawingOverlay(
                 state = drawingState,
@@ -598,6 +604,13 @@ fun TerritoryMapCanvas(
             }
         }
         style.getSourceAs<GeoJsonSource>(SRC_PINS)?.setGeoJson(FeatureCollection.fromFeatures(features))
+    }
+
+    // Driving Mode camera (does nothing unless Driving Mode is on).
+    com.emfitsolutions.gopreach.ui.components.map.DrivingCameraEffect(map, driving)
+    LaunchedEffect(map, styleVersion, routePoints) {
+        val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
+        com.emfitsolutions.gopreach.ui.components.map.RouteLineLayer.set(style, routePoints)
     }
 
     // Focus pin (Share Location's "open in Territory Map").

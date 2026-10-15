@@ -207,9 +207,6 @@ fun WeatherScreen(
 }
 
 private data class StatusLine(val message: String, val icon: ImageVector, val tint: Color)
-private operator fun StatusLine.component1() = message
-private operator fun StatusLine.component2() = icon
-private operator fun StatusLine.component3() = tint
 
 @Composable
 private fun statusBanner(state: WeatherUiState): StatusLine? {

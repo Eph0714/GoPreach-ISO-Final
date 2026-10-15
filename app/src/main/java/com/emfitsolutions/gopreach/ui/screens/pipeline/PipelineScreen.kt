@@ -1532,7 +1532,7 @@ private fun GpsLocationSection(person: InterestedPerson, currentPersonId: String
                         Icon(Icons.Rounded.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Text("GPS Location Captured", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 4.dp))
                     }
-                    ClickableCoordinatesText(lat = person.gpsLat!!, lng = person.gpsLng!!, label = person.name.ifBlank { null })
+                    com.emfitsolutions.gopreach.ui.components.RecordLocationActions(lat = person.gpsLat!!, lng = person.gpsLng!!, name = person.name)
                     if (person.gpsAccuracy != null) Text("Accuracy: ${person.gpsAccuracy!!.toInt()} meters", style = MaterialTheme.typography.bodyMedium)
                     if (person.gpsCapturedAt != null) Text("Captured: ${formatRecordTimestamp(person.gpsCapturedAt!!)}", style = MaterialTheme.typography.bodySmall)
                     // "Cannot Change the parent address/location" — a

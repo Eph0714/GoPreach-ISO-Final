@@ -75,6 +75,9 @@ fun MapLibreHost(
     drawingLayers: Boolean = false,
     /** Tapping the My Location arrow centers the map on it. A screen whose records sit above the arrow turns this off and does the check itself, after its record layers. */
     recenterOnArrowTap: Boolean = true,
+    /** Driving Mode: the arrow turns to [headingOverrideDeg] (GPS course of travel, true-north degrees) instead of the compass, and the compass-driven map rotation is off. */
+    drivingMode: Boolean = false,
+    headingOverrideDeg: Float? = null,
     onStyleReady: (MapLibreMap, Style) -> Unit,
     content: @Composable BoxScope.(map: MapLibreMap?, styleVersion: Int) -> Unit = { _, _ -> },
 ) {
@@ -154,16 +157,18 @@ fun MapLibreHost(
     }
 
     // ---- shared location + orientation -----------------------------------------
-    val needsCompass = interactive && (showOrientation || myLocation != null)
-    val heading: Float? = if (needsCompass) rememberDeviceHeading(myLocation).value else null
+    val needsCompass = interactive && !drivingMode && (showOrientation || myLocation != null)
+    val compassHeading: Float? = if (needsCompass) rememberDeviceHeading(myLocation).value else null
+    // While driving, the direction is the GPS course of travel - never the way the phone happens to face.
+    val heading: Float? = if (drivingMode) headingOverrideDeg else compassHeading
     var orientationMode by remember { mutableStateOf(OrientationMode.NORTH_UP) }
     LaunchedEffect(heading == null) { if (heading == null) orientationMode = OrientationMode.NORTH_UP }
-    CurrentLocationUpdater(map, styleVersion, myLocation, heading)
+    CurrentLocationUpdater(map, styleVersion, myLocation, heading, drivingMode = drivingMode, directionKnown = !drivingMode || headingOverrideDeg != null)
     LaunchedEffect(map, styleVersion, myLocation, myAccuracyMeters) {
         val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         CurrentLocationLayer.setAccuracy(style, myLocation, myAccuracyMeters)
     }
-    if (interactive) MapOrientationEffects(map, heading, orientationMode)
+    if (interactive && !drivingMode) MapOrientationEffects(map, heading, orientationMode)
     val bearing by rememberMapBearing(map)
 
     Box(modifier = modifier) {
@@ -172,7 +177,7 @@ fun MapLibreHost(
         if (showOrientation) {
             MapOrientationIndicator(
                 mapBearing = bearing,
-                headingDeg = heading,
+                headingDeg = compassHeading,
                 mode = orientationMode,
                 onClick = {
                     val m = map

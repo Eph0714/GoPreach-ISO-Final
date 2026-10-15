@@ -284,7 +284,7 @@ fun PublisherAssignmentScreen(
                                         .ifEmpty { listOf(person.address) }.joinToString(", ")
                                     if (location.isNotBlank()) Text("Location: $location", style = MaterialTheme.typography.bodySmall)
                                     if (person.gpsLat != null && person.gpsLng != null) {
-                                        Text("Coordinates: %.5f, %.5f".format(person.gpsLat, person.gpsLng), style = MaterialTheme.typography.bodySmall)
+                                        com.emfitsolutions.gopreach.ui.components.RecordLocationActions(lat = person.gpsLat!!, lng = person.gpsLng!!, name = person.name)
                                     }
                                     Text(
                                         "Status: " + if (person.status == RecordStatus.ACTIVE) "Active" else "Inactive",

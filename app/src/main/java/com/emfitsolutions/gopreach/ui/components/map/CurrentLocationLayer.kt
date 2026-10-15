@@ -240,7 +240,11 @@ internal class LocationTrack {
  * Only runs while the screen is RESUMED, so nothing animates in the background.
  */
 @Composable
-fun CurrentLocationUpdater(map: MapLibreMap?, styleVersion: Int, location: Pair<Double, Double>?, headingDeg: Float?) {
+fun CurrentLocationUpdater(
+    map: MapLibreMap?, styleVersion: Int, location: Pair<Double, Double>?, headingDeg: Float?,
+    /** Driving Mode: a larger arrow, and a faded one while no direction of travel is known yet (it must not point anywhere false). */
+    drivingMode: Boolean = false, directionKnown: Boolean = true,
+) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val lastHeading = remember { FloatArray(2) } // [0] = stabilized heading, [1] = 1 once seeded
     if (headingDeg != null) {
@@ -251,6 +255,8 @@ fun CurrentLocationUpdater(map: MapLibreMap?, styleVersion: Int, location: Pair<
     }
     val track = remember { LocationTrack() }
     val latestLocation = androidx.compose.runtime.rememberUpdatedState(location)
+    val drivingNow = androidx.compose.runtime.rememberUpdatedState(drivingMode)
+    val directionKnownNow = androidx.compose.runtime.rememberUpdatedState(directionKnown)
 
     LaunchedEffect(location) {
         if (location == null) track.reset() else track.onFix(location, SystemClock.elapsedRealtime())
@@ -278,7 +284,7 @@ fun CurrentLocationUpdater(map: MapLibreMap?, styleVersion: Int, location: Pair<
                 val wave = 0.5f + 0.5f * sin(phase * 2f * PI.toFloat())
                 val opacity = if (track.moving) 1f else 0.62f + 0.38f * wave
                 val size = if (track.moving) 1f else 1f + 0.06f * wave
-                CurrentLocationLayer.setAppearance(style, shownHeading, opacity, size)
+                CurrentLocationLayer.setAppearance(style, shownHeading, if (directionKnownNow.value) opacity else minOf(opacity, 0.5f), size * (if (drivingNow.value) 1.35f else 1f))
             }
         }
     }

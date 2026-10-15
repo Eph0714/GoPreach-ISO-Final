@@ -74,7 +74,7 @@ class AndroidLocationTracker(
         // meters outdoors), which is what that filter was written assuming.
         val request = CurrentLocationRequest.Builder().setPriority(Priority.PRIORITY_HIGH_ACCURACY).build()
         val location = client.getCurrentLocation(request, null).await() ?: return null
-        return LatLng(location.latitude, location.longitude, location.accuracy)
+        return location.toFix()
     }
 
     /** "The publisher cannot open Share Location fast, it will take time" —
@@ -91,7 +91,7 @@ class AndroidLocationTracker(
         if (!hasLocationPermission()) return null
         val client = LocationServices.getFusedLocationProviderClient(context)
         val location = client.lastLocation.await() ?: return null
-        return LatLng(location.latitude, location.longitude, location.accuracy)
+        return location.toFix()
     }
 
     /** "Fix the delay in the Shared Location feature" — root cause: the old
@@ -127,7 +127,7 @@ class AndroidLocationTracker(
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 result.lastLocation?.let { location ->
-                    trySend(LatLng(location.latitude, location.longitude, location.accuracy))
+                    trySend(location.toFix())
                 }
             }
         }
@@ -277,4 +277,22 @@ class AndroidLocationTracker(
             address?.let { LatLng(it.latitude, it.longitude, accuracyMeters = null) }
         }.getOrNull()
     }
+}
+
+/**
+ * A fix with the platform's own speed, travel course and time. The bearing is the GPS course over ground (direction of movement), never the
+ * compass; a course whose own error estimate is large is dropped. [LatLng.timeMillis] is when the fix was taken on this device's clock, so
+ * a cached, old location can be recognised as old rather than shown as live.
+ */
+private fun android.location.Location.toFix(): LatLng {
+    val ageMs = ((android.os.SystemClock.elapsedRealtimeNanos() - elapsedRealtimeNanos) / 1_000_000L).coerceAtLeast(0L)
+    val course = if (hasBearing() && !(android.os.Build.VERSION.SDK_INT >= 26 && hasBearingAccuracy() && bearingAccuracyDegrees > 45f)) bearing else null
+    return LatLng(
+        lat = latitude,
+        lng = longitude,
+        accuracyMeters = accuracy,
+        speedMps = if (hasSpeed()) speed else null,
+        bearingDeg = course,
+        timeMillis = System.currentTimeMillis() - ageMs,
+    )
 }
