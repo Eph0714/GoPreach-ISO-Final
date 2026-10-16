@@ -6,9 +6,11 @@ import com.emfitsolutions.gopreach.data.weather.CurrentPlaceResolver
 import com.emfitsolutions.gopreach.data.repository.TerritoryDrawingRepository
 import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.weather.WeatherPreferences
+import com.emfitsolutions.gopreach.data.weather.OfficialAlertService
 import com.emfitsolutions.gopreach.data.weather.WeatherService
 import com.emfitsolutions.gopreach.data.weather.asSaved
 import com.emfitsolutions.gopreach.domain.map.DrawingGeometry
+import com.emfitsolutions.gopreach.domain.weather.OfficialAlert
 import com.emfitsolutions.gopreach.domain.weather.PlaceKind
 import com.emfitsolutions.gopreach.domain.weather.WeatherException
 import com.emfitsolutions.gopreach.domain.weather.WeatherFailure
@@ -26,6 +28,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 enum class WeatherSource { NONE, LIVE, SAVED_COPY }
+
+/** Where the official-warnings section stands. FAILED and NOT_APPLICABLE never imply that there is no hazard. */
+enum class AlertsStatus { IDLE, LOADING, LOADED, FAILED, NOT_APPLICABLE }
 
 /** Which territories this person may pick: their own congregation's, or every congregation's (Super Admin), or none. */
 data class TerritoryWeatherScope(val congregationId: String? = null, val allCongregations: Boolean = false)
@@ -48,10 +53,15 @@ data class WeatherUiState(
     val territories: List<WeatherPlace> = emptyList(),
     val locating: Boolean = false,
     val locationMessage: String? = null,
+    val alerts: List<OfficialAlert> = emptyList(),
+    val alertsStatus: AlertsStatus = AlertsStatus.IDLE,
+    val alertsMessage: String? = null,
+    val alertsCheckedAt: Long? = null,
 )
 
 class WeatherViewModel(
     private val service: WeatherService,
+    private val alertService: OfficialAlertService,
     private val preferences: WeatherPreferences,
     private val connectivity: ConnectivityObserver,
     private val locationResolver: CurrentPlaceResolver,
@@ -64,6 +74,7 @@ class WeatherViewModel(
     private var started = false
     private var loadJob: Job? = null
     private var searchJob: Job? = null
+    private var alertsJob: Job? = null
     private val lastAttempt = mutableMapOf<String, Long>()
 
     fun start(personId: String, scope: TerritoryWeatherScope) {
@@ -105,7 +116,7 @@ class WeatherViewModel(
 
     fun select(place: WeatherPlace) {
         preferences.setSelected(personId, place)
-        _state.update { it.copy(place = place, report = null, source = WeatherSource.NONE, error = null, failure = null, notice = null, results = emptyList(), query = "", searchMessage = null) }
+        _state.update { it.copy(place = place, report = null, source = WeatherSource.NONE, error = null, failure = null, notice = null, results = emptyList(), query = "", searchMessage = null, alerts = emptyList(), alertsStatus = AlertsStatus.IDLE, alertsMessage = null) }
         load(place, force = false)
     }
 
@@ -114,6 +125,7 @@ class WeatherViewModel(
 
     private fun load(place: WeatherPlace, force: Boolean, retry: Boolean = false) {
         loadJob?.cancel()
+        loadAlerts(place, force)
         val now = nowMillis()
         val cached = preferences.cached(personId, place, now)?.let { it.copy(place = place) } // a copy cached for a nearby place must not rename this one
         val current = _state.value.report?.takeIf { it.place.key == place.key } ?: cached
@@ -148,6 +160,32 @@ class WeatherViewModel(
                 fail(place, e.failure, e.message ?: "Weather could not be loaded.", current != null)
             } catch (e: Exception) {
                 fail(place, WeatherFailure.BAD_RESPONSE, "Weather could not be loaded.", current != null)
+            }
+        }
+    }
+
+    /** Official PAGASA warnings load apart from the forecast, so one failing never hides the other. */
+    private fun loadAlerts(place: WeatherPlace, force: Boolean) {
+        alertsJob?.cancel()
+        if (place.countryCode.isNotBlank() && !place.isPhilippines) {
+            _state.update { it.copy(alerts = emptyList(), alertsStatus = AlertsStatus.NOT_APPLICABLE, alertsMessage = null) }
+            return
+        }
+        if (!connectivity.isOnline()) {
+            _state.update { it.copy(alerts = emptyList(), alertsStatus = AlertsStatus.FAILED, alertsMessage = "You are offline, so official warnings could not be checked.") }
+            return
+        }
+        _state.update { it.copy(alertsStatus = AlertsStatus.LOADING, alertsMessage = null) }
+        alertsJob = viewModelScope.launch {
+            try {
+                val now = nowMillis()
+                val found = alertService.alertsFor(place, now, force)
+                _state.update { if (it.place?.key != place.key) it else it.copy(alerts = found, alertsStatus = AlertsStatus.LOADED, alertsMessage = null, alertsCheckedAt = now) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val msg = (e as? WeatherException)?.message ?: "Official warnings could not be loaded."
+                _state.update { if (it.place?.key != place.key) it else it.copy(alerts = emptyList(), alertsStatus = AlertsStatus.FAILED, alertsMessage = msg) }
             }
         }
     }

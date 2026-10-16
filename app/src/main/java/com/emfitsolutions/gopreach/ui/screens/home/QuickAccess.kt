@@ -34,7 +34,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.CompareArrows
 import androidx.compose.material.icons.rounded.Assessment
 import androidx.compose.material.icons.rounded.AssignmentInd
-import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.rounded.EventAvailable
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HowToReg
@@ -43,10 +44,11 @@ import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PinDrop
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Shield
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.WorkspacePremium
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -113,6 +115,8 @@ enum class QuickAccessItem(
     PUBLISHER_ASSIGNMENT("Publisher Assignment", "Manage Searching, Return Visit, Bible Study and Publisher assignments", Icons.Rounded.AssignmentInd, Color(0xFF3F51B5), false, Destinations.PUBLISHER_ASSIGNMENT),
     PUBLISHER_MODULE("Publisher Module", "Manage publishers", Icons.Rounded.Groups, Color(0xFF1E88E5), false, Destinations.MANAGE_PUBLISHERS),
     FIELD_SERVICE_REPORT("Field Service Report", "Open the field service report", Icons.Rounded.Assessment, Color(0xFFEF6C00), false, Destinations.FIELD_SERVICE_REPORT),
+    MEETING_ATTENDANCE("Meeting Attendance", "Enter and review weekly meeting attendance", Icons.Rounded.HowToReg, Color(0xFF0097A7), false, Destinations.MEETING_ATTENDANCE),
+    SETTINGS("Settings", "Account, appearance and app settings", Icons.Rounded.Settings, Color(0xFF616161), false, Destinations.SETTINGS),
     COMPARATIVE_REPORT("Comparative Report", "Compare report periods", Icons.AutoMirrored.Rounded.CompareArrows, Color(0xFF6D4C41), false, Destinations.ADMIN_COMPARATIVE),
     REGULAR_PIONEERS("Regular Pioneers", "Regular pioneer records", Icons.Rounded.Star, Color(0xFFC79100), true, Destinations.MANAGE_PUBLISHERS, PublisherCategory.REGULAR_PIONEER),
     AUXILIARY_PIONEERS("Auxiliary Pioneer", "Auxiliary pioneer records", Icons.Rounded.EventAvailable, Color(0xFF8E24AA), true, Destinations.MANAGE_PUBLISHERS, PublisherCategory.AUXILIARY_PIONEER),
@@ -219,7 +223,8 @@ fun QuickAccessSection(
     val fromSaved = remember(layout.quickAccessOrder, layout.quickAccessConfigured, defaultIds, catalog) {
         val saved = layout.quickAccessOrder
         val ids = when {
-            layout.quickAccessConfigured -> saved
+            // A customised layout is kept exactly, except that cards added in a later release (see [NEWER_CARDS]) are appended so they can be found.
+            layout.quickAccessConfigured -> saved + defaultIds.filter { it !in saved && QuickAccessItem.valueOf(it) in NEWER_CARDS }
             // An order saved before customizing existed: keep it, and add the newer default cards after it.
             saved.isNotEmpty() -> saved + defaultIds.filter { it !in saved }
             else -> defaultIds
@@ -237,6 +242,7 @@ fun QuickAccessSection(
     }
 
     var dragging by remember { mutableStateOf<String?>(null) }
+    var menuFor by remember { mutableStateOf<String?>(null) }
     var dragPos by remember { mutableStateOf(Offset.Zero) }
     var justDragged by remember { mutableStateOf(false) }
     var showReset by remember { mutableStateOf(false) }
@@ -379,6 +385,8 @@ fun QuickAccessSection(
                                     onMoveEarlier = { moveBy(-1) },
                                     onMoveLater = { moveBy(1) },
                                     onRemove = { commit(order - id) },
+                                    menuOpen = menuFor == id,
+                                    onDismissMenu = { if (menuFor == id) menuFor = null },
                                     onClick = { if (!justDragged) onOpen(entry) },
                                     modifier = Modifier
                                         .offset { position }
@@ -386,15 +394,18 @@ fun QuickAccessSection(
                                         .height(CardHeight)
                                         .zIndex(if (isDragging) 1f else 0f)
                                         .pointerInput(id) {
+                                            var moved = false
                                             detectDragGesturesAfterLongPress(
                                                 onDragStart = {
                                                     dragging = id
                                                     justDragged = true
+                                                    moved = false
                                                     dragPos = slot((local ?: fromSaved).indexOf(id))
                                                 },
                                                 onDrag = { change, amount ->
                                                     change.consume()
                                                     dragPos += amount
+                                                    if (amount.getDistance() > 0f) moved = true
                                                     val current = local ?: fromSaved
                                                     val from = current.indexOf(id)
                                                     val centerX = dragPos.x + cellWPx / 2
@@ -406,11 +417,13 @@ fun QuickAccessSection(
                                                 },
                                                 onDragEnd = {
                                                     dragging = null
-                                                    viewModel.save(personId, local ?: fromSaved)
+                                                    if (moved) viewModel.save(personId, local ?: fromSaved) else menuFor = id
                                                     scope.launch { delay(250); justDragged = false }
                                                 },
                                                 onDragCancel = {
                                                     dragging = null
+                                                    // Lifting the finger after a long press without any movement is reported as a cancel: that is the "options" gesture.
+                                                    if (!moved) menuFor = id
                                                     scope.launch { delay(250); justDragged = false }
                                                 },
                                             )
@@ -475,6 +488,8 @@ private fun QuickAccessCard(
     onMoveEarlier: () -> Unit,
     onMoveLater: () -> Unit,
     onRemove: () -> Unit,
+    menuOpen: Boolean,
+    onDismissMenu: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -515,7 +530,7 @@ private fun QuickAccessCard(
     val description = buildString {
         append(entry.label)
         if (count != null) append(", $count") else append(", ${entry.description}")
-        append(". Opens ${entry.label}. Long press and drag to rearrange.")
+        append(". Opens ${entry.label}. Long press for options, or long press and drag to rearrange.")
     }
 
     Surface(
@@ -582,21 +597,15 @@ private fun QuickAccessCard(
                     }
                 }
             }
-            // Unobtrusive remove control: only takes the card off Quick Access, the module stays in the side panel.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .size(28.dp)
-                    .clickable(onClickLabel = "Remove ${entry.label} from Quick Access") { onRemove() },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Rounded.Close,
-                    contentDescription = "Remove ${entry.label} from Quick Access",
-                    modifier = Modifier.size(14.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            // Long press (without dragging) opens the options; dragging after a long press still moves the card.
+            DropdownMenu(expanded = menuOpen, onDismissRequest = onDismissMenu) {
+                DropdownMenuItem(text = { Text("Move earlier") }, onClick = { onDismissMenu(); onMoveEarlier() })
+                DropdownMenuItem(text = { Text("Move later") }, onClick = { onDismissMenu(); onMoveLater() })
+                DropdownMenuItem(text = { Text("Remove from Quick Access") }, onClick = { onDismissMenu(); onRemove() })
             }
         }
     }
 }
+
+/** Cards introduced after people may already have customised their Quick Access: shown for them once, at the end, until they remove them. */
+private val NEWER_CARDS = setOf(QuickAccessItem.MEETING_ATTENDANCE, QuickAccessItem.SETTINGS)

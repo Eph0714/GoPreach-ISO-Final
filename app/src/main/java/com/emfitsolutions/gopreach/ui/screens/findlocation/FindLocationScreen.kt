@@ -28,7 +28,7 @@ import androidx.compose.material.icons.rounded.DirectionsCar
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Save
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults

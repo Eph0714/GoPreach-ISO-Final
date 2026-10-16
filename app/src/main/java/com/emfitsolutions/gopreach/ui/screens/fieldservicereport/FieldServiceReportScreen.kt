@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
+import com.emfitsolutions.gopreach.ui.components.ViewSegments
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import com.emfitsolutions.gopreach.data.model.ReportStatus as RS
@@ -549,7 +550,8 @@ fun FieldServiceReportScreen(
     }
     rejectTarget?.let { item ->
         var reason by remember(item.key) { mutableStateOf("") }
-        androidx.compose.material3.AlertDialog(
+        com.emfitsolutions.gopreach.ui.components.AlertDialog(
+        scrollBody = true,
             onDismissRequest = { rejectTarget = null },
             title = { Text("Reject access request") },
             text = {
@@ -564,7 +566,8 @@ fun FieldServiceReportScreen(
     }
     reverseTarget?.let { item ->
         var reason by remember(item.key) { mutableStateOf("") }
-        androidx.compose.material3.AlertDialog(
+        com.emfitsolutions.gopreach.ui.components.AlertDialog(
+        scrollBody = true,
             onDismissRequest = { reverseTarget = null },
             title = { Text("Reverse submission") },
             text = {
@@ -578,7 +581,7 @@ fun FieldServiceReportScreen(
         )
     }
     pendingLock?.let { item ->
-        androidx.compose.material3.AlertDialog(
+        com.emfitsolutions.gopreach.ui.components.AlertDialog(
             onDismissRequest = { pendingLock = null },
             title = { Text("Lock this report?") },
             text = { Text(item.publisherName + "'s report" + (item.monthLabel?.let { " for $it" } ?: "") + " will be locked (posted). The publisher will no longer be able to edit it.") },
@@ -587,7 +590,7 @@ fun FieldServiceReportScreen(
         )
     }
     pendingUnlock?.let { item ->
-        androidx.compose.material3.AlertDialog(
+        com.emfitsolutions.gopreach.ui.components.AlertDialog(
             onDismissRequest = { pendingUnlock = null },
             title = { Text("Unlock this report?") },
             text = { Text(item.publisherName + "'s report" + (item.monthLabel?.let { " for $it" } ?: "") + " will be unlocked. The publisher can edit it and submit it again.") },
@@ -596,7 +599,7 @@ fun FieldServiceReportScreen(
         )
     }
     if (confirmLockAll) {
-        androidx.compose.material3.AlertDialog(
+        com.emfitsolutions.gopreach.ui.components.AlertDialog(
             onDismissRequest = { confirmLockAll = false },
             title = { Text("Lock all submitted reports?") },
             text = { Text("Every submitted report listed here will be locked (posted). Those publishers will no longer be able to edit them.") },
@@ -622,11 +625,12 @@ internal fun Cell(
     bold: Boolean = false,
     left: Boolean = false,
 ) {
+    val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(fill)
     Box(
-        modifier = modifier.width(width).height(34.dp).background(fill).border(0.5.dp, Color(0xFF444444)).padding(horizontal = 6.dp),
+        modifier = modifier.width(width).height(34.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
         contentAlignment = if (left) Alignment.CenterStart else Alignment.Center,
     ) {
-        Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = Color.Black, maxLines = 1)
+        Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1)
     }
 }
 
@@ -649,7 +653,10 @@ internal fun SheetTable(sheet: FieldServiceReportSheet) {
             }
         }
 
-        Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+        com.emfitsolutions.gopreach.ui.components.PinnedTable(
+            rowCount = sheet.rows.size,
+            header = {
+            Column {
             // Block headings.
             Row {
                 Cell("", W_NO); Cell("", W_STATUS); Cell("", W_NAME)
@@ -668,7 +675,20 @@ internal fun SheetTable(sheet: FieldServiceReportSheet) {
                 rc.forEach { Cell(it.label, W_NUM, fill = FILL_BIBLE, bold = true) }
                 Cell("Remarks", W_REMARKS, bold = true)
             }
-            sheet.rows.forEach { line ->
+            }
+            },
+            footer = {
+            Row {
+                Cell("", W_NO, fill = FILL_TOTAL); Cell("", W_STATUS, fill = FILL_TOTAL)
+                Cell("Total:", W_NAME, fill = FILL_TOTAL, bold = true, left = true)
+                rc.forEach { Cell(sheet.reportCount(it).toString(), W_NUM, fill = FILL_TOTAL, bold = true) }
+                hc.forEach { Cell(formatHours(sheet.totalHours(it)), W_NUM, fill = FILL_TOTAL, bold = true) }
+                rc.forEach { Cell(sheet.totalBibleStudies(it).toString(), W_NUM, fill = FILL_TOTAL, bold = true) }
+                Cell("", W_REMARKS, fill = FILL_TOTAL)
+            }
+            },
+        ) { index ->
+                val line = sheet.rows[index]
                 Row {
                     Cell(line.number.toString(), W_NO)
                     Cell(line.status.label, W_STATUS)
@@ -679,15 +699,6 @@ internal fun SheetTable(sheet: FieldServiceReportSheet) {
                     Cell(line.remarks, W_REMARKS, left = true)
                 }
             }
-            Row {
-                Cell("", W_NO, fill = FILL_TOTAL); Cell("", W_STATUS, fill = FILL_TOTAL)
-                Cell("Total:", W_NAME, fill = FILL_TOTAL, bold = true, left = true)
-                rc.forEach { Cell(sheet.reportCount(it).toString(), W_NUM, fill = FILL_TOTAL, bold = true) }
-                hc.forEach { Cell(formatHours(sheet.totalHours(it)), W_NUM, fill = FILL_TOTAL, bold = true) }
-                rc.forEach { Cell(sheet.totalBibleStudies(it).toString(), W_NUM, fill = FILL_TOTAL, bold = true) }
-                Cell("", W_REMARKS, fill = FILL_TOTAL)
-            }
-        }
     }
 }
 
@@ -852,25 +863,6 @@ private fun MonthStepper(label: String, options: List<Pair<String, String>>, onP
     }
 }
 
-/** A row of connected buttons where exactly one is selected (Report | List | Compare). */
-@Composable
-private fun ViewSegments(items: List<Pair<String, androidx.compose.ui.graphics.vector.ImageVector>>, selected: Int, onSelect: (Int) -> Unit) {
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
-    Row(Modifier.fillMaxWidth().clip(shape).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape)) {
-        items.forEachIndexed { index, (text, icon) ->
-            val on = index == selected
-            Row(
-                Modifier.weight(1f).background(if (on) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                    .clickable { onSelect(index) }.padding(vertical = 10.dp),
-                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("  " + text, style = MaterialTheme.typography.labelLarge, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium, maxLines = 1,
-                    color = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
 
 /** Side-by-side totals for the two selected periods, summed over every sheet shown for each. */
 @Composable

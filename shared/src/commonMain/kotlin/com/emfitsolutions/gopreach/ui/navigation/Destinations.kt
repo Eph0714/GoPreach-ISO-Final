@@ -101,6 +101,7 @@ object Destinations {
     const val CIRCUIT_CONGREGATIONS = "circuit_congregations"
     // Consolidated summary of every congregation in one circuit.
     const val CIRCUIT_REPORT = "circuit_report"
+    const val CIRCUIT_ATTENDANCE_COMPARISON = "circuit_attendance_comparison"
     // The Circuit Overseer's Received Reports landing page: the Field Service Report and Circuit Attendance Report categories.
     const val RECEIVED_REPORTS = "received_reports"
     // The Circuit Overseer's frozen copies of the Field Service Reports the congregations sent, with unread / read notifications.
@@ -237,6 +238,7 @@ object Destinations {
     const val FIND_LOCATION = "find_location"
     // Weather forecast and current conditions - available to every signed-in role.
     const val WEATHER = "weather"
+    const val VOICE_NOTES = "voice_notes"
 
     const val SETTINGS = "settings"
 

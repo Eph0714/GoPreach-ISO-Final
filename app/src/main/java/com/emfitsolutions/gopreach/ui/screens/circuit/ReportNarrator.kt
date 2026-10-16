@@ -65,11 +65,21 @@ class ReportNarrator(context: Context, private var sentences: List<String>) {
         override fun onError(utteranceId: String?, errorCode: Int) { main.post { fail("The phone's speech engine could not read this report (error $errorCode). Use the text below, or check Settings > Text-to-speech.") } }
     }
 
+    /** The language the text is in (a language code such as "fil" or "en"), or null for the app language. Set by [load]. */
+    private var language: String? = null
+    /** A gentle note (not an error): the text's own language has no installed offline voice, so another voice reads it. */
+    var notice by mutableStateOf<String?>(null)
+        private set
+
     /** Replaces what is read (the selection changed): whatever was playing stops first. */
-    fun load(newSentences: List<String>) {
-        if (newSentences == sentences) return
+    fun load(newSentences: List<String>, language: String? = null) {
+        val languageChanged = language != this.language
+        if (newSentences == sentences && !languageChanged) return
         stop()
         sentences = newSentences
+        this.language = language
+        notice = null
+        if (ready && languageChanged) tts?.let { e -> chooseOfflineVoice(e)?.let { v -> e.voice = v }; e.setPitch(pitch) }
     }
 
     fun play() {
@@ -131,6 +141,7 @@ class ReportNarrator(context: Context, private var sentences: List<String>) {
             return
         }
         engine.voice = voice
+        engine.setPitch(pitch)
         engine.setSpeechRate(rate)
         engine.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
         engine.setOnUtteranceProgressListener(progress)
@@ -139,11 +150,61 @@ class ReportNarrator(context: Context, private var sentences: List<String>) {
         if (startWhenReady) { startWhenReady = false; speakFrom(0) }
     }
 
-    /** The best installed voice for the app's language that works without a network; null when there is none. */
+    /** What the Publisher chose (Settings or the player): a language to read in (null = the text's own / the app's) and a kind of voice. */
+    private var preferredLanguage: String? = null
+    private var gender = com.emfitsolutions.gopreach.domain.VoiceGender.ANY
+    /** Speech pitch for the chosen voice kind: normal when a real male / female voice was found, otherwise raised (female) or lowered (male). */
+    private var pitch = 1.0f
+
+    /** Applies the Publisher's voice choices. Changing either stops what is playing (a voice cannot change mid-sentence). */
+    fun applyPreferences(gender: com.emfitsolutions.gopreach.domain.VoiceGender, languageCode: String?) {
+        if (gender == this.gender && languageCode == preferredLanguage) return
+        stop()
+        this.gender = gender
+        preferredLanguage = languageCode
+        notice = null
+        if (ready) tts?.let { e -> chooseOfflineVoice(e)?.let { v -> e.voice = v }; e.setPitch(pitch) }
+    }
+
+    /**
+     * The best installed offline voice: the language the Publisher chose, else the text's own language, else the app language, else English. When a male
+     * or female voice was asked for it is matched from the voice's name (Android has no gender field); when the phone does not label its voices, a
+     * DIFFERENT voice is used for each kind (when the phone has more than one) and the pitch is lowered for male / raised for female, so the choice is
+     * always audible. A note says which of these happened.
+     */
     private fun chooseOfflineVoice(engine: TextToSpeech): Voice? {
         val voices = runCatching { engine.voices?.toList() }.getOrNull().orEmpty().filter { !it.isNetworkConnectionRequired && !it.features.orEmpty().contains("notInstalled") }
-        fun best(language: String) = voices.filter { it.locale.language == language }.maxByOrNull { it.quality }
-        return best(Locale.getDefault().language) ?: best(Locale.ENGLISH.language)
+        fun codes(l: String): List<String> = if (l == "fil" || l == "tl") listOf("fil", "tl") else listOf(l)
+        fun inLanguage(l: String) = voices.filter { v -> codes(l).any { v.locale.language == it } }
+        val wanted = preferredLanguage ?: language
+        val ownList = wanted?.let { inLanguage(it) }.orEmpty()
+        val pool = ownList.ifEmpty { inLanguage(Locale.getDefault().language).ifEmpty { inLanguage(Locale.ENGLISH.language) } }
+        var chosen: Voice? = null
+        var stretched = false
+        if (pool.isNotEmpty()) {
+            val ranked = pool.sortedWith(compareByDescending<Voice> { it.quality }.thenBy { it.name })
+            if (gender == com.emfitsolutions.gopreach.domain.VoiceGender.ANY) {
+                chosen = ranked.first()
+            } else {
+                val named = ranked.filter { com.emfitsolutions.gopreach.domain.VoiceNames.gender(it.name) == gender }
+                if (named.isNotEmpty()) {
+                    chosen = named.first()
+                } else {
+                    // Unlabelled voices: a different one for each kind, then a pitch change on top.
+                    val unlabelled = ranked.filter { com.emfitsolutions.gopreach.domain.VoiceNames.gender(it.name) == null }.ifEmpty { ranked }
+                    chosen = if (gender == com.emfitsolutions.gopreach.domain.VoiceGender.FEMALE) unlabelled.first() else unlabelled.getOrElse(1) { unlabelled.first() }
+                    stretched = true
+                }
+            }
+        }
+        pitch = if (stretched) (if (gender == com.emfitsolutions.gopreach.domain.VoiceGender.MALE) 0.78f else 1.2f) else 1.0f
+        android.util.Log.i("ReportNarrator", "voices for ${wanted ?: "default"}: ${pool.joinToString { it.name }} -> ${chosen?.name} gender=$gender pitch=$pitch")
+        val notes = buildList {
+            if (wanted != null && ownList.isEmpty()) add("No offline voice is installed for this language, so another voice reads it and may pronounce it poorly. You can install one in Settings > Text-to-speech.")
+            if (stretched) add("This phone does not say which of its voices are male or female, so the ${gender.label.lowercase()} choice changes the voice's pitch.")
+        }
+        notice = notes.joinToString(" ").ifBlank { null }
+        return chosen
     }
 
     private fun speakFrom(start: Int) {

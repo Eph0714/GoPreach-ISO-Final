@@ -80,13 +80,14 @@ private fun monthsBetween(from: Long, to: Long): List<Long> {
 
 @Composable
 private fun Cell(text: String, width: Dp, bold: Boolean = false, fill: Color = Color.Transparent, left: Boolean = false, sub: String? = null) {
+    val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(fill)
     Box(
-        modifier = Modifier.width(width).height(if (sub != null) 44.dp else 34.dp).background(fill).border(0.5.dp, Color(0xFF444444)).padding(horizontal = 6.dp),
+        modifier = Modifier.width(width).height(if (sub != null) 44.dp else 34.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
         contentAlignment = if (left) Alignment.CenterStart else Alignment.Center,
     ) {
         Column(horizontalAlignment = if (left) Alignment.Start else Alignment.CenterHorizontally) {
-            Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = Color.Black, maxLines = 1)
-            if (sub != null) Text(sub, style = MaterialTheme.typography.labelSmall, color = Color(0xFF555555), maxLines = 1)
+            Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1)
+            if (sub != null) Text(sub, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
         }
     }
 }

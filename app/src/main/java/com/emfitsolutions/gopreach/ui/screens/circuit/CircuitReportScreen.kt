@@ -36,6 +36,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -69,6 +70,7 @@ fun CircuitReportScreen(
     currentPersonId: String,
     onBack: () -> Unit,
     onOpenCongregation: (String) -> Unit,
+    onOpenComparison: (() -> Unit)? = null,
     viewModel: CircuitPeopleViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
@@ -94,7 +96,10 @@ fun CircuitReportScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                actions = { com.emfitsolutions.gopreach.ui.components.co.CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
+                actions = {
+                    onOpenComparison?.let { open -> TextButton(onClick = open) { Text("Compare periods") } }
+                    com.emfitsolutions.gopreach.ui.components.co.CoFullScreenButton(fullScreen) { fullScreen = !fullScreen }
+                },
                 title = { Text("Circuit Attendance Report") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )

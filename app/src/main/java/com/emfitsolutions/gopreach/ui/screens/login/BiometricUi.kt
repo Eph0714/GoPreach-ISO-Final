@@ -3,7 +3,7 @@ package com.emfitsolutions.gopreach.ui.screens.login
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ListItem
@@ -110,6 +110,7 @@ fun BiometricLoginSettingsSection(showTitle: Boolean = true, viewModel: Biometri
         var error by remember { mutableStateOf<String?>(null) }
         var checking by remember { mutableStateOf(false) }
         AlertDialog(
+        scrollBody = true,
             onDismissRequest = { if (!checking) showPasswordDialog = false },
             title = { Text("Confirm your password") },
             text = {

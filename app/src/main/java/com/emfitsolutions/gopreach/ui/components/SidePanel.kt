@@ -85,6 +85,7 @@ import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.ManageAccounts
 import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.material.icons.rounded.Palette
@@ -351,6 +352,7 @@ fun GoPreachSidePanelContent(
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.side_share_location_settings), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
             add(SideItem(stringResource(Res.string.home_tile_weather_title), Icons.Rounded.WbSunny, Destinations.WEATHER))
+            add(SideItem("Voice Notes & Minutes", Icons.Rounded.Mic, Destinations.VOICE_NOTES))
             if (canViewUserLogs) add(SideItem(stringResource(Res.string.side_user_logs), Icons.Rounded.History, Destinations.USER_LOGS))
             if (canViewContactRecord) add(SideItem(stringResource(Res.string.side_contact_record), Icons.Rounded.Contacts, Destinations.CONTACT_RECORD))
             // "Theme Color Settings — Simplified User Experience" (spec §16/

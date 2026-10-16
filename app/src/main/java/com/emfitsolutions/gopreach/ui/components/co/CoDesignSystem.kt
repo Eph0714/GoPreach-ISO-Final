@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.components.co
 
+import com.emfitsolutions.gopreach.ui.theme.glass
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -154,11 +155,11 @@ fun CoCard(
     val pressed by source.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.985f else 1f, tween(90), label = "press")
     Card(
-        modifier = modifier.scale(scale).clip(shape).then(if (onClick != null) Modifier.clickable(interactionSource = source, indication = androidx.compose.material3.ripple(), onClick = onClick) else Modifier),
+        modifier = modifier.scale(scale).glass(shape, accent ?: MaterialTheme.colorScheme.primary).clip(shape).then(if (onClick != null) Modifier.clickable(interactionSource = source, indication = androidx.compose.material3.ripple(), onClick = onClick) else Modifier),
         shape = shape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        border = BorderStroke(1.dp, accent?.copy(alpha = 0.55f) ?: MaterialTheme.colorScheme.outlineVariant),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = accent?.let { BorderStroke(1.dp, it.copy(alpha = 0.55f)) },
     ) { content() }
 }
 

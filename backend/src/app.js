@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { loadActor, authorizeWrite, canReadRow, loadGrant } from './policy/index.js';
 import { rateLimit } from './rateLimit.js';
 import { mountFiles } from './files.js';
+import { mountVoice } from './voice.js';
 import { mountAnnouncementFiles } from './announcementFiles.js';
 import { mountPresence } from './presence.js';
 import { mountAccounts } from './accounts.js';
@@ -30,7 +31,7 @@ const ID_RE = /^[^/\\\s][^/\\]{0,189}$/;
  * Every push op is authorized individually (role → congregation → FS Group → territory); a denied op never writes
  * and never blocks the others. Every pull is filtered to what the caller may read.
  */
-export function createApp(store, { devAuth = false, health = () => ({}), publicLimits = {}, authOptions = {} } = {}) {
+export function createApp(store, { devAuth = false, health = () => ({}), publicLimits = {}, authOptions = {}, voiceOptions = {} } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1); // Hostinger's HTTPS proxy sits in front: use the real client address for rate limiting
@@ -107,6 +108,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   app.post('/v1/territory/remove', auth, territory(removeAssignment));
 
   mountFiles(app, store, auth);
+  mountVoice(app, store, auth, voiceOptions);
   mountAnnouncementFiles(app, store, auth);
   mountPresence(app, store, auth);
   mountAccounts(app, store, auth, authOptions);

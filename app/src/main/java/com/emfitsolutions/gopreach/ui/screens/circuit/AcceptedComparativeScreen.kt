@@ -249,20 +249,26 @@ private fun ComparisonSummaryView(summary: ComparisonSummary.Result) {
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ReadReportPanel(narrator: ReportNarrator, script: List<String>) {
+internal fun ReadReportPanel(narrator: ReportNarrator, script: List<String>, label: String = "Read Report") {
     var open by rememberSaveable { mutableStateOf(false) }
     var showText by rememberSaveable { mutableStateOf(false) }
     val state = narrator.state
+    val listenPref = org.koin.compose.koinInject<com.emfitsolutions.gopreach.data.repository.ListenButtonPreference>()
+    // The Listen button always stays; the player under it opens and closes. The Publisher's voice choices (Settings, or in the player) apply to every player.
+    val voiceGender by listenPref.gender.collectAsStateWithLifecycle()
+    val languageChoice by listenPref.language.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(voiceGender, languageChoice) { narrator.applyPreferences(voiceGender, languageChoice.narration?.code) }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
-            onClick = { open = true; narrator.play() },
+            // Tapping Listen opens the player and starts reading; tapping it again closes the player (and stops the reading).
+            onClick = { if (open) { narrator.stop(); open = false } else { open = true; narrator.play() } },
             modifier = Modifier.fillMaxWidth().height(52.dp),
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = secondBarColor, contentColor = Color.Black),
             shape = RoundedCornerShape(14.dp),
         ) {
             Icon(Icons.Rounded.Headphones, contentDescription = null, modifier = Modifier.size(22.dp))
-            Text("  Read Report", fontWeight = FontWeight.Bold)
+            Text("  " + label, fontWeight = FontWeight.Bold)
         }
         if (open) {
             CoCard(Modifier.fillMaxWidth()) {
@@ -287,14 +293,32 @@ private fun ReadReportPanel(narrator: ReportNarrator, script: List<String>) {
                             Icon(Icons.Rounded.Replay, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Read Again")
                         }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // The Publisher's voice choices - the same ones as in Settings: male or female voice, and the language it reads in.
+                    Text("Voice", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        com.emfitsolutions.gopreach.domain.VoiceGender.entries.forEach { g ->
+                            FilterChip(selected = voiceGender == g, onClick = { listenPref.setGender(g) }, label = { Text(g.label) })
+                        }
+                    }
+                    Text("Language", style = MaterialTheme.typography.labelLarge)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        com.emfitsolutions.gopreach.domain.ListenLanguageChoice.entries.forEach { c ->
+                            FilterChip(selected = languageChoice == c, onClick = { listenPref.setLanguage(c) }, label = { Text(c.label) })
+                        }
+                    }
+                    FlowRow(verticalArrangement = Arrangement.spacedBy(2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("Speed", style = MaterialTheme.typography.labelLarge)
                         listOf(0.75f to "0.75x", 1.0f to "1x", 1.25f to "1.25x", 1.5f to "1.5x").forEach { (value, label) ->
                             FilterChip(selected = narrator.rate == value, onClick = { narrator.changeRate(value) }, label = { Text(label) })
                         }
                     }
                     narrator.message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-                    TextButton(onClick = { showText = !showText }) { Text(if (showText) "Hide text" else "Show text") }
+                    narrator.notice?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TextButton(onClick = { showText = !showText }) { Text(if (showText) "Hide text" else "Show text") }
+                        Spacer(Modifier.weight(1f))
+                        TextButton(onClick = { narrator.stop(); open = false }) { Text("Hide player", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
                     if (showText) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             script.forEachIndexed { i, line ->
@@ -661,12 +685,13 @@ private fun ReportGrid(rows: List<List<String>>, firstColumn: Dp = 190.dp, colum
         rows.forEachIndexed { r, cells ->
             Row {
                 cells.forEachIndexed { c, text ->
+                    val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(if (r == 0) Color(0xFFDDE6F2) else Color.Transparent)
                     Box(
                         Modifier.width(if (c == 0) firstColumn else column).height(34.dp)
-                            .background(if (r == 0) Color(0xFFDDE6F2) else Color.Transparent)
-                            .border(0.5.dp, Color(0xFF444444)).padding(horizontal = 6.dp),
+                            .background(cellBg)
+                            .border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
                         contentAlignment = if (c == 0) Alignment.CenterStart else Alignment.Center,
-                    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (r == 0) FontWeight.Bold else FontWeight.Normal, color = Color.Black, maxLines = 1) }
+                    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (r == 0) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1) }
                 }
             }
         }
@@ -698,7 +723,7 @@ private fun SheetView(sheet: ConsolidatedSheet, color: Color) {
     val nameWidth = 190.dp
     val cellWidth = 50.dp
     val remarksWidth = 200.dp
-    val line = Color(0xFF444444)
+    val line = com.emfitsolutions.gopreach.ui.theme.cellBorder()
     fun widthOf(i: Int, last: Int): Dp = when {
         i == 0 -> numberWidth
         i == 1 -> statusWidth
@@ -729,24 +754,19 @@ private fun SheetView(sheet: ConsolidatedSheet, color: Color) {
             Text("No report in this period, so there are no publishers to list.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             return@Column
         }
-        Column(Modifier.horizontalScroll(rememberScrollState())) {
-            // band: No. of Reports | Hours | Bible Studies
-            Row {
-                Spacer(Modifier.width(numberWidth + statusWidth + nameWidth))
-                Box(Modifier.width(cellWidth * rc).height(28.dp).background(peachFill).border(1.dp, Color.Black), contentAlignment = Alignment.Center) { Text("No. of Reports", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
-                if (hc > 0) Box(Modifier.width(cellWidth * hc).height(28.dp).background(blueFill).border(1.dp, Color.Black), contentAlignment = Alignment.Center) { Text("Hours", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
-                Box(Modifier.width(cellWidth * rc).height(28.dp).background(greenFill).border(1.dp, Color.Black), contentAlignment = Alignment.Center) { Text("Bible Studies", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
-            }
-            table.forEachIndexed { r, cells ->
+        val drawRow: @Composable (Int) -> Unit = { r ->
+            val cells = table[r]
                 val header = r == 0
                 val total = r == table.size - 1
                 Row {
                     cells.forEachIndexed { i, text ->
                         val last = cells.size - 1
+                        val sheetFill = if (total && i >= 2) totalFill else if (header) fillOf(i) else Color.Transparent
+                        val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(sheetFill)
                         Box(
                             Modifier.width(widthOf(i, last)).height(28.dp)
-                                .background(if (total && i >= 2) totalFill else if (header) fillOf(i).let { if (it == Color.Transparent) Color.Transparent else it } else Color.Transparent)
-                                .border(if (total) 1.5.dp else 0.5.dp, if (total) Color.Black else line)
+                                .background(cellBg)
+                                .border(if (total) 1.5.dp else 0.5.dp, if (total) MaterialTheme.colorScheme.onSurface else line)
                                 .padding(horizontal = 4.dp),
                             contentAlignment = if (i == 2 || i == last) Alignment.CenterStart else if (i < 2 && !header) Alignment.CenterEnd.takeIf { i == 0 } ?: Alignment.CenterStart else Alignment.Center,
                         ) {
@@ -754,12 +774,27 @@ private fun SheetView(sheet: ConsolidatedSheet, color: Color) {
                                 if (header && i == 0) "" else text,
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = if (header || total) FontWeight.Bold else FontWeight.Normal,
-                                color = Color.Black, maxLines = 1,
+                                color = cellFg, maxLines = 1,
                             )
                         }
                     }
                 }
             }
-        }
+        com.emfitsolutions.gopreach.ui.components.PinnedTable(
+            rowCount = (table.size - 2).coerceAtLeast(0),
+            header = {
+                Column {
+            // band: No. of Reports | Hours | Bible Studies
+            Row {
+                Spacer(Modifier.width(numberWidth + statusWidth + nameWidth))
+                Box(Modifier.width(cellWidth * rc).height(28.dp).background(com.emfitsolutions.gopreach.ui.theme.cellColors(peachFill).first).border(1.dp, MaterialTheme.colorScheme.onSurface), contentAlignment = Alignment.Center) { Text("No. of Reports", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
+                if (hc > 0) Box(Modifier.width(cellWidth * hc).height(28.dp).background(com.emfitsolutions.gopreach.ui.theme.cellColors(blueFill).first).border(1.dp, MaterialTheme.colorScheme.onSurface), contentAlignment = Alignment.Center) { Text("Hours", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
+                Box(Modifier.width(cellWidth * rc).height(28.dp).background(com.emfitsolutions.gopreach.ui.theme.cellColors(greenFill).first).border(1.dp, MaterialTheme.colorScheme.onSurface), contentAlignment = Alignment.Center) { Text("Bible Studies", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
+            }
+                    drawRow(0)
+                }
+            },
+            footer = if (table.size > 1) ({ drawRow(table.size - 1) }) else null,
+        ) { n -> drawRow(n + 1) }
     }
 }

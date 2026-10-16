@@ -143,6 +143,9 @@ class AttendanceSubmissionViewModel(
         }
     }
 
+    suspend fun deleteSubmission(congregationId: String, month: Long, actorPersonId: String): CircuitResult =
+        service.deleteSubmission(congregationId, month, actorFor(actorPersonId))
+
     suspend fun undo(congregationId: String, month: Long, actorPersonId: String): CircuitResult =
         service.undoSubmission(congregationId, month, actorFor(actorPersonId))
 }

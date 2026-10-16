@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach
 
+import androidx.compose.foundation.layout.ime
 import org.koin.android.ext.android.inject
 import android.content.Intent
 import android.os.Bundle
@@ -88,6 +89,7 @@ class MainActivity : AppCompatActivity() {
             val nameOrder by nameOrderPreference.order.collectAsStateWithLifecycle()
             androidx.compose.runtime.CompositionLocalProvider(
                 com.emfitsolutions.gopreach.ui.components.LocalNameOrder provides nameOrder,
+                com.emfitsolutions.gopreach.ui.components.LocalKeyboardHeight provides with(androidx.compose.ui.platform.LocalDensity.current) { androidx.compose.foundation.layout.WindowInsets.Companion.ime.getBottom(this).toDp() },
                 com.emfitsolutions.gopreach.platform.LocalPlatformActions provides com.emfitsolutions.gopreach.data.print.rememberAndroidPlatformActions(),
             ) {
             GoPreachTheme(darkTheme = darkTheme, dynamicColor = false, colorOption = colorOption, customColor = customColor) {

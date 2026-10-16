@@ -103,6 +103,12 @@ data class CoMonthStatus(
      * so CANCELLED keeps the lock when it was cancelled from RECEIVED; only the overseer returning the month for editing unlocks it.
      */
     val isLocked: Boolean get() = status.locksMonth || (status == CoReportStatus.CANCELLED && cancelledFromStatus == CoReportStatus.RECEIVED.name)
+
+    /**
+     * The congregation may delete a send's snapshots (taking the month back to Draft) while the Circuit Overseer has NOT received it: awaiting receipt,
+     * returned for editing, or cancelled from a state that was not locked. A Received month - or one cancelled from Received - can never be deleted.
+     */
+    val canDeleteSubmission: Boolean get() = status == CoReportStatus.SUBMITTED || status == CoReportStatus.RETURNED || (status == CoReportStatus.CANCELLED && !isLocked)
 }
 
 /** One permanent audit line (`coFieldServiceReportEvents/{id}`) — written together with every move, never edited. */

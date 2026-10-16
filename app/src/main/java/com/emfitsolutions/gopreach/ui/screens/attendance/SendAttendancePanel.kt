@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.attendance
 
+import com.emfitsolutions.gopreach.ui.theme.glass
+import com.emfitsolutions.gopreach.ui.components.ViewSegments
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,9 +20,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.TableChart
+import androidx.compose.material.icons.rounded.ViewList
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -122,6 +126,8 @@ fun SendAttendancePanel(
 
     var confirmSend by remember { mutableStateOf(false) }
     var confirmUndo by remember { mutableStateOf(false) }
+    var tableView by remember { mutableStateOf(false) }
+    var confirmDelete by remember { mutableStateOf(false) }
     var validations by remember { mutableStateOf<List<MonthValidation>?>(null) }
     var busy by remember { mutableStateOf(false) }
     var results by remember { mutableStateOf<List<MonthSendResult>?>(null) }
@@ -149,9 +155,8 @@ fun SendAttendancePanel(
     val accent = Color(0xFFF2B705)
     Card(
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        modifier = modifier.fillMaxWidth().glass(RoundedCornerShape(20.dp)),
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -167,7 +172,22 @@ fun SendAttendancePanel(
                 }
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ViewSegments(listOf("Table" to Icons.Rounded.TableChart, "List" to Icons.Rounded.ViewList), if (tableView) 0 else 1) { tableView = it == 0; if (it == 0) multiMode = true }
+            if (tableView) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        TextButton(onClick = { picked = monthOptions.filter { statusOf(it) != CoReportStatus.RECEIVED }.take(MAX_MONTHS).toSet(); message = null }) { Text("Select all") }
+                        TextButton(onClick = { picked = emptySet() }) { Text("Clear") }
+                        Spacer(Modifier.weight(1f))
+                        Text(picked.size.toString() + " selected", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                    }
+                    com.emfitsolutions.gopreach.ui.components.SendStatusTable(
+                        months = monthOptions, statusOf = { monthStatus(it) }, selected = picked, monthLabel = { monthFormat.format(Date(it)) },
+                        onToggle = { m -> picked = if (m in picked) picked - m else picked + m; multiMode = true; message = null },
+                    )
+                }
+            }
+            if (!tableView) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = !multiMode, onClick = { multiMode = false; message = null }, label = { Text("One month") })
                     FilterChip(selected = multiMode, onClick = { multiMode = true; message = null }, label = { Text("Several months") })
@@ -242,6 +262,7 @@ fun SendAttendancePanel(
                     )
                 }
                 if (soleMonth != null && soleStatus.canUndo) TextButton(enabled = !busy, onClick = { confirmUndo = true }, modifier = Modifier.fillMaxWidth()) { Text("Undo sending") }
+                if (soleMonth != null && soleCurrent?.canDeleteSubmission == true) TextButton(enabled = !busy, onClick = { confirmDelete = true }, modifier = Modifier.fillMaxWidth()) { Text("Delete submission", color = MaterialTheme.colorScheme.error) }
                 message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold) }
             }
         }
@@ -323,6 +344,31 @@ fun SendAttendancePanel(
                 }) { Text("Undo sending") }
             },
             dismissButton = { TextButton(onClick = { confirmUndo = false }) { Text("Cancel") } },
+        )
+    }
+    if (confirmDelete && soleMonth != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Delete this submission?") },
+            text = {
+                Text(
+                    "The " + monthFormat.format(Date(soleMonth)) + " attendance snapshot" + (if (soleStatus == CoReportStatus.SUBMITTED) "s sent to the Circuit Overseer are" else "s are") +
+                        " permanently deleted and the month goes back to Draft. Your recorded attendance is not changed, and the deletion is kept in the history. " +
+                        "A report the Circuit Overseer has already received can never be deleted.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDelete = false
+                    busy = true
+                    scope.launch {
+                        val problem = viewModel.deleteSubmission(congregationId, soleMonth, actorPersonId).messageOrNull()
+                        if (problem != null) failure = problem else message = "The submission was deleted. The month is back to Draft."
+                        busy = false
+                    }
+                }) { Text("Delete submission", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
         )
     }
     failure?.let { text ->

@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.ui.theme.readableAccent
+import androidx.compose.foundation.layout.statusBarsPadding
+import com.emfitsolutions.gopreach.ui.components.keyboardPadding
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -18,6 +21,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,7 +36,7 @@ import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.CalendarViewMonth
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
@@ -238,6 +246,7 @@ internal fun PlannerDayContent(currentPersonId: String, viewModel: PlannerDayVie
                     ),
                     onStatClick = expansion::expand,
                 )
+                PlannerPeriodVoice(plannerPeriod("day", dateFormat.format(Date(dayStart)), state.totalMinutes, state.creditHoursTotalMinutes, state.returnVisitCount, state.bibleStudyCount, state.dailyGoalHours, state.remainingMinutes, state.surplusMinutes, LocalPlannerVisibility.current))
 
                 // "Make a consistent location of this [Goal/Remaining] in the
                 // entire date range" — the Day Goal now sits right after
@@ -421,6 +430,7 @@ internal fun PlannerMonthContent(
                 stats = periodStats(state.totalMinutes, state.creditHoursMinutes, state.returnVisitCount, state.bibleStudyCount, LocalPlannerVisibility.current),
                 onStatClick = expansion::expand,
             )
+            PlannerPeriodVoice(plannerPeriod("month", monthFormat.format(Date(monthStart)), state.totalMinutes, state.creditHoursMinutes, state.returnVisitCount, state.bibleStudyCount, state.goalHours, state.remainingMinutes, state.surplusMinutes, LocalPlannerVisibility.current))
             PlannerGoalRow(
                 label = "Hours Goal for this Month",
                 goalHours = state.goalHours,
@@ -562,11 +572,17 @@ internal fun PlannerActivitySummary(stats: List<PlannerStat>, onStatClick: (Stri
  * text, two squeezed into the corner). */
 @Composable
 private fun SendReportDialogShell(onDismiss: () -> Unit, title: String, content: @Composable ColumnScope.() -> Unit) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(20.dp), tonalElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                content()
+    // Own window sized to what the keyboard leaves free, so the form and its buttons are never covered by it.
+    Dialog(onDismissRequest = onDismiss, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        androidx.compose.foundation.layout.Box(
+            modifier = Modifier.fillMaxSize().statusBarsPadding().keyboardPadding().padding(horizontal = 24.dp, vertical = 16.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(shape = RoundedCornerShape(20.dp), tonalElevation = 6.dp, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    content()
+                }
             }
         }
     }
@@ -603,7 +619,7 @@ private fun SendReportChooserDialog(
             colors = ButtonDefaults.buttonColors(containerColor = PlannerAccent.ReturnVisits),
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Send as Text") }
-        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancel", color = PlannerAccent.Neutral) }
+        TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancel", color = readableAccent(PlannerAccent.Neutral)) }
     }
 }
 
@@ -627,7 +643,7 @@ private fun SendReportPreviewDialog(text: String, onDismiss: () -> Unit, onSend:
             Text(text, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(16.dp))
         }
         androidx.compose.animation.AnimatedVisibility(visible = showCopiedConfirmation) {
-            Text("Copied to clipboard", style = MaterialTheme.typography.labelMedium, color = PlannerAccent.ReturnVisits)
+            Text("Copied to clipboard", style = MaterialTheme.typography.labelMedium, color = readableAccent(PlannerAccent.ReturnVisits))
         }
         Button(
             onClick = onSend,
@@ -992,6 +1008,7 @@ internal fun PlannerYearContent(
                 stats = periodStats(state.totalMinutes, state.creditHoursMinutes, state.returnVisitCount, state.bibleStudyCount, LocalPlannerVisibility.current),
                 onStatClick = expansion::expand,
             )
+            PlannerPeriodVoice(plannerPeriod("year", yearFormat.format(Date(yearStart)), state.totalMinutes, state.creditHoursMinutes, state.returnVisitCount, state.bibleStudyCount, state.goalHours, state.remainingMinutes, state.surplusMinutes, LocalPlannerVisibility.current, state.monthRows.map { com.emfitsolutions.gopreach.domain.PlannerNarration.Month(it.label, it.totalMinutes, 0, 0) }))
             PlannerGoalRow(
                 label = "Hours Goal for this Year",
                 goalHours = state.goalHours,

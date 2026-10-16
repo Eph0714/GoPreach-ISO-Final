@@ -36,8 +36,8 @@ export function androidOrigin(fingerprint) {
 }
 
 export function mountPasskeys(app, { store, auth, enabled, loginLimit, issue, passkeyConfig = config.passkey }) {
-  const { rpId, rpName, androidPackage, androidCertSha256 } = passkeyConfig;
-  const origins = androidCertSha256.map(androidOrigin).filter(Boolean);
+  const { rpId, rpName, androidPackage, androidCertSha256, webOrigins = [] } = passkeyConfig;
+  const origins = [...androidCertSha256.map(androidOrigin).filter(Boolean), ...webOrigins];
   const ready = (req, res, next) => (rpId && origins.length ? next() : res.status(503).json({ error: 'passkeys-not-configured' }));
 
   const challenges = new Map(); // key -> { challenge, personId?, expiresAt }

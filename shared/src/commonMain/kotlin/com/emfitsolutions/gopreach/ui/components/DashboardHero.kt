@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.ui.theme.heroBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,7 +53,7 @@ fun DashboardHero(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.primary)
+            .heroBackground()
             .padding(bottom = if (compact) 8.dp else 16.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {

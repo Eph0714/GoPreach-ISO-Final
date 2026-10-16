@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
+import com.emfitsolutions.gopreach.ui.components.recordTableItems
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -420,20 +421,20 @@ fun ReportsScreen(
                 item { com.emfitsolutions.gopreach.ui.components.RecordViewToggle(viewMode) }
                 if (viewMode.table) {
                     // Table View: one row per publisher, with the group it belongs to.
-                    item(key = "group-report-table") {
-                        com.emfitsolutions.gopreach.ui.components.RecordTable(
-                            sections.flatMap { s -> s.rows.map { r -> s.groupName to r } },
-                            listOf(
-                                UniversalColumn<Pair<String, PublisherReportRow>>("Group", 150.dp) { it.first },
-                                UniversalColumn("Publisher", 200.dp) { it.second.person.fullName },
-                                UniversalColumn("Status", 160.dp) { it.second.category.displayName },
-                                UniversalColumn("Bible Studies", 110.dp) { it.second.totalBibleStudies.toString() },
-                                UniversalColumn("Hours", 80.dp) { h -> h.second.totalHours.let { v -> if (v % 1.0 == 0.0) v.toLong().toString() else "%.1f".format(v) } },
-                                UniversalColumn("Interested People", 140.dp) { it.second.totalInterestedPeople.toString() },
-                            ),
-                            onRowClick = if (canEditReports) ({ pair -> onEditPublisher(pair.second.person.id) }) else null,
-                        )
-                    }
+                    recordTableItems(
+                        sections.flatMap { s -> s.rows.map { r -> s.groupName to r } },
+                        listOf(
+                            UniversalColumn<Pair<String, PublisherReportRow>>("Group", 150.dp) { it.first },
+                            UniversalColumn("Publisher", 200.dp) { it.second.person.fullName },
+                            UniversalColumn("Status", 160.dp) { it.second.category.displayName },
+                            UniversalColumn("Bible Studies", 110.dp) { it.second.totalBibleStudies.toString() },
+                            UniversalColumn("Hours", 80.dp) { h -> h.second.totalHours.let { v -> if (v % 1.0 == 0.0) v.toLong().toString() else "%.1f".format(v) } },
+                            UniversalColumn("Interested People", 140.dp) { it.second.totalInterestedPeople.toString() },
+                        ),
+                        viewMode.hScroll,
+                        onRowClick = if (canEditReports) ({ pair -> onEditPublisher(pair.second.person.id) }) else null,
+                        key = { it.second.person.id },
+                    )
                 } else {
                     items(sections, key = { it.groupId ?: "unassigned" }) { section ->
                         GroupReportCard(section, dateRange, canEditReports, onEditPublisher)

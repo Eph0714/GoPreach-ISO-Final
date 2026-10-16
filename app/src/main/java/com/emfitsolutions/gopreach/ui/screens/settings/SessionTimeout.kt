@@ -174,7 +174,7 @@ fun SessionTimeoutHost(viewModel: SessionTimeoutViewModel = koinViewModel()) {
         androidx.compose.foundation.layout.Box(
             Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         )
-        androidx.compose.material3.AlertDialog(
+        com.emfitsolutions.gopreach.ui.components.AlertDialog(
             properties = androidx.compose.ui.window.DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = false),
             onDismissRequest = {},
             title = { Text("Session Expired") },

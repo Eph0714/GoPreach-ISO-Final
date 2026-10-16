@@ -56,6 +56,27 @@ class AcceptedComparativeViewModel(
             }
         }
 
+    /** The attendance months of several congregations at once (the Circuit Overseer's whole circuit), keyed by congregation id. */
+    fun attendanceMonthsOf(congregationIds: List<String>, includeSent: Boolean = false): Flow<Map<String, List<AttendanceComparative.MonthInput>>> =
+        combine(attendance.observeSnapshots(), attendance.observeStatuses()) { copies, states ->
+            congregationIds.associateWith { id ->
+                val sends = copies.filter { it.congregationId == id }
+                states.filter { it.congregationId == id }.map { s ->
+                    val input = { state: MonthState, copy: CoAttendanceSnapshot? -> AttendanceComparative.MonthInput(s.periodMonth, state, copy) }
+                    when {
+                        counts(s.status, includeSent) -> {
+                            val copy = sends.firstOrNull { it.periodMonth == s.periodMonth && it.version == s.version }
+                            if (copy != null) input(MonthState.ACCEPTED, copy) else input(MonthState.NO_COPY, null)
+                        }
+                        s.status == CoReportStatus.SUBMITTED -> input(MonthState.AWAITING, null)
+                        s.status == CoReportStatus.RETURNED -> input(MonthState.RETURNED, null)
+                        s.status == CoReportStatus.CANCELLED -> input(MonthState.CANCELLED, null)
+                        else -> input(MonthState.NOT_SENT, null)
+                    }
+                }
+            }
+        }
+
     fun months(congregationId: String?, includeSent: Boolean = false): Flow<List<MonthInput>> =
         combine(reports.observeReports(), statuses.observeStatuses()) { copies, states ->
             if (congregationId == null) return@combine emptyList()

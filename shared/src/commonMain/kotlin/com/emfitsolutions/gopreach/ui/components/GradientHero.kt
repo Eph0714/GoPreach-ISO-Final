@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.ui.theme.heroBackground
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -42,7 +43,7 @@ fun GradientHero(
             .height(height)
             .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
             // Theme-driven: deep purple in light mode, bright purple on #121212 in dark mode.
-            .background(MaterialTheme.colorScheme.primary),
+            .heroBackground(),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width

@@ -158,7 +158,7 @@ fun GroupChatListScreen(
     }
 
     pendingDelete?.let { chat ->
-        androidx.compose.material3.AlertDialog(
+        com.emfitsolutions.gopreach.ui.components.AlertDialog(
             onDismissRequest = { pendingDelete = null },
             title = { Text(stringResource(Res.string.chat_delete_group_chat_title)) },
             text = { Text(stringResource(Res.string.chat_delete_group_chat_message, chat.groupName)) },

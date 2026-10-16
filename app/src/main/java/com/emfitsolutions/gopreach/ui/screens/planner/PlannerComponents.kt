@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.ui.theme.readableAccent
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -40,7 +41,7 @@ import androidx.compose.material.icons.automirrored.rounded.ViewList
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Remove
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -211,7 +212,7 @@ internal fun PeriodListDialog(title: String, items: List<Pair<String, String?>>,
                         PeriodListRow(title = itemTitle, subtitle = subtitle, onClick = { onSelect(index); onDismiss() })
                     }
                 }
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Cancel", color = PlannerAccent.Neutral) }
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Cancel", color = readableAccent(PlannerAccent.Neutral)) }
             }
         }
     }
@@ -831,6 +832,7 @@ internal fun StepperRow(
 private fun NumberEntryDialog(label: String, initial: Int, onDismiss: () -> Unit, onSave: (Int) -> Unit) {
     var text by remember { mutableStateOf(initial.toString()) }
     AlertDialog(
+        scrollBody = true,
         onDismissRequest = onDismiss,
         title = { Text("Enter $label") },
         text = {
@@ -873,8 +875,8 @@ internal fun PlannerGoalRow(
             onIncrement = { onSetGoal(goalHours + 1) },
             currentValue = goalHours,
             onValueEntered = onSetGoal,
-            valueColor = PlannerAccent.Goal,
-            labelColor = PlannerAccent.Goal,
+            valueColor = readableAccent(PlannerAccent.Goal),
+            labelColor = readableAccent(PlannerAccent.Goal),
             labelColumnWidth = labelColumnWidth,
         )
         // "Remaining Hours must have the same visual size and importance as
@@ -886,14 +888,14 @@ internal fun PlannerGoalRow(
         PlannerStaticValueRow(
             label = "Remaining Hours",
             value = formatHoursMinutes(remainingMinutes),
-            valueColor = if (goalMet) PlannerAccent.GoalMet else PlannerAccent.Remaining,
+            valueColor = readableAccent(if (goalMet) PlannerAccent.GoalMet else PlannerAccent.Remaining),
             labelColumnWidth = labelColumnWidth,
         )
         if (surplusMinutes > 0) {
             PlannerStaticValueRow(
                 label = "Surplus",
                 value = formatHoursMinutes(surplusMinutes),
-                valueColor = PlannerAccent.GoalMet,
+                valueColor = readableAccent(PlannerAccent.GoalMet),
                 labelColumnWidth = labelColumnWidth,
             )
         }

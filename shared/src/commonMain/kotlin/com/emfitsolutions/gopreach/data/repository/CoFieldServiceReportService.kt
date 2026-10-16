@@ -40,6 +40,9 @@ interface CoFieldServiceReportService {
     /** SUBMITTED → NOT_SUBMITTED, before the overseer has received it. */
     suspend fun undoSubmission(congregationId: String, periodMonth: Long, actor: SubmissionActor): CircuitResult
 
+    /** Deletes the frozen snapshots of a month the Circuit Overseer has not received (awaiting receipt, returned, or cancelled while unlocked) and takes the month back to Draft, with an audit line. A Received month is refused here and by the server. */
+    suspend fun deleteSubmission(congregationId: String, periodMonth: Long, actor: SubmissionActor): CircuitResult
+
     /** Circuit Overseer: SUBMITTED → RECEIVED, with optional remarks. [expectedVersion] is the snapshot version the overseer reviewed; a newer one is refused. */
     suspend fun receive(reportId: String, remarks: String?, actor: SubmissionActor, expectedVersion: Int? = null): CircuitResult
 

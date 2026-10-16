@@ -18,7 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -214,6 +214,7 @@ private fun RejectAssignmentDialog(onDismiss: () -> Unit, onConfirm: (String?) -
     var otherText by remember { mutableStateOf("") }
 
     AlertDialog(
+        scrollBody = true,
         onDismissRequest = onDismiss,
         title = { Text("Reject Assignment?") },
         text = {

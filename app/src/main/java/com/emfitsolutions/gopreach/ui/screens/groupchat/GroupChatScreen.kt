@@ -57,7 +57,7 @@ import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.contentColorFor
@@ -400,6 +400,7 @@ private fun UnauthorizedGroupChatScreen(
 private fun EditMessageDialog(message: GroupChatMessage, onDismiss: () -> Unit, onSave: (String) -> Unit) {
     var text by remember(message.id) { mutableStateOf(message.text) }
     AlertDialog(
+        scrollBody = true,
         properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
         onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.chat_edit_message_title)) },

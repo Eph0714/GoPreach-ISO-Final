@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.sharelocation
 
+import com.emfitsolutions.gopreach.ui.components.keyboardPadding
 import android.graphics.Bitmap
 import com.emfitsolutions.gopreach.data.model.displayName
 import android.graphics.Canvas
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -427,7 +429,7 @@ private fun SharePointDetailsSheet(
 ) {
     val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).padding(bottom = 24.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().keyboardPadding().padding(horizontal = 24.dp, vertical = 8.dp).padding(bottom = 24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(
                     modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(0xFF1A73E8)),

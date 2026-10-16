@@ -83,7 +83,7 @@ internal fun LazyListScope.sheetItems(
                 Cell(line.remarks, W_REMARKS, left = true)
                 if (actions != null) {
                     androidx.compose.foundation.layout.Row(
-                        modifier = Modifier.width(W_ACTIONS).height(34.dp).border(0.5.dp, androidx.compose.ui.graphics.Color(0xFF444444)),
+                        modifier = Modifier.width(W_ACTIONS).height(34.dp).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()),
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                     ) {
                         androidx.compose.material3.TextButton(onClick = { actions.onEdit(line) }, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp)) { Text(if (line.bibleStudies == null) "Add" else "Edit", style = MaterialTheme.typography.labelSmall) }

@@ -12,6 +12,7 @@ import com.emfitsolutions.gopreach.data.sync.ConnectivityObserver
 import com.emfitsolutions.gopreach.data.sync.OfflineFirestoreRepository
 import com.emfitsolutions.gopreach.data.sync.RemoteCollections
 import com.emfitsolutions.gopreach.platform.nowMillis
+import kotlinx.coroutines.flow.first
 
 /**
  * The Meeting Attendance workflow for the Hostinger backend: the same moves as [BackendCoFieldServiceReportService] (send, undo, receive,
@@ -104,6 +105,29 @@ class BackendCoAttendanceService(
             event(id, s, actor, "Attendance sending undone", s.status, CoReportStatus.NOT_SUBMITTED, null, s.coRemarks),
         )
         return writer.push(ops).also { if (it is CircuitResult.Success) offline.cacheFromServer(statuses, id, next) }
+    }
+
+    override suspend fun deleteSubmission(congregationId: String, periodMonth: Long, actor: SubmissionActor): CircuitResult {
+        val id = coReportId(congregationId, periodMonth)
+        val s = offline.get<CoMonthStatus>(statuses, id) ?: return CircuitResult.Conflict("This month has not been submitted.")
+        if (!s.canDeleteSubmission) return CircuitResult.Conflict(
+            if (s.isLocked) "The Circuit Overseer has received this report, so it can no longer be deleted. Only the Circuit Overseer can return it."
+            else "This month is ${s.status.label.lowercase()} — there is no submission to delete.",
+        )
+        val now = nowMillis()
+        val next = s.copy(
+            status = CoReportStatus.NOT_SUBMITTED, coRemarks = null, coRemarksAt = null, coRemarksByName = null,
+            undoneAt = now, undoneByPersonId = actor.personId, undoneByName = actor.name, updatedAt = now,
+        )
+        val copies = offline.observeCollection<CoAttendanceSnapshot>(snapshots).first().filter { it.congregationId == congregationId && it.periodMonth == periodMonth }
+        val ops = buildList {
+            add(writer.op(statuses, id, next)) // first: the server accepts a snapshot deletion only once the month is back to Draft
+            copies.forEach { add(writer.deleteOp(snapshots, it.id)) }
+            add(event(id, s, actor, "Attendance submission deleted (${copies.size} snapshot${if (copies.size == 1) "" else "s"}, version ${s.version})", s.status, CoReportStatus.NOT_SUBMITTED, null, s.coRemarks))
+        }
+        return writer.push(ops).also {
+            if (it is CircuitResult.Success) { offline.cacheFromServer(statuses, id, next); copies.forEach { c -> offline.deleteFromServer(snapshots, c.id) } }
+        }
     }
 
     private suspend fun review(

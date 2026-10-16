@@ -11,6 +11,7 @@ const RP_ID = 'api.example.test';
 const CERT = 'AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99';
 const ORIGIN = androidOrigin(CERT);
 const SECRET = 'test-secret-test-secret-test-secret';
+const WEB_ORIGIN = 'https://web.api.example.test';
 const sha256 = (b) => createHash('sha256').update(b).digest();
 const b64u = (b) => Buffer.from(b).toString('base64url');
 
@@ -66,7 +67,7 @@ before(async () => {
   await put('people', 'pub002', { isSuperAdmin: false, activeCongregationId: 'congA', username: 'ben.lee' });
   await store.createAccount('pub001', await hashPassword('Secret123'));
   await store.createAccount('pub002', await hashPassword('Secret456'));
-  const passkey = { rpId: RP_ID, rpName: 'GoPreach', androidPackage: 'com.emfitsolutions.gopreach', androidCertSha256: [CERT] };
+  const passkey = { rpId: RP_ID, rpName: 'GoPreach', androidPackage: 'com.emfitsolutions.gopreach', androidCertSha256: [CERT], webOrigins: [WEB_ORIGIN] };
   server = createApp(store, { authOptions: { secret: SECRET, limits: { login: { max: 1000 }, passkey } } }).listen(0);
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -175,4 +176,16 @@ test('passkeys answer 503 until the domain and the app certificate are configure
     const res = await fetch(`http://127.0.0.1:${bare.address().port}/v1/auth/passkey/login/options`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
     assert.equal(res.status, 503);
   } finally { bare.close(); }
+});
+
+test('the website can register and use a passkey from its own listed origin, and no other web origin', async () => {
+  const token = await login('pub002', 'Secret456');
+  const browser = newAuthenticator();
+  const { options } = await (await post('/v1/auth/passkey/register/options', {}, token)).json();
+  assert.equal((await post('/v1/auth/passkey/register/verify', { response: browser.register(options, { origin: 'https://other.api.example.test' }) }, token)).status, 400, 'an origin that is not listed');
+  const again = await (await post('/v1/auth/passkey/register/options', {}, token)).json();
+  assert.equal((await post('/v1/auth/passkey/register/verify', { response: browser.register(again.options, { origin: WEB_ORIGIN }), name: 'Laptop' }, token)).status, 200);
+  const res = await passkeyLogin(browser, 'pub002', { origin: WEB_ORIGIN });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).personId, 'pub002');
 });

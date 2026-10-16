@@ -13,6 +13,8 @@
          app still installs on a device/emulator with no camera; the feature
          itself is optional per spec §7 either way. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Voice Notes: asked only when the person taps Record. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <!-- In-app auto-update (see data/update): hands the downloaded APK to the

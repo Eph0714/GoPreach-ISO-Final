@@ -1,5 +1,10 @@
 package com.emfitsolutions.gopreach.ui.screens.weather
 
+import com.emfitsolutions.gopreach.ui.theme.glass
+import androidx.compose.runtime.DisposableEffect
+import com.emfitsolutions.gopreach.ui.screens.circuit.ReportNarrator
+import com.emfitsolutions.gopreach.ui.screens.circuit.ReadReportPanel
+import com.emfitsolutions.gopreach.domain.weather.WeatherNarration
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -46,7 +51,7 @@ import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Map
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -65,6 +70,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,7 +95,9 @@ import com.emfitsolutions.gopreach.domain.weather.CurrentWeather
 import com.emfitsolutions.gopreach.domain.weather.DailyForecast
 import com.emfitsolutions.gopreach.domain.weather.HourlyForecast
 import com.emfitsolutions.gopreach.domain.weather.PlaceKind
+import com.emfitsolutions.gopreach.domain.weather.OfficialAlert
 import com.emfitsolutions.gopreach.domain.weather.WeatherAdvisory
+import com.emfitsolutions.gopreach.ui.screens.weather.AlertsStatus
 import com.emfitsolutions.gopreach.domain.weather.WeatherCodes
 import com.emfitsolutions.gopreach.domain.weather.WeatherKind
 import com.emfitsolutions.gopreach.domain.weather.WeatherPlace
@@ -111,7 +119,8 @@ import kotlin.math.roundToInt
 
 private const val PAGASA_ADVISORY = "https://pagasa.dost.gov.ph/weather/weather-advisory"
 private const val PAGASA_BULLETIN = "https://pagasa.dost.gov.ph/tropical-cyclone/severe-weather-bulletin"
-private const val OPEN_METEO = "https://open-meteo.com/"
+private const val PAGASA_ALERTS = "https://publicalert.pagasa.dost.gov.ph/"
+private const val OPEN_METEO ="https://open-meteo.com/"
 
 private val Caution = Color(0xFFE0A100)
 private val Warning = Color(0xFFD32F2F)
@@ -129,6 +138,23 @@ fun WeatherScreen(
     viewModel: WeatherViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // The narrator lives here, outside the scrolling list, so scrolling the player off screen never stops the speech; it pauses when the app is left.
+    val appContext = androidx.compose.ui.platform.LocalContext.current
+    val narrator = remember { ReportNarrator(appContext, emptyList()) }
+    // What is read aloud: the forecast, advice and official warnings of the place on screen, rebuilt whenever any of them changes.
+    val narrationLang = com.emfitsolutions.gopreach.ui.components.rememberNarrationLanguage()
+    val narrationScript = remember(state.report, state.alerts, state.alertsStatus, state.source, narrationLang) {
+        state.report?.let { r ->
+            WeatherNarration.script(r, nowMillis(), WeatherAdvisory.build(r, nowMillis()), if (state.alertsStatus == AlertsStatus.LOADED) state.alerts else null, state.source == WeatherSource.SAVED_COPY, narrationLang)
+        }.orEmpty()
+    }
+    LaunchedEffect(narrationScript) { narrator.load(narrationScript) }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event -> if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) narrator.pause() }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); narrator.shutdown() }
+    }
     val permission = rememberPermissionRequester { granted -> if (granted) viewModel.useCurrentLocation() else viewModel.onLocationPermissionDenied() }
     // First visit with no place chosen: use the device location (asking for permission once, now that it is needed).
     LaunchedEffect(personId) {
@@ -183,6 +209,7 @@ fun WeatherScreen(
             if (report != null) {
                 val now = nowMillis()
                 report.current?.let { c -> item { CurrentCard(report, c, state.source == WeatherSource.SAVED_COPY, now) } }
+                item { ReadReportPanel(narrator, narrationScript, label = "Listen to the weather") }
                 item { AdvisorySection(WeatherAdvisory.build(report, now), state.source == WeatherSource.SAVED_COPY) }
                 item { HourlySection(report, now) }
                 item { DailySection(report, now) }
@@ -193,7 +220,7 @@ fun WeatherScreen(
             } else if (state.place == null) {
                 item { EmptyState("Choose a place", "Use your current location, search for a municipality, city or barangay, or pick a saved place or territory.") }
             }
-            item { AlertsSection(state.place) }
+            item { AlertsSection(state.place, state) }
             item { Attribution() }
         }
     }
@@ -347,7 +374,7 @@ private fun SectionTitle(text: String) {
 private fun AdvisorySection(advisory: Advisory, saved: Boolean) {
     Column {
         SectionTitle("Field Ministry Weather Advisory")
-        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Surface(shape = RoundedCornerShape(16.dp), color = Color.Transparent, modifier = Modifier.glass(RoundedCornerShape(16.dp))) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (saved) Text("Based on a saved forecast that may be out of date.", style = MaterialTheme.typography.labelMedium, color = Caution)
                 advisory.items.forEach { item ->
@@ -408,7 +435,7 @@ private fun DailySection(report: WeatherReport, now: Long) {
         SectionTitle("7-day forecast")
         if (report.daily.isEmpty()) { Text("The daily forecast is not available.", style = MaterialTheme.typography.bodyMedium); return }
         val todayStart = report.startOfLocalDay(now)
-        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        Surface(shape = RoundedCornerShape(16.dp), color = Color.Transparent, modifier = Modifier.glass(RoundedCornerShape(16.dp))) {
             Column(Modifier.fillMaxWidth()) {
                 report.daily.forEachIndexed { i, d ->
                     DayRow(d, report, isToday = d.dateMillis == todayStart)
@@ -447,19 +474,42 @@ private fun DayRow(d: DailyForecast, report: WeatherReport, isToday: Boolean) {
 }
 
 @Composable
-private fun AlertsSection(place: WeatherPlace?) {
+private fun AlertsSection(place: WeatherPlace?, state: WeatherUiState) {
     val uriHandler = LocalUriHandler.current
-    Column {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionTitle("Official weather warnings")
-        Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+        if (state.alertsStatus == AlertsStatus.LOADED) state.alerts.forEach { AlertCard(it) }
+        Surface(shape = RoundedCornerShape(16.dp), color = Color.Transparent, modifier = Modifier.glass(RoundedCornerShape(16.dp))) {
             Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("No verified warning data is available in GoPreach.", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Text(
-                    "This app does not receive official warnings, so none are shown. That is not a sign that there is no hazard. " +
-                        "The forecast above and the advisory are not official warnings - check the national weather agency before outdoor activities.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                if (place == null || place.isPhilippines) {
+                when (state.alertsStatus) {
+                    AlertsStatus.LOADED -> {
+                        Text(
+                            if (state.alerts.isEmpty()) "PAGASA has no active warning for this place." else "${state.alerts.size} active PAGASA warning${if (state.alerts.size == 1) "" else "s"} for this place.",
+                            style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            "Checked ${state.alertsCheckedAt?.let { formatDate(it, "EEE, MMM d 'at' h:mm a") } ?: "just now"}. Warnings are matched to the place by map area, " +
+                                "and PAGASA may issue a warning at any time - check the PAGASA site before outdoor activities.",
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    AlertsStatus.LOADING, AlertsStatus.IDLE -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Text("Checking PAGASA warnings...", style = MaterialTheme.typography.bodyMedium)
+                    }
+                    AlertsStatus.FAILED -> {
+                        Text("Official warnings could not be checked.", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            (state.alertsMessage ?: "") + " That is not a sign that there is no hazard - check the PAGASA site directly.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                    AlertsStatus.NOT_APPLICABLE -> Text(
+                        "PAGASA warnings cover the Philippines only. Check the weather agency of this country for official warnings.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (state.alertsStatus != AlertsStatus.NOT_APPLICABLE && (place == null || place.isPhilippines || place.countryCode.isBlank())) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { uriHandler.openUri(PAGASA_ADVISORY) }) { Text("PAGASA advisories") }
                         OutlinedButton(onClick = { uriHandler.openUri(PAGASA_BULLETIN) }) { Text("Severe weather bulletin") }
@@ -472,10 +522,39 @@ private fun AlertsSection(place: WeatherPlace?) {
 }
 
 @Composable
+private fun AlertCard(alert: OfficialAlert) {
+    val tint = if (alert.severityRank >= 3) Warning else Caution
+    var expanded by rememberSaveable(alert.id) { mutableStateOf(false) }
+    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant, border = BorderStroke(1.5.dp, tint)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(Icons.Rounded.Warning, contentDescription = "Warning", tint = tint, modifier = Modifier.size(22.dp))
+                Text(alert.event.ifBlank { alert.headline }, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            }
+            Text(
+                listOfNotNull(
+                    "Severity: ${alert.severity}",
+                    alert.sentMillis?.let { "Issued ${formatDate(it, "EEE, MMM d, h:mm a")}" },
+                    alert.expiresMillis?.let { "Until ${formatDate(it, "EEE, MMM d, h:mm a")}" },
+                ).joinToString(" | "),
+                style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (alert.areaNames.isNotEmpty()) Text("Areas: ${alert.areaNames.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+            if (alert.instruction.isNotBlank()) Text(alert.instruction.replace("**", ""), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            if (expanded && alert.description.isNotBlank()) Text(alert.description.replace("**", "").replace(Regex("\\n{3,}"), "\n\n"), style = MaterialTheme.typography.bodySmall)
+            if (alert.description.isNotBlank()) TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Hide details" else "Show details") }
+        }
+    }
+}
+
+@Composable
 private fun Attribution() {
     val uriHandler = LocalUriHandler.current
     TextButton(onClick = { uriHandler.openUri(OPEN_METEO) }, modifier = Modifier.fillMaxWidth()) {
         Text("Weather data by Open-Meteo.com (CC BY 4.0)", style = MaterialTheme.typography.bodySmall)
+    }
+    TextButton(onClick = { uriHandler.openUri(PAGASA_ALERTS) }, modifier = Modifier.fillMaxWidth()) {
+        Text("Official warnings by PAGASA-DOST (CC BY 4.0)", style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -489,7 +568,7 @@ private fun LocationPicker(
     onRename: (WeatherPlace) -> Unit,
     onRemove: (WeatherPlace) -> Unit,
 ) {
-    Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
+    Surface(shape = RoundedCornerShape(16.dp), color = Color.Transparent, modifier = Modifier.glass(RoundedCornerShape(16.dp))) {
         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = onCurrent, enabled = !state.locating, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Rounded.MyLocation, contentDescription = null)
@@ -549,6 +628,7 @@ private fun PlaceRow(place: WeatherPlace, icon: ImageVector, onSelect: () -> Uni
 private fun NameDialog(title: String, initial: String, confirm: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var text by remember { mutableStateOf(initial) }
     AlertDialog(
+        scrollBody = true,
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = { OutlinedTextField(value = text, onValueChange = { text = it.take(60) }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth()) },

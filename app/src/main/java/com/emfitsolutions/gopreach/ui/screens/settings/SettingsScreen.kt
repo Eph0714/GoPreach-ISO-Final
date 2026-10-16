@@ -75,7 +75,7 @@ import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PriorityHigh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SwapHoriz
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -181,6 +181,8 @@ fun SettingsScreen(
             }
 
             com.emfitsolutions.gopreach.ui.components.NameOrderSettingsSection()
+
+            com.emfitsolutions.gopreach.ui.components.ListenSettingsSection()
 
             PrintSettingsSection()
 

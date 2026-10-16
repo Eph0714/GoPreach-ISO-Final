@@ -619,6 +619,51 @@ test('attendance workflow: senders send, undo and re-send; the overseer receives
   assert.equal(await set('coB', 'coAttendanceReportEvents', 'ae2', { reportId: id, congregationId: 'congB', userId: 'secB' }), false, 'events are written as yourself');
 });
 
+// ---- Deleting a sent snapshot (attendance and field service) --------------------------------------------------------
+
+test('deleting a sent snapshot: allowed for the sender while the overseer has not received it; never once received', async () => {
+  await put('people', 'coB', person('CIRCUIT_OVERSEER', null));
+  await put('userAccessGrants', 'coB', { permissions: ['VIEW_CONGREGATIONS'], scopeType: 'SELECTED_CONGREGATIONS', scopeCongregationIds: ['congB'], circuitCode: 'NT01' });
+  await put('people', 'secB', person('SECRETARY', 'congB'));
+  const month = 1790784000000;
+  const id = `congB_${month}`;
+  for (const [statusColl, snapColl] of [['coAttendanceMonthStatus', 'coAttendanceReports'], ['coFieldServiceMonthStatus', 'coReceivedReports']]) {
+    const base = { congregationId: 'congB', periodMonth: month, version: 1, submittedAt: 1 };
+    const snap = { congregationId: 'congB', periodMonth: month, version: 1, submittedByPersonId: 'secB', rows: [] };
+    const draft = { ...base, status: 'NOT_SUBMITTED', coRemarks: null, undoneAt: 2 };
+
+    // awaiting receipt: the snapshot cannot be deleted until the month is back to Draft
+    await put(statusColl, id, { ...base, status: 'SUBMITTED' });
+    await put(snapColl, `${id}_1`, snap);
+    assert.equal(await del('secB', snapColl, `${id}_1`), false, `${snapColl}: not while the month is still sent`);
+    assert.equal(await set('secB', statusColl, id, draft), true, `${statusColl}: a sender takes a sent month back to Draft`);
+    await put(statusColl, id, draft);
+    assert.equal(await del('secB', snapColl, `${id}_1`), true, `${snapColl}: the sender deletes it once the month is Draft`);
+    assert.equal(await del('coB', snapColl, `${id}_1`), false, `${snapColl}: the overseer never deletes a snapshot`);
+    assert.equal(await del('pubB', snapColl, `${id}_1`), false, `${snapColl}: a publisher cannot`);
+    assert.equal(await del('adminA', snapColl, `${id}_1`), false, `${snapColl}: another congregation cannot`);
+
+    // returned: the sender may take it back to Draft and delete
+    const returnedDoc = { ...base, status: 'RETURNED', returnedAt: 3, returnReason: 'Check' };
+    await put(statusColl, id, returnedDoc);
+    assert.equal(await set('secB', statusColl, id, { ...returnedDoc, ...draft }), true, `${statusColl}: a returned month can be deleted back to Draft`);
+
+    // cancelled while unlocked: allowed; cancelled from Received: never
+    const cancelledDoc = { ...base, status: 'CANCELLED', cancelledFromStatus: 'SUBMITTED', cancelReason: 'x', cancelledAt: 3 };
+    await put(statusColl, id, cancelledDoc);
+    assert.equal(await set('secB', statusColl, id, { ...cancelledDoc, ...draft }), true, `${statusColl}: cancelled while only sent can be deleted`);
+    const lockedDoc = { ...cancelledDoc, cancelledFromStatus: 'RECEIVED' };
+    await put(statusColl, id, lockedDoc);
+    assert.equal(await set('secB', statusColl, id, { ...lockedDoc, ...draft }), false, `${statusColl}: cancelled from Received stays locked`);
+
+    // received: never deletable, in any way
+    await put(statusColl, id, { ...base, status: 'RECEIVED', receivedAt: 3 });
+    await put(snapColl, `${id}_1`, snap);
+    assert.equal(await set('secB', statusColl, id, draft), false, `${statusColl}: a received month cannot go back to Draft`);
+    assert.equal(await del('secB', snapColl, `${id}_1`), false, `${snapColl}: a received snapshot cannot be deleted`);
+  }
+});
+
 // ---- Audit: sent report copies stay inside their congregation ---------------------------------------------------------
 
 test('sent report copies (field service and attendance) and read marks: only that congregation\'s overseer and senders; nobody crosses congregations', async () => {
@@ -644,4 +689,40 @@ test('sent report copies (field service and attendance) and read marks: only tha
   assert.equal(await set('coB', 'coAttendanceReads', `coB_${id}`, { coPersonId: 'coB', receivedReportId: id, congregationId: 'congB' }), true, 'an overseer marks their own read');
   assert.equal(await set('coB', 'coAttendanceReads', `coB_${idA}`, { coPersonId: 'coB', receivedReportId: idA, congregationId: 'congA' }), false, 'not for a congregation outside the grant');
   assert.equal(await set('adminB', 'coAttendanceReads', `coB_${id}`, { coPersonId: 'coB', receivedReportId: id, congregationId: 'congB' }), false, 'nobody marks reads for someone else');
+});
+
+test('a newly enrolled person reads their own role assignments even before they have an active congregation, but nobody else\'s', async () => {
+  const s = new MemoryStore();
+  const seed = (c, id, data) => s.transaction((tx) => tx.put(c, id, data, 'seed'));
+  await seed('people', 'fresh', { isSuperAdmin: false, activeAdminRole: null, activeCongregationId: null });
+  await seed('people', 'other', { isSuperAdmin: false, activeAdminRole: null, activeCongregationId: 'congX' });
+  await seed('roleAssignments', 'mine', { personId: 'fresh', congregationId: 'congX', roleType: 'PUBLISHER:REGULAR_PUBLISHER', status: 'ACTIVE' });
+  await seed('roleAssignments', 'theirs', { personId: 'other', congregationId: 'congX', roleType: 'PUBLISHER:REGULAR_PUBLISHER', status: 'ACTIVE' });
+  const get = (c, i) => s.get(c, i);
+  const read = async (who, id) => {
+    const row = await s.get('roleAssignments', id);
+    return canReadRow(await loadActor(who, get), await loadGrant(who, get), { collection: 'roleAssignments', id, data: row.data, deleted: row.deleted }, get);
+  };
+  assert.equal(await read('fresh', 'mine'), true, 'their own assignment');
+  assert.equal(await read('fresh', 'theirs'), false, 'someone else\'s, before they belong to that congregation');
+  assert.equal(await read('other', 'theirs'), true, 'a member still reads their congregation\'s assignments as before');
+});
+
+
+test('a record waiting to be transferred is readable by the receiving congregation only while the request is pending', async () => {
+  const s = new MemoryStore();
+  const seed = (c, id, data) => s.transaction((tx) => tx.put(c, id, data, 'seed'));
+  await seed('people', 'so', { isSuperAdmin: false, activeAdminRole: 'SERVICE_OVERSEER', activeCongregationId: 'congB' });
+  await seed('people', 'nosy', { isSuperAdmin: false, activeAdminRole: 'SERVICE_OVERSEER', activeCongregationId: 'congC' });
+  await seed('interestedPeople', 'ip1', { congregationId: 'congA', publisherPersonId: 'p', name: 'X', pendingForwardRequestId: 'fr1' });
+  await seed('forwardRequests', 'fr1', { interestedPersonId: 'ip1', fromCongregationId: 'congA', toCongregationId: 'congB', status: 'PENDING' });
+  const get = (c, i) => s.get(c, i);
+  const read = async (who) => {
+    const row = await s.get('interestedPeople', 'ip1');
+    return canReadRow(await loadActor(who, get), await loadGrant(who, get), { collection: 'interestedPeople', id: 'ip1', data: row.data, deleted: row.deleted }, get);
+  };
+  assert.equal(await read('so'), true, 'the receiving congregation');
+  assert.equal(await read('nosy'), false, 'a third congregation');
+  await seed('forwardRequests', 'fr1', { interestedPersonId: 'ip1', fromCongregationId: 'congA', toCongregationId: 'congB', status: 'ACCEPTED' });
+  assert.equal(await read('so'), false, 'once answered it is no longer exposed this way');
 });

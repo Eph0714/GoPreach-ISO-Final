@@ -436,6 +436,9 @@ class FieldServiceReportViewModel(
         }
     }
 
+    suspend fun deleteSubmission(congregationId: String, month: Long, actorPersonId: String) =
+        coReportService.deleteSubmission(congregationId, month, actorFor(actorPersonId))
+
     suspend fun undoSubmission(congregationId: String, month: Long, actorPersonId: String) =
         coReportService.undoSubmission(congregationId, month, actorFor(actorPersonId))
 

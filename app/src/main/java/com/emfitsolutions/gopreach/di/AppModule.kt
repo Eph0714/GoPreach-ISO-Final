@@ -56,6 +56,10 @@ import com.emfitsolutions.gopreach.data.repository.MonthLockGuard
 import com.emfitsolutions.gopreach.data.repository.CoReceivedReportRepository
 import com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository
 import com.emfitsolutions.gopreach.data.repository.NameOrderPreference
+import com.emfitsolutions.gopreach.data.repository.VoiceNoteRepository
+import com.emfitsolutions.gopreach.data.voice.VoiceNoteProcessor
+import com.emfitsolutions.gopreach.ui.screens.voicenotes.VoiceNotesViewModel
+import com.emfitsolutions.gopreach.data.repository.ListenButtonPreference
 import com.emfitsolutions.gopreach.data.repository.NotificationDismissedStore
 import com.emfitsolutions.gopreach.data.repository.NotificationSeenStore
 import com.emfitsolutions.gopreach.data.repository.NotificationSoundRepository
@@ -315,10 +319,16 @@ val appModule = module {
     single { com.emfitsolutions.gopreach.data.repository.ReportSubmissionPreferences(androidContext()) }
     singleOf(::CongregationStatisticsBuilder)
     singleOf(::NameOrderPreference)
+    singleOf(::VoiceNoteRepository)
+    single { com.emfitsolutions.gopreach.ui.screens.voicenotes.AndroidVoiceAudioStore(androidContext()) }
+    single<com.emfitsolutions.gopreach.data.voice.VoiceAudioStore> { get<com.emfitsolutions.gopreach.ui.screens.voicenotes.AndroidVoiceAudioStore>() }
+    singleOf(::VoiceNoteProcessor)
+    singleOf(::ListenButtonPreference)
     singleOf(::WeatherPreferences)
     singleOf(::CurrentPlaceResolver)
     single<RoutingService> { ValhallaRoutingService(get()) }
     single<WeatherService> { OpenMeteoWeatherService(get()) }
+    single<com.emfitsolutions.gopreach.data.weather.OfficialAlertService> { com.emfitsolutions.gopreach.data.weather.PagasaAlertService(get()) }
     singleOf(::NotificationDismissedStore)
     singleOf(::NotificationSeenStore)
     singleOf(::NotificationSoundRepository)
@@ -434,6 +444,7 @@ val appModule = module {
     viewModelOf(::FieldServiceReportViewModel)
     viewModelOf(::FindLocationViewModel)
     viewModelOf(::WeatherViewModel)
+    viewModelOf(::VoiceNotesViewModel)
     viewModelOf(::WeatherSummaryViewModel)
     viewModelOf(::GroupChatViewModel)
     viewModelOf(::ManageGroupsViewModel)

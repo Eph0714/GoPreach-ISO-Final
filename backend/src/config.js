@@ -38,6 +38,8 @@ export const config = {
     rpName: process.env.PASSKEY_RP_NAME ?? 'GoPreach',
     androidPackage: process.env.ANDROID_PACKAGE ?? 'com.emfitsolutions.gopreach',
     androidCertSha256: (process.env.ANDROID_CERT_SHA256 ?? '').split(',').map((x) => x.trim()).filter(Boolean),
+    /** Origins of the GoPreach website that may use passkeys (comma-separated, e.g. https://app.gopreach.sinaglahinv.com). The site's host must end with PASSKEY_RP_ID. */
+    webOrigins: (process.env.PASSKEY_WEB_ORIGINS ?? '').split(',').map((x) => x.trim().replace(/\/+$/, '')).filter(Boolean),
   },
   db: {
     host: process.env.DB_HOST ?? 'localhost',

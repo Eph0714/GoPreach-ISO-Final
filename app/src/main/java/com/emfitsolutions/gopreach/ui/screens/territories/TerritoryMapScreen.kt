@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.territories
 
+import com.emfitsolutions.gopreach.ui.components.keyboardPadding
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
 import com.emfitsolutions.gopreach.platform.AppPermission
 import com.emfitsolutions.gopreach.platform.rememberToaster
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -44,7 +46,7 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.Streetview
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -1185,6 +1187,7 @@ fun TerritoryMapScreen(
     // Create a Pin: a short text mark, saved online.
     pinDraftPoint?.let { (lat, lng) ->
         AlertDialog(
+        scrollBody = true,
             onDismissRequest = { if (!isSavingPin) pinDraftPoint = null },
             title = { Text("Create a Pin") },
             text = {
@@ -1300,7 +1303,7 @@ fun TerritoryMapScreen(
         val stacked = recordsWithDistance.filter { it.record.id in ids }
         ModalBottomSheet(onDismissRequest = { stackIds = null }, sheetState = rememberModalBottomSheetState()) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 24.dp),
+                modifier = Modifier.fillMaxWidth().keyboardPadding().padding(horizontal = 24.dp).padding(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
                 Text("${stacked.size} records at this location", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -1691,7 +1694,7 @@ private fun RecordSheet(item: RecordWithDistance, onDismiss: () -> Unit, onViewD
     val r = item.record
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 24.dp),
+            modifier = Modifier.fillMaxWidth().keyboardPadding().padding(horizontal = 24.dp).padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             // Who, what kind of record, and how far.

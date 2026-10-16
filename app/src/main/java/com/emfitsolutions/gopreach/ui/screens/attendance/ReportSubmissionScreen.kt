@@ -93,10 +93,11 @@ private fun StatusBadge(s: SubmissionStatus) {
 
 @Composable
 private fun TCell(text: String, width: Dp, head: Boolean = false, right: Boolean = false) {
+    val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(if (head) Color(0xFFDDE6F2) else Color.Transparent)
     Box(
-        modifier = Modifier.width(width).height(34.dp).background(if (head) Color(0xFFDDE6F2) else Color.Transparent).border(0.5.dp, Color(0xFF444444)).padding(horizontal = 6.dp),
+        modifier = Modifier.width(width).height(34.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
         contentAlignment = if (right) Alignment.CenterEnd else Alignment.CenterStart,
-    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (head) FontWeight.Bold else FontWeight.Normal, color = Color.Black, maxLines = 1) }
+    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (head) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1) }
 }
 
 /**
@@ -274,12 +275,13 @@ fun ReportSubmissionScreen(
                     )
                     if (planned.isNotEmpty()) OutlinedButton(onClick = { kindFilter = null; statusFilter = "ALL"; query = "" }) { Text("Clear Filters") }
                 } else if (table) {
-                    Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        Row { TCell("Report", 150.dp, true); TCell("Period", 130.dp, true); TCell("Status", 140.dp, true); TCell("Updated", 70.dp, true); TCell("Action", 110.dp, true) }
-                        visible.forEach { i ->
-                            Row {
-                                TCell(i.kind.title.removeSuffix("s"), 150.dp); TCell(i.periodLabel, 130.dp); TCell(i.status.label, 140.dp); TCell(stamp(i.updatedAt), 70.dp); TCell(actionLabel(i), 110.dp)
-                            }
+                    com.emfitsolutions.gopreach.ui.components.PinnedTable(
+                        rowCount = visible.size,
+                        header = { Row { TCell("Report", 150.dp, true); TCell("Period", 130.dp, true); TCell("Status", 140.dp, true); TCell("Updated", 70.dp, true); TCell("Action", 110.dp, true) } },
+                    ) { n ->
+                        val i = visible[n]
+                        Row {
+                            TCell(i.kind.title.removeSuffix("s"), 150.dp); TCell(i.periodLabel, 130.dp); TCell(i.status.label, 140.dp); TCell(stamp(i.updatedAt), 70.dp); TCell(actionLabel(i), 110.dp)
                         }
                     }
                     // tap a row's action through the list below the table is not needed: the card list is the actionable view

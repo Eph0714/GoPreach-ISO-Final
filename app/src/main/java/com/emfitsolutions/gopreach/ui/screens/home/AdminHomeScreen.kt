@@ -74,7 +74,7 @@ import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -727,6 +727,8 @@ fun AdminHomeScreen(
                                     if (role in setOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY)) add(QuickAccessItem.COMPARATIVE_REPORT)
                                     if (canEnrollPublisher) addAll(listOf(QuickAccessItem.PUBLISHER_MODULE, QuickAccessItem.REGULAR_PIONEERS, QuickAccessItem.AUXILIARY_PIONEERS, QuickAccessItem.SPECIAL_PIONEERS, QuickAccessItem.UNBAPTIZED_PUBLISHERS))
                                     if (canViewFieldServiceGroupReport) add(QuickAccessItem.FIELD_SERVICE_REPORT)
+                                    add(QuickAccessItem.SETTINGS)
+                                    if (role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles && !session.isGroupRole) add(QuickAccessItem.MEETING_ATTENDANCE)
                                     if (canManageRegularEldersForDrawer) add(QuickAccessItem.TOTAL_ELDERS)
                                     if (canEnrollMinisterialServant) add(QuickAccessItem.TOTAL_MINISTERIAL)
                                 }

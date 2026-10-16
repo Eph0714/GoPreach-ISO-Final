@@ -13,7 +13,11 @@ Open to every signed-in role (publisher, admin roles, Circuit Overseer). It read
 - Times are requested as unix time, and the place's own UTC offset is used for display. Units are °C, km/h and mm.
 
 ## Official warnings (PAGASA)
-PAGASA publishes a CAP feed (`publicalert.pagasa.dost.gov.ph/feeds/`) and RSS feeds. I found no published terms of use for them, and matching a CAP area to a coordinate needs polygon handling. **No warning feed is wired in**, so the app shows an explicit "No verified warning data is available" notice and links to the PAGASA advisory and bulletin pages. It never implies that no alert means no hazard. Adding the CAP feed later needs a terms check and a parser; the section is already separate from the forecast.
+Warnings come from PAGASA's public CAP feed (`publicalert.pagasa.dost.gov.ph/feeds/`, an Atom feed of CAP documents). The feed states "Licensed under CC BY 4.0", so the screen shows "Official warnings by PAGASA-DOST (CC BY 4.0)". Checked 2026-10-16.
+- `PagasaAlertService` downloads the feed and every entry updated in the last 48 hours (6 at a time), keeps the result for 5 minutes (30 seconds minimum between forced refreshes), and drops expired, cancelled and non-"Actual" alerts.
+- A place gets an alert only when it lies inside one of the alert's area polygons (`CapParser.inside`, matched on the device; no coordinates are sent). Most severe first.
+- Warnings load separately from the forecast and are never cached. If they cannot be loaded (offline, error), the screen says so and links to PAGASA; it never implies that no warning means no hazard. Outside the Philippines it says PAGASA covers the Philippines only.
+- Today the feed mostly carries General Flood Advisories per region; Tropical Cyclone Wind Signals and rainfall warnings appear only if PAGASA publishes them to this feed. The PAGASA advisory and bulletin links stay on screen.
 
 ## Offline and cache
 - The last forecast of up to 8 places is stored on the device, one store per signed-in person, and is dropped after 24 hours. It is shown labelled "Saved forecast from <time> ... may be out of date".
@@ -25,4 +29,4 @@ PAGASA publishes a CAP feed (`publicalert.pagasa.dost.gov.ph/feeds/`) and RSS fe
 The list holds territories from the user's own congregation (Super Admin: all), taken from the already-synced territory drawings. Only the territory name and its centre point are used.
 
 ## Tests
-`WeatherTest` (shared) covers WMO mapping, local time, advisory rules, response parsing, malformed responses, HTTP errors and the request parameters.
+`WeatherTest` and `OfficialAlertTest` (shared) cover CAP parsing, polygon matching, feed parsing, WMO mapping, local time, advisory rules, response parsing, malformed responses, HTTP errors and the request parameters.

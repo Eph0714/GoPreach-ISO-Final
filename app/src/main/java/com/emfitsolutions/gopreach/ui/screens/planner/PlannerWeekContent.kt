@@ -109,6 +109,7 @@ internal fun PlannerWeekContent(
                     stats = periodStats(state.totalMinutes, state.creditHoursMinutes, state.returnVisitCount, state.bibleStudyCount, LocalPlannerVisibility.current),
                     onStatClick = expansion::expand,
                 )
+                PlannerPeriodVoice(plannerPeriod("week", weekLabel, state.totalMinutes, state.creditHoursMinutes, state.returnVisitCount, state.bibleStudyCount, state.goalHours, state.remainingMinutes, state.surplusMinutes, LocalPlannerVisibility.current))
                 PlannerGoalRow(
                     label = "Hours Goal for this Week",
                     goalHours = state.goalHours,

@@ -12,10 +12,13 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -42,10 +45,12 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun rememberRecordViewMode(screenKey: String, defaultTable: Boolean = false): RecordViewMode {
     var table by rememberSaveable(screenKey) { mutableStateOf(defaultTable) }
-    return RecordViewMode(table) { table = it }
+    val hScroll = rememberScrollState()
+    return RecordViewMode(table, hScroll) { table = it }
 }
 
-class RecordViewMode(val table: Boolean, val set: (Boolean) -> Unit)
+/** [hScroll] is shared by the pinned heading and every row of Table View, so they slide sideways together. */
+class RecordViewMode(val table: Boolean, val hScroll: ScrollState, val set: (Boolean) -> Unit)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -67,7 +72,7 @@ fun <T> LazyListScope.recordItems(
     card: @Composable (T) -> Unit,
 ) {
     if (mode.table) {
-        item(key = "record-table") { RecordTable(items, columns, onRowClick) }
+        recordTableItems(items, columns, mode.hScroll, onRowClick, key)
     } else {
         items(items.size, key = { key(items[it]) }) { card(items[it]) }
     }
@@ -95,5 +100,57 @@ private fun RecordCell(text: String, width: Dp, header: Boolean = false, fill: C
         contentAlignment = Alignment.CenterStart,
     ) {
         Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (header) FontWeight.Bold else FontWeight.Normal, maxLines = 2)
+    }
+}
+
+/**
+ * Table View as separate lazy items: a heading that stays pinned at the top while the records scroll, then one lazy row per record.
+ * [hScroll] keeps the heading and the rows aligned when the table is wider than the screen.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+fun <T> LazyListScope.recordTableItems(
+    items: List<T>,
+    columns: List<UniversalColumn<T>>,
+    hScroll: ScrollState,
+    onRowClick: ((T) -> Unit)? = null,
+    key: ((T) -> Any)? = null,
+) {
+    stickyHeader(key = "record-table-head") {
+        val head = MaterialTheme.colorScheme.surfaceVariant
+        Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+            Row(Modifier.horizontalScroll(hScroll)) { columns.forEach { c -> RecordCell(c.title, c.width, header = true, fill = head) } }
+        }
+    }
+    items(items.size, key = { i -> key?.let { "rt-" + it(items[i]) } ?: "rt-row-$i" }) { index ->
+        val item = items[index]
+        Row(modifier = Modifier.horizontalScroll(hScroll).then(if (onRowClick != null) Modifier.clickable { onRowClick(item) } else Modifier)) {
+            val fill = if (index % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f) else Color.Transparent
+            columns.forEach { c -> RecordCell(c.value(item), c.width, fill = fill) }
+        }
+    }
+}
+
+/**
+ * A table placed inside a page that already scrolls: the heading stays pinned at the top of the table while its rows scroll
+ * (the table body scrolls within [maxHeight]), and heading and rows slide sideways together. [header] and [row] each draw one
+ * table row; [footer], when given, is a last row that scrolls with the records (e.g. a Total row).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun PinnedTable(
+    rowCount: Int,
+    modifier: Modifier = Modifier,
+    maxHeight: Dp = 460.dp,
+    header: @Composable () -> Unit,
+    footer: (@Composable () -> Unit)? = null,
+    row: @Composable (Int) -> Unit,
+) {
+    val hScroll = rememberScrollState()
+    androidx.compose.foundation.lazy.LazyColumn(modifier = modifier.fillMaxWidth().heightIn(max = maxHeight)) {
+        stickyHeader {
+            Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) { Box(Modifier.horizontalScroll(hScroll)) { header() } }
+        }
+        items(rowCount) { i -> Box(Modifier.horizontalScroll(hScroll)) { row(i) } }
+        footer?.let { f -> item { Box(Modifier.horizontalScroll(hScroll)) { f() } } }
     }
 }

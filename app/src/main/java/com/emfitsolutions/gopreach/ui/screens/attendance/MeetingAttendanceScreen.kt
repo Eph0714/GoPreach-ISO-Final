@@ -1,5 +1,8 @@
 ﻿package com.emfitsolutions.gopreach.ui.screens.attendance
 
+import androidx.compose.material.icons.automirrored.rounded.ViewList
+import com.emfitsolutions.gopreach.ui.components.ViewSegments
+import com.emfitsolutions.gopreach.ui.components.keyboardPadding
 import com.emfitsolutions.gopreach.ui.components.co.CoButton
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Calculate
@@ -34,6 +37,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,7 +48,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -120,10 +124,11 @@ private fun monthStartOf(year: Int, month: Int): Long = Calendar.getInstance().a
 
 @Composable
 private fun Cell(text: String, width: Dp, bold: Boolean = false, fill: Color = Color.Transparent, left: Boolean = false) {
+    val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(fill)
     Box(
-        modifier = Modifier.width(width).height(36.dp).background(fill).border(0.5.dp, Color(0xFF444444)).padding(horizontal = 6.dp),
+        modifier = Modifier.width(width).height(36.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
         contentAlignment = if (left) Alignment.CenterStart else Alignment.Center,
-    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = Color.Black, maxLines = 1) }
+    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1) }
 }
 
 /**
@@ -143,6 +148,8 @@ fun MeetingAttendanceScreen(
     canEdit: Boolean,
     onBack: () -> Unit,
     onOpenComparative: (() -> Unit)? = null,
+    /** The Circuit Overseer's two-period attendance comparison of the entire circuit. */
+    onOpenCircuitComparison: (() -> Unit)? = null,
     viewModel: MeetingAttendanceViewModel = koinViewModel(),
     people: CircuitPeopleViewModel = koinViewModel(),
 ) {
@@ -181,15 +188,7 @@ fun MeetingAttendanceScreen(
     var historyOf by remember { mutableStateOf<MeetingAttendance?>(null) }
     var settingsOpen by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    var sendOpen by remember { mutableStateOf(false) }
     val submission: AttendanceSubmissionViewModel = koinViewModel()
-    if (sendOpen && congregationId != null && canEdit && circuitScope == null) {
-        androidx.compose.material3.ModalBottomSheet(onDismissRequest = { sendOpen = false }) {
-            Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-                SendAttendancePanel(congregationId = congregationId, actorPersonId = currentPersonId, viewModel = submission)
-            }
-        }
-    }
 
     val dateFmt = remember { SimpleDateFormat("MMM d", Locale.getDefault()) }
     val monthFmt = remember { SimpleDateFormat("MMMM", Locale.getDefault()) }
@@ -298,11 +297,13 @@ fun MeetingAttendanceScreen(
                                     onClick = { menuOpen = false; open() },
                                 )
                             }
-                            if (canEdit && circuitScope == null) androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Send to Circuit Overseer") },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null) },
-                                onClick = { menuOpen = false; sendOpen = true },
-                            )
+                            onOpenCircuitComparison?.let { open ->
+                                androidx.compose.material3.DropdownMenuItem(
+                                    text = { Text("Compare entire circuit") },
+                                    leadingIcon = { Icon(Icons.Rounded.CompareArrows, contentDescription = null) },
+                                    onClick = { menuOpen = false; open() },
+                                )
+                            }
                             if (canEdit) androidx.compose.material3.DropdownMenuItem(
                                 text = { Text("Attendance calculation") },
                                 leadingIcon = { Icon(Icons.Rounded.Calculate, contentDescription = null) },
@@ -319,15 +320,6 @@ fun MeetingAttendanceScreen(
                 title = { Text("Meeting Attendance") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )
-        },
-        floatingActionButton = {
-            if (canEdit && congregationId != null) {
-                androidx.compose.material3.ExtendedFloatingActionButton(
-                    onClick = { adding = true },
-                    icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-                    text = { Text("Add Attendance") },
-                )
-            }
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
@@ -359,6 +351,21 @@ fun MeetingAttendanceScreen(
                             IconButton(onClick = { filtersOpen = true }) { Icon(Icons.Rounded.FilterList, contentDescription = "Filters") }
                         }
                     }
+                }
+                // ---- the same view switch, Add button and Send panel as the Field Service Report, in the same order ----
+                item(key = "view") {
+                    ViewSegments(listOf("Table" to Icons.Rounded.TableChart, "List" to Icons.AutoMirrored.Rounded.ViewList), if (viewMode.table) 0 else 1) { viewMode.set(it == 0) }
+                }
+                if (canEdit) {
+                    item(key = "add") {
+                        androidx.compose.material3.Button(onClick = { adding = true }) {
+                            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Text("  Add Attendance")
+                        }
+                    }
+                }
+                if (canEdit && circuitScope == null) {
+                    item(key = "send") { SendAttendancePanel(congregationId = congregationId, actorPersonId = currentPersonId, viewModel = submission) }
                 }
                 // ---- 2. which meeting ----
                 item(key = "types") {
@@ -407,7 +414,6 @@ fun MeetingAttendanceScreen(
                         )
                         if (query.isNotBlank() || showDeleted) TextButton(onClick = { query = ""; showDeleted = false }) { Text("Clear") }
                     }
-                    com.emfitsolutions.gopreach.ui.components.RecordViewToggle(viewMode)
                 }
                 message?.let { text -> item(key = "message") { Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) } }
                 if (filtered.isEmpty()) {
@@ -441,7 +447,7 @@ fun MeetingAttendanceScreen(
                             Cell(r.watchtowerStudyAttendance?.toString() ?: dash, W_PART)
                             Cell(AttendanceCalculator.display(r.officialAttendance, r.roundingMode), W_OFFICIAL, true, OFFICIAL_FILL)
                             if (canEdit) {
-                                Row(modifier = Modifier.width(W_ACTIONS).height(36.dp).border(0.5.dp, Color(0xFF444444)), verticalAlignment = Alignment.CenterVertically) {
+                                Row(modifier = Modifier.width(W_ACTIONS).height(36.dp).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()), verticalAlignment = Alignment.CenterVertically) {
                                     val pad = PaddingValues(horizontal = 5.dp)
                                     if (!r.deleted && !locked) {
                                         TextButton(onClick = { editing = r }, contentPadding = pad) { Text("Edit", style = MaterialTheme.typography.labelSmall) }
@@ -481,6 +487,7 @@ fun MeetingAttendanceScreen(
         var dKeepRange by remember { mutableStateOf(range != null) }
         var dQuery by remember { mutableStateOf(query) }
         AlertDialog(
+        scrollBody = true,
             onDismissRequest = { filtersOpen = false },
             title = { Text("Filters") },
             text = {
@@ -534,6 +541,7 @@ fun MeetingAttendanceScreen(
     deleting?.let { r ->
         var reason by remember(r.id) { mutableStateOf("") }
         AlertDialog(
+        scrollBody = true,
             onDismissRequest = { deleting = null },
             title = { Text("Delete attendance record?") },
             text = {

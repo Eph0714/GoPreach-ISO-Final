@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.bibletext
 
+import com.emfitsolutions.gopreach.domain.BibleTextNarration
+import com.emfitsolutions.gopreach.ui.components.ListenPanel
 import androidx.compose.material3.OutlinedButton
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -47,6 +49,7 @@ import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PictureAsPdf
@@ -148,6 +151,15 @@ private fun BibleTextRecord.referenceLabel(): String {
     return "${book?.name ?: bibleBookId} $chapter:$verses"
 }
 
+
+/** What is read aloud for this record: the reference as spoken words, the saved verse text and the Publisher's own note. */
+private fun BibleTextRecord.narration(l: com.emfitsolutions.gopreach.domain.NarrationLanguage = com.emfitsolutions.gopreach.domain.NarrationLanguage.ENGLISH): BibleTextNarration.Text {
+    val book = NwtBibleReferenceData.book(bibleVersionId, languageId, bibleBookId)
+    return BibleTextNarration.Text(
+        reference = if (isNote()) "Note" else BibleTextNarration.spokenReference(book?.name ?: bibleBookId, chapter, verses, l),
+        verseText = verseText, remarks = remarks, isNote = isNote(),
+    )
+}
 /** A Bible Text matches by its reference (book chapter:verses), its remarks, or - for a Note - the note text. */
 private fun BibleTextRecord.matches(query: String): Boolean =
     remarks.contains(query, ignoreCase = true) || verseText.contains(query, ignoreCase = true) || referenceLabel().contains(query, ignoreCase = true)
@@ -694,6 +706,19 @@ private fun EventDetailScreen(
                     }
                 }
             }
+            item {
+                // Listen: the event's details, then every Bible text and note (grouped by sub topic) read aloud, in the language of the texts.
+                val narrationLang = com.emfitsolutions.gopreach.ui.components.rememberNarrationLanguage()
+                val script = remember(event, eventWithTexts.texts, narrationLang) {
+                    val bySub = eventWithTexts.texts.groupBy { it.subtopicId }
+                    fun ordered(id: String?) = bySub[id].orEmpty().sortedByDescending { it.sortKey() }.map { it.narration(narrationLang) }
+                    val groups = listOf(BibleTextNarration.Group(null, ordered(null))) +
+                        flattenSubtopics(event.subtopics).map { (st, _) -> BibleTextNarration.Group(st.name, ordered(st.id)) }
+                    BibleTextNarration.eventScript(event.name.ifBlank { event.eventLabel }, event.eventLabel, event.speaker, groups, narrationLang)
+                }
+                val language = remember(eventWithTexts.texts) { eventWithTexts.texts.firstOrNull { !it.isNote() }?.let { NwtBibleReferenceData.language(it.languageId)?.code } }
+                ListenPanel(script, "Listen to this event", language)
+            }
             // Bible Texts and Videos are two separate groups, each with its own
             // small "+" in its own header row instead of a full-width button
             // below it (spec: "move the add button to the upper right...
@@ -1227,6 +1252,7 @@ private fun BibleTextCard(
     val isNote = text.isNote()
     val bookNumber = NwtBibleReferenceData.book(text.bibleVersionId, text.languageId, text.bibleBookId)?.order
     val jwLocale = NwtBibleReferenceData.language(text.languageId)?.jwLocale
+    var listening by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth().clickable(enabled = selectionMode) { onToggleSelect() }.then(dragModifier),
     ) {
@@ -1245,6 +1271,9 @@ private fun BibleTextCard(
                         Text(preview, style = MaterialTheme.typography.bodySmall, maxLines = if (isNote) 6 else 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                 }
+                IconButton(onClick = { listening = true }, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Rounded.Headphones, contentDescription = "Listen to this text", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                }
                 if (!isNote && bookNumber != null && jwLocale != null) {
                     IconButton(
                         onClick = { if (!openInJwLibrary(context, jwLocale, bookNumber, text.chapter, text.verses)) showToast("Couldn't open JW Library.") },
@@ -1261,6 +1290,20 @@ private fun BibleTextCard(
                 }
             }
         }
+    }
+    if (listening) {
+        AlertDialog(
+            onDismissRequest = { listening = false },
+            title = { Text(text.referenceLabel()) },
+            text = {
+                ListenPanel(
+                    script = com.emfitsolutions.gopreach.ui.components.rememberNarrationLanguage().let { nl -> remember(text, nl) { BibleTextNarration.textScript(text.narration(nl), nl) } },
+                    label = if (isNote) "Listen to this note" else "Listen to this text",
+                    language = remember(text.languageId) { NwtBibleReferenceData.language(text.languageId)?.code }.takeIf { !isNote },
+                )
+            },
+            confirmButton = { TextButton(onClick = { listening = false }) { Text("Close") } },
+        )
     }
 }
 

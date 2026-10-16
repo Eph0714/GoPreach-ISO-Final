@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
+import com.emfitsolutions.gopreach.ui.theme.heroBackground
+import com.emfitsolutions.gopreach.ui.theme.glass
 import com.emfitsolutions.gopreach.shared.resources.app_name
 import androidx.compose.runtime.mutableStateMapOf
 import com.emfitsolutions.gopreach.ui.components.NavProfileHeader
@@ -115,6 +117,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.automirrored.rounded.Forward
 import androidx.compose.material.icons.automirrored.rounded.ListAlt
@@ -139,7 +142,7 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Timer
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -552,7 +555,8 @@ fun PublisherHomeScreen(
                     ) {
                     Card(
                         shape = RoundedCornerShape(20.dp),
-                        modifier = Modifier.fillMaxWidth().animateContentSize(),
+                        modifier = Modifier.fillMaxWidth().animateContentSize().glass(RoundedCornerShape(20.dp)),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.Transparent),
                     ) {
                         UnifiedPlannerHeader(
                             range = plannerDateRange,
@@ -789,10 +793,8 @@ private fun PublisherWelcomeHeader(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
-                MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
-            )
+            .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
+            .heroBackground()
             .padding(bottom = 20.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
@@ -1029,6 +1031,7 @@ private fun publisherModuleTiles(
     add(PublisherModuleTile(DashboardModuleId.SHARE_MY_LOCATION, stringResource(Res.string.home_tile_share_my_location_title), stringResource(Res.string.home_tile_share_my_location_subtitle), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
     add(PublisherModuleTile(DashboardModuleId.FIND_LOCATION, stringResource(Res.string.home_tile_find_location_title), stringResource(Res.string.home_tile_find_location_subtitle), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
     add(PublisherModuleTile(DashboardModuleId.WEATHER, stringResource(Res.string.home_tile_weather_title), stringResource(Res.string.home_tile_weather_subtitle), Icons.Rounded.WbSunny, Destinations.WEATHER))
+    add(PublisherModuleTile(DashboardModuleId.VOICE_NOTES, "Voice Notes & Minutes", "Record, transcribe and summarise", Icons.Rounded.Mic, Destinations.VOICE_NOTES))
     // "Add the Territory Module in Publisher. The publisher can see all
     // the location but cannot edit or delete, view only" — the screen
     // itself has no edit/delete actions for anyone anymore (see

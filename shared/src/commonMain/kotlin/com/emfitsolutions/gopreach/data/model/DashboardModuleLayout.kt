@@ -53,6 +53,8 @@ enum class DashboardModuleId {
     // My Planner / Ministry Timer / Reporting upgrade — Day/Month/Year
     // ministry-time planner, Publisher-only, own data (spec §16/§41).
     MY_PLANNER,
+    // Voice Notes & Meeting Minutes: record, transcribe, summarise, read and listen. Private to the person; every role.
+    VOICE_NOTES,
 }
 
 /**

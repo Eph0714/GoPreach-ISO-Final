@@ -22,6 +22,8 @@ import com.emfitsolutions.gopreach.ui.screens.accountmanagement.AccountManagemen
 import com.emfitsolutions.gopreach.ui.screens.account.AccountSettingsScreen
 import com.emfitsolutions.gopreach.ui.screens.credithours.CreditHourCategoriesScreen
 import com.emfitsolutions.gopreach.ui.screens.account.PublisherSchedulesScreen
+import com.emfitsolutions.gopreach.data.export.TableReportData
+import com.emfitsolutions.gopreach.data.export.TableReportExporter
 import com.emfitsolutions.gopreach.ui.screens.auth.ForcedPasswordChangeScreen
 import com.emfitsolutions.gopreach.ui.screens.auth.ForgotPasswordScreen
 import com.emfitsolutions.gopreach.ui.screens.admins.ManageAdminsScreen
@@ -968,6 +970,14 @@ fun GoPreachNavGraph(
                 onBack = { navController.popBackStack() },
             )
         }
+        composable(Destinations.VOICE_NOTES) {
+            // Private to the person: their own recordings, transcripts and minutes. Open to every signed-in role.
+            com.emfitsolutions.gopreach.ui.screens.voicenotes.VoiceNotesScreen(
+                personId = currentPersonId,
+                congregationId = ownPublisherAssignment?.congregationId ?: ownCongregationId ?: ownGroupAssignment?.congregationId ?: "",
+                onBack = { navController.popBackStack() },
+            )
+        }
         composable(Destinations.WEATHER) {
             // Open to every signed-in role. Territory places are limited to the caller's own congregation (Super Admin: all).
             WeatherScreen(
@@ -1071,10 +1081,13 @@ fun GoPreachNavGraph(
             // Same congregation-scoping source PREACHING_TIME_RECORD already
             // uses for a Publisher-scoped screen — this route is Publisher-
             // only (reached from Account Settings' own Publisher-gated link).
+            val scheduleContext = androidx.compose.ui.platform.LocalContext.current
             PublisherSchedulesScreen(
                 congregationId = ownPublisherAssignment?.congregationId,
                 currentPersonId = currentPersonId,
                 onBack = { navController.popBackStack() },
+                onPrint = { rows -> TableReportExporter.print(scheduleContext, scheduleReport(rows, session.person?.fullName)) },
+                onExcel = { rows -> TableReportExporter.shareExcel(scheduleContext, scheduleReport(rows, session.person?.fullName)) },
             )
         }
         // ---- Circuit Overseer module ----
@@ -1258,12 +1271,21 @@ fun GoPreachNavGraph(
                 )
             } else NoAccessScreen(onBack = { navController.popBackStack() })
         }
+        composable(Destinations.CIRCUIT_ATTENDANCE_COMPARISON) {
+            if (isCircuitViewer) {
+                com.emfitsolutions.gopreach.ui.screens.circuit.CircuitAttendanceComparisonScreen(
+                    currentPersonId = circuitScope,
+                    onBack = { navController.popBackStack() },
+                )
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
         composable(Destinations.CIRCUIT_REPORT) {
             if (isCircuitViewer) {
                 CircuitReportScreen(
                     currentPersonId = circuitScope,
                     onBack = { navController.popBackStack() },
                     onOpenCongregation = { navController.navigate(Destinations.circuitCongregation(it)) },
+                    onOpenComparison = { navController.navigate(Destinations.CIRCUIT_ATTENDANCE_COMPARISON) },
                 )
             } else NoAccessScreen(onBack = { navController.popBackStack() })
         }
@@ -1295,6 +1317,7 @@ fun GoPreachNavGraph(
                     canEdit = manages,
                     onBack = { navController.popBackStack() },
                     onOpenComparative = if (overseer) ({ navController.navigate(Destinations.CONGREGATION_COMPARATIVE) }) else null,
+                    onOpenCircuitComparison = if (overseer) ({ navController.navigate(Destinations.CIRCUIT_ATTENDANCE_COMPARISON) }) else null,
                 )
             } else NoAccessScreen(onBack = { navController.popBackStack() })
         }
@@ -1433,4 +1456,21 @@ fun GoPreachNavGraph(
             )
         }
     }
+}
+
+/** The Publisher Schedules table as a printable / exportable report. [rows] is the screen's table, first row = headings. */
+private fun scheduleReport(rows: List<List<String>>, generatedBy: String?): TableReportData {
+    val now = java.text.SimpleDateFormat("MMMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(java.util.Date())
+    val publishers = rows.size - 1
+    val perDay = rows.first().indices.filter { it in 1..7 }.map { c -> rows.first()[c] to rows.drop(1).count { it[c].isNotEmpty() } }
+    return TableReportData(
+        title = "Publisher Schedules",
+        details = listOf("Report" to "Preaching availability by day"),
+        recordsFound = publishers.toString(),
+        table = rows,
+        summary = listOf(listOf("Metric", "Value"), listOf("Publishers listed", publishers.toString())) + perDay.map { (d, n) -> listOf("Available $d", n.toString()) },
+        generatedBy = generatedBy ?: "-",
+        generatedAt = now,
+        landscape = false,
+    )
 }

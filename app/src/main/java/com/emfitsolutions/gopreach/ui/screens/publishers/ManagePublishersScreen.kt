@@ -33,7 +33,7 @@ import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.RestoreFromTrash
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -793,7 +793,7 @@ private fun PublisherExportDialog(
     var format by remember { mutableStateOf(com.emfitsolutions.gopreach.data.export.PublisherPrintFormat.TABLE) }
     val count = if (all) allCount else filteredCount
     val verb = when (kind) { "print" -> "Printing"; "pdf" -> "Exporting"; else -> "Exporting" }
-    androidx.compose.material3.AlertDialog(
+    com.emfitsolutions.gopreach.ui.components.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(when (kind) { "print" -> "Print Publisher Records"; "pdf" -> "Export to PDF"; else -> "Export to Excel" }) },
         text = {

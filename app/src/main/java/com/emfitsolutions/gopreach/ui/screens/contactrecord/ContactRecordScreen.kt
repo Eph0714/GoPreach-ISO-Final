@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.contactrecord
 
+import com.emfitsolutions.gopreach.ui.components.keyboardPadding
 import android.content.ActivityNotFoundException
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -384,7 +386,7 @@ private fun ContactDetailsSheet(
     val hasPhone = isValidPhoneNumber(row.contact)
     val sheetState = rememberModalBottomSheetState()
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp).padding(bottom = 24.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().keyboardPadding().padding(horizontal = 24.dp, vertical = 8.dp).padding(bottom = 24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 ContactAvatar(row.profileImageUrl, size = 56.dp)
                 Column {

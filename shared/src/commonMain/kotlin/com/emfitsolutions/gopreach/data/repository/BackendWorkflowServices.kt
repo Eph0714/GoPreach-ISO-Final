@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.data.repository
 
+import kotlinx.coroutines.flow.first
 import com.emfitsolutions.gopreach.data.json.DocJson
 import com.emfitsolutions.gopreach.data.json.encode
 import com.emfitsolutions.gopreach.data.model.COMPARATIVE_RECEIVED_MESSAGE
@@ -160,6 +161,31 @@ class BackendCoFieldServiceReportService(
             add(event(id, s, actor, "Report sending undone", s.status, CoReportStatus.NOT_SUBMITTED, null, s.coRemarks))
         }
         return writer.push(ops).also { if (it is CircuitResult.Success) offline.cacheFromServer(statuses, id, next) }
+    }
+
+    override suspend fun deleteSubmission(congregationId: String, periodMonth: Long, actor: SubmissionActor): CircuitResult {
+        val id = coReportId(congregationId, periodMonth)
+        val s = offline.get<CoMonthStatus>(statuses, id) ?: return CircuitResult.Conflict("This month has not been submitted.")
+        if (!s.canDeleteSubmission) return CircuitResult.Conflict(
+            if (s.isLocked) "The Circuit Overseer has received this report, so it can no longer be deleted. Only the Circuit Overseer can return it."
+            else "This month is ${s.status.label.lowercase()} — there is no submission to delete.",
+        )
+        val now = nowMillis()
+        val next = s.copy(
+            status = CoReportStatus.NOT_SUBMITTED, coRemarks = null, coRemarksAt = null, coRemarksByName = null,
+            undoneAt = now, undoneByPersonId = actor.personId, undoneByName = actor.name, updatedAt = now,
+        )
+        val copies = offline.observeCollection<com.emfitsolutions.gopreach.data.model.CoReceivedReport>(CoReceivedReportRepository.REPORTS).first()
+            .filter { it.congregationId == congregationId && it.periodMonth == periodMonth }
+        val ops = buildList {
+            add(writer.op(statuses, id, next)) // first: the server accepts a snapshot deletion only once the month is back to Draft
+            statsDoc(id)?.let { add(writer.op(stats, id, it.copy(snapshotStatus = CoReportStatus.NOT_SUBMITTED.name, updatedAt = now))) }
+            copies.forEach { add(writer.deleteOp(CoReceivedReportRepository.REPORTS, it.id)) }
+            add(event(id, s, actor, "Report submission deleted (${copies.size} snapshot${if (copies.size == 1) "" else "s"}, version ${s.version})", s.status, CoReportStatus.NOT_SUBMITTED, null, s.coRemarks))
+        }
+        return writer.push(ops).also {
+            if (it is CircuitResult.Success) { offline.cacheFromServer(statuses, id, next); copies.forEach { c -> offline.deleteFromServer(CoReceivedReportRepository.REPORTS, c.id) } }
+        }
     }
 
     private suspend fun review(

@@ -18,7 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
@@ -421,6 +421,7 @@ private fun ReviewForwardRequestDialog(
     }
 
     AlertDialog(
+        scrollBody = true,
         properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
         onDismissRequest = onDismiss,
         title = { Text("Forward Request") },
@@ -542,6 +543,7 @@ private fun EditCongregationRequestDialog(
     var status by remember { mutableStateOf(request.status) }
     var expanded by remember { mutableStateOf(false) }
     AlertDialog(
+        scrollBody = true,
         properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
         onDismissRequest = onDismiss,
         title = { Text("Edit Forward Request") },
@@ -586,6 +588,7 @@ private fun EditPublisherRequestDialog(
     var status by remember { mutableStateOf(request.status) }
     var expanded by remember { mutableStateOf(false) }
     AlertDialog(
+        scrollBody = true,
         properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
         onDismissRequest = onDismiss,
         title = { Text("Edit Forward Request") },

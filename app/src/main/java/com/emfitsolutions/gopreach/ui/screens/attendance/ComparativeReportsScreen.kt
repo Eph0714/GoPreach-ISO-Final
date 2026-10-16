@@ -25,7 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -112,10 +112,11 @@ private fun StatusPill(s: ComparativeStatus) {
 
 @Composable
 private fun ReportCell(text: String, width: Dp, bold: Boolean = false, fill: Color = Color.Transparent, left: Boolean = false) {
+    val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(fill)
     Box(
-        modifier = Modifier.width(width).height(32.dp).background(fill).border(0.5.dp, Color(0xFF444444)).padding(horizontal = 6.dp),
+        modifier = Modifier.width(width).height(32.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
         contentAlignment = if (left) Alignment.CenterStart else Alignment.Center,
-    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = Color.Black, maxLines = 1) }
+    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1) }
 }
 
 /** A saved table (first row = headings). The first column stays put while the rest scrolls sideways. */
@@ -430,14 +431,15 @@ fun ComparativeReportsScreen(
                     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (visible.isEmpty()) Text(if (isCo) "No Comparative Reports have been submitted by this congregation yet." else "No Comparative Reports yet. Tap Create Comparative Report.", style = MaterialTheme.typography.bodyMedium)
                         if (table && visible.isNotEmpty()) {
-                            Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                                val head = Color(0xFFDDE6F2)
-                                Row { ReportCell("Report No.", 110.dp, true, head, true); ReportCell("Period A", 130.dp, true, head); ReportCell("Period B", 130.dp, true, head); ReportCell("Status", 120.dp, true, head); ReportCell("Submitted", 150.dp, true, head); ReportCell("Received", 150.dp, true, head) }
-                                visible.forEach { r ->
-                                    Row(modifier = Modifier.clickable { openId = r.id }) {
-                                        ReportCell(r.reportNumber.ifBlank { "—" }, 110.dp, left = true); ReportCell(r.periodA(), 130.dp); ReportCell(r.periodB(), 130.dp)
-                                        ReportCell(r.status.label, 120.dp); ReportCell(stamp(r.submittedAt), 150.dp); ReportCell(stamp(r.receivedAt), 150.dp)
-                                    }
+                            val head = Color(0xFFDDE6F2)
+                            com.emfitsolutions.gopreach.ui.components.PinnedTable(
+                                rowCount = visible.size,
+                                header = { Row { ReportCell("Report No.", 110.dp, true, head, true); ReportCell("Period A", 130.dp, true, head); ReportCell("Period B", 130.dp, true, head); ReportCell("Status", 120.dp, true, head); ReportCell("Submitted", 150.dp, true, head); ReportCell("Received", 150.dp, true, head) } },
+                            ) { n ->
+                                val r = visible[n]
+                                Row(modifier = Modifier.clickable { openId = r.id }) {
+                                    ReportCell(r.reportNumber.ifBlank { "—" }, 110.dp, left = true); ReportCell(r.periodA(), 130.dp); ReportCell(r.periodB(), 130.dp)
+                                    ReportCell(r.status.label, 120.dp); ReportCell(stamp(r.submittedAt), 150.dp); ReportCell(stamp(r.receivedAt), 150.dp)
                                 }
                             }
                         }
@@ -540,6 +542,7 @@ fun ComparativeReportsScreen(
     dialog?.let { kind ->
         val target = open
         AlertDialog(
+        scrollBody = true,
             onDismissRequest = { dialog = null },
             title = { Text(if (kind == "return") "Return for Correction" else "Add Remarks") },
             text = {

@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.components
 
+import com.emfitsolutions.gopreach.ui.theme.heroBackground
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,7 +47,7 @@ fun AppBanner(
             // Theme-driven, not a hardcoded brand color, so this reads deep purple in
             // light mode and bright purple on #121212 in dark mode (spec: two distinct
             // theme identities, not just a dimmed copy of the light one).
-            .background(MaterialTheme.colorScheme.primary),
+            .heroBackground(),
         contentAlignment = Alignment.Center,
     ) {
         Column(

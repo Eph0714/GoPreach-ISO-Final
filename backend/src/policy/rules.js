@@ -159,6 +159,13 @@ export async function canReadDoc(actor, grant, collection, id, data, get) {
     const parent = live(await get('interestedPeople', sub.parentId));
     return !parent || h.readableCongregation(nul(parent.congregationId));
   }
+  // A person always reads their OWN role assignments: a newly enrolled person has no active congregation yet, and could otherwise never find their role.
+  if (!sub && collection === 'roleAssignments' && nul(data.personId) === h.me) return true;
+  // A record waiting to be transferred here can be read by the receiving congregation, so its Service Overseer can accept it (and only while the request is pending).
+  if (!sub && collection === 'interestedPeople' && !h.readableCongregation(nul(data.congregationId)) && nul(data.pendingForwardRequestId)) {
+    const f = live(await get('forwardRequests', data.pendingForwardRequestId));
+    if (f && f.status === 'PENDING' && nul(f.interestedPersonId) === id && nul(f.toCongregationId) === nul(actor.congregationId)) return true;
+  }
   if (!sub && CONGREGATION_SCOPED_READS.has(collection)) return h.readableCongregation(nul(data.congregationId));
   return true;
 }
@@ -220,6 +227,8 @@ async function baseRead(h, actor, grant, collection, id, data, get) { // match /
     case 'groupChats': return chatAllowsRead(h, data);
     case 'presence': return h.inMyActiveCongregation(nul(data.congregationId));
     case 'dashboardModuleLayouts': return id === h.me;
+    // Voice notes are private: only the person who recorded them reads them, whatever their role.
+    case 'voiceNotes': return nul(data.publisherPersonId) === h.me;
     case 'passwordResetRequests': return true;
     // A Circuit Overseer (grant) reads only the congregations on their grant; everyone else is unchanged.
     case 'territoryAssignments': case 'territoryAssignmentBarangays': case 'mapPins':
@@ -333,8 +342,8 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       return verdict(!!report && ['SUBMITTED', 'RETURNED'].includes(report.status), 'Remarks go on a submitted or returned report');
     }
 
-    case 'coReceivedReports': return await writeReceivedReport(h, { id, next, isCreate, verdict });
-    case 'coAttendanceReports': return await writeAttendanceSnapshot(h, { id, next, isCreate, verdict });
+    case 'coReceivedReports': return await writeReceivedReport(h, { id, next, old, isCreate, isDelete, verdict });
+    case 'coAttendanceReports': return await writeAttendanceSnapshot(h, { id, next, old, isCreate, isDelete, verdict });
     case 'publisherCategoryHistory': return writeCategoryHistory(h, { next, isCreate, verdict });
 
     case 'announcements': return await writeAnnouncement(h, { next, old, isCreate, isDelete, verdict });
@@ -386,6 +395,10 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
 
     case 'dashboardModuleLayouts':
       return verdict(id === h.me, 'Your own layout only');
+
+    case 'voiceNotes':
+      if (isDelete) return verdict(nul(old?.publisherPersonId) === h.me, 'Only your own voice notes');
+      return verdict(nul(next.publisherPersonId) === h.me && (isCreate || nul(old?.publisherPersonId) === h.me), 'Only your own voice notes');
 
     case 'creditHourCategories':
       if (isCreate) return verdict(h.canManageCreditHourCategories() || /^default_[a-z_]+$/.test(id), 'Only admins manage categories');
@@ -648,7 +661,23 @@ function writeCategoryHistory(h, { next, isCreate, verdict }) {
 }
 
 /** The frozen copy of a month's report, written once with the send: one document per congregation + month + send number. */
-async function writeReceivedReport(h, { id, next, isCreate, verdict }) {
+/**
+ * A congregation may delete the snapshots of a month the Circuit Overseer has NOT received. The month's status must already be back to
+ * Draft (NOT_SUBMITTED) - the sender's own moves from SUBMITTED / RETURNED / cancelled-while-unlocked get it there, and a Received month
+ * (or one cancelled from Received) can never reach Draft - so a received snapshot is never deletable. Only the sender's roles may do it.
+ */
+async function deleteSnapshotAllowed(h, statusCollection, old, verdict) {
+  const cong = nul(old?.congregationId);
+  const month = Math.trunc(Number(old?.periodMonth));
+  const status = live(await h.get(statusCollection, `${cong}_${month}`));
+  return verdict(
+    !!status && status.status === 'NOT_SUBMITTED' && Number(old.version) <= Number(status.version) && h.canSubmitFieldServiceFor(cong),
+    'A sent snapshot is deleted only by its congregation, and only while the Circuit Overseer has not received it',
+  );
+}
+
+async function writeReceivedReport(h, { id, next, old, isCreate, isDelete, verdict }) {
+  if (isDelete) return deleteSnapshotAllowed(h, 'coFieldServiceMonthStatus', old, verdict);
   if (!isCreate) return deny('A received report is never edited or deleted');
   const cong = nul(next.congregationId);
   const month = Math.trunc(Number(next.periodMonth));
@@ -661,7 +690,8 @@ async function writeReceivedReport(h, { id, next, isCreate, verdict }) {
 }
 
 /** The frozen copy of a sent Meeting Attendance month, written once with the send (the twin of writeReceivedReport). */
-async function writeAttendanceSnapshot(h, { id, next, isCreate, verdict }) {
+async function writeAttendanceSnapshot(h, { id, next, old, isCreate, isDelete, verdict }) {
+  if (isDelete) return deleteSnapshotAllowed(h, 'coAttendanceMonthStatus', old, verdict);
   if (!isCreate) return deny('A received attendance snapshot is never edited or deleted');
   const cong = nul(next.congregationId);
   const month = Math.trunc(Number(next.periodMonth));
@@ -710,6 +740,8 @@ function writeMonthStatus(h, { id, next, old, isCreate, isUpdate, verdict }) {
     if (['NOT_SUBMITTED', 'RETURNED', 'CANCELLED', 'SUBMITTED'].includes(old.status) && next.status === 'SUBMITTED' && notFuture(old.periodMonth) &&
       Number(next.version) === Number(old.version) + 1 && changed.every((k) => SEND_KEYS.includes(k))) return ok();
     if (old.status === 'SUBMITTED' && next.status === 'NOT_SUBMITTED' && nul(next.coRemarks) == null && changed.every((k) => UNDO_KEYS.includes(k))) return ok();
+    // Delete the submission: a returned month, or one cancelled while unlocked, goes back to Draft (a Received month never can).
+    if ((old.status === 'RETURNED' || (old.status === 'CANCELLED' && old.cancelledFromStatus !== 'RECEIVED')) && next.status === 'NOT_SUBMITTED' && nul(next.coRemarks) == null && changed.every((k) => UNDO_KEYS.includes(k))) return ok();
   }
   if (h.isCircuitOverseerFor(cong)) {
     const reason = (v) => typeof v === 'string' && v.trim() !== '';

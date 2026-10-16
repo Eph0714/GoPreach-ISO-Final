@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.domain.PlannerNarration
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -112,6 +113,16 @@ internal fun PlannerComparativeContent(currentPersonId: String, viewModel: Plann
 
             ComparativeTable(rows = state.rows, monthFormat = monthFormat)
 
+            // Voice: a summary of the months chosen above, read month by month.
+            val longMonth = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
+            val narrationLang = com.emfitsolutions.gopreach.ui.components.rememberNarrationLanguage()
+            val summary = remember(state.rows, narrationLang) {
+                val months = state.rows.map { PlannerNarration.Month(longMonth.format(Date(it.monthStart)), it.totalMinutes, it.returnVisitCount, it.bibleStudyCount) }
+                val label = if (months.size <= 1) months.firstOrNull()?.label ?: "the chosen month" else "${months.first().label} to ${months.last().label}"
+                PlannerNarration.script(label, months, narrationLang)
+            }
+            PlannerVoice(summary, "Listen to my planner")
+
             Button(
                 onClick = { ComparativeReportPdfExporter.export(context, state.rows) },
                 colors = ButtonDefaults.buttonColors(containerColor = PlannerAccent.Hours),
@@ -220,6 +231,12 @@ private fun DualPeriodComparison(currentPersonId: String, viewModel: PlannerComp
         if (rowsA.isEmpty()) PlannerEmptyHint("No data in this range.") else ComparativeTable(rows = rowsA, monthFormat = tableFormat)
         Text(labelB, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         if (rowsB.isEmpty()) PlannerEmptyHint("No data in this range.") else ComparativeTable(rows = rowsB, monthFormat = tableFormat)
+        val narrationLang = com.emfitsolutions.gopreach.ui.components.rememberNarrationLanguage()
+        val spoken = remember(rowsA, rowsB, labelA, labelB, narrationLang) {
+            fun months(rows: List<ComparativeMonthRow>) = rows.map { PlannerNarration.Month(SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date(it.monthStart)), it.totalMinutes, it.returnVisitCount, it.bibleStudyCount) }
+            PlannerNarration.compareScript(labelA, months(rowsA), labelB, months(rowsB), narrationLang)
+        }
+        PlannerVoice(spoken, "Listen to this comparison")
         Button(
             onClick = { ComparativeReportPdfExporter.exportPeriods(context, labelA, rowsA, labelB, rowsB) },
             enabled = rowsA.isNotEmpty() || rowsB.isNotEmpty(),

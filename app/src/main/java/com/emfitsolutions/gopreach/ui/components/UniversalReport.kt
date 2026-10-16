@@ -94,6 +94,7 @@ fun <T> UniversalReport(
     val context = LocalContext.current
     var query by rememberSaveable(title) { mutableStateOf("") }
     var table by rememberSaveable(title) { mutableStateOf(false) }
+    val tableScroll = rememberScrollState()
     var sortId by rememberSaveable(title) { mutableStateOf(sorts.firstOrNull()?.id) }
     // filter id -> chosen value; saved as a flat string so it survives rotation
     var chosenRaw by rememberSaveable(title) { mutableStateOf("") }
@@ -219,15 +220,16 @@ fun <T> UniversalReport(
                 }
             }
         } else if (table) {
-            item(key = "ur-table") {
+            // The heading row is pinned while the records scroll; heading and rows share one sideways scroll.
+            stickyHeader(key = "ur-table-head") {
                 val head = Color(0xFFDDE6F2)
-                Column(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    Row { columns.forEach { c -> UrCell(c.title, c.width, true, head) } }
-                    shown.forEach { item ->
-                        Row(modifier = if (onRowClick != null) Modifier.clickableRow { onRowClick(item) } else Modifier) {
-                            columns.forEach { c -> UrCell(c.value(item), c.width) }
-                        }
-                    }
+                Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
+                    Row(Modifier.horizontalScroll(tableScroll)) { columns.forEach { c -> UrCell(c.title, c.width, true, head) } }
+                }
+            }
+            items(shown, key = { "ur-row-" + key(it) }) { item ->
+                Row(modifier = Modifier.horizontalScroll(tableScroll).then(if (onRowClick != null) Modifier.clickableRow { onRowClick(item) } else Modifier)) {
+                    columns.forEach { c -> UrCell(c.value(item), c.width) }
                 }
             }
         } else {
@@ -242,8 +244,9 @@ private fun Modifier.clickableRow(onClick: () -> Unit): Modifier = this.then(Mod
 
 @Composable
 private fun UrCell(text: String, width: Dp, head: Boolean = false, fill: Color = Color.Transparent) {
+    val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(fill)
     Box(
-        modifier = Modifier.width(width).height(34.dp).background(fill).border(0.5.dp, Color(0xFF444444)).padding(horizontal = 6.dp),
+        modifier = Modifier.width(width).height(34.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
         contentAlignment = Alignment.CenterStart,
-    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (head) FontWeight.Bold else FontWeight.Normal, color = Color.Black, maxLines = 1) }
+    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (head) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1) }
 }

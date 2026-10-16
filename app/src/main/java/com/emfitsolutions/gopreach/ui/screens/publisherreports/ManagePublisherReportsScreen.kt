@@ -33,7 +33,7 @@ import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.TableChart
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenuItem
@@ -467,6 +467,7 @@ fun ManagePublisherReportsScreen(
     if (toReturn != null) {
         var reason by remember { mutableStateOf("") }
         AlertDialog(
+        scrollBody = true,
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
             onDismissRequest = { pendingReturnForCorrection = null },
             title = { Text(stringResource(R.string.manage_reports_return_for_correction_title)) },

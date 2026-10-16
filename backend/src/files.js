@@ -15,6 +15,8 @@ import { loadActor, isWide } from './policy/index.js';
  *   The token is only ever returned to the person who uploaded the file.
  */
 export const MAX_FILE_BYTES = 8 * 1024 * 1024;
+/** Voice recordings (voice-notes/<personId>/...) may be larger: OpenAI accepts up to 25 MB per audio file. */
+export const MAX_VOICE_BYTES = 24 * 1024 * 1024;
 const PATH_RE = /^[A-Za-z0-9][A-Za-z0-9_\-./ ()]{0,400}$/;
 
 /** Returns true if [actor] may write the file at [path]. */
@@ -22,6 +24,8 @@ export async function mayWriteFile(actor, path, get) {
   if (!actor.known) return false;
   if (path.includes('..') || path.includes('//')) return false;
   if (path.startsWith('app-settings/')) return actor.isSuperAdmin;
+  // A recording is private to the person who made it: voice-notes/<their own personId>/...
+  if (path.startsWith('voice-notes/')) return path.startsWith(`voice-notes/${actor.personId}/`);
   if (path.startsWith('announcement-files/')) return false; // served only through the permission-checked /v1/announcements/:id/files routes
   const chat = /^groupChats\/([^/]+)\//.exec(path);
   if (chat) {
@@ -34,7 +38,7 @@ export async function mayWriteFile(actor, path, get) {
 }
 
 export function mountFiles(app, store, auth) {
-  const raw = express.raw({ type: () => true, limit: MAX_FILE_BYTES });
+  const raw = express.raw({ type: () => true, limit: MAX_VOICE_BYTES });
 
   /** PUT /v1/files?path=<logical path>  (raw bytes, Content-Type = the file's type) -> { url } */
   app.put('/v1/files', auth, raw, async (req, res) => {
@@ -42,6 +46,7 @@ export function mountFiles(app, store, auth) {
     if (!PATH_RE.test(path)) return res.status(400).json({ error: 'Bad path' });
     const data = req.body;
     if (!Buffer.isBuffer(data) || data.length === 0) return res.status(400).json({ error: 'Empty file' });
+    if (data.length > (path.startsWith('voice-notes/') ? MAX_VOICE_BYTES : MAX_FILE_BYTES)) return res.status(413).json({ error: 'File too large' });
     try {
       const actor = await loadActor(req.personId, (c, i) => store.get(c, i));
       if (!(await mayWriteFile(actor, path, (c, i) => store.get(c, i)))) return res.status(403).json({ error: 'Not allowed' });

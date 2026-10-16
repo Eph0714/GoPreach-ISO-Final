@@ -248,3 +248,14 @@ The Circuit Overseer's Comparative Report screen (`AcceptedComparativeScreen`) i
 * **Data**: the frozen snapshots the congregation SENT to its Circuit Overseer (Submitted or Received, the version that counts), Field Service and Circuit Attendance - so the admin compares exactly what the overseer was given. Wording says "sent" instead of "received"; nothing else differs (report type cards, two real-named periods, Graph / List / Details, automatic summary, Read Report, Print / PDF / Excel).
 * **Server**: no new rules - senders already read `coReceivedReports`, `coAttendanceReports` and the status documents of their own congregation.
 * The older admin tool that compares Searching / Return Visit / Bible Study counts is now called **Searching & Study Comparison** in the side panel (same screen, same route).
+
+## Deleting a sent snapshot (admin app)
+
+For BOTH the Field Service Report and Meeting Attendance, a sender (Admin, Coordinator Elder, Service Overseer, Secretary, Super-Admin) can **Delete submission**
+in the Send panel while the Circuit Overseer has not received the month: *Submitted (awaiting receipt)*, *Returned*, or *Cancelled while only sent*.
+
+* The month goes back to **Draft**, every frozen snapshot of that month (all versions) is deleted, and an audit line ("... submission deleted (N snapshots, version V)")
+  is appended. The live records are untouched. The Circuit Overseer stops seeing the month; a later send continues the version numbers.
+* **Never deletable**: a *Received* month, or one cancelled from Received. The server enforces this: a snapshot may be deleted only when its month's status is already
+  Draft, and a Received month (or one cancelled from Received) cannot reach Draft (`backend/src/policy/rules.js`, tests in `backend/test/rules.test.js`).
+  The backend must be redeployed for the delete to work; an older server still refuses it ("never edited or deleted").

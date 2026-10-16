@@ -60,7 +60,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ListAlt
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material3.AlertDialog
+import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -494,7 +494,8 @@ private fun MonthlyReportForm(
             }
         }
         if (askingAccess) {
-            androidx.compose.material3.AlertDialog(
+            com.emfitsolutions.gopreach.ui.components.AlertDialog(
+        scrollBody = true,
                 onDismissRequest = { askingAccess = false },
                 title = { Text("Request Edit Access") },
                 text = {
@@ -522,7 +523,7 @@ private fun MonthlyReportForm(
             ) { Text("Delete Draft Report") }
         }
         if (confirmingDelete) {
-            androidx.compose.material3.AlertDialog(
+            com.emfitsolutions.gopreach.ui.components.AlertDialog(
                 onDismissRequest = { confirmingDelete = false },
                 title = { Text("Delete Draft Report") },
                 text = { Text("Delete your draft report for $selectedMonthLabel? This cannot be undone.") },
