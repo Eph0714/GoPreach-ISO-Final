@@ -1,6 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
 import androidx.compose.foundation.clickable
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
 import com.emfitsolutions.gopreach.ui.components.recordItems
@@ -19,16 +20,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Search
 import com.emfitsolutions.gopreach.ui.components.AlertDialog
+import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
@@ -52,49 +59,88 @@ import com.emfitsolutions.gopreach.data.model.RecordStatus
 import com.emfitsolutions.gopreach.ui.components.formatRecordTimestamp
 
 private fun PipelineStage.label(): String = when (this) {
-    PipelineStage.SEARCHING -> "Searching"
+    PipelineStage.SEARCHING -> "Search Record"
     PipelineStage.RETURN_VISIT -> "Return Visit"
     PipelineStage.BIBLE_STUDY -> "Bible Study"
 }
 
+/** One dropdown of the filter bar: [allLabel] clears the choice, [options] are (value, label) pairs. */
+@Composable
+private fun FilterDropdown(
+    label: String,
+    allLabel: String,
+    options: List<Pair<String, String>>,
+    selected: String?,
+    onSelect: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var open by remember { mutableStateOf(false) }
+    val shown = options.firstOrNull { it.first == selected }?.second ?: allLabel
+    Box(modifier) {
+        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(shown, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text(allLabel) }, onClick = { open = false; onSelect(null) })
+            options.forEach { (value, text) ->
+                DropdownMenuItem(text = { Text(text) }, onClick = { open = false; onSelect(value) })
+            }
+        }
+    }
+}
+
 /**
- * Spec §15 — "Elders should be able to see Interested Person information
- * according to their existing Congregation/Group access scope." Read-only
- * browse-and-view: an Elder/Admin sees every Interested Person within
- * [congregationId] (narrowed further to [groupId]'s own members for a
- * Regular Elder — see [PipelineViewModel.peopleForScope]), can search/filter
- * and open a record's full detail, but cannot add/edit/delete or advance a
- * pipeline stage from here — this screen only ever satisfies "see," not the
- * write authority [PipelineScreen] already gives a publisher over their own
- * records or [SuperAdminInterestedRecordsScreen] gives a Super-Admin over
- * every record. Kept deliberately read-only rather than reusing
- * [PipelinePersonDetailScreen]'s full action set: that screen's Visit/GPS/
- * stage-advance actions attribute writes to the viewing session
- * ([currentPersonId]), which would be wrong here since the viewer is
- * typically not this record's own publisher.
+ * "House Holder Records" — every Search Record / Return Visit / Bible Study (an [InterestedPerson]) inside the signed-in
+ * role's scope. [congregationIds] is that scope: null = every congregation (Super-Admin, or a Circuit Overseer with all
+ * congregations), otherwise exactly the congregations the role may see (Admin: its own; Circuit Overseer: the assigned
+ * ones). [groupId] further narrows a Regular Elder to its own Group's publishers.
+ *
+ * The filter bar narrows by FS Group Territory (the group the record's publisher belongs to, see [HouseHolderRecordsViewModel]), then by
+ * Municipality/City and Barangay; the tabs pick the record type. Read-only: no add/edit/delete or stage change from here,
+ * since the viewer is typically not the record's own publisher.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ElderInterestedRecordsScreen(
-    congregationId: String?,
+fun HouseHolderRecordsScreen(
+    congregationIds: Set<String>?,
     groupId: String?,
     onBack: () -> Unit,
-    viewModel: PipelineViewModel = koinViewModel(),
+    viewModel: HouseHolderRecordsViewModel = koinViewModel(),
 ) {
-    val congregationName by remember(congregationId) {
-        if (congregationId != null) viewModel.congregationName(congregationId) else kotlinx.coroutines.flow.flowOf(null)
-    }.collectAsStateWithLifecycle(initialValue = null)
-    val scopeLabel = (congregationName ?: "—") + if (groupId != null) " (own Group only)" else ""
+    val congregations by viewModel.congregations.collectAsStateWithLifecycle()
+    val allGroups by viewModel.groups.collectAsStateWithLifecycle()
+    val personNames by viewModel.personNames.collectAsStateWithLifecycle()
+    val scopedCongregations = remember(congregations, congregationIds) {
+        congregations.filter { congregationIds == null || it.id in congregationIds }
+    }
+    val congregationNames = remember(congregations) { congregations.associate { it.id to it.name } }
+    val multiCongregation = scopedCongregations.size > 1
+    val scopeLabel = when {
+        congregationIds == null -> "All congregations"
+        else -> scopedCongregations.joinToString(", ") { it.name }.ifBlank { "—" }
+    } + if (groupId != null) " (own Group only)" else ""
 
     var stage by remember { mutableStateOf(PipelineStage.SEARCHING) }
-    val peopleFlow = remember(stage, congregationId, groupId) { viewModel.peopleForScope(stage, congregationId, groupId) }
-    val allPeople by peopleFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    var filter by remember { mutableStateOf(HouseHolderFilter()) }
+    val state by remember(stage, congregationIds, groupId, filter) { viewModel.records(stage, congregationIds, groupId, filter) }
+        .collectAsStateWithLifecycle(initialValue = HouseHolderRecordsState())
     var showInactive by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var selectedPerson by remember { mutableStateOf<InterestedPerson?>(null) }
 
-    val people = remember(allPeople, showInactive, query) {
-        allPeople
+    val groupOptions = remember(allGroups, scopedCongregations, filter.congregationId) {
+        val ids = scopedCongregations.map { it.id }.toSet()
+        allGroups
+            .filter { it.congregationId in ids && (filter.congregationId == null || it.congregationId == filter.congregationId) }
+            .map { it.id to (if (multiCongregation) "${it.name} · ${congregationNames[it.congregationId].orEmpty()}" else it.name) }
+    }
+
+    val people = remember(state.records, showInactive, query) {
+        state.records
             .filter { showInactive || it.status == RecordStatus.ACTIVE }
             .filter { p -> query.isBlank() || p.name.contains(query, ignoreCase = true) || p.address.contains(query, ignoreCase = true) }
             .sortedBy { it.name }
@@ -104,7 +150,7 @@ fun ElderInterestedRecordsScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text("Interested People") },
+                    title = { Text("House Holder Records") },
                     navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
                 )
                 ScrollableTabRow(selectedTabIndex = PipelineStage.entries.indexOf(stage)) {
@@ -116,12 +162,61 @@ fun ElderInterestedRecordsScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            HideInFullScreen(hideWhileTyping = true) {
             Text(
                 "Scope: $scopeLabel",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (multiCongregation) {
+                    FilterDropdown(
+                        label = "Congregation",
+                        allLabel = "All Congregations",
+                        options = scopedCongregations.map { it.id to it.name },
+                        selected = filter.congregationId,
+                        onSelect = { filter = HouseHolderFilter(congregationId = it) },
+                    )
+                }
+                FilterDropdown(
+                    label = "FS Group Territory",
+                    allLabel = "All FS Group",
+                    options = groupOptions,
+                    selected = filter.fsGroupId,
+                    onSelect = { filter = filter.copy(fsGroupId = it) },
+                )
+                FilterDropdown(
+                    label = "Province",
+                    allLabel = "All Provinces",
+                    options = state.provinces.map { it to it },
+                    selected = filter.province?.let { p -> state.provinces.firstOrNull { it.equals(p, ignoreCase = true) } },
+                    onSelect = { filter = filter.copy(province = it, city = null, barangay = null) },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterDropdown(
+                        label = "Municipality / City",
+                        allLabel = "All Municipalities / Cities",
+                        options = state.cities.map { it to it },
+                        selected = filter.city?.let { c -> state.cities.firstOrNull { it.equals(c, ignoreCase = true) } },
+                        onSelect = { filter = filter.copy(city = it, barangay = null) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    FilterDropdown(
+                        label = "Barangay",
+                        allLabel = "All Barangays",
+                        options = state.barangays.map { it to it },
+                        selected = filter.barangay?.let { b -> state.barangays.firstOrNull { it.equals(b, ignoreCase = true) } },
+                        onSelect = { filter = filter.copy(barangay = it) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            }
+            HideInFullScreen {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -132,6 +227,7 @@ fun ElderInterestedRecordsScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
             androidx.compose.material3.FilterChip(selected = showInactive, onClick = { showInactive = !showInactive }, label = { Text("Include inactive") }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            }
             if (people.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     RecordFound(0)
@@ -150,6 +246,7 @@ fun ElderInterestedRecordsScreen(
                         viewMode, people, { it.id },
                         listOf(
                                 UniversalColumn("Name", 200.dp) { it.name },
+                                UniversalColumn("Publisher", 180.dp) { personNames[it.publisherPersonId] ?: "Unassigned" },
                                 UniversalColumn("Address", 260.dp) { it.address },
                                 UniversalColumn("Status", 90.dp) { if (it.status == RecordStatus.INACTIVE) "Inactive" else "Active" },
                         ),
@@ -175,7 +272,7 @@ fun ElderInterestedRecordsScreen(
                     com.emfitsolutions.gopreach.ui.components.EndSummary(
                         listOf(
                             "Total Records" to people.size.toString(),
-                            "Searching" to people.count { it.pipelineStage == com.emfitsolutions.gopreach.data.model.PipelineStage.SEARCHING }.toString(),
+                            "Search Records" to people.count { it.pipelineStage == com.emfitsolutions.gopreach.data.model.PipelineStage.SEARCHING }.toString(),
                             "Return Visits" to people.count { it.pipelineStage == com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT }.toString(),
                             "Bible Studies" to people.count { it.pipelineStage == com.emfitsolutions.gopreach.data.model.PipelineStage.BIBLE_STUDY }.toString(),
                         ),

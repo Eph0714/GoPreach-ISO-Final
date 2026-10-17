@@ -44,7 +44,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -123,6 +124,7 @@ fun AccountManagementScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            HideInFullScreen(true) {
             if (isSuperAdmin) {
                 CongregationFilterDropdown(
                     congregations = congregations,
@@ -145,6 +147,8 @@ fun AccountManagementScreen(
                 }
             }
 
+            }
+            HideInFullScreen(false) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -157,6 +161,7 @@ fun AccountManagementScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             )
 
+            }
             if (needsCongregation) {
                 SelectCongregationPrompt()
             } else if (rows.isEmpty()) {

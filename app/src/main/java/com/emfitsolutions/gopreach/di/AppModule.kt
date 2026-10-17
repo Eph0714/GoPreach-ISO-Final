@@ -189,6 +189,7 @@ import com.emfitsolutions.gopreach.ui.screens.monthlyreport.MySubmittedReportsVi
 import com.emfitsolutions.gopreach.ui.screens.notifications.NotificationCenterViewModel
 import com.emfitsolutions.gopreach.ui.screens.notifications.NotificationItemsProvider
 import com.emfitsolutions.gopreach.ui.screens.pipeline.ForwardRequestsViewModel
+import com.emfitsolutions.gopreach.ui.screens.pipeline.HouseHolderRecordsViewModel
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PipelineViewModel
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PublisherForwardRequestsViewModel
 import com.emfitsolutions.gopreach.ui.screens.planner.CreditHourEntryViewModel
@@ -467,6 +468,7 @@ val appModule = module {
     viewModelOf(::NotificationCenterViewModel)
     viewModelOf(::ForwardRequestsViewModel)
     viewModelOf(::PipelineViewModel)
+    viewModelOf(::HouseHolderRecordsViewModel)
     viewModelOf(::PublisherForwardRequestsViewModel)
     viewModelOf(::CreditHourEntryViewModel)
     viewModelOf(::PlannerComparativeViewModel)

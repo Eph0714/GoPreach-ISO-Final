@@ -113,6 +113,7 @@ enum class QuickAccessItem(
     TERRITORY_MAP("Territory Map", "View territory locations", Icons.Rounded.Map, Color(0xFF558B2F), false, Destinations.MANAGE_TERRITORIES_BASE),
     WEATHER("Weather", "Forecast and conditions", Icons.Rounded.WbSunny, Color(0xFFF9A825), false, Destinations.WEATHER),
     PUBLISHER_ASSIGNMENT("Publisher Assignment", "Manage Searching, Return Visit, Bible Study and Publisher assignments", Icons.Rounded.AssignmentInd, Color(0xFF3F51B5), false, Destinations.PUBLISHER_ASSIGNMENT),
+    HOUSEHOLDER_RECORDS("House Holder Records", "Search Records, Return Visits and Bible Studies by FS Group", Icons.Rounded.Groups, Color(0xFF7B1FA2), false, Destinations.SCOPED_INTERESTED_RECORDS),
     PUBLISHER_MODULE("Publisher Module", "Manage publishers", Icons.Rounded.Groups, Color(0xFF1E88E5), false, Destinations.MANAGE_PUBLISHERS),
     FIELD_SERVICE_REPORT("Field Service Report", "Open the field service report", Icons.Rounded.Assessment, Color(0xFFEF6C00), false, Destinations.FIELD_SERVICE_REPORT),
     MEETING_ATTENDANCE("Meeting Attendance", "Enter and review weekly meeting attendance", Icons.Rounded.HowToReg, Color(0xFF0097A7), false, Destinations.MEETING_ATTENDANCE),
@@ -608,4 +609,4 @@ private fun QuickAccessCard(
 }
 
 /** Cards introduced after people may already have customised their Quick Access: shown for them once, at the end, until they remove them. */
-private val NEWER_CARDS = setOf(QuickAccessItem.MEETING_ATTENDANCE, QuickAccessItem.SETTINGS)
+private val NEWER_CARDS = setOf(QuickAccessItem.MEETING_ATTENDANCE, QuickAccessItem.SETTINGS, QuickAccessItem.HOUSEHOLDER_RECORDS)

@@ -29,7 +29,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -130,10 +131,13 @@ fun CircuitReportsInboxScreen(
             return@Scaffold
         }
         Column(Modifier.fillMaxSize().padding(padding)) {
+            HideInFullScreen(true) {
             SelectedCongregationBar(
                 chosen.name, onChange = { chosenId = null; filter = InboxFilter.ALL.name; query = "" },
                 title = "Field Service Report", modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
             )
+            }
+            HideInFullScreen(false) {
             OutlinedTextField(
                 value = query, onValueChange = { query = it }, singleLine = true,
                 placeholder = { Text("Search congregation, month, year or status") },
@@ -142,6 +146,8 @@ fun CircuitReportsInboxScreen(
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
+            }
+            HideInFullScreen(true) {
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 InboxFilter.entries.forEach { f ->
                     val count = items.count { f.matches(it.status.status) }
@@ -151,6 +157,7 @@ fun CircuitReportsInboxScreen(
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = sortByPeriod, onClick = { sortByPeriod = true }, label = { Text("Sort: Reporting period", maxLines = 1, softWrap = false) })
                 FilterChip(selected = !sortByPeriod, onClick = { sortByPeriod = false }, label = { Text("Sort: Latest submission", maxLines = 1, softWrap = false) })
+            }
             }
             if (shown.isEmpty()) {
                 Text(

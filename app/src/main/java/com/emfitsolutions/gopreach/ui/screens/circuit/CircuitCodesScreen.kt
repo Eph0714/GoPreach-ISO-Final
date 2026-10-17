@@ -28,7 +28,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -87,6 +88,7 @@ fun CircuitCodesScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            HideInFullScreen(false) {
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
@@ -95,10 +97,13 @@ fun CircuitCodesScreen(
                 visualTransformation = VisualTransformation.None,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             )
+            }
+            HideInFullScreen(true) {
             Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = statusFilter == null, onClick = { statusFilter = null }, label = { Text("All") })
                 FilterChip(selected = statusFilter == RecordStatus.ACTIVE, onClick = { statusFilter = RecordStatus.ACTIVE }, label = { Text("Active") })
                 FilterChip(selected = statusFilter == RecordStatus.INACTIVE, onClick = { statusFilter = RecordStatus.INACTIVE }, label = { Text("Inactive") })
+            }
             }
             val viewMode = rememberRecordViewMode("circuit_codes")
             LazyColumn(

@@ -41,7 +41,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -167,6 +168,7 @@ fun ContactRecordScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            HideInFullScreen(false) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -177,6 +179,8 @@ fun ContactRecordScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
 
+            }
+            HideInFullScreen(true) {
             if (isSuperAdmin) {
                 ContactCongregationDropdown(
                     congregations = congregations,
@@ -197,6 +201,7 @@ fun ContactRecordScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
+            }
             if (needsCongregation) {
                 com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt()
             } else if (filteredRows.isEmpty()) {

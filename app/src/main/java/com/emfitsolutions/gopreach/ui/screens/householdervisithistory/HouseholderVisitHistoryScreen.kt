@@ -36,7 +36,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -242,6 +243,7 @@ fun HouseholderVisitHistoryScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxWidth().padding(padding)) {
+            HideInFullScreen(false) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 // "Super Admin – Congregation Filter" — only ever shown for
                 // the actual unscoped (Super-Admin) session; [congregationId]
@@ -249,6 +251,7 @@ fun HouseholderVisitHistoryScreen(
                 // boundary the UI never exposes a way around (see
                 // HouseholderVisitHistoryViewModel.setCongregationFilter's
                 // own doc comment for the matching ViewModel-side guard).
+            HideInFullScreen(true) {
                 if (congregationId == null) {
                     CongregationFilterDropdown(
                         congregations = uiState.congregations,
@@ -260,6 +263,7 @@ fun HouseholderVisitHistoryScreen(
                 }
                 RecordTypeDropdown(selected = uiState.recordType, onSelected = viewModel::setRecordType)
                 SearchByDropdown(selected = uiState.searchByField, onSelected = viewModel::setSearchByField)
+            }
                 OutlinedTextField(
                     value = uiState.searchQuery,
                     onValueChange = viewModel::setSearchQuery,
@@ -271,6 +275,7 @@ fun HouseholderVisitHistoryScreen(
                 )
             }
             HorizontalDivider()
+            }
             if (congregationId == null && uiState.congregationFilter == null) {
                 com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt()
             } else if (uiState.rows.isEmpty()) {

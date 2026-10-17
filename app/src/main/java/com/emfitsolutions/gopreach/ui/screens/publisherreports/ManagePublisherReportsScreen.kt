@@ -45,7 +45,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -193,6 +194,7 @@ fun ManagePublisherReportsScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            HideInFullScreen(false) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -255,6 +257,7 @@ fun ManagePublisherReportsScreen(
                 // Report Summary spec §36 — Classification/Status filters,
                 // alongside Congregation/Year-Month (date range, above)/
                 // Publisher this screen already had.
+            HideInFullScreen(true) {
                 Text(stringResource(R.string.manage_reports_classification_label), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     FilterChip(
@@ -287,6 +290,7 @@ fun ManagePublisherReportsScreen(
                     }
                 }
 
+            }
                 TextButton(onClick = viewModel::resetFilters, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.manage_reports_reset_filters))
                 }
@@ -306,6 +310,7 @@ fun ManagePublisherReportsScreen(
                 }
             }
 
+            }
             if (fixedCongregationId == null && uiState.selectedCongregationId == null) {
                 com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt()
             } else if (uiState.rows.isEmpty()) {

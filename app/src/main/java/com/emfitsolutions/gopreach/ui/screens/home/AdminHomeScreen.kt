@@ -273,7 +273,9 @@ fun AdminHomeScreen(
     // Excludes Super-Admin, who already has the separate, full read/write
     // ALL_INTERESTED_RECORDS drawer item instead — this scoped screen would
     // be redundant (and congregationId-less) for that role.
-    val canViewInterestedPeopleScope = role == AdminRole.ADMIN_PER_CONGREGATION || role == AdminRole.COORDINATOR_ELDER ||
+    // "House Holder Records": Super-Admin now uses it too (all congregations), and so does the Circuit Overseer (assigned ones).
+    val canViewInterestedPeopleScope = role == AdminRole.SUPER_ADMIN || role == AdminRole.CIRCUIT_OVERSEER ||
+        role == AdminRole.ADMIN_PER_CONGREGATION || role == AdminRole.COORDINATOR_ELDER ||
         role == AdminRole.SERVICE_OVERSEER || role == AdminRole.REGULAR_ELDER
     // "Meeting Assignments" — "the Coordinator-elder, elder, service
     // overseer, admin can make an assignment for the meetings, the super
@@ -724,6 +726,7 @@ fun AdminHomeScreen(
                                     if (canManageTerritoryAssignments) add(QuickAccessItem.TERRITORY_ASSIGNMENT)
                                     if (canViewTerritoryMap) add(QuickAccessItem.TERRITORY_MAP)
                                     if (canManageHouseholderAssignment) add(QuickAccessItem.PUBLISHER_ASSIGNMENT)
+                                    if (canViewInterestedPeopleScope) add(QuickAccessItem.HOUSEHOLDER_RECORDS)
                                     if (role in setOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY)) add(QuickAccessItem.COMPARATIVE_REPORT)
                                     if (canEnrollPublisher) addAll(listOf(QuickAccessItem.PUBLISHER_MODULE, QuickAccessItem.REGULAR_PIONEERS, QuickAccessItem.AUXILIARY_PIONEERS, QuickAccessItem.SPECIAL_PIONEERS, QuickAccessItem.UNBAPTIZED_PUBLISHERS))
                                     if (canViewFieldServiceGroupReport) add(QuickAccessItem.FIELD_SERVICE_REPORT)

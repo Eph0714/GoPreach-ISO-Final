@@ -48,7 +48,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -180,6 +181,7 @@ fun ManagePublishersScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            HideInFullScreen(false) {
             if (visibleCongregationId == null) {
                 // Switching congregation refreshes the list, filters, counts and clears the search (it is keyed on the id).
                 CongregationSwitcher(
@@ -252,6 +254,7 @@ fun ManagePublishersScreen(
                 )
             }
             // Print / Excel / PDF all use the same rows as the list below (current search, filter, group, status).
+            }
             val context = androidx.compose.ui.platform.LocalContext.current
             var exportKind by remember { mutableStateOf<String?>(null) }
             var exportMenu by remember { mutableStateOf(false) }

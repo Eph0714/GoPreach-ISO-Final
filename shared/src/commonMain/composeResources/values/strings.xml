@@ -154,7 +154,7 @@
     <string name="side_share_location_settings">Share Location Settings</string>
     <string name="side_user_logs">User Logs</string>
     <string name="side_contact_record">Contact Record</string>
-    <string name="side_interested_records_scoped">Interested People</string>
+    <string name="side_interested_records_scoped">House Holder Records</string>
     <string name="side_householder_visit_history">House Holder Visit History</string>
     <string name="side_user_management">User Management</string>
     <string name="side_account_management">Account Management</string>

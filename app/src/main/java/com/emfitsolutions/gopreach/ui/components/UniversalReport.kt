@@ -25,6 +25,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
@@ -111,6 +113,7 @@ fun <T> UniversalReport(
     val summaryRows = summary(shown)
     val filtering = query.isNotBlank() || chosen.isNotEmpty()
     var showOptions by rememberSaveable(title) { mutableStateOf(false) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { RecordFullScreen.active = false } }
 
     fun exportData() = TableReportData(
         title = title,
@@ -137,6 +140,9 @@ fun <T> UniversalReport(
                         shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
                         modifier = Modifier.weight(1f),
                     )
+                    androidx.compose.material3.IconButton(onClick = { RecordFullScreen.active = !RecordFullScreen.active }) {
+                        Icon(if (RecordFullScreen.active) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, contentDescription = if (RecordFullScreen.active) "Exit full screen" else "Full screen")
+                    }
                     androidx.compose.material3.FilledTonalIconButton(onClick = { showOptions = !showOptions }) {
                         androidx.compose.material3.BadgedBox(badge = { if (chosen.isNotEmpty()) androidx.compose.material3.Badge() }) {
                             Icon(Icons.Rounded.Tune, contentDescription = "Filters, view and export")
@@ -147,7 +153,7 @@ fun <T> UniversalReport(
                     (if (shown.size == items.size) "${items.size}" else "${shown.size} of ${items.size}") + if (items.size == 1) " record" else " records",
                     style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                androidx.compose.animation.AnimatedVisibility(visible = showOptions) {
+                androidx.compose.animation.AnimatedVisibility(visible = showOptions && !RecordFullScreen.active) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         filters.forEach { f ->
                             Text(f.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)

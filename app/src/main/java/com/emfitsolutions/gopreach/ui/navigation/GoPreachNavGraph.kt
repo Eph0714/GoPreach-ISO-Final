@@ -55,7 +55,7 @@ import com.emfitsolutions.gopreach.ui.screens.householderassignment.IncomingHous
 import com.emfitsolutions.gopreach.ui.screens.pipeline.ForwardRequestsScreen
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PipelineScreen
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PublisherForwardRequestsScreen
-import com.emfitsolutions.gopreach.ui.screens.pipeline.ElderInterestedRecordsScreen
+import com.emfitsolutions.gopreach.ui.screens.pipeline.HouseHolderRecordsScreen
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PublisherAssignmentScreen
 import com.emfitsolutions.gopreach.ui.screens.bibletext.BibleTextRecordScreen
 import com.emfitsolutions.gopreach.ui.screens.preachingtime.PreachingTimeRecordScreen
@@ -457,8 +457,15 @@ fun GoPreachNavGraph(
         // [groupId] stays null for every scope wider than "own Group" (see
         // [ElderInterestedRecordsScreen]'s own null-means-no-narrowing convention).
         composable(Destinations.SCOPED_INTERESTED_RECORDS) {
-            ElderInterestedRecordsScreen(
-                congregationId = ownCongregationId ?: ownGroupAssignment?.congregationId,
+            // Super-Admin: every congregation (null). Circuit Overseer: the congregations assigned on their grant
+            // (null when the grant covers all). Everyone else: their own congregation only.
+            HouseHolderRecordsScreen(
+                congregationIds = when (currentRole) {
+                    AdminRole.SUPER_ADMIN -> null
+                    AdminRole.CIRCUIT_OVERSEER ->
+                        if (grant?.resolvedScopeType == ScopeType.ALL_CONGREGATIONS) null else grant?.scopeCongregationIds?.toSet().orEmpty()
+                    else -> setOfNotNull(ownCongregationId ?: ownGroupAssignment?.congregationId)
+                },
                 groupId = ownGroupAssignment?.groupId,
                 onBack = { navController.popBackStack() },
             )

@@ -35,7 +35,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -113,7 +114,10 @@ fun PreachingTimeRecordScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            HideInFullScreen(true) {
             DateRangeFilterBar(range = dateRange, onRangeChange = viewModel::setDateRange, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            }
+            HideInFullScreen(false) {
             OutlinedTextField(
                 value = searchText,
                 onValueChange = { searchText = it },
@@ -128,6 +132,7 @@ fun PreachingTimeRecordScreen(
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
+            }
             if (records.isEmpty()) {
                 Column(
                     modifier = Modifier.fillMaxSize().padding(24.dp),

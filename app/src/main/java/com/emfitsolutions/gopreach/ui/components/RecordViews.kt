@@ -19,6 +19,12 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,6 +52,8 @@ import androidx.compose.ui.unit.dp
 fun rememberRecordViewMode(screenKey: String, defaultTable: Boolean = false): RecordViewMode {
     var table by rememberSaveable(screenKey) { mutableStateOf(defaultTable) }
     val hScroll = rememberScrollState()
+    // Full screen belongs to the list on screen: leaving it (back, or the list emptying) puts the app bar and filters back.
+    DisposableEffect(Unit) { onDispose { RecordFullScreen.active = false } }
     return RecordViewMode(table, hScroll) { table = it }
 }
 
@@ -58,6 +66,18 @@ fun RecordViewToggle(mode: RecordViewMode, modifier: Modifier = Modifier) {
     FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FilterChip(selected = !mode.table, onClick = { mode.set(false) }, label = { Text("List View") })
         FilterChip(selected = mode.table, onClick = { mode.set(true) }, label = { Text("Table View") })
+        FilterChip(
+            selected = RecordFullScreen.active,
+            onClick = { RecordFullScreen.active = !RecordFullScreen.active },
+            label = { Text(if (RecordFullScreen.active) "Exit Full Screen" else "Full Screen") },
+            leadingIcon = {
+                Icon(
+                    if (RecordFullScreen.active) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+            },
+        )
     }
 }
 

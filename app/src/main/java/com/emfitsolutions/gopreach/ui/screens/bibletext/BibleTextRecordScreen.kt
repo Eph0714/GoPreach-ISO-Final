@@ -72,7 +72,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CircularProgressIndicator
@@ -354,6 +355,7 @@ private fun EventListScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            HideInFullScreen(false) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = searchText,
@@ -366,6 +368,8 @@ private fun EventListScreen(
                 )
             }
 
+            }
+            HideInFullScreen(true) {
             if (showFilters) {
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     LabeledDropdown(
@@ -397,6 +401,7 @@ private fun EventListScreen(
                 }
             }
 
+            }
             val viewMode = rememberRecordViewMode("bible_text_events")
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

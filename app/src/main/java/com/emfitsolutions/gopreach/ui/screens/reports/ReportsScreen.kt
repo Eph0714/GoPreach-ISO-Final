@@ -74,7 +74,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
+import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -267,6 +268,7 @@ fun ReportsScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
         // "Select a congregation for Super Admin" — the only role that ever
         // reaches this screen with visibleCongregationId == null.
+            HideInFullScreen(true) {
         if (visibleCongregationId == null) {
             ReportsCongregationDropdown(
                 congregations = congregations,
@@ -315,6 +317,7 @@ fun ReportsScreen(
             onRangeChange = viewModel::setDateRange,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )
+            }
         if (needsCongregation) {
             com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt()
         } else if (rows.isEmpty()) {
