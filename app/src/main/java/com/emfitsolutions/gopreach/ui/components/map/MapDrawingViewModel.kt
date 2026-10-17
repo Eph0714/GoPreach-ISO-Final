@@ -102,7 +102,7 @@ class MapDrawingViewModel(
             id = item.existing?.id.orEmpty(),
             geometryJson = DrawingGeometry.polygonJson(item.ring),
             fillColor = item.fillColor, // the status color
-            fillOpacity = item.opacity.toDouble(),
+            fillOpacity = DEFAULT_DRAWING_OPACITY.toDouble(),
             borderColor = item.borderColor,
             status = item.status ?: com.emfitsolutions.gopreach.data.model.DrawingStatus.FINISHED,
             remarks = item.remarks.trim(),

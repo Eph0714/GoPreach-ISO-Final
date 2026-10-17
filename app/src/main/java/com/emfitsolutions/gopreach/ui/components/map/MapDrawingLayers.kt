@@ -209,7 +209,7 @@ object MapDrawingLayers {
                 // The color is the status color, always — never an arbitrary stored one.
                 it.addStringProperty("fill", d.status.colorHex)
                 it.addStringProperty("border", d.status.borderHex)
-                it.addNumberProperty("opacity", d.fillOpacity)
+                it.addNumberProperty("opacity", DEFAULT_DRAWING_OPACITY.toDouble())
                 it.addStringProperty("sync", sync)
                 it.addStringProperty("sel", if (d.id == selectedId) "1" else "0")
             }
@@ -237,7 +237,7 @@ object MapDrawingLayers {
             if (item.ring.size >= 3) {
                 fills += polygonFeature(item.ring).also {
                     it.addStringProperty("fill", item.fillColor)
-                    it.addNumberProperty("opacity", item.opacity.toDouble())
+                    it.addNumberProperty("opacity", DEFAULT_DRAWING_OPACITY.toDouble())
                 }
             }
             if (item.ring.size >= 2) {

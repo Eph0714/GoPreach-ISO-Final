@@ -17,8 +17,8 @@ import java.util.UUID
 /** Shown for a polygon whose status hasn't been picked yet — deliberately none of the three status colors. */
 const val UNSET_STATUS_COLOR = "#9E9E9E"
 
-/** Where every new drawing's fill opacity starts (10%); the user may change it afterwards. */
-const val DEFAULT_DRAWING_OPACITY = 0.10f
+/** Every drawing's fill opacity is always 50%; it cannot be changed. */
+const val DEFAULT_DRAWING_OPACITY = 0.50f
 
 /** A slightly darker shade of [fillHex], for outlines. */
 fun darkerBorder(fillHex: String): String {

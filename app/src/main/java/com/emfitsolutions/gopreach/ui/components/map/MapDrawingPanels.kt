@@ -41,7 +41,6 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -157,17 +156,6 @@ fun DrawingDock(state: MapDrawingState, modifier: Modifier = Modifier) {
                     }
                 }
                 if (active.status == null) Text("Required — pick one to save.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Opacity", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(end = 8.dp))
-                    Slider(
-                        value = active.opacity,
-                        onValueChange = { state.selectOpacity(it) },
-                        onValueChangeFinished = { state.commitOpacity() },
-                        valueRange = 0.05f..0.7f,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text("${(active.opacity * 100).toInt()}%", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(start = 8.dp))
-                }
                 OutlinedTextField(
                     value = active.remarks,
                     onValueChange = { state.setRemarks(it.take(1000)) },
@@ -281,7 +269,7 @@ fun DrawingInfoPanel(
             InfoLine("Territory", drawing.territoryName.ifBlank { "Unassigned area" })
             InfoLine("FS Group", groupName ?: "None (not in an FS Group territory)")
             InfoLine("Congregation", congregationName ?: "—")
-            InfoLine("Opacity", "${(drawing.fillOpacity * 100).toInt()}%")
+            InfoLine("Opacity", "50%")
             InfoLine("Created by", listOf(drawing.userName, drawing.userRole).filter { it.isNotBlank() }.joinToString(" · ").ifBlank { "—" })
             InfoLine("Created", dateTime.format(Date(drawing.createdAt)))
             InfoLine("Last modified", dateTime.format(Date(drawing.updatedAt)) + drawing.updatedByName.takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty())
