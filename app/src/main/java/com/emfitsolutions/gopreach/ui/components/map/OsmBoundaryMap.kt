@@ -95,6 +95,10 @@ private enum class MapStyle(val label: String, val maptilerId: String) {
  * without a key, Standard falls back to OpenFreeMap's keyless "Liberty" style
  * and the other two to it as well, so the map is never blank. */
 private fun styleUrl(style: MapStyle): String =
+    if (com.emfitsolutions.gopreach.data.offlinemap.OfflineMaps.shouldUse()) com.emfitsolutions.gopreach.data.offlinemap.OfflineMaps.styleUrl(dark = style == MapStyle.NIGHT)
+    else onlineStyleUrl(style)
+
+private fun onlineStyleUrl(style: MapStyle): String =
     if (BuildConfig.MAPTILER_API_KEY.isBlank()) "https://tiles.openfreemap.org/styles/liberty"
     else "https://api.maptiler.com/maps/${style.maptilerId}/style.json?key=${BuildConfig.MAPTILER_API_KEY}"
 

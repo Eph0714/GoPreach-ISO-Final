@@ -34,6 +34,10 @@ import org.maplibre.android.maps.Style
  * Without a key it falls back to OpenFreeMap's keyless "Liberty" style, so a
  * map is never blank just because a developer key is missing. */
 fun maptilerStyleUrl(styleId: String): String =
+    if (com.emfitsolutions.gopreach.data.offlinemap.OfflineMaps.shouldUse()) com.emfitsolutions.gopreach.data.offlinemap.OfflineMaps.styleUrl(dark = "dark" in styleId)
+    else maptilerOnlineStyleUrl(styleId)
+
+private fun maptilerOnlineStyleUrl(styleId: String): String =
     if (BuildConfig.MAPTILER_API_KEY.isBlank()) "https://tiles.openfreemap.org/styles/liberty"
     else "https://api.maptiler.com/maps/$styleId/style.json?key=${BuildConfig.MAPTILER_API_KEY}"
 

@@ -35,6 +35,8 @@ val mapTilerApiKey: String = localProperties.getProperty("mapTilerApiKey", "")
 val mapillaryToken: String = localProperties.getProperty("mapillaryToken", "")
 // Google Maps Platform key for in-app Google Street View (Street View Static API + Maps Embed API enabled), as `googleMapsApiKey=...` in local.properties. Blank = Google is not used in-app.
 val googleMapsApiKey: String = localProperties.getProperty("googleMapsApiKey", "")
+// Where the Philippines offline map file (.pmtiles) is hosted, as `offlineMapUrl=https://...` in local.properties. Blank = the file can only be chosen from the phone.
+val offlineMapUrl: String = localProperties.getProperty("offlineMapUrl", "")
 
 android {
     namespace = "com.emfitsolutions.gopreach"
@@ -44,8 +46,8 @@ android {
         applicationId = "com.emfitsolutions.gopreach"
         minSdk = 24
         targetSdk = 36
-        versionCode = 204
-        versionName = "1.142.0"
+        versionCode = 205
+        versionName = "1.143.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -60,6 +62,7 @@ android {
         buildConfigField("String", "MAPTILER_API_KEY", "\"$mapTilerApiKey\"")
         buildConfigField("String", "MAPILLARY_TOKEN", "\"$mapillaryToken\"")
         buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsApiKey\"")
+        buildConfigField("String", "OFFLINE_MAP_URL", "\"$offlineMapUrl\"")
     }
 
     // Release signing. A production build is signed with GoPreach's own release key, read from

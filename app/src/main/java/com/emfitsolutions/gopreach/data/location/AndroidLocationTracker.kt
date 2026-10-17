@@ -177,6 +177,20 @@ class AndroidLocationTracker(
      * the geocoder has nothing at all, so callers can tell "no match" apart
      * from "matched, but couldn't identify any of the three levels." */
     override suspend fun reverseGeocodeAddress(lat: Double, lng: Double): GeocodedAddress? {
+        // No internet: neither the phone's geocoder nor Nominatim can answer (each would only time out), so use the
+        // boundaries bundled in the app. Online, those same boundaries fill whatever the geocoders left blank.
+        if (!com.emfitsolutions.gopreach.data.offlinemap.OfflineMaps.isOnline()) return OfflinePlaceResolver.resolve(context, lat, lng)
+        val geocoded = reverseGeocodeOnlineAndOnDevice(lat, lng)
+        if (geocoded?.barangay != null && geocoded.cityMunicipality != null && geocoded.province != null) return geocoded
+        val bundled = OfflinePlaceResolver.resolve(context, lat, lng) ?: return geocoded
+        return GeocodedAddress(
+            barangay = geocoded?.barangay ?: bundled.barangay,
+            cityMunicipality = geocoded?.cityMunicipality ?: bundled.cityMunicipality,
+            province = geocoded?.province ?: bundled.province,
+        )
+    }
+
+    private suspend fun reverseGeocodeOnlineAndOnDevice(lat: Double, lng: Double): GeocodedAddress? {
         val onDevice = reverseGeocodeOnDevice(lat, lng)
         Log.d(TAG, "on-device geocoder -> $onDevice")
         // Phones without Google's geocoder backend (e.g. Huawei devices

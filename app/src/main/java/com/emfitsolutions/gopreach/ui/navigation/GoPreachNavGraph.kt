@@ -985,6 +985,9 @@ fun GoPreachNavGraph(
                 onBack = { navController.popBackStack() },
             )
         }
+        composable(Destinations.OFFLINE_MAPS) {
+            com.emfitsolutions.gopreach.ui.screens.offlinemaps.OfflineMapsScreen(onBack = { navController.popBackStack() })
+        }
         composable(Destinations.WEATHER) {
             // Open to every signed-in role. Territory places are limited to the caller's own congregation (Super Admin: all).
             WeatherScreen(

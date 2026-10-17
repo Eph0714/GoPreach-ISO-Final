@@ -43,6 +43,7 @@ class GoPreachApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        com.emfitsolutions.gopreach.data.offlinemap.OfflineMaps.init(this)
         startKoin {
             androidContext(this@GoPreachApp)
             modules(infraModule, appModule)

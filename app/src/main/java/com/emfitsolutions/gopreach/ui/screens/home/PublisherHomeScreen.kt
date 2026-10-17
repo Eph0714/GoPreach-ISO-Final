@@ -1032,6 +1032,7 @@ private fun publisherModuleTiles(
     add(PublisherModuleTile(DashboardModuleId.FIND_LOCATION, stringResource(Res.string.home_tile_find_location_title), stringResource(Res.string.home_tile_find_location_subtitle), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
     add(PublisherModuleTile(DashboardModuleId.WEATHER, stringResource(Res.string.home_tile_weather_title), stringResource(Res.string.home_tile_weather_subtitle), Icons.Rounded.WbSunny, Destinations.WEATHER))
     add(PublisherModuleTile(DashboardModuleId.VOICE_NOTES, "Voice Notes & Minutes", "Record, transcribe and summarise", Icons.Rounded.Mic, Destinations.VOICE_NOTES))
+    add(PublisherModuleTile(DashboardModuleId.OFFLINE_MAPS, "Offline Maps", "Download the map for use without internet", Icons.Rounded.Map, Destinations.OFFLINE_MAPS))
     // "Add the Territory Module in Publisher. The publisher can see all
     // the location but cannot edit or delete, view only" — the screen
     // itself has no edit/delete actions for anyone anymore (see

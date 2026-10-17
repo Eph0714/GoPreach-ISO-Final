@@ -238,6 +238,8 @@ object Destinations {
     const val FIND_LOCATION = "find_location"
     // Weather forecast and current conditions - available to every signed-in role.
     const val WEATHER = "weather"
+    // Offline Maps - download/choose the Philippines street map used without internet; open to every signed-in role.
+    const val OFFLINE_MAPS = "offline_maps"
     const val VOICE_NOTES = "voice_notes"
 
     const val SETTINGS = "settings"

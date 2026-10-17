@@ -55,6 +55,8 @@ enum class DashboardModuleId {
     MY_PLANNER,
     // Voice Notes & Meeting Minutes: record, transcribe, summarise, read and listen. Private to the person; every role.
     VOICE_NOTES,
+    // Offline Maps: the Philippines street map used when there is no internet. Every role.
+    OFFLINE_MAPS,
 }
 
 /**
