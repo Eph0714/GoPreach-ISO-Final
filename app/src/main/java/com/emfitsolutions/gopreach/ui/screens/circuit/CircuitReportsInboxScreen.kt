@@ -179,6 +179,7 @@ fun CircuitReportsInboxScreen(
                                 UniversalColumn("Last Action", 180.dp) { stamp(it.lastActionAt) },
                         ),
                         onRowClick = { item -> item.report?.let { r -> onOpenSnapshot(r.id) } },
+                        gap = 10.dp,
                     ) { item ->
                         val s = item.status
                         CoCard(Modifier.fillMaxWidth(), accent = if (item.unread) com.emfitsolutions.gopreach.ui.components.co.coPalette().danger else null) {

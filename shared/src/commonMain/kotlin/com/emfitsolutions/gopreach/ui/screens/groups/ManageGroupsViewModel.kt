@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.AdminRole
 import com.emfitsolutions.gopreach.data.model.Congregation
+import com.emfitsolutions.gopreach.data.model.displayName
 import com.emfitsolutions.gopreach.data.model.Group
 import com.emfitsolutions.gopreach.data.model.Person
 import com.emfitsolutions.gopreach.data.model.RecordStatus
@@ -32,11 +33,16 @@ import kotlinx.coroutines.launch
  * pools are merged into one list for that dropdown. */
 data class PersonCandidate(val person: Person, val isElder: Boolean)
 
+/** One member of a Field Service Group, as listed under it: who, their category and how to reach them. */
+data class GroupMember(val personId: String, val name: String, val category: String, val contact: String)
+
 data class GroupRow(
     val group: Group,
     val overseerName: String?,
     val servantName: String?,
     val assistantName: String?,
+    /** The group's publishers (active role assignments with this group), by name. */
+    val members: List<GroupMember> = emptyList(),
 )
 
 /** One Publisher candidate for the "[ADD MEMBERS] Browse from Publishers
@@ -225,16 +231,28 @@ class ManageGroupsViewModel(
     }
 
     fun rowsFor(congregationId: String?, scope: GroupAccessScope? = null): Flow<List<GroupRow>> =
-        combine(groupRepository.observeAll(), personRepository.observeAll()) { groups, people ->
+        combine(groupRepository.observeAll(), personRepository.observeAll(), roleAssignmentRepository.observeAll()) { groups, people, assignments ->
+            val peopleById = people.associateBy { it.id }
             groups
                 .filter { congregationId == null || it.congregationId == congregationId }
                 .filter { scope == null || scope.allows(it) }
                 .map { group ->
+                    val members = assignments
+                        .filter { it.groupId == group.id && it.status == RoleAssignmentStatus.ACTIVE }
+                        .mapNotNull { a ->
+                            val category = (a.resolvedRoleTypeOrNull() as? RoleType.Publisher)?.category ?: return@mapNotNull null
+                            if (category == com.emfitsolutions.gopreach.data.model.PublisherCategory.REMOVED_PUBLISHER) return@mapNotNull null
+                            val person = peopleById[a.personId] ?: return@mapNotNull null
+                            GroupMember(person.id, person.fullName, category.displayName, person.contact)
+                        }
+                        .distinctBy { it.personId }
+                        .sortedBy { it.name }
                     GroupRow(
                         group = group,
                         overseerName = people.firstOrNull { it.id == group.overseerPersonId }?.fullName,
                         servantName = people.firstOrNull { it.id == group.servantPersonId }?.fullName,
                         assistantName = people.firstOrNull { it.id == group.assistantPersonId }?.fullName,
+                        members = members,
                     )
                 }
                 .sortedWith(com.emfitsolutions.gopreach.domain.NaturalOrder.by { it.group.name })

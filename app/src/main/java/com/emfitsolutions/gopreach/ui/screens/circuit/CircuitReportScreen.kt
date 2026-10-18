@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.joinTableRow
 import com.emfitsolutions.gopreach.ui.components.co.CoButton
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -116,7 +117,7 @@ fun CircuitReportScreen(
             return@Scaffold
         }
         val hScroll = rememberScrollState()
-        val border = MaterialTheme.colorScheme.outlineVariant
+        val border = com.emfitsolutions.gopreach.ui.theme.cellBorder()
         @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
         androidx.compose.foundation.lazy.LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
@@ -155,11 +156,11 @@ fun CircuitReportScreen(
             if (rows.isNotEmpty()) {
                 // The heading row stays pinned while the congregations scroll underneath; every row shares one sideways scroll.
                 if (viewMode.table) stickyHeader(key = "head") {
-                    Row(modifier = Modifier.horizontalScroll(hScroll).height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.secondaryContainer)) {
+                    Row(modifier = Modifier.joinTableRow(10.dp).horizontalScroll(hScroll).height(IntrinsicSize.Min).background(com.emfitsolutions.gopreach.ui.components.TableHeadFill)) {
                         CIRCUIT_REPORT_COLUMNS.forEach { (title, _) ->
                             Text(
-                                title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.width(widthOf(title).dp).fillMaxHeight().border(0.5.dp, border).padding(6.dp),
+                                title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.width(widthOf(title).dp).fillMaxHeight().border(0.5.dp, border).padding(horizontal = 6.dp, vertical = 8.dp),
                             )
                         }
                     }
@@ -179,26 +180,26 @@ fun CircuitReportScreen(
                 if (viewMode.table) itemsIndexed(rows, key = { _, r -> "row-" + r.congregationId }) { i, r ->
                     Row(
                         modifier = Modifier
-                            .horizontalScroll(hScroll)
+                            .joinTableRow(10.dp).horizontalScroll(hScroll)
                             .height(IntrinsicSize.Min)
-                            .background(if (i % 2 == 0) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
+                            .background(androidx.compose.ui.graphics.Color.Transparent)
                             .clickable { onOpenCongregation(r.congregationId) },
                     ) {
                         CIRCUIT_REPORT_COLUMNS.forEach { (title, value) ->
                             Text(
                                 value(r), style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.width(widthOf(title).dp).fillMaxHeight().border(0.5.dp, border).padding(6.dp),
+                                modifier = Modifier.width(widthOf(title).dp).fillMaxHeight().border(0.5.dp, border).padding(horizontal = 6.dp, vertical = 8.dp),
                                 textAlign = if (title in NUMERIC) androidx.compose.ui.text.style.TextAlign.End else null,
                             )
                         }
                     }
                 }
                 if (viewMode.table) item(key = "total") {
-                    Row(modifier = Modifier.horizontalScroll(hScroll).height(IntrinsicSize.Min).background(MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f))) {
+                    Row(modifier = Modifier.joinTableRow(10.dp).horizontalScroll(hScroll).height(IntrinsicSize.Min).background(com.emfitsolutions.gopreach.ui.components.TableHeadFill)) {
                         CIRCUIT_REPORT_COLUMNS.forEach { (title, value) ->
                             Text(
                                 value(total), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
-                                modifier = Modifier.width(widthOf(title).dp).fillMaxHeight().border(0.5.dp, border).padding(6.dp),
+                                modifier = Modifier.width(widthOf(title).dp).fillMaxHeight().border(0.5.dp, border).padding(horizontal = 6.dp, vertical = 8.dp),
                                 textAlign = if (title in NUMERIC) androidx.compose.ui.text.style.TextAlign.End else null,
                             )
                         }

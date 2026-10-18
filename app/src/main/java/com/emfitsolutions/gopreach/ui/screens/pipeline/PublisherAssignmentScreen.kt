@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -184,7 +185,13 @@ fun PublisherAssignmentScreen(
         topBar = {
             Column {
                 TopAppBar(
-                    title = { Text(if (congregationName != null) "Publisher Assignment – $congregationName" else "Publisher Assignment") },
+                    title = {
+                        // The congregation goes on a small second line so the title is never clipped.
+                        Column {
+                            Text("Publisher Assignment", style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                            if (congregationName != null) Text(congregationName, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        }
+                    },
                     navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
                     actions = {
                         IconButton(onClick = onSearchCoordinates) { Icon(Icons.Rounded.MyLocation, contentDescription = "Search Coordinates") }
@@ -269,12 +276,19 @@ fun PublisherAssignmentScreen(
                     item { RecordFound(shown.size) }
                     items(shown, key = { it.id }) { person ->
                         Card(modifier = Modifier.fillMaxWidth().clickable { selectedPersonId = person.id }) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            // Simple card: the name and its action icons on the first line, then the publisher, place and the compact location row.
+                            Column(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 6.dp, bottom = 10.dp, end = 4.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                    IconButton(onClick = { assigning = person }, modifier = Modifier.size(40.dp)) {
+                                        Icon(Icons.Rounded.PersonAdd, contentDescription = if (person.publisherPersonId.isBlank()) "Assign Publisher" else "Reassign Publisher", modifier = Modifier.size(22.dp))
+                                    }
+                                    if (stage != PipelineStage.BIBLE_STUDY) {
+                                        IconButton(onClick = { editing = person }, modifier = Modifier.size(40.dp)) { Icon(Icons.Rounded.Edit, contentDescription = "Edit", modifier = Modifier.size(22.dp)) }
+                                        IconButton(onClick = { deleting = person }, modifier = Modifier.size(40.dp)) { Icon(Icons.Rounded.Delete, contentDescription = "Delete", modifier = Modifier.size(22.dp)) }
+                                    }
+                                }
+                                Column(modifier = Modifier.padding(end = 12.dp)) {
                                     Text(
                                         "Assigned Publisher: " + if (person.publisherPersonId.isBlank()) "Unassigned" else (names[person.publisherPersonId] ?: "—"),
                                         style = MaterialTheme.typography.bodySmall,
@@ -284,20 +298,13 @@ fun PublisherAssignmentScreen(
                                         .ifEmpty { listOf(person.address) }.joinToString(", ")
                                     if (location.isNotBlank()) Text("Location: $location", style = MaterialTheme.typography.bodySmall)
                                     if (person.gpsLat != null && person.gpsLng != null) {
-                                        com.emfitsolutions.gopreach.ui.components.RecordLocationActions(lat = person.gpsLat!!, lng = person.gpsLng!!, name = person.name)
+                                        com.emfitsolutions.gopreach.ui.components.RecordLocationCompact(lat = person.gpsLat!!, lng = person.gpsLng!!, name = person.name)
                                     }
                                     Text(
                                         "Status: " + if (person.status == RecordStatus.ACTIVE) "Active" else "Inactive",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
-                                }
-                                IconButton(onClick = { assigning = person }) {
-                                    Icon(Icons.Rounded.PersonAdd, contentDescription = if (person.publisherPersonId.isBlank()) "Assign Publisher" else "Reassign Publisher")
-                                }
-                                if (stage != PipelineStage.BIBLE_STUDY) {
-                                    IconButton(onClick = { editing = person }) { Icon(Icons.Rounded.Edit, contentDescription = "Edit") }
-                                    IconButton(onClick = { deleting = person }) { Icon(Icons.Rounded.Delete, contentDescription = "Delete") }
                                 }
                             }
                         }

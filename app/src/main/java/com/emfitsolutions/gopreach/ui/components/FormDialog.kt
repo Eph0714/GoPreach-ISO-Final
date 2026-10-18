@@ -17,6 +17,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.emfitsolutions.gopreach.ui.components.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.Alignment
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -130,7 +135,15 @@ fun FormDialog(
         // [requestDismiss] → unsaved-changes-confirmation path as the
         // Cancel button always has.
         properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
-        title = { Text(title) },
+        // A back arrow in the (fixed) title lets the user cancel from the top of a long form without scrolling down to Cancel.
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = ::requestDismiss, enabled = !hasConfirmed, modifier = Modifier.padding(end = 4.dp)) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = dismissLabel)
+                }
+                Text(title)
+            }
+        },
         text = {
             Column(
                 modifier = Modifier

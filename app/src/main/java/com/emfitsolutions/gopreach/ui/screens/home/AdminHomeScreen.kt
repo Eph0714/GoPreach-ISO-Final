@@ -731,6 +731,7 @@ fun AdminHomeScreen(
                                     if (canEnrollPublisher) addAll(listOf(QuickAccessItem.PUBLISHER_MODULE, QuickAccessItem.REGULAR_PIONEERS, QuickAccessItem.AUXILIARY_PIONEERS, QuickAccessItem.SPECIAL_PIONEERS, QuickAccessItem.UNBAPTIZED_PUBLISHERS))
                                     if (canViewFieldServiceGroupReport) add(QuickAccessItem.FIELD_SERVICE_REPORT)
                                     add(QuickAccessItem.SETTINGS)
+                                    if (canManageGroups) add(QuickAccessItem.FIELD_SERVICE_GROUP)
                                     if (role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles && !session.isGroupRole) add(QuickAccessItem.MEETING_ATTENDANCE)
                                     if (canManageRegularEldersForDrawer) add(QuickAccessItem.TOTAL_ELDERS)
                                     if (canEnrollMinisterialServant) add(QuickAccessItem.TOTAL_MINISTERIAL)

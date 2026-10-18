@@ -96,6 +96,8 @@ fun SendAttendancePanel(
     actorPersonId: String,
     viewModel: AttendanceSubmissionViewModel,
     modifier: Modifier = Modifier,
+    /** Opens the chosen month's attendance in table view (the panel itself does not list the meetings). */
+    onPreview: (Long) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val monthFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
@@ -106,7 +108,7 @@ fun SendAttendancePanel(
     val baseNow = clock?.now ?: System.currentTimeMillis()
     val monthOptions = remember(monthStartAt(baseNow, 0)) { (0 until MONTHS_BACK).map { monthStartAt(baseNow, it) } }
 
-    var multiMode by remember(congregationId) { mutableStateOf(false) }
+    var multiMode by remember(congregationId) { mutableStateOf(true) }
     var singleMonth by remember(congregationId) { mutableStateOf<Long?>(null) }
     var picked by remember(congregationId) { mutableStateOf<Set<Long>>(emptySet()) }
     val months: List<Long> = remember(multiMode, singleMonth, picked) { if (multiMode) picked.toList().sorted() else listOfNotNull(singleMonth) }
@@ -126,7 +128,6 @@ fun SendAttendancePanel(
 
     var confirmSend by remember { mutableStateOf(false) }
     var confirmUndo by remember { mutableStateOf(false) }
-    var tableView by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var validations by remember { mutableStateOf<List<MonthValidation>?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -172,69 +173,30 @@ fun SendAttendancePanel(
                 }
             }
 
-            ViewSegments(listOf("Table" to Icons.Rounded.TableChart, "List" to Icons.Rounded.ViewList), if (tableView) 0 else 1) { tableView = it == 0; if (it == 0) multiMode = true }
-            if (tableView) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        TextButton(onClick = { picked = monthOptions.filter { statusOf(it) != CoReportStatus.RECEIVED }.take(MAX_MONTHS).toSet(); message = null }) { Text("Select all") }
-                        TextButton(onClick = { picked = emptySet() }) { Text("Clear") }
-                        Spacer(Modifier.weight(1f))
-                        Text(picked.size.toString() + " selected", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    }
-                    com.emfitsolutions.gopreach.ui.components.SendStatusTable(
-                        months = monthOptions, statusOf = { monthStatus(it) }, selected = picked, monthLabel = { monthFormat.format(Date(it)) },
-                        onToggle = { m -> picked = if (m in picked) picked - m else picked + m; multiMode = true; message = null },
-                    )
+            // Table View only: tick the months to send, or open a month with Preview.
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    TextButton(onClick = { picked = monthOptions.filter { statusOf(it) != CoReportStatus.RECEIVED }.take(MAX_MONTHS).toSet(); message = null }) { Text("Select all") }
+                    TextButton(onClick = { picked = emptySet() }) { Text("Clear") }
+                    Spacer(Modifier.weight(1f))
+                    Text(picked.size.toString() + " selected", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 }
+                com.emfitsolutions.gopreach.ui.components.SendStatusTable(
+                    months = monthOptions, statusOf = { monthStatus(it) }, selected = picked, monthLabel = { monthFormat.format(Date(it)) },
+                    onToggle = { m -> picked = if (m in picked) picked - m else picked + m; multiMode = true; message = null },
+                    onPreview = onPreview,
+                )
             }
-            if (!tableView) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !multiMode, onClick = { multiMode = false; message = null }, label = { Text("One month") })
-                    FilterChip(selected = multiMode, onClick = { multiMode = true; message = null }, label = { Text("Several months") })
-                }
-                if (!multiMode) {
-                    SimpleDropdown(
-                        label = "Month", selectedLabel = singleMonth?.let { monthFormat.format(Date(it)) } ?: "Choose a month",
-                        options = monthOptions.map { it.toString() to monthFormat.format(Date(it)) }, onSelected = { singleMonth = it.toLong(); message = null },
-                    )
-                } else {
-                    val eligible = monthOptions.filter { statusOf(it) != CoReportStatus.RECEIVED }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(onClick = { picked = eligible.take(MAX_MONTHS).toSet(); message = null }) { Text("Select all") }
-                        TextButton(onClick = { picked = emptySet() }) { Text("Clear") }
-                        Spacer(Modifier.weight(1f))
-                        Text(picked.size.toString() + " selected", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    }
-                    monthOptions.groupBy { yearOf(it) }.toSortedMap(compareByDescending { it }).forEach { (year, inYear) ->
-                        Text(year.toString(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            inYear.sorted().forEach { m ->
-                                val st = statusOf(m)
-                                FilterChip(
-                                    selected = m in picked, enabled = st != CoReportStatus.RECEIVED,
-                                    onClick = { picked = if (m in picked) picked - m else picked + m; message = null },
-                                    label = { Text(monthFormat.format(Date(m)).substringBefore(' ').take(3)) },
-                                    leadingIcon = if (st != CoReportStatus.NOT_SUBMITTED) ({ Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp)) }) else null,
-                                )
-                            }
-                        }
-                    }
-                }
-                if (tooMany) Text("Up to $MAX_MONTHS months at a time", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
+            if (tooMany) Text("Up to $MAX_MONTHS months at a time", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
 
-            if (months.isNotEmpty()) {
+            // The month, its status and Preview are already in the table above, so only the extra notes are listed here.
+            val anyChanged = months.any { it in changedMonths }
+            val hasNotes = anyChanged || (soleStatus == CoReportStatus.RETURNED && soleCurrent?.returnReason != null) ||
+                (soleStatus == CoReportStatus.CANCELLED && soleCurrent?.cancelReason != null) || soleStatus == CoReportStatus.RECEIVED
+            if (months.isNotEmpty() && hasNotes) {
                 Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        months.forEach { m ->
-                            val st = monthStatus(m)
-                            val status = st?.status ?: CoReportStatus.NOT_SUBMITTED
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(shortFormat.format(Date(m)), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                if (m in changedMonths) CoStatusBadge("Changed", CoKind.Warning)
-                                CoStatusBadge(status.workflowLabel + (st?.takeIf { it.version > 0 && status != CoReportStatus.NOT_SUBMITTED }?.let { " · v" + it.version } ?: ""), kindOf(status))
-                            }
-                        }
+                        if (anyChanged) CoStatusBadge("Changed since last sent", CoKind.Warning)
                         if (soleStatus == CoReportStatus.RETURNED && soleCurrent?.returnReason != null) Text("Returned: " + soleCurrent.returnReason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                         if (soleStatus == CoReportStatus.CANCELLED && soleCurrent?.cancelReason != null) Text("Cancelled: " + soleCurrent.cancelReason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                         if (soleStatus == CoReportStatus.RECEIVED) Text("Received - this month's attendance is locked.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

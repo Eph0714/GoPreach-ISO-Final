@@ -29,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.rounded.Assessment
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.SortByAlpha
+import com.emfitsolutions.gopreach.ui.components.joinTableRow
 import com.emfitsolutions.gopreach.ui.components.co.CoButton
 import com.emfitsolutions.gopreach.ui.components.co.CoCard
 import com.emfitsolutions.gopreach.ui.components.co.CoCongregationCard
@@ -461,26 +462,26 @@ private fun androidx.compose.foundation.lazy.LazyListScope.publisherTableItems(
 ) {
     val columns = PUBLISHER_COLUMNS.filter { showCongregation || it.title != "Congregation" }
     stickyHeader(key = "publisher-table-head") {
-        val border = MaterialTheme.colorScheme.outlineVariant
-        Row(modifier = Modifier.horizontalScroll(hScroll).background(MaterialTheme.colorScheme.primaryContainer)) {
+        val border = com.emfitsolutions.gopreach.ui.theme.cellBorder()
+        Row(modifier = Modifier.joinTableRow().horizontalScroll(hScroll).background(com.emfitsolutions.gopreach.ui.components.TableHeadFill)) {
             columns.forEach { c ->
                 Text(
-                    c.title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(c.width.dp).border(0.5.dp, border).padding(6.dp),
+                    c.title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(c.width.dp).border(0.5.dp, border).padding(horizontal = 6.dp, vertical = 8.dp),
                 )
             }
         }
     }
     itemsIndexed(rows, key = { _, r -> "tbl-" + r.personId + r.congregationId }) { i, r ->
-        val border = MaterialTheme.colorScheme.outlineVariant
+        val border = com.emfitsolutions.gopreach.ui.theme.cellBorder()
         Row(
-            modifier = Modifier.horizontalScroll(hScroll)
-                .background(if (i % 2 == 0) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+            modifier = Modifier.joinTableRow().horizontalScroll(hScroll)
+                .background(androidx.compose.ui.graphics.Color.Transparent),
         ) {
             columns.forEach { c ->
                 Text(
                     c.value(r, i), style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.width(c.width.dp).border(0.5.dp, border).padding(6.dp),
+                    modifier = Modifier.width(c.width.dp).border(0.5.dp, border).padding(horizontal = 6.dp, vertical = 8.dp),
                 )
             }
         }

@@ -295,11 +295,6 @@ fun DashboardStatsContent(
             range = uiState.dateRange,
             onRangeChange = viewModel::setDateRange,
         )
-        Text(
-            stringResource(Res.string.dashboard_description),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
 
         if (displayed == null) {
             Text(stringResource(Res.string.dashboard_no_congregation_data), style = MaterialTheme.typography.bodyMedium)

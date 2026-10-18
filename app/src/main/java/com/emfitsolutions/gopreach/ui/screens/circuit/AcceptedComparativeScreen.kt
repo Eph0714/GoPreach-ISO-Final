@@ -764,7 +764,7 @@ private fun SheetView(sheet: ConsolidatedSheet, color: Color) {
                         val sheetFill = if (total && i >= 2) totalFill else if (header) fillOf(i) else Color.Transparent
                         val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(sheetFill)
                         Box(
-                            Modifier.width(widthOf(i, last)).height(28.dp)
+                            Modifier.width(widthOf(i, last)).height(34.dp)
                                 .background(cellBg)
                                 .border(if (total) 1.5.dp else 0.5.dp, if (total) MaterialTheme.colorScheme.onSurface else line)
                                 .padding(horizontal = 4.dp),
@@ -787,9 +787,9 @@ private fun SheetView(sheet: ConsolidatedSheet, color: Color) {
             // band: No. of Reports | Hours | Bible Studies
             Row {
                 Spacer(Modifier.width(numberWidth + statusWidth + nameWidth))
-                Box(Modifier.width(cellWidth * rc).height(28.dp).background(com.emfitsolutions.gopreach.ui.theme.cellColors(peachFill).first).border(1.dp, MaterialTheme.colorScheme.onSurface), contentAlignment = Alignment.Center) { Text("No. of Reports", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
-                if (hc > 0) Box(Modifier.width(cellWidth * hc).height(28.dp).background(com.emfitsolutions.gopreach.ui.theme.cellColors(blueFill).first).border(1.dp, MaterialTheme.colorScheme.onSurface), contentAlignment = Alignment.Center) { Text("Hours", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
-                Box(Modifier.width(cellWidth * rc).height(28.dp).background(com.emfitsolutions.gopreach.ui.theme.cellColors(greenFill).first).border(1.dp, MaterialTheme.colorScheme.onSurface), contentAlignment = Alignment.Center) { Text("Bible Studies", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
+                Box(Modifier.width(cellWidth * rc).height(34.dp).background(com.emfitsolutions.gopreach.ui.theme.cellColors(peachFill).first).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()), contentAlignment = Alignment.Center) { Text("No. of Reports", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
+                if (hc > 0) Box(Modifier.width(cellWidth * hc).height(34.dp).background(com.emfitsolutions.gopreach.ui.theme.cellColors(blueFill).first).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()), contentAlignment = Alignment.Center) { Text("Hours", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
+                Box(Modifier.width(cellWidth * rc).height(34.dp).background(com.emfitsolutions.gopreach.ui.theme.cellColors(greenFill).first).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()), contentAlignment = Alignment.Center) { Text("Bible Studies", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.Black) }
             }
                     drawRow(0)
                 }

@@ -1,7 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
 import com.emfitsolutions.gopreach.ui.theme.glass
-import com.emfitsolutions.gopreach.ui.components.ViewSegments
 import com.emfitsolutions.gopreach.data.model.displayName
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
 import androidx.compose.foundation.verticalScroll
@@ -18,8 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.TableChart
-import androidx.compose.material.icons.rounded.ViewList
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.CalendarMonth
@@ -108,6 +105,8 @@ fun SendToCircuitPanel(
     actorPersonId: String,
     viewModel: FieldServiceReportViewModel,
     modifier: Modifier = Modifier,
+    /** Opens the chosen month's report in table view (the panel itself does not list publishers). */
+    onPreview: (Long) -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val monthFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
@@ -121,7 +120,7 @@ fun SendToCircuitPanel(
     val monthOptions = remember(monthStartAt(baseNow, 0)) { (0 until MONTHS_BACK).map { monthStartAt(baseNow, it) } } // newest first
 
     // The Report Month(s) are ALWAYS chosen here by the user - nothing is preselected and the device's date never decides them.
-    var multiMode by remember(congregation.id) { mutableStateOf(false) }
+    var multiMode by remember(congregation.id) { mutableStateOf(true) }
     var singleMonth by remember(congregation.id) { mutableStateOf<Long?>(null) }
     var picked by remember(congregation.id) { mutableStateOf<Set<Long>>(emptySet()) }
     val months: List<Long> = remember(multiMode, singleMonth, picked) {
@@ -151,7 +150,6 @@ fun SendToCircuitPanel(
 
     var confirmSend by remember { mutableStateOf(false) }
     var confirmUndo by remember { mutableStateOf(false) }
-    var tableView by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
     var validations by remember { mutableStateOf<List<MonthValidation>?>(null) }
     var plans by remember { mutableStateOf<List<MonthSnapshotPlan>?>(null) }
@@ -226,75 +224,33 @@ fun SendToCircuitPanel(
             }
 
             // Month(s)
-            ViewSegments(listOf("Table" to Icons.Rounded.TableChart, "List" to Icons.Rounded.ViewList), if (tableView) 0 else 1) { tableView = it == 0; if (it == 0) multiMode = true }
-            if (tableView) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        TextButton(onClick = { picked = monthOptions.filter { statusOf(it) != CoReportStatus.RECEIVED }.take(MAX_SNAPSHOT_MONTHS).toSet(); message = null }) { Text("Select all") }
-                        TextButton(onClick = { picked = emptySet() }) { Text("Clear") }
-                        Spacer(Modifier.weight(1f))
-                        Text(picked.size.toString() + " selected", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    }
-                    com.emfitsolutions.gopreach.ui.components.SendStatusTable(
-                        months = monthOptions, statusOf = { monthStatus(it) }, selected = picked, monthLabel = { monthFormat.format(Date(it)) },
-                        onToggle = { m -> picked = if (m in picked) picked - m else picked + m; multiMode = true; message = null },
-                    )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    TextButton(onClick = { picked = monthOptions.filter { statusOf(it) != CoReportStatus.RECEIVED }.take(MAX_SNAPSHOT_MONTHS).toSet(); message = null }) { Text("Select all") }
+                    TextButton(onClick = { picked = emptySet() }) { Text("Clear") }
+                    Spacer(Modifier.weight(1f))
+                    Text(picked.size.toString() + " selected", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                 }
+                com.emfitsolutions.gopreach.ui.components.SendStatusTable(
+                    months = monthOptions, statusOf = { monthStatus(it) }, selected = picked, monthLabel = { monthFormat.format(Date(it)) },
+                    onToggle = { m -> picked = if (m in picked) picked - m else picked + m; multiMode = true; message = null },
+                    onPreview = onPreview,
+                )
             }
-            if (!tableView) Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    androidx.compose.material3.FilterChip(selected = !multiMode, onClick = { multiMode = false; message = null }, label = { Text("One month") })
-                    androidx.compose.material3.FilterChip(selected = multiMode, onClick = { multiMode = true; message = null }, label = { Text("Several months") })
-                }
-                if (!multiMode) {
-                    com.emfitsolutions.gopreach.ui.screens.territoryassignments.SimpleDropdown(
-                        label = "Month",
-                        selectedLabel = singleMonth?.let { monthFormat.format(Date(it)) } ?: "Choose a month",
-                        options = monthOptions.map { it.toString() to monthFormat.format(Date(it)) },
-                        onSelected = { singleMonth = it.toLong(); message = null },
-                    )
-                } else {
-                    val eligible = monthOptions.filter { statusOf(it) != CoReportStatus.RECEIVED }
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        TextButton(onClick = { picked = eligible.take(MAX_SNAPSHOT_MONTHS).toSet(); message = null }) { Text("Select all") }
-                        TextButton(onClick = { picked = emptySet() }) { Text("Clear") }
-                        Spacer(Modifier.weight(1f))
-                        Text(picked.size.toString() + " selected", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-                    }
-                    monthOptions.groupBy { yearOf(it) }.toSortedMap(compareByDescending { it }).forEach { (year, inYear) ->
-                        Text(year.toString(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            inYear.sorted().forEach { m ->
-                                val st = statusOf(m)
-                                androidx.compose.material3.FilterChip(
-                                    selected = m in picked, enabled = st != CoReportStatus.RECEIVED,
-                                    onClick = { picked = if (m in picked) picked - m else picked + m; message = null },
-                                    label = { Text(monthFormat.format(Date(m)).substringBefore(' ').take(3)) },
-                                    leadingIcon = if (st != CoReportStatus.NOT_SUBMITTED) ({ Icon(Icons.Rounded.CheckCircle, contentDescription = null, modifier = Modifier.size(16.dp)) }) else null,
-                                )
-                            }
-                        }
-                    }
-                }
-                if (clock?.fromServer == false) {
-                    Text("Using this device's date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                if (tooMany) Text("Up to $MAX_SNAPSHOT_MONTHS months at a time", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            if (clock?.fromServer == false) {
+                Text("Using this device's date", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            if (tooMany) Text("Up to $MAX_SNAPSHOT_MONTHS months at a time", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
 
             // Status of what is selected
-            if (months.isNotEmpty()) {
+            // The month, its status and Preview are already in the table above, so only the extra notes are listed here.
+            val anyChanged = months.any { it in changedMonths }
+            val hasNotes = anyChanged || (soleStatus == CoReportStatus.RETURNED && soleCurrent?.returnReason != null) ||
+                (soleStatus == CoReportStatus.CANCELLED && soleCurrent?.cancelReason != null) || !soleCurrent?.coRemarks.isNullOrBlank() || notSubmittedTotal > 0
+            if (months.isNotEmpty() && hasNotes) {
                 Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        months.forEach { m ->
-                            val st = monthStatus(m)
-                            val status = st?.status ?: CoReportStatus.NOT_SUBMITTED
-                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(shortFormat.format(Date(m)), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                if (m in changedMonths) CoStatusBadge("Changed", CoKind.Warning)
-                                CoStatusBadge(status.workflowLabel + (st?.takeIf { it.version > 0 && status != CoReportStatus.NOT_SUBMITTED }?.let { " · v" + it.version } ?: ""), kindOf(status))
-                            }
-                        }
+                        if (anyChanged) CoStatusBadge("Changed since last sent", CoKind.Warning)
                         if (soleStatus == CoReportStatus.RETURNED && soleCurrent?.returnReason != null) {
                             Text("Returned: " + soleCurrent.returnReason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                         }

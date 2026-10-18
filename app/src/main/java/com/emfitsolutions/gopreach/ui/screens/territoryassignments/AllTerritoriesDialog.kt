@@ -337,62 +337,35 @@ private fun AllTerritoriesListView(rows: List<GroupTerritoryRow>, modifier: Modi
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(20.dp),
     ) {
-        item { RecordFound(blocks.size) }
+        item {
+            val barangayTotal = blocks.sumOf { b -> b.cells.sumOf { it.barangayNames.size } }
+            Text("${blocks.size} municipalities · $barangayTotal barangays", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        }
         items(blocks, key = { it.municipalityName }) { block ->
+            // One municipality: its name as the heading, then every barangay on its own line with the FS Group that covers it.
+            val lines = block.cells.flatMap { cell ->
+                cell.barangayNames.map { barangay -> Triple(barangay, cell.groupName, GroupColorPalette.parseHex(cell.colorHex ?: GroupColorPalette.UNASSIGNED_COLOR)) }
+            }.sortedBy { it.first }
             Column {
-                Box(
-                    modifier = Modifier.fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer)
-                        .padding(vertical = 10.dp),
-                    contentAlignment = Alignment.Center,
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(
-                        block.municipalityName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    )
+                    Text(block.municipalityName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                    Text("${lines.size} barangay" + if (lines.size == 1) "" else "s", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                Spacer(Modifier.height(6.dp))
-                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    block.cells.forEach { cell ->
-                        val swatch = GroupColorPalette.parseHex(cell.colorHex ?: GroupColorPalette.UNASSIGNED_COLOR)
-                        Column(modifier = Modifier.width(150.dp).padding(end = 6.dp)) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth()
-                                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
-                                    .background(swatch)
-                                    .padding(vertical = 6.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    cell.groupName,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                )
-                            }
-                            Column(
-                                modifier = Modifier.fillMaxWidth()
-                                    .clip(RoundedCornerShape(bottomStart = 6.dp, bottomEnd = 6.dp))
-                                    .background(swatch.copy(alpha = 0.16f))
-                                    .padding(8.dp),
-                            ) {
-                                if (cell.barangayNames.isEmpty()) {
-                                    Text(
-                                        "—",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                } else {
-                                    cell.barangayNames.forEach { name ->
-                                        Text(name, style = MaterialTheme.typography.bodySmall)
-                                    }
-                                }
-                            }
-                        }
+                androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                if (lines.isEmpty()) {
+                    Text("No barangay assigned yet.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 8.dp))
+                }
+                lines.forEach { (barangay, groupName, swatch) ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(barangay, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        Box(
+                            modifier = Modifier.clip(RoundedCornerShape(50)).background(swatch).padding(horizontal = 12.dp, vertical = 4.dp),
+                        ) { Text(groupName, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = Color.White) }
                     }
+                    androidx.compose.material3.HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
                 }
             }
         }

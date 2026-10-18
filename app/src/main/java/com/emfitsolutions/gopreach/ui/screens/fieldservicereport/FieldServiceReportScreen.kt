@@ -241,8 +241,8 @@ fun FieldServiceReportScreen(
     val compareSheets = (sheetsA.orEmpty() + sheetsB.orEmpty()).filter { it.rows.isNotEmpty() }
     val ready = if (compareMode) compareSheets.takeIf { it.isNotEmpty() } else singleReady
 
-    // List View: every report in the period with its lock state.
-    var listView by rememberSaveable { mutableStateOf(true) }
+    // List View: every report in the period with its lock state. The screen opens in the Table (Report) view: the publishers' names, like the sample.
+    var listView by rememberSaveable { mutableStateOf(false) }
 
     // Table View entry: Add / Edit / Delete a publisher record of the month, for the active role scope only.
     val manual: com.emfitsolutions.gopreach.ui.screens.manualreport.ManualFieldServiceViewModel = koinViewModel()
@@ -250,10 +250,25 @@ fun FieldServiceReportScreen(
         .collectAsStateWithLifecycle(initialValue = emptyList())
     val manualReports by remember(congregationId) { congregationId?.let { manual.reportsIn(it) } ?: emptyFlow() }
         .collectAsStateWithLifecycle(initialValue = emptyList())
-    val monthStatus by remember(congregationId, fromMonth) { viewModel.submissionFor(congregationId, fromMonth) }.collectAsStateWithLifecycle(initialValue = null)
+    var sendOpen by rememberSaveable { mutableStateOf(false) }
+    // A month picked in the Send view, shown as the report table on demand; records can be added to it there.
+    var previewMonth by rememberSaveable { mutableStateOf<Long?>(null) }
+    // The month the record actions (Add / Edit / Delete) work on: the previewed month, else the one on screen.
+    val recordMonth = previewMonth ?: fromMonth
+    val monthStatus by remember(congregationId, recordMonth) { viewModel.submissionFor(congregationId, recordMonth) }.collectAsStateWithLifecycle(initialValue = null)
     val monthLocked = monthStatus?.isLocked == true
     val editingAllowed = recordScope != null && !coMode && congregationId != null && fromMonth == toMonth && !compareMode && !listView
     val editingEnabled = editingAllowed && !monthLocked
+    val previewEditing = previewMonth != null && recordScope != null && !coMode && congregationId != null && !monthLocked
+    val recordEditingActive = if (previewMonth != null) previewEditing else editingEnabled
+    val sendCongregation = congregations.firstOrNull { it.id == congregationId }
+    // What is sent to the Circuit Overseer is always the whole congregation as ONE report, whatever grouping is chosen for viewing.
+    val previewSheetsFlow = remember(reportGroups.map { it.id }, previewMonth, sendCongregation?.id) {
+        val m = previewMonth
+        if (m == null || reportGroups.isEmpty() || sendCongregation == null) emptyFlow() else viewModel.sheetsFor(reportGroups, m, m, sendCongregation)
+    }
+    val previewSheets by previewSheetsFlow.collectAsStateWithLifecycle(initialValue = null)
+    val showSendToggle = canSendToCircuit && !restricted && congregationId != null && !compareMode
     var editTarget by remember { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
     var deleteTarget by remember { mutableStateOf<FieldServiceReportRow?>(null) }
@@ -271,9 +286,10 @@ fun FieldServiceReportScreen(
     // Back from a chosen congregation returns to the congregation picker (Super-Admin / Circuit Overseer); it only leaves the report from the picker itself.
     val backToPicker = fixedCongregationId == null && congregationId != null
     val goBack: () -> Unit = {
-        if (backToPicker) { pickedCongregationId = null; if (restricted) CircuitScopeStore.selectCongregation(null); selectedGroupId = ALL_GROUPS; query = "" } else onBack()
+        if (sendOpen) sendOpen = false // the Send view closes back to the report first
+        else if (backToPicker) { pickedCongregationId = null; if (restricted) CircuitScopeStore.selectCongregation(null); selectedGroupId = ALL_GROUPS; query = "" } else onBack()
     }
-    androidx.activity.compose.BackHandler(enabled = backToPicker) { goBack() }
+    androidx.activity.compose.BackHandler(enabled = backToPicker || sendOpen) { goBack() }
     var shareMenu by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -339,8 +355,8 @@ fun FieldServiceReportScreen(
                     if (showingAll) Box(Modifier.weight(1f)) {
                         SimpleDropdown(
                             label = "Group by",
-                            selectedLabel = if (groupByCongregation) "Congregation" else "FS Group",
-                            options = listOf("group" to "FS Group", "congregation" to "Congregation"),
+                            selectedLabel = if (groupByCongregation) "All Publishers (one report)" else "By FS Group",
+                            options = listOf("group" to "By FS Group", "congregation" to "All Publishers (one report)"),
                             onSelected = { groupByCongregation = it == "congregation" },
                         )
                     }
@@ -402,11 +418,7 @@ fun FieldServiceReportScreen(
                     status = monthStatus,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                 )
-                if (editingEnabled) {
-                    Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        androidx.compose.material3.Button(onClick = { adding = true }) { Text("Add Record") }
-                    }
-                } else if (monthLocked) {
+                if (!editingEnabled && monthLocked) {
                     Text(
                         com.emfitsolutions.gopreach.data.model.MONTH_LOCKED_MESSAGE,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -416,18 +428,24 @@ fun FieldServiceReportScreen(
             }
             // Sending is about the whole congregation's month(s) - the panel picks its own months - so it shows in Report View and List View alike,
             // whichever FS Group, grouping or month is on screen.
-            if (!tableOnly && canSendToCircuit && !restricted && congregationId != null && !compareMode) {
-                val congregation = congregations.firstOrNull { it.id == congregationId }
-                if (congregation != null) {
-                    SendToCircuitPanel(
-                        congregation = congregation,
-                        actorPersonId = currentPersonId,
-                        viewModel = viewModel,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    )
+            // How to view the publishers: all of them as ONE report, or one table per FS Group. (Sending to the Circuit Overseer is always one report.)
+            if (!tableOnly && showingAll && congregationId != null && !compareMode && !listView && !sendOpen) {
+                Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.FilterChip(selected = groupByCongregation, onClick = { groupByCongregation = true }, label = { Text("All Publishers") })
+                    androidx.compose.material3.FilterChip(selected = !groupByCongregation, onClick = { groupByCongregation = false }, label = { Text("By FS Group") })
                 }
             }
-            if (!tableOnly && congregationId != null && !compareMode && !coModeEmpty(coMode, visibleMonths.size)) {
+            if (!tableOnly && (editingEnabled || showSendToggle)) {
+                Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (editingEnabled) androidx.compose.material3.Button(onClick = { adding = true }) { Text("Add Record") }
+                    if (showSendToggle) androidx.compose.material3.OutlinedButton(onClick = { sendOpen = !sendOpen }) {
+                        Text(if (sendOpen) "Hide Send to Circuit Overseer" else "Send to Circuit Overseer")
+                    }
+                }
+            }
+            // Send to Circuit Overseer opens as its own view (the report and its publishers list would only repeat what is already there).
+            val sending = !tableOnly && showSendToggle && sendOpen
+            if (!tableOnly && congregationId != null && !compareMode && !sending && !coModeEmpty(coMode, visibleMonths.size)) {
                 androidx.compose.material3.OutlinedTextField(
                     value = query, onValueChange = { query = it }, singleLine = true, label = { Text("Search records...") },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -436,6 +454,17 @@ fun FieldServiceReportScreen(
             }
             val current = searchedSheets
             when {
+                sending -> congregations.firstOrNull { it.id == congregationId }?.let { congregation ->
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                        SendToCircuitPanel(
+                            congregation = congregation,
+                            actorPersonId = currentPersonId,
+                            viewModel = viewModel,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            onPreview = { previewMonth = it },
+                        )
+                    }
+                }
                 restricted && congregationId == null -> com.emfitsolutions.gopreach.ui.screens.circuit.SelectCongregationPrompt(
                     congregations = congregations,
                     onSelect = { pickedCongregationId = it; CircuitScopeStore.selectCongregation(it); selectedGroupId = ALL_GROUPS },
@@ -522,10 +551,44 @@ fun FieldServiceReportScreen(
         }
     }
 
-    if (editingEnabled && (adding || editTarget != null) && congregationId != null) {
+    previewMonth?.let { month ->
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { previewMonth = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            androidx.compose.material3.Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { previewMonth = null }) { Icon(Icons.Rounded.Close, contentDescription = "Close preview") }
+                        Text(labelOf(month) + " – Preview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        if (previewEditing) androidx.compose.material3.Button(onClick = { adding = true }, modifier = Modifier.padding(end = 8.dp)) { Text("Add Record") }
+                    }
+                    if (monthLocked) Text(
+                        com.emfitsolutions.gopreach.data.model.MONTH_LOCKED_MESSAGE,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                    )
+                    val shown = previewSheets?.filter { it.rows.isNotEmpty() }
+                    when {
+                        shown == null -> Message("Loading…")
+                        shown.isEmpty() -> Message("No records for this month.")
+                        else -> {
+                            val hScroll = rememberScrollState()
+                            androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp)) {
+                                sheetItems(shown, hScroll, actions = if (previewEditing) RowActions(onEdit = { editTarget = it.personId }, onDelete = { deleteTarget = it }) else null)
+                                item(key = "preview-summary") { SummaryCard(FieldServiceSummary.ofSheets(shown), Modifier.padding(vertical = 16.dp)) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (recordEditingActive && (adding || editTarget != null) && congregationId != null) {
         RecordEditDialog(
-            month = fromMonth,
-            monthLabel = labelOf(fromMonth),
+            month = recordMonth,
+            monthLabel = labelOf(recordMonth),
             congregationId = congregationId,
             actorPersonId = currentPersonId,
             actorRole = currentRole,
@@ -538,9 +601,9 @@ fun FieldServiceReportScreen(
         )
     }
     deleteTarget?.let { row ->
-        val record = manualReports.firstOrNull { it.publisherPersonId == row.personId && it.periodMonth == fromMonth }
+        val record = manualReports.firstOrNull { it.publisherPersonId == row.personId && it.periodMonth == recordMonth }
         RecordDeleteDialog(
-            name = row.name, monthLabel = labelOf(fromMonth),
+            name = row.name, monthLabel = labelOf(recordMonth),
             onConfirm = {
                 if (record != null && congregationId != null) manual.delete(record, congregationId, currentRole, currentPersonId, groupScopeId)
                 deleteTarget = null

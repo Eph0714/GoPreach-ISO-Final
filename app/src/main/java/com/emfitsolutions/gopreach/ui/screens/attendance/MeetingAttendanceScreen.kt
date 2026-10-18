@@ -1,6 +1,7 @@
 ﻿package com.emfitsolutions.gopreach.ui.screens.attendance
 
 import androidx.compose.material.icons.automirrored.rounded.ViewList
+import com.emfitsolutions.gopreach.ui.components.joinTableRow
 import com.emfitsolutions.gopreach.ui.components.ViewSegments
 import com.emfitsolutions.gopreach.ui.components.keyboardPadding
 import com.emfitsolutions.gopreach.ui.components.co.CoButton
@@ -126,7 +127,7 @@ private fun monthStartOf(year: Int, month: Int): Long = Calendar.getInstance().a
 private fun Cell(text: String, width: Dp, bold: Boolean = false, fill: Color = Color.Transparent, left: Boolean = false) {
     val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(fill)
     Box(
-        modifier = Modifier.width(width).height(36.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
+        modifier = Modifier.width(width).height(34.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
         contentAlignment = if (left) Alignment.CenterStart else Alignment.Center,
     ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1) }
 }
@@ -189,6 +190,11 @@ fun MeetingAttendanceScreen(
     var settingsOpen by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val submission: AttendanceSubmissionViewModel = koinViewModel()
+    // Send to Circuit Overseer opens as its own view (like the Field Service Report); a month picked there can be previewed and added to.
+    var sendOpen by rememberSaveable { mutableStateOf(false) }
+    var previewMonth by rememberSaveable { mutableStateOf<Long?>(null) }
+    val sending = sendOpen && canEdit && circuitScope == null
+    androidx.activity.compose.BackHandler(enabled = sending) { sendOpen = false }
 
     val dateFmt = remember { SimpleDateFormat("MMM d", Locale.getDefault()) }
     val monthFmt = remember { SimpleDateFormat("MMMM", Locale.getDefault()) }
@@ -253,7 +259,7 @@ fun MeetingAttendanceScreen(
         )
     }
 
-    val viewMode = com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode("meeting_attendance")
+    val viewMode = com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode("meeting_attendance", defaultTable = true)
     var menuOpen by remember { mutableStateOf(false) }
     val cardDateFmt = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
     val atCurrentPeriod = if (month == null) year >= now.get(Calendar.YEAR) else year * 12 + month!! >= now.get(Calendar.YEAR) * 12 + now.get(Calendar.MONTH)
@@ -318,7 +324,7 @@ fun MeetingAttendanceScreen(
                     }
                 },
                 title = { Text("Meeting Attendance") },
-                navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
+                navigationIcon = { IconButton(onClick = { if (sending) sendOpen = false else onBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )
         },
     ) { padding ->
@@ -342,7 +348,7 @@ fun MeetingAttendanceScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 // ---- 1. which month: previous / next, and the filters ----
-                item(key = "period") {
+                if (!sending) item(key = "period") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(onClick = { stepPeriod(-1) }) { Icon(Icons.Rounded.ChevronLeft, contentDescription = "Previous period") }
                         Text(periodLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.weight(1f))
@@ -353,22 +359,30 @@ fun MeetingAttendanceScreen(
                     }
                 }
                 // ---- the same view switch, Add button and Send panel as the Field Service Report, in the same order ----
-                item(key = "view") {
+                if (!sending) item(key = "view") {
                     ViewSegments(listOf("Table" to Icons.Rounded.TableChart, "List" to Icons.AutoMirrored.Rounded.ViewList), if (viewMode.table) 0 else 1) { viewMode.set(it == 0) }
                 }
                 if (canEdit) {
                     item(key = "add") {
-                        androidx.compose.material3.Button(onClick = { adding = true }) {
-                            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text("  Add Attendance")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            androidx.compose.material3.Button(onClick = { adding = true }) {
+                                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Text("  Add Attendance")
+                            }
+                            // Collapsed until asked for, so the attendance records are what the screen shows.
+                            if (circuitScope == null) androidx.compose.material3.OutlinedButton(onClick = { sendOpen = !sendOpen }) {
+                                Text(if (sendOpen) "Hide Send" else "Send to Circuit Overseer", maxLines = 1)
+                            }
                         }
                     }
                 }
-                if (canEdit && circuitScope == null) {
-                    item(key = "send") { SendAttendancePanel(congregationId = congregationId, actorPersonId = currentPersonId, viewModel = submission) }
+                if (sending) {
+                    item(key = "send") {
+                        SendAttendancePanel(congregationId = congregationId, actorPersonId = currentPersonId, viewModel = submission, onPreview = { previewMonth = it })
+                    }
                 }
                 // ---- 2. which meeting ----
-                item(key = "types") {
+                if (!sending) item(key = "types") {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(selected = typeFilter == null, onClick = { typeFilter = null }, label = { Text("All meetings") })
                         FilterChip(selected = typeFilter == "MIDWEEK", onClick = { typeFilter = "MIDWEEK" }, label = { Text("Midweek") })
@@ -376,7 +390,7 @@ fun MeetingAttendanceScreen(
                     }
                 }
                 // ---- 3. the answer at a glance: average, recorded and missing for each meeting ----
-                item(key = "glance") {
+                if (!sending) item(key = "glance") {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         summaryTypes.forEach { type ->
                             val s = AttendanceSummaries.of(shown.filter { it.meetingType == type }, expectedByType?.get(type) ?: 0)
@@ -406,7 +420,7 @@ fun MeetingAttendanceScreen(
                     }
                 }
                 // ---- 4. the records: List View (a card per meeting) or Table View ----
-                item(key = "toolbar") {
+                if (!sending) item(key = "toolbar") {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             "${shown.size} meeting${if (shown.size == 1) "" else "s"}" + (if (query.isNotBlank()) " matching “$query”" else ""),
@@ -415,8 +429,10 @@ fun MeetingAttendanceScreen(
                         if (query.isNotBlank() || showDeleted) TextButton(onClick = { query = ""; showDeleted = false }) { Text("Clear") }
                     }
                 }
-                message?.let { text -> item(key = "message") { Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) } }
-                if (filtered.isEmpty()) {
+                if (!sending) message?.let { text -> item(key = "message") { Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) } }
+                if (sending) {
+                    // the records are not repeated under the Send view
+                } else if (filtered.isEmpty()) {
                     item(key = "none") {
                         Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Icon(Icons.Rounded.EventBusy, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(40.dp))
@@ -429,7 +445,7 @@ fun MeetingAttendanceScreen(
                     }
                 } else if (viewMode.table) {
                     stickyHeader(key = "head") {
-                        Row(modifier = Modifier.background(MaterialTheme.colorScheme.surface).horizontalScroll(hScroll)) {
+                        Row(modifier = Modifier.background(MaterialTheme.colorScheme.surface).joinTableRow(10.dp).horizontalScroll(hScroll)) {
                             Cell("Date", W_DATE, true, HEAD_FILL); Cell("Meeting", W_TYPE, true, HEAD_FILL)
                             Cell("Treasures", W_PART, true, HEAD_FILL); Cell("Apply Yourself", W_PART, true, HEAD_FILL); Cell("Living as Christians", W_PART, true, HEAD_FILL)
                             Cell("Public Meeting", W_PART, true, HEAD_FILL); Cell("Watchtower Study", W_PART, true, HEAD_FILL); Cell("Official Attendance", W_OFFICIAL, true, HEAD_FILL)
@@ -439,7 +455,7 @@ fun MeetingAttendanceScreen(
                     items(filtered, key = { it.id }) { r ->
                         val locked = r.serviceMonth in frozen
                         val dash = "—"
-                        Row(modifier = Modifier.horizontalScroll(hScroll)) {
+                        Row(modifier = Modifier.joinTableRow(10.dp).horizontalScroll(hScroll)) {
                             Cell(dateFmt.format(Date(r.meetingDate)), W_DATE)
                             Cell(r.meetingType.label + if (r.deleted) " (deleted)" else "", W_TYPE)
                             Cell(r.treasuresAttendance?.toString() ?: dash, W_PART); Cell(r.applyYourselfAttendance?.toString() ?: dash, W_PART)
@@ -447,7 +463,7 @@ fun MeetingAttendanceScreen(
                             Cell(r.watchtowerStudyAttendance?.toString() ?: dash, W_PART)
                             Cell(AttendanceCalculator.display(r.officialAttendance, r.roundingMode), W_OFFICIAL, true, OFFICIAL_FILL)
                             if (canEdit) {
-                                Row(modifier = Modifier.width(W_ACTIONS).height(36.dp).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()), verticalAlignment = Alignment.CenterVertically) {
+                                Row(modifier = Modifier.width(W_ACTIONS).height(34.dp).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()), verticalAlignment = Alignment.CenterVertically) {
                                     val pad = PaddingValues(horizontal = 5.dp)
                                     if (!r.deleted && !locked) {
                                         TextButton(onClick = { editing = r }, contentPadding = pad) { Text("Edit", style = MaterialTheme.typography.labelSmall) }
@@ -466,14 +482,14 @@ fun MeetingAttendanceScreen(
                         )
                     }
                 }
-                item(key = "foot") {
+                if (!sending) item(key = "foot") {
                     Text(
                         "Attendance is " + rounding.label.lowercase() + ". A missing meeting is shown as missing — never as zero.",
                         style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 // The mandatory end-of-report Summary: only what is shown above (after the filters and search).
-                item(key = "end-summary") { SummaryCard(summaryRows, Modifier.padding(top = 2.dp)) }
+                if (!sending) item(key = "end-summary") { SummaryCard(summaryRows, Modifier.padding(top = 2.dp)) }
             }
         }
     }
@@ -528,8 +544,74 @@ fun MeetingAttendanceScreen(
             },
         )
     }
+    // A month opened from the Send view: its attendance as a table, with Add / Edit / Delete while the month is not locked.
+    previewMonth?.let { pm ->
+        val monthRecords = records.filter { !it.deleted && it.serviceMonth == pm }.sortedBy { it.meetingDate }
+        val locked = pm in frozen
+        val pHScroll = rememberScrollState()
+        val previewTitle = remember(pm) { SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date(pm)) }
+        val pExpected: Map<MeetingType, Int>? = if (pm > monthStartOf(now.get(Calendar.YEAR), now.get(Calendar.MONTH))) null
+        else MeetingType.entries.associateWith { AttendanceSummaries.expectedMeetings(pm) }
+        val pSummary = AttendanceReportSummary.rows(monthRecords, MeetingType.entries, pExpected) { v ->
+            v?.let { AttendanceCalculator.display(if (rounding == AttendanceRounding.ROUNDED) AttendanceCalculator.roundHalfUp(it) else it, rounding) } ?: "—"
+        }
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { previewMonth = null },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            androidx.compose.material3.Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Column(Modifier.fillMaxSize().padding(top = 24.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { previewMonth = null }) { Icon(Icons.Rounded.Close, contentDescription = "Close preview") }
+                        Text("$previewTitle – Preview", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        if (canEdit && !locked) androidx.compose.material3.Button(onClick = { adding = true }, modifier = Modifier.padding(end = 8.dp)) { Text("Add Attendance") }
+                    }
+                    if (locked) Text(
+                        "Month received by the Circuit Overseer — locked",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                    )
+                    if (monthRecords.isEmpty()) {
+                        Text(
+                            "No attendance recorded for this month.",
+                            modifier = Modifier.padding(24.dp), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp)) {
+                        stickyHeader(key = "p-head") {
+                            Row(modifier = Modifier.background(MaterialTheme.colorScheme.surface).horizontalScroll(pHScroll)) {
+                                Cell("Date", W_DATE, true, HEAD_FILL); Cell("Meeting", W_TYPE, true, HEAD_FILL)
+                                Cell("Treasures", W_PART, true, HEAD_FILL); Cell("Apply Yourself", W_PART, true, HEAD_FILL); Cell("Living as Christians", W_PART, true, HEAD_FILL)
+                                Cell("Public Meeting", W_PART, true, HEAD_FILL); Cell("Watchtower Study", W_PART, true, HEAD_FILL); Cell("Official Attendance", W_OFFICIAL, true, HEAD_FILL)
+                                if (canEdit && !locked) Cell("Actions", W_ACTIONS, true, HEAD_FILL)
+                            }
+                        }
+                        items(monthRecords, key = { "p-" + it.id }) { r ->
+                            val dash = "—"
+                            Row(modifier = Modifier.horizontalScroll(pHScroll)) {
+                                Cell(dateFmt.format(Date(r.meetingDate)), W_DATE)
+                                Cell(r.meetingType.label, W_TYPE)
+                                Cell(r.treasuresAttendance?.toString() ?: dash, W_PART); Cell(r.applyYourselfAttendance?.toString() ?: dash, W_PART)
+                                Cell(r.livingAsChristiansAttendance?.toString() ?: dash, W_PART); Cell(r.publicMeetingAttendance?.toString() ?: dash, W_PART)
+                                Cell(r.watchtowerStudyAttendance?.toString() ?: dash, W_PART)
+                                Cell(AttendanceCalculator.display(r.officialAttendance, r.roundingMode), W_OFFICIAL, true, OFFICIAL_FILL)
+                                if (canEdit && !locked) {
+                                    Row(modifier = Modifier.width(W_ACTIONS).height(34.dp).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()), verticalAlignment = Alignment.CenterVertically) {
+                                        val pad = PaddingValues(horizontal = 5.dp)
+                                        TextButton(onClick = { editing = r }, contentPadding = pad) { Text("Edit", style = MaterialTheme.typography.labelSmall) }
+                                        TextButton(onClick = { deleting = r }, contentPadding = pad) { Text("Delete", style = MaterialTheme.typography.labelSmall) }
+                                        TextButton(onClick = { historyOf = r }, contentPadding = pad) { Text("History", style = MaterialTheme.typography.labelSmall) }
+                                    }
+                                }
+                            }
+                        }
+                        item(key = "p-summary") { SummaryCard(pSummary, Modifier.padding(vertical = 16.dp)) }
+                    }
+                }
+            }
+        }
+    }
     if (canEdit && congregationId != null && (adding || editing != null)) {
         AttendanceFormDialog(
+            monthStart = previewMonth,
             congregationId = congregationId, editing = editing, rounding = editing?.roundingMode ?: rounding,
             onDismiss = { adding = false; editing = null },
             onSave = { input, reason ->
@@ -638,6 +720,8 @@ private fun MeetingCard(
 /** Add / Edit: meeting type, date, the counts of that meeting type, and the calculation shown at once. */
 @Composable
 private fun AttendanceFormDialog(
+    /** When a month is being previewed, a new record starts in that month and its date can only be picked inside it. */
+    monthStart: Long? = null,
     congregationId: String,
     editing: MeetingAttendance?,
     rounding: AttendanceRounding,
@@ -647,7 +731,14 @@ private fun AttendanceFormDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var type by remember { mutableStateOf(editing?.meetingType ?: MeetingType.MIDWEEK) }
-    var date by remember { mutableLongStateOf(editing?.meetingDate ?: System.currentTimeMillis()) }
+    val monthEnd = monthStart?.let { Calendar.getInstance().apply { timeInMillis = it; add(Calendar.MONTH, 1); add(Calendar.MILLISECOND, -1) }.timeInMillis }
+    var date by remember {
+        mutableLongStateOf(
+            editing?.meetingDate
+                ?: monthStart?.let { s -> System.currentTimeMillis().takeIf { it >= s && it <= monthEnd!! } ?: (s + 12L * 60 * 60 * 1000) }
+                ?: System.currentTimeMillis(),
+        )
+    }
     val texts = remember { mutableStateOf(editing?.parts?.map { it.toString() } ?: List(3) { "" }) }
     var remarks by remember { mutableStateOf(editing?.remarks.orEmpty()) }
     var reason by remember { mutableStateOf("") }
@@ -678,7 +769,9 @@ private fun AttendanceFormDialog(
                     Text("Meeting Date: $dateLabel", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     if (editing == null) OutlinedButton(onClick = {
                         val c = Calendar.getInstance().apply { timeInMillis = date }
-                        DatePickerDialog(context, { _, y, m, d -> date = Calendar.getInstance().apply { clear(); set(y, m, d, 12, 0, 0) }.timeInMillis }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).show()
+                        DatePickerDialog(context, { _, y, m, d -> date = Calendar.getInstance().apply { clear(); set(y, m, d, 12, 0, 0) }.timeInMillis }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).apply {
+                            if (monthStart != null && monthEnd != null) { datePicker.minDate = monthStart; datePicker.maxDate = monthEnd }
+                        }.show()
                     }) { Text("Choose") }
                 }
                 labels.forEachIndexed { i, label ->

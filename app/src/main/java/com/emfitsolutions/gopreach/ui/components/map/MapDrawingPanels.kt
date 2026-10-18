@@ -207,13 +207,18 @@ fun StatusBar(
     filter: DrawingStatus?,
     onFilter: (DrawingStatus?) -> Unit,
     modifier: Modifier = Modifier,
+    /** Controls placed first in the same bar (the map's Next Nearest / Next Farthest), so everything sits on one line. */
+    leading: (@Composable () -> Unit)? = null,
+    /** False hides the status chips (for a viewer who has no drawings to filter) while the [leading] controls stay. */
+    showStatus: Boolean = true,
 ) {
     Row(
         modifier = modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Territory Status", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(end = 2.dp))
+        leading?.invoke()
+        if (!showStatus) return@Row
         FilterChip(selected = filter == null, onClick = { onFilter(null) }, label = { Text("All", style = MaterialTheme.typography.labelMedium) })
         DrawingStatus.entries.forEach { s ->
             FilterChip(

@@ -33,8 +33,8 @@ fun PeriodComparisonTable(labelA: String, sheetsA: List<FieldServiceReportSheet>
     fun reports(s: List<FieldServiceReportSheet>, c: StatusColumn) = s.sumOf { it.reportCount(c) }
     fun hours(s: List<FieldServiceReportSheet>, c: StatusColumn) = s.sumOf { it.totalHours(c) }
     fun studies(s: List<FieldServiceReportSheet>, c: StatusColumn) = s.sumOf { it.totalBibleStudies(c) }
-    val border = MaterialTheme.colorScheme.outline
-    val head = MaterialTheme.colorScheme.secondaryContainer
+    val border = com.emfitsolutions.gopreach.ui.theme.cellBorder()
+    val head = com.emfitsolutions.gopreach.ui.components.TableHeadFill
     val widths = listOf(90.dp) + List(9) { 64.dp }
 
     @Composable

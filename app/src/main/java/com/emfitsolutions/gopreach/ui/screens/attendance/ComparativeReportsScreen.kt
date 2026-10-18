@@ -114,7 +114,7 @@ private fun StatusPill(s: ComparativeStatus) {
 private fun ReportCell(text: String, width: Dp, bold: Boolean = false, fill: Color = Color.Transparent, left: Boolean = false) {
     val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(fill)
     Box(
-        modifier = Modifier.width(width).height(32.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
+        modifier = Modifier.width(width).height(34.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
         contentAlignment = if (left) Alignment.CenterStart else Alignment.Center,
     ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1) }
 }

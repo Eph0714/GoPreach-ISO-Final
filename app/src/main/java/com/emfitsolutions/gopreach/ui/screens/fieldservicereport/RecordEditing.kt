@@ -60,13 +60,14 @@ fun RecordScopeBar(
 ) {
     val state = status?.status ?: CoReportStatus.NOT_SUBMITTED
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer), modifier = modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text("Active Role: $activeRole", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-            if (scope.groupId != null) Text("FS Group: ${groupName ?: "—"}", style = MaterialTheme.typography.bodySmall)
-            Text("Scope: ${scope.describe(congregationName, groupName)}", style = MaterialTheme.typography.bodySmall)
-            Text("Report Month: $monthLabel", style = MaterialTheme.typography.bodySmall)
+        // Two lines only, so the report below keeps the screen.
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(
-                "Report Status: " + if (state.locksMonth) "${state.label} — locked" else state.label,
+                "$activeRole · " + (if (scope.groupId != null) "FS Group: ${groupName ?: "—"} · " else "") + scope.describe(congregationName, groupName),
+                style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            Text(
+                "$monthLabel · " + if (state.locksMonth) "${state.label} — locked" else state.label,
                 style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold,
             )
         }

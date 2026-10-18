@@ -29,6 +29,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.IosShare
+import androidx.compose.material.icons.rounded.Print
+import androidx.compose.material.icons.rounded.TableChart
+import androidx.compose.ui.text.font.FontWeight
+import com.emfitsolutions.gopreach.ui.components.recordGroupedTableItems
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
@@ -117,6 +122,33 @@ fun ManageGroupsScreen(
     val allRows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var showInactive by remember { mutableStateOf(false) }
     val rows = allRows.filter { showInactive || it.group.status == RecordStatus.ACTIVE }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val congregationName = congregations.firstOrNull { it.id == effectiveCongregationId }?.name.orEmpty()
+    // The printed / exported report: every group with its officers and members, one row per person.
+    fun exportData(): com.emfitsolutions.gopreach.data.export.TableReportData {
+        val table = mutableListOf(listOf("Field Service Group", "Role", "Name", "Category", "Contact"))
+        rows.forEach { r ->
+            r.overseerName?.let { table += listOf(r.group.name, "Group Overseer", it, "", "") }
+            r.servantName?.let { table += listOf(r.group.name, "Group Servant", it, "", "") }
+            r.assistantName?.let { table += listOf(r.group.name, "Group Assistant", it, "", "") }
+            r.members.forEach { m -> table += listOf(r.group.name, "Member", m.name, m.category, m.contact) }
+            if (r.members.isEmpty() && r.overseerName == null && r.servantName == null && r.assistantName == null) table += listOf(r.group.name, "", "No members", "", "")
+        }
+        return com.emfitsolutions.gopreach.data.export.TableReportData(
+            title = "Field Service Group Members",
+            details = listOfNotNull(if (congregationName.isNotBlank()) "Congregation" to congregationName else null),
+            recordsFound = rows.sumOf { it.members.size }.toString(),
+            table = table,
+            summary = listOf(
+                listOf("Metric", "Value"),
+                listOf("Field Service Groups", rows.size.toString()),
+                listOf("Members", rows.sumOf { it.members.size }.toString()),
+            ),
+            generatedBy = "Admin",
+            generatedAt = java.text.SimpleDateFormat("MMMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(java.util.Date()),
+            landscape = false,
+        )
+    }
     var showCreateDialog by remember { mutableStateOf(false) }
     var pendingEdit by remember { mutableStateOf<Group?>(null) }
     var pendingDelete by remember { mutableStateOf<Group?>(null) }
@@ -130,6 +162,23 @@ fun ManageGroupsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    // Print / Save as PDF and Excel come from the same members list the screen shows.
+                    var exportMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(enabled = rows.isNotEmpty(), onClick = { exportMenu = true }) { Icon(Icons.Rounded.IosShare, contentDescription = "Print or export") }
+                        androidx.compose.material3.DropdownMenu(expanded = exportMenu, onDismissRequest = { exportMenu = false }) {
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Print / Save as PDF") }, leadingIcon = { Icon(Icons.Rounded.Print, contentDescription = null) },
+                                onClick = { exportMenu = false; com.emfitsolutions.gopreach.data.export.TableReportExporter.print(context, exportData()) },
+                            )
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text("Export to Excel") }, leadingIcon = { Icon(Icons.Rounded.TableChart, contentDescription = null) },
+                                onClick = { exportMenu = false; com.emfitsolutions.gopreach.data.export.TableReportExporter.shareExcel(context, exportData()) },
+                            )
+                        }
                     }
                 },
             )
@@ -176,7 +225,19 @@ fun ManageGroupsScreen(
                     )
                 }
                 item { RecordViewToggle(viewMode) }
-                recordItems(
+                if (viewMode.table) {
+                    // Table View: each group is a heading row and its members are the rows under it.
+                    val byGroup = rows.associate { r -> r.group.name to r.members.map { m -> GroupMemberLine(r, m) } }
+                    recordGroupedTableItems(
+                        byGroup,
+                        listOf(
+                            UniversalColumn<GroupMemberLine>("Name", 220.dp) { it.member.name },
+                            UniversalColumn<GroupMemberLine>("Category", 170.dp) { it.member.category },
+                            UniversalColumn<GroupMemberLine>("Contact", 150.dp) { it.member.contact },
+                        ),
+                        viewMode.hScroll, { pendingEdit = it.row.group }, { it.row.group.id + "/" + it.member.personId },
+                    )
+                } else recordItems(
                     viewMode, rows, { it.group.id },
                     listOf(
                             UniversalColumn<com.emfitsolutions.gopreach.ui.screens.groups.GroupRow>("Group", 170.dp) { it.group.name },
@@ -187,6 +248,7 @@ fun ManageGroupsScreen(
                     ),
                     onRowClick = { pendingEdit = it.group },
                 ) { row ->
+                  Column {
                     com.emfitsolutions.gopreach.ui.screens.elders.PersonRecordCard(
                         name = row.group.name,
                         detail = listOf(
@@ -212,6 +274,15 @@ fun ManageGroupsScreen(
                         onShowSignIn = {},
                         menuExtras = {},
                     )
+                    // The group's members, indented under it.
+                    Column(Modifier.padding(start = 28.dp, top = 4.dp, bottom = 4.dp)) {
+                        Text("Members · ${row.members.size}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                        if (row.members.isEmpty()) Text("No members yet.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        row.members.forEach { m ->
+                            Text(m.name + if (m.category.isNotBlank()) "  ·  " + m.category else "", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(vertical = 2.dp))
+                        }
+                    }
+                  }
                 }
             }
         }
@@ -696,3 +767,6 @@ private fun AssistantRoleDropdown(label: String, candidates: List<PersonCandidat
         }
     }
 }
+
+/** One member row of the Table View, remembering which group it belongs to (a click opens that group). */
+private data class GroupMemberLine(val row: GroupRow, val member: GroupMember)

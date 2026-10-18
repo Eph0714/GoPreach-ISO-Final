@@ -246,15 +246,15 @@ private fun trendColor(t: Trend): Color = when (t) {
 private fun GridRow(cells: List<String>, header: Boolean, striped: Boolean = false) {
     val circuit = !header && (cells[0].startsWith("Entire circuit") || cells[0].startsWith("Circuit total"))
     val fill = when {
-        header -> MaterialTheme.colorScheme.secondaryContainer
+        header -> com.emfitsolutions.gopreach.ui.components.TableHeadFill
         circuit -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-        striped -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-        else -> MaterialTheme.colorScheme.surface
+        striped -> androidx.compose.ui.graphics.Color.Transparent
+        else -> androidx.compose.ui.graphics.Color.Transparent
     }
     Row(Modifier.height(44.dp)) {
         cells.forEachIndexed { i, text ->
             Box(
-                Modifier.width(GridWidths.getOrElse(i) { 100.dp }).fillMaxHeight().background(fill).border(0.5.dp, MaterialTheme.colorScheme.outline).padding(horizontal = 6.dp),
+                Modifier.width(GridWidths.getOrElse(i) { 100.dp }).fillMaxHeight().background(fill).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
                 contentAlignment = if (i < 2) Alignment.CenterStart else Alignment.Center,
             ) {
                 val color = if (!header && i in 4..6) {

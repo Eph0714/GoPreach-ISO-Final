@@ -172,6 +172,7 @@ fun DeletedRecordsScreen(
                     UniversalColumn("Date Deleted", 150.dp) { dateFormat.format(java.util.Date(it.deletedAt)) },
                 ),
                 onRowClick = { restoreTarget = it },
+                gap = 12.dp,
             ) { record ->
                 DeletedRecordCard(
                     record = record,

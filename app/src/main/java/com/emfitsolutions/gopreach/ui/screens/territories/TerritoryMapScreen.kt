@@ -505,9 +505,10 @@ fun TerritoryMapScreen(
     // current (filtered) records by distance; stepping restarts whenever a filter changes.
     var stepOrder by remember(datasetKey, typeFilter, municipalityFilter, territoryFilter) { mutableStateOf<SortOrder?>(null) }
     var stepIndex by remember(datasetKey, typeFilter, municipalityFilter, territoryFilter) { mutableIntStateOf(-1) }
-    var viewMode by rememberSaveable { mutableStateOf(if (fixedCongregationId == null) ViewMode.LIST else ViewMode.MAP) }
-    // Super-Admin / Circuit Overseer: every congregation opens on Show FS Group and the List view.
-    androidx.compose.runtime.LaunchedEffect(congregationId) { if (fixedCongregationId == null && focusLat == null) { scope = GroupScope.ALL; viewMode = ViewMode.LIST } }
+    // The Territory Map is the map: there is no List switch any more. Same viewing rules as before decide whose territories it shows.
+    val viewMode = ViewMode.MAP
+    // Super-Admin / Circuit Overseer: every congregation opens on Show FS Group.
+    androidx.compose.runtime.LaunchedEffect(congregationId) { if (fixedCongregationId == null && focusLat == null) scope = GroupScope.ALL }
     // Full-screen Map View: hides the app bar, the controls above the map and
     // the system bars so the map fills the display; Back exits it first.
     // The Territory Map opens in full screen (the controls come back with Exit); the user can leave it at any time.
@@ -524,6 +525,7 @@ fun TerritoryMapScreen(
         onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
     }
     var basemap by rememberSaveable { mutableStateOf(TerritoryBasemap.STANDARD) }
+    var is3d by rememberSaveable { mutableStateOf(false) }
     var recenterToken by remember { mutableIntStateOf(0) }
     var reloadToken by remember { mutableIntStateOf(0) }
     var mapLoadState by remember { mutableStateOf(MapLoadState.LOADING) }
@@ -793,25 +795,6 @@ fun TerritoryMapScreen(
                         TextButton(onClick = { showGroupPicker = true }) { Text(if (selectedGroup == null) "Choose FS Group" else "Change") }
                     }
                 }
-                // Compact controls: view switcher and nearest/farthest stepping, wrapping instead of scrolling on narrow screens.
-                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-                androidx.compose.foundation.layout.FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    SegmentedPair(
-                        labels = ViewMode.entries.map { it.label },
-                        icons = listOf(Icons.Rounded.Map, Icons.AutoMirrored.Rounded.ViewList),
-                        selected = viewMode.ordinal,
-                        onSelect = { viewMode = ViewMode.entries[it] },
-                    )
-                    SegmentedPair(
-                        labels = listOf("Next Nearest", "Next Farthest"),
-                        icons = listOf(Icons.Rounded.NearMe, Icons.Rounded.Explore),
-                        selected = when (stepOrder) { SortOrder.NEAREST -> 0; SortOrder.FARTHEST -> 1; else -> -1 },
-                        onSelect = { stepTo(if (it == 0) SortOrder.NEAREST else SortOrder.FARTHEST) },
-                    )
-                }
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -882,9 +865,24 @@ fun TerritoryMapScreen(
                         }
                     }
                 }
-                // Territory Status + filter: a single row up here, never over the map.
-                if (!drawingState.active && (drawingAccess.canUseDrawingTools || statusCounts.values.any { it > 0 })) {
-                    StatusBar(counts = statusCounts, filter = drawingState.statusFilter, onFilter = { drawingState.statusFilter = it })
+                // ONE control bar above the map: Next Nearest / Next Farthest, then the Territory Status filter (All, Finished, To Continue, To Do).
+                // The status chips follow the same rule as before (shown to whoever can draw, or when there are drawings to filter).
+                if (!drawingState.active) {
+                    StatusBar(
+                        counts = statusCounts,
+                        filter = drawingState.statusFilter,
+                        onFilter = { drawingState.statusFilter = it },
+                        showStatus = drawingAccess.canUseDrawingTools || statusCounts.values.any { it > 0 },
+                        leading = {
+                            SegmentedPair(
+                                labels = listOf("Next Nearest", "Next Farthest"),
+                                icons = listOf(Icons.Rounded.NearMe, Icons.Rounded.Explore),
+                                selected = when (stepOrder) { SortOrder.NEAREST -> 0; SortOrder.FARTHEST -> 1; else -> -1 },
+                                onSelect = { stepTo(if (it == 0) SortOrder.NEAREST else SortOrder.FARTHEST) },
+                            )
+                            androidx.compose.foundation.layout.Spacer(Modifier.width(4.dp))
+                        },
+                    )
                 }
                 locationIssue?.let { issue ->
                     LocationBanner(
@@ -919,6 +917,7 @@ fun TerritoryMapScreen(
                         routePoints = routePoints,
                         focus = focus,
                         basemap = basemap,
+                        is3d = is3d,
                         reloadToken = reloadToken,
                         fitKey = fitKey,
                         fitReady = fitReady,
@@ -967,11 +966,17 @@ fun TerritoryMapScreen(
                             active = drawingState.markersHidden,
                             onClick = { drawingState.markersHidden = !drawingState.markersHidden },
                         )
-                        MapToolButton(
-                            icon = Icons.Rounded.Layers,
-                            label = basemap.label,
-                            onClick = { basemap = TerritoryBasemap.entries[(basemap.ordinal + 1) % TerritoryBasemap.entries.size] },
-                        )
+                        // Every map style is one tap away and always visible: Standard, Satellite, Night, and 3D (for every role).
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                            shadowElevation = 3.dp,
+                        ) {
+                            Row(modifier = Modifier.padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                TerritoryBasemap.entries.forEach { b -> MapStyleChip(b.label, basemap == b) { basemap = b } }
+                                MapStyleChip("3D", is3d) { is3d = !is3d }
+                            }
+                        }
                         MapToolButton(
                             icon = Icons.Rounded.MyLocation,
                             label = "My location",
@@ -1123,10 +1128,8 @@ fun TerritoryMapScreen(
                         }
                         isLoading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                         areas.isEmpty() -> CenterState { Text("No territories have been assigned to this FS Group yet.", style = MaterialTheme.typography.bodyLarge) }
-                        recordsWithDistance.isEmpty() -> CenterState {
-                            Text("No Searching, Return Visit, or Bible Study locations found.", style = MaterialTheme.typography.bodyLarge)
-                        }
                         else -> RecordListView(
+                            areas = visibleAreas,
                             sorted = recordsWithDistance,
                             hasLocation = myLocation != null,
                             showAllGroups = showingAll,
@@ -1447,6 +1450,24 @@ private fun CenterState(content: @Composable () -> Unit) {
 }
 
 /** Compact labelled map tool: a small icon over a one-word caption, so each button says what it does. */
+/** One option of the map-style row (Standard / Satellite / Night / 3D). */
+@Composable
+private fun MapStyleChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(9.dp))
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 9.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
 @Composable
 private fun MapToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, active: Boolean = false, description: String = label) {
     Surface(
@@ -1537,6 +1558,14 @@ private sealed interface ListEntry {
     data class Item(val item: RecordWithDistance) : ListEntry {
         override val key get() = "r_" + item.record.id
     }
+    /** "Territories (n)" heading of a group (or of the single group on screen). */
+    data class TerritoryHeader(val scope: String, val count: Int) : ListEntry {
+        override val key get() = "th_" + scope
+    }
+    /** One territory = one barangay claimed by the FS Group. */
+    data class Territory(val area: TerritoryArea) : ListEntry {
+        override val key get() = "ta_" + area.id
+    }
 }
 
 /** List View. The whole list scrolls, it can be printed / saved as a PDF, and the record picked with
@@ -1544,6 +1573,7 @@ private sealed interface ListEntry {
  * record type; with "Show All FS Groups" it is organized by FS Group first, then by type. */
 @Composable
 private fun RecordListView(
+    areas: List<TerritoryArea>,
     sorted: List<RecordWithDistance>,
     hasLocation: Boolean,
     showAllGroups: Boolean,
@@ -1552,8 +1582,13 @@ private fun RecordListView(
     onClick: (String) -> Unit,
     onPrint: () -> Unit,
 ) {
-    val entries = remember(sorted, showAllGroups) {
+    val entries = remember(sorted, areas, showAllGroups) {
         buildList<ListEntry> {
+            fun addTerritories(scope: String, list: List<TerritoryArea>) {
+                if (list.isEmpty()) return
+                add(ListEntry.TerritoryHeader(scope, list.size))
+                list.sortedWith(compareBy({ it.municipality.lowercase() }, { it.barangay.lowercase() })).forEach { add(ListEntry.Territory(it)) }
+            }
             fun addByType(scope: String, records: List<RecordWithDistance>) {
                 RecordType.entries.forEach { type ->
                     val ofType = records.filter { it.record.type == type }
@@ -1564,13 +1599,17 @@ private fun RecordListView(
                 }
             }
             if (showAllGroups) {
-                sorted.groupBy { it.record.groupId to it.record.groupName }
-                    .entries.sortedBy { it.key.second.orEmpty().lowercase() }
-                    .forEach { (group, records) ->
-                        add(ListEntry.GroupHeader(group.second ?: "Unknown group", group.first?.let { groupColors[it] }, records.size))
-                        addByType(group.first.orEmpty(), records)
-                    }
+                // Every FS Group that has territories or records: its territories first, then its records by type.
+                val groupIds = (areas.map { it.groupId to it.groupName } + sorted.map { it.record.groupId.orEmpty() to (it.record.groupName ?: "Unknown group") }).distinct()
+                    .sortedBy { it.second.lowercase() }
+                groupIds.forEach { (gid, gname) ->
+                    val groupRecords = sorted.filter { it.record.groupId.orEmpty() == gid }
+                    add(ListEntry.GroupHeader(gname, groupColors[gid], groupRecords.size))
+                    addTerritories(gid, areas.filter { it.groupId == gid })
+                    addByType(gid, groupRecords)
+                }
             } else {
+                addTerritories("", areas)
                 addByType("", sorted)
             }
         }
@@ -1617,6 +1656,25 @@ private fun RecordListView(
                         Text("(" + entry.count + ")", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 2.dp)
+                }
+                is ListEntry.TerritoryHeader -> Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Rounded.Map, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text("Territories", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("(" + entry.count + ")", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                is ListEntry.Territory -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(entry.area.barangay, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(entry.area.municipality, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                 }
                 is ListEntry.TypeHeader -> Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),

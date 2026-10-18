@@ -25,6 +25,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private val PreviewWidth: Dp = 84.dp
 private val Widths: List<Dp> = listOf(48.dp, 130.dp, 150.dp, 64.dp, 140.dp, 140.dp)
 
 /**
@@ -40,13 +41,18 @@ fun SendStatusTable(
     onToggle: (Long) -> Unit,
     monthLabel: (Long) -> String,
     modifier: Modifier = Modifier,
+    /** When set, a Report column opens that month's report in table view. */
+    onPreview: ((Long) -> Unit)? = null,
 ) {
     val stamp = SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault())
     PinnedTable(
         rowCount = months.size, modifier = modifier, maxHeight = 360.dp,
         header = {
             Row(Modifier.height(40.dp)) {
-                listOf("", "Month", "Status", "Ver.", "Sent", "Sent by").forEachIndexed { i, t -> Cell(t, Widths[i], MaterialTheme.colorScheme.secondaryContainer, bold = true) }
+                Cell("", Widths[0], TableHeadFill, bold = true)
+                Cell("Month", Widths[1], TableHeadFill, bold = true)
+                if (onPreview != null) Cell("Report", PreviewWidth, TableHeadFill, bold = true)
+                listOf("Status", "Ver.", "Sent", "Sent by").forEachIndexed { i, t -> Cell(t, Widths[i + 2], TableHeadFill, bold = true) }
             }
         },
     ) { i ->
@@ -54,7 +60,7 @@ fun SendStatusTable(
         val s = statusOf(m)
         val status = s?.status ?: CoReportStatus.NOT_SUBMITTED
         val received = status == CoReportStatus.RECEIVED
-        val fill = if (m in selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else if (i % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface
+        val fill = if (m in selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f) else androidx.compose.ui.graphics.Color.Transparent
         val color = when (status) {
             CoReportStatus.RECEIVED -> Color(0xFF2E7D32)
             CoReportStatus.RETURNED, CoReportStatus.CANCELLED -> Color(0xFFE65100)
@@ -62,10 +68,14 @@ fun SendStatusTable(
             CoReportStatus.NOT_SUBMITTED -> MaterialTheme.colorScheme.onSurfaceVariant
         }
         Row(Modifier.height(44.dp).clickable(enabled = !received) { onToggle(m) }) {
-            Box(Modifier.width(Widths[0]).fillMaxHeight().background(fill).border(0.5.dp, MaterialTheme.colorScheme.outline), contentAlignment = Alignment.Center) {
+            Box(Modifier.width(Widths[0]).fillMaxHeight().background(fill).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()), contentAlignment = Alignment.Center) {
                 Checkbox(checked = m in selected, onCheckedChange = { onToggle(m) }, enabled = !received)
             }
             Cell(monthLabel(m), Widths[1], fill)
+            if (onPreview != null) Box(
+                Modifier.width(PreviewWidth).fillMaxHeight().background(fill).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).clickable { onPreview(m) },
+                contentAlignment = Alignment.Center,
+            ) { Text("Preview", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }
             Cell(status.workflowLabel, Widths[2], fill, color = color, bold = true)
             Cell(if (s != null && status != CoReportStatus.NOT_SUBMITTED) s.version.toString() else "-", Widths[3], fill)
             Cell(if (s != null && s.submittedAt > 0 && status != CoReportStatus.NOT_SUBMITTED) stamp.format(Date(s.submittedAt)) else "-", Widths[4], fill)
@@ -76,7 +86,7 @@ fun SendStatusTable(
 
 @Composable
 private fun Cell(text: String, width: Dp, fill: Color, bold: Boolean = false, color: Color = Color.Unspecified) {
-    Box(Modifier.width(width).fillMaxHeight().background(fill).border(0.5.dp, MaterialTheme.colorScheme.outline).padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {
+    Box(Modifier.width(width).fillMaxHeight().background(fill).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp), contentAlignment = Alignment.CenterStart) {
         Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, color = color, maxLines = 2)
     }
 }

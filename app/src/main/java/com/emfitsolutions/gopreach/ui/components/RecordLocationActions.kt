@@ -83,6 +83,40 @@ fun RecordLocationActions(lat: Double, lng: Double, name: String?, modifier: Mod
 }
 
 
+/**
+ * The same place choices as [RecordLocationActions] on one light line for dense lists: the coordinates, Copy, and small Street View / Maps
+ * buttons that wrap under the coordinates only when the row is too narrow.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun RecordLocationCompact(lat: Double, lng: Double, name: String?, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val tight = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Rounded.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(
+                coordinateText(lat, lng), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium,
+                modifier = Modifier.semantics { contentDescription = "Coordinates: latitude ${"%.6f".format(lat)}, longitude ${"%.6f".format(lng)}" },
+            )
+            IconButton(onClick = { copyCoordinates(context, lat, lng) }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy coordinates", modifier = Modifier.size(16.dp))
+            }
+        }
+        androidx.compose.material3.TextButton(onClick = { openStreetViewExternally(context, lat, lng) }, contentPadding = tight, modifier = Modifier.height(32.dp)) {
+            Icon(Icons.Rounded.Streetview, contentDescription = null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Street View", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+        }
+        androidx.compose.material3.TextButton(onClick = { openCoordinatesInMaps(context, lat, lng, name?.ifBlank { null }) }, contentPadding = tight, modifier = Modifier.height(32.dp)) {
+            Icon(Icons.Rounded.Map, contentDescription = null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Maps", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+        }
+    }
+}
+
 private fun copyCoordinates(context: Context, lat: Double, lng: Double) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
     clipboard.setPrimaryClip(ClipData.newPlainText("Coordinates", coordinateText(lat, lng)))

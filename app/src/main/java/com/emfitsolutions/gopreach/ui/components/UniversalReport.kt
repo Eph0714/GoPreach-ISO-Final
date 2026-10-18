@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Fullscreen
@@ -228,13 +229,14 @@ fun <T> UniversalReport(
         } else if (table) {
             // The heading row is pinned while the records scroll; heading and rows share one sideways scroll.
             stickyHeader(key = "ur-table-head") {
-                val head = Color(0xFFDDE6F2)
-                Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
-                    Row(Modifier.horizontalScroll(tableScroll)) { columns.forEach { c -> UrCell(c.title, c.width, true, head) } }
+                val head = com.emfitsolutions.gopreach.ui.components.TableHeadFill
+                Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).joinTableRow()) {
+                    Row(Modifier.horizontalScroll(tableScroll)) { UrCell("No.", com.emfitsolutions.gopreach.ui.components.TableNoWidth, true, head, center = true); columns.forEach { c -> UrCell(c.title, c.width, true, head) } }
                 }
             }
-            items(shown, key = { "ur-row-" + key(it) }) { item ->
-                Row(modifier = Modifier.horizontalScroll(tableScroll).then(if (onRowClick != null) Modifier.clickableRow { onRowClick(item) } else Modifier)) {
+            itemsIndexed(shown, key = { _, it -> "ur-row-" + key(it) }) { rowNo, item ->
+                Row(modifier = Modifier.joinTableRow().horizontalScroll(tableScroll).then(if (onRowClick != null) Modifier.clickableRow { onRowClick(item) } else Modifier)) {
+                    UrCell((rowNo + 1).toString(), com.emfitsolutions.gopreach.ui.components.TableNoWidth, center = true)
                     columns.forEach { c -> UrCell(c.value(item), c.width) }
                 }
             }
@@ -249,10 +251,10 @@ fun <T> UniversalReport(
 private fun Modifier.clickableRow(onClick: () -> Unit): Modifier = this.then(Modifier.clickable(onClick = onClick))
 
 @Composable
-private fun UrCell(text: String, width: Dp, head: Boolean = false, fill: Color = Color.Transparent) {
+private fun UrCell(text: String, width: Dp, head: Boolean = false, fill: Color = Color.Transparent, center: Boolean = false) {
     val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(fill)
     Box(
         modifier = Modifier.width(width).height(34.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
-        contentAlignment = Alignment.CenterStart,
+        contentAlignment = if (center) Alignment.Center else Alignment.CenterStart,
     ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (head) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1) }
 }

@@ -48,6 +48,10 @@ import androidx.compose.ui.unit.dp
 fun PersonRecordCard(
     name: String,
     detail: String,
+    /** Lines of [detail] shown before it is cut off (the Publisher card shows all of a publisher's data). */
+    detailMaxLines: Int = 4,
+    /** When set, the card shows only the name and a "View details" button beside it; the details open from that button. */
+    onViewDetails: (() -> Unit)? = null,
     active: Boolean,
     readOnly: Boolean,
     hasTemporarySignIn: Boolean,
@@ -74,21 +78,24 @@ fun PersonRecordCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Box(
+            // The simple card has no avatar, so the whole name has room.
+            if (onViewDetails == null) Box(
                 modifier = Modifier.size(44.dp).clip(CircleShape).background(avatarColor ?: MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(initials, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = if (onViewDetails != null) 2 else 1, overflow = TextOverflow.Ellipsis)
+                if (onViewDetails == null) Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = detailMaxLines, overflow = TextOverflow.Ellipsis)
                 if (note != null) Text(note, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
-                    StatusPill(if (active) "Active" else "Inactive", good = active)
-                    chips.forEach { StatusPill(it, good = null) }
+                // The simple card shows the name only; an inactive (removed) record is still marked so it is not mistaken for an active one.
+                if (onViewDetails == null || !active) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 2.dp)) {
+                    if (onViewDetails == null || !active) StatusPill(if (active) "Active" else "Inactive", good = active)
+                    if (onViewDetails == null) chips.forEach { StatusPill(it, good = null) }
                 }
             }
+            if (onViewDetails != null) androidx.compose.material3.TextButton(onClick = onViewDetails, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) { Text("Details", style = MaterialTheme.typography.labelLarge, maxLines = 1) }
             if (!readOnly) {
                 IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary) }
                 Box {

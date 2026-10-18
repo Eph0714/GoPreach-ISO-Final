@@ -130,6 +130,7 @@ fun ManageUsersScreen(
                             UniversalColumn("Permissions", 110.dp) { (it.grant?.resolvedPermissions?.size ?: 0).toString() },
                         ),
                         onRowClick = { onEdit(it.person.id) },
+                        gap = 12.dp,
                     ) { row ->
                     val status = row.person.accountStatus
                     com.emfitsolutions.gopreach.ui.screens.elders.PersonRecordCard(

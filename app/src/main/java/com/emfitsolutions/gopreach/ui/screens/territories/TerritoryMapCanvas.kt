@@ -167,6 +167,8 @@ fun TerritoryMapCanvas(
     myAccuracyMeters: Float? = null,
     focus: Triple<Double, Double, String>?,
     basemap: TerritoryBasemap,
+    /** 3D: tilted camera with extruded buildings (where the map style has building data). */
+    is3d: Boolean = false,
     reloadToken: Int,
     /** Changes whenever the camera should re-fit to the current territories/records. */
     fitKey: String,
@@ -479,6 +481,30 @@ fun TerritoryMapCanvas(
     )
 
     // Territory boundaries + labels.
+    // 3D: tilted camera + extruded buildings from the style's own vector building data (the satellite style usually has none).
+    LaunchedEffect(map, styleVersion, is3d) {
+        val m = map ?: return@LaunchedEffect
+        val style = m.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
+        style.removeLayer("tm-3d-buildings")
+        if (is3d) {
+            val source = style.sources.filterIsInstance<org.maplibre.android.style.sources.VectorSource>().firstOrNull()
+            if (source != null) {
+                val layer = org.maplibre.android.style.layers.FillExtrusionLayer("tm-3d-buildings", source.id).apply {
+                    sourceLayer = "building"
+                    minZoom = 14f
+                    setProperties(
+                        PropertyFactory.fillExtrusionColor("#D9D9D9"),
+                        PropertyFactory.fillExtrusionOpacity(0.85f),
+                        PropertyFactory.fillExtrusionHeight(Expression.coalesce(Expression.get("render_height"), Expression.literal(8))),
+                        PropertyFactory.fillExtrusionBase(Expression.coalesce(Expression.get("render_min_height"), Expression.literal(0))),
+                    )
+                }
+                if (style.getLayer(LYR_AREA_FILL) != null) style.addLayerBelow(layer, LYR_AREA_FILL) else style.addLayer(layer)
+            }
+        }
+        m.animateCamera(org.maplibre.android.camera.CameraUpdateFactory.tiltTo(if (is3d) 60.0 else 0.0), 600)
+    }
+
     LaunchedEffect(map, styleVersion, areas, boundaryJson, selectedAreaId, areaColors, showAllGroups) {
         val m = map ?: return@LaunchedEffect
         val style = m.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect

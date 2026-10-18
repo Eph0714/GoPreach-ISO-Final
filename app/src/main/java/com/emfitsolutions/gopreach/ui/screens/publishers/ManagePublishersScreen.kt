@@ -3,9 +3,11 @@ package com.emfitsolutions.gopreach.ui.screens.publishers
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
+import com.emfitsolutions.gopreach.ui.components.recordGroupedTableItems
 import com.emfitsolutions.gopreach.ui.components.recordItems
 import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.platform.AppPermission
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Box
@@ -58,6 +60,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -127,7 +130,8 @@ fun ManagePublishersScreen(
     }
     val congregationName = congregations.firstOrNull { it.id == effectiveCongregationId }?.name
     // Search + filter. Changing the congregation clears the text and puts the filter back to "All" (they are keyed on it).
-    var filterMode by remember(effectiveCongregationId) { mutableStateOf(PublisherFilterMode.ALL) }
+    // Opens grouped: By Group with "All groups" lists each FS Group with its publishers under it. Choosing "All" gives the flat list.
+    var filterMode by remember(effectiveCongregationId) { mutableStateOf(PublisherFilterMode.GROUP) }
     var searchQuery by remember(effectiveCongregationId) { mutableStateOf("") }
     var groupFilterId by remember(effectiveCongregationId) { mutableStateOf<String?>(null) }
     var statusFilter by remember(effectiveCongregationId) { mutableStateOf<AccountStatus?>(null) }
@@ -135,14 +139,22 @@ fun ManagePublishersScreen(
     val rowsFlow = remember(effectiveCongregationId) { viewModel.rowsFor(effectiveCongregationId) }
     val allRows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var showInactive by remember { mutableStateOf(false) }
+    // See every publisher, or only those in my own Field Service Group (offered when the signed-in person belongs to one).
+    val ownGroupId = allRows.firstOrNull { it.person.id == currentPersonId }?.assignment?.groupId
+    var myGroupOnly by rememberSaveable(effectiveCongregationId) { mutableStateOf(false) }
+    val groupScoped = myGroupOnly && ownGroupId != null
     val shown = allRows.filter { showInactive || it.category != PublisherCategory.REMOVED_PUBLISHER }
         .filter { categoryFilter == null || it.category == categoryFilter }
+        .filter { !groupScoped || it.assignment.groupId == ownGroupId }
     // The same filtered rows drive the list AND the count above it. They are already limited to this congregation.
     val filter = PublisherListFilter(filterMode, searchQuery, groupFilterId, statusFilter)
     val rows = filter.apply(shown)
     val countText = filter.countLabel(rows.size, groupChoices.firstOrNull { it.id == groupFilterId }?.name ?: if (groupFilterId == NO_GROUP_FILTER) "Unassigned" else null)
+    // By Group + "All groups" lists the publishers group by group; plain "All" stays one flat list.
+    val groupedByFsGroup = filterMode == PublisherFilterMode.GROUP && groupFilterId == null
     val filtering = filter.query.isNotBlank() || (filterMode == PublisherFilterMode.GROUP && groupFilterId != null) || (filterMode == PublisherFilterMode.STATUS && statusFilter != null)
     var lookupTarget by remember { mutableStateOf<Person?>(null) }
+    var detailsOf by remember { mutableStateOf<PublisherRow?>(null) }
     var pendingEdit by remember { mutableStateOf<PublisherRow?>(null) }
     var pendingDelete by remember { mutableStateOf<PublisherRow?>(null) }
     val showToast = rememberActionToast()
@@ -190,6 +202,13 @@ fun ManagePublishersScreen(
                     onSelected = viewModel::selectCongregation,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                 )
+            }
+            if (ownGroupId != null) {
+                val ownGroupName = groupChoices.firstOrNull { it.id == ownGroupId }?.name
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.FilterChip(selected = !myGroupOnly, onClick = { myGroupOnly = false }, label = { Text("All Publishers") })
+                    androidx.compose.material3.FilterChip(selected = myGroupOnly, onClick = { myGroupOnly = true }, label = { Text(if (ownGroupName != null) "My FS Group – $ownGroupName" else "My FS Group", maxLines = 1) })
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -310,9 +329,9 @@ fun ManagePublishersScreen(
                         val name = congregationName ?: "Congregation"
                         val text = if (all) "All records" else filterText
                         when (kind) {
-                            "print" -> com.emfitsolutions.gopreach.data.export.PublisherRecordsExporter.print(context, chosen, name, text, format)
-                            "pdf" -> com.emfitsolutions.gopreach.data.export.PublisherRecordsExporter.sharePdf(context, chosen, name, text, format)
-                            else -> com.emfitsolutions.gopreach.data.export.PublisherRecordsExporter.shareExcel(context, chosen, name)
+                            "print" -> com.emfitsolutions.gopreach.data.export.PublisherRecordsExporter.print(context, chosen, name, text, format, groupedByFsGroup)
+                            "pdf" -> com.emfitsolutions.gopreach.data.export.PublisherRecordsExporter.sharePdf(context, chosen, name, text, format, groupedByFsGroup)
+                            else -> com.emfitsolutions.gopreach.data.export.PublisherRecordsExporter.shareExcel(context, chosen, name, groupedByFsGroup)
                         }
                         exportKind = null
                     },
@@ -339,24 +358,14 @@ fun ManagePublishersScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item { RecordViewToggle(viewMode) }
-                recordItems(
-                    viewMode, rows, { it.person.id },
-                    listOf(
-                            UniversalColumn("Name", 200.dp) { it.person.fullName },
-                            UniversalColumn("Category", 160.dp) { it.category.displayName },
-                            UniversalColumn("Group", 150.dp) { it.groupName },
-                            UniversalColumn("Contact", 140.dp) { it.person.contact },
-                            UniversalColumn("Remarks", 200.dp) { it.person.remarks.orEmpty() },
-                    ),
-                    onRowClick = { pendingEdit = it },
-                ) { row ->
+                // Every field of a publisher is a column; Print / PDF / Excel use this same list, so they match the table exactly.
+                val pubColumns = PublisherColumns.all.map { c -> UniversalColumn<PublisherRow>(c.title, c.width.dp) { c.value(it) } }
+                val card: @Composable (PublisherRow) -> Unit = { row ->
                     com.emfitsolutions.gopreach.ui.screens.elders.PersonRecordCard(
                         name = row.person.fullName,
-                        detail = listOfNotNull(
-                            row.groupName.takeIf { it.isNotBlank() },
-                            row.person.contact.takeIf { it.isNotBlank() },
-                            row.person.remarks?.takeIf { it.isNotBlank() },
-                        ).joinToString(" · "),
+                        // The simple list shows the name; everything else opens from "View details".
+                        detail = "",
+                        onViewDetails = { detailsOf = row },
                         active = row.category != PublisherCategory.REMOVED_PUBLISHER,
                         readOnly = readOnly,
                         hasTemporarySignIn = row.person.isTemporaryCredential && !readOnly,
@@ -386,11 +395,51 @@ fun ManagePublishersScreen(
                         },
                     )
                 }
+                if (groupedByFsGroup) {
+                    // "All groups": publishers sit under their own FS Group (Table View is ordered by group, its Group column names it).
+                    val byGroup = rows.groupBy { it.groupName.ifBlank { "No FS Group" } }.toSortedMap()
+                    if (viewMode.table) {
+                        recordGroupedTableItems(byGroup, pubColumns, viewMode.hScroll, { pendingEdit = it }, { it.person.id })
+                    } else byGroup.forEach { (groupName, members) ->
+                        item(key = "group-$groupName") {
+                            Text(
+                                "$groupName · ${members.size}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 10.dp),
+                            )
+                        }
+                        // Each publisher keeps its full record (details, status, edit / menu actions), indented under its group.
+                        items(members.size, key = { members[it].person.id }) { i ->
+                            Box(Modifier.padding(start = 8.dp)) { card(members[i]) }
+                        }
+                    }
+                } else {
+                    recordItems(viewMode, rows, { it.person.id }, pubColumns, onRowClick = { pendingEdit = it }) { card(it) }
+                }
                 // The mandatory end-of-report Summary: only the publishers listed above (after the congregation, search and filters).
                 item(key = "end-summary") { PublisherSummaryCard(PublisherSummary.rows(rows), Modifier.padding(top = 8.dp)) }
             }
         }
         }
+    }
+
+    // View details: every field of the publisher record (the same list the table and the print use).
+    detailsOf?.let { row ->
+        com.emfitsolutions.gopreach.ui.components.AlertDialog(
+            onDismissRequest = { detailsOf = null },
+            title = { Text(row.person.fullName) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PublisherColumns.all.drop(1).forEach { c ->
+                        Column {
+                            Text(c.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(c.value(row).ifBlank { "—" }, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { detailsOf = null }) { Text("Close") } },
+            dismissButton = if (!readOnly) ({ androidx.compose.material3.TextButton(onClick = { detailsOf = null; pendingEdit = row }) { Text("Edit") } }) else null,
+        )
     }
 
     lookupTarget?.let { person ->

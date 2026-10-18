@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -89,10 +90,12 @@ fun <T> LazyListScope.recordItems(
     key: (T) -> Any,
     columns: List<UniversalColumn<T>>,
     onRowClick: ((T) -> Unit)? = null,
+    /** The list's own spacing between items, taken back out of the table rows so they join into one table. */
+    gap: Dp = 8.dp,
     card: @Composable (T) -> Unit,
 ) {
     if (mode.table) {
-        recordTableItems(items, columns, mode.hScroll, onRowClick, key)
+        recordTableItems(items, columns, mode.hScroll, onRowClick, key, gap)
     } else {
         items(items.size, key = { key(items[it]) }) { card(items[it]) }
     }
@@ -101,25 +104,42 @@ fun <T> LazyListScope.recordItems(
 /** One scrollable table: pinned look heading row, one row per record, every column a fixed width so rows line up. */
 @Composable
 fun <T> RecordTable(items: List<T>, columns: List<UniversalColumn<T>>, onRowClick: ((T) -> Unit)? = null, modifier: Modifier = Modifier) {
-    val head = MaterialTheme.colorScheme.surfaceVariant
+    val head = TableHeadFill
     Column(modifier = modifier.horizontalScroll(rememberScrollState())) {
-        Row { columns.forEach { c -> RecordCell(c.title, c.width, header = true, fill = head) } }
+        Row { RecordCell("No.", TableNoWidth, header = true, fill = head, center = true); columns.forEach { c -> RecordCell(c.title, c.width, header = true, fill = head) } }
         items.forEachIndexed { index, item ->
             Row(modifier = if (onRowClick != null) Modifier.clickable { onRowClick(item) } else Modifier) {
-                val fill = if (index % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f) else Color.Transparent
-                columns.forEach { c -> RecordCell(c.value(item), c.width, fill = fill) }
+                val fill = Color.Transparent
+                RecordCell((index + 1).toString(), TableNoWidth, center = true); columns.forEach { c -> RecordCell(c.value(item), c.width) }
             }
         }
     }
 }
 
+/**
+ * Joins a table row to the one above it. A lazy list spaces its items (usually 8 dp), which would float every table row as its own bar;
+ * this takes that spacing back out of the row's height so the rows touch and the vertical lines run through the whole table.
+ */
+fun Modifier.joinTableRow(gap: Dp = 8.dp): Modifier = this.layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val g = gap.roundToPx()
+    layout(placeable.width, (placeable.height - g).coerceAtLeast(0)) { placeable.placeRelative(0, 0) }
+}
+
+/** The shared table look (the Field Service Report's): 34 dp rows, hairline cell borders, bold light-blue heading, plain body rows. */
+val TableHeadFill = Color.Transparent
+
+/** Width of the numbered first column every record table starts with, like the Field Service Report's No. column. */
+val TableNoWidth = 36.dp
+
 @Composable
-private fun RecordCell(text: String, width: Dp, header: Boolean = false, fill: Color = Color.Transparent) {
+private fun RecordCell(text: String, width: Dp, header: Boolean = false, fill: Color = Color.Transparent, center: Boolean = false) {
+    val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(fill)
     Box(
-        modifier = Modifier.width(width).height(40.dp).background(fill).border(0.5.dp, MaterialTheme.colorScheme.outlineVariant).padding(horizontal = 8.dp),
-        contentAlignment = Alignment.CenterStart,
+        modifier = Modifier.width(width).height(34.dp).background(cellBg).border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
+        contentAlignment = if (center) Alignment.Center else Alignment.CenterStart,
     ) {
-        Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (header) FontWeight.Bold else FontWeight.Normal, maxLines = 2)
+        Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (header) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
     }
 }
 
@@ -134,18 +154,56 @@ fun <T> LazyListScope.recordTableItems(
     hScroll: ScrollState,
     onRowClick: ((T) -> Unit)? = null,
     key: ((T) -> Any)? = null,
+    gap: Dp = 8.dp,
 ) {
     stickyHeader(key = "record-table-head") {
-        val head = MaterialTheme.colorScheme.surfaceVariant
-        Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface)) {
-            Row(Modifier.horizontalScroll(hScroll)) { columns.forEach { c -> RecordCell(c.title, c.width, header = true, fill = head) } }
+        val head = TableHeadFill
+        Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).joinTableRow(gap)) {
+            Row(Modifier.horizontalScroll(hScroll)) { RecordCell("No.", TableNoWidth, header = true, fill = head, center = true); columns.forEach { c -> RecordCell(c.title, c.width, header = true, fill = head) } }
         }
     }
     items(items.size, key = { i -> key?.let { "rt-" + it(items[i]) } ?: "rt-row-$i" }) { index ->
         val item = items[index]
-        Row(modifier = Modifier.horizontalScroll(hScroll).then(if (onRowClick != null) Modifier.clickable { onRowClick(item) } else Modifier)) {
-            val fill = if (index % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f) else Color.Transparent
-            columns.forEach { c -> RecordCell(c.value(item), c.width, fill = fill) }
+        Row(modifier = Modifier.joinTableRow(gap).horizontalScroll(hScroll).then(if (onRowClick != null) Modifier.clickable { onRowClick(item) } else Modifier)) {
+            RecordCell((index + 1).toString(), TableNoWidth, center = true); columns.forEach { c -> RecordCell(c.value(item), c.width) }
+        }
+    }
+}
+
+/**
+ * Table View in sections: the pinned column heading once, then for each of [groups] a bold name row (with its count) followed by that
+ * group's rows. Used where records belong to a group (e.g. publishers by FS Group).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+fun <T> LazyListScope.recordGroupedTableItems(
+    groups: Map<String, List<T>>,
+    columns: List<UniversalColumn<T>>,
+    hScroll: ScrollState,
+    onRowClick: ((T) -> Unit)? = null,
+    key: (T) -> Any,
+    gap: Dp = 8.dp,
+) {
+    stickyHeader(key = "record-table-head") {
+        val head = TableHeadFill
+        Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface).joinTableRow(gap)) {
+            Row(Modifier.horizontalScroll(hScroll)) { RecordCell("No.", TableNoWidth, header = true, fill = head, center = true); columns.forEach { c -> RecordCell(c.title, c.width, header = true, fill = head) } }
+        }
+    }
+    groups.forEach { (name, members) ->
+        item(key = "rt-group-$name") {
+            Row(Modifier.joinTableRow(gap).horizontalScroll(hScroll)) {
+                Box(
+                    Modifier.width((TableNoWidth.value + columns.sumOf { it.width.value.toDouble() }).dp).height(34.dp).background(MaterialTheme.colorScheme.primaryContainer)
+                        .border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
+                    contentAlignment = Alignment.CenterStart,
+                ) { Text("$name · ${members.size}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer) }
+            }
+        }
+        items(members.size, key = { i -> "rt-" + key(members[i]) }) { index ->
+            val item = members[index]
+            Row(modifier = Modifier.joinTableRow(gap).horizontalScroll(hScroll).then(if (onRowClick != null) Modifier.clickable { onRowClick(item) } else Modifier)) {
+                RecordCell((index + 1).toString(), TableNoWidth, center = true); columns.forEach { c -> RecordCell(c.value(item), c.width) }
+            }
         }
     }
 }

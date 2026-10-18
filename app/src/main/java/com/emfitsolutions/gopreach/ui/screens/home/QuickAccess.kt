@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.AssignmentInd
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.rounded.EventAvailable
+import androidx.compose.material.icons.rounded.GroupWork
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HowToReg
 import androidx.compose.material.icons.rounded.Map
@@ -114,6 +115,7 @@ enum class QuickAccessItem(
     WEATHER("Weather", "Forecast and conditions", Icons.Rounded.WbSunny, Color(0xFFF9A825), false, Destinations.WEATHER),
     PUBLISHER_ASSIGNMENT("Publisher Assignment", "Manage Searching, Return Visit, Bible Study and Publisher assignments", Icons.Rounded.AssignmentInd, Color(0xFF3F51B5), false, Destinations.PUBLISHER_ASSIGNMENT),
     HOUSEHOLDER_RECORDS("House Holder Records", "Search Records, Return Visits and Bible Studies by FS Group", Icons.Rounded.Groups, Color(0xFF7B1FA2), false, Destinations.SCOPED_INTERESTED_RECORDS),
+    FIELD_SERVICE_GROUP("Field Service Group", "Groups and their members", Icons.Rounded.GroupWork, Color(0xFF6A1B9A), false, Destinations.MANAGE_GROUPS),
     PUBLISHER_MODULE("Publisher Module", "Manage publishers", Icons.Rounded.Groups, Color(0xFF1E88E5), false, Destinations.MANAGE_PUBLISHERS),
     FIELD_SERVICE_REPORT("Field Service Report", "Open the field service report", Icons.Rounded.Assessment, Color(0xFFEF6C00), false, Destinations.FIELD_SERVICE_REPORT),
     MEETING_ATTENDANCE("Meeting Attendance", "Enter and review weekly meeting attendance", Icons.Rounded.HowToReg, Color(0xFF0097A7), false, Destinations.MEETING_ATTENDANCE),
@@ -609,4 +611,4 @@ private fun QuickAccessCard(
 }
 
 /** Cards introduced after people may already have customised their Quick Access: shown for them once, at the end, until they remove them. */
-private val NEWER_CARDS = setOf(QuickAccessItem.MEETING_ATTENDANCE, QuickAccessItem.SETTINGS, QuickAccessItem.HOUSEHOLDER_RECORDS)
+private val NEWER_CARDS = setOf(QuickAccessItem.MEETING_ATTENDANCE, QuickAccessItem.SETTINGS, QuickAccessItem.HOUSEHOLDER_RECORDS, QuickAccessItem.FIELD_SERVICE_GROUP)
