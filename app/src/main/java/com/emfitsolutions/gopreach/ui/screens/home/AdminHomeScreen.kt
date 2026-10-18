@@ -663,7 +663,7 @@ fun AdminHomeScreen(
                     modifier = Modifier.fillMaxSize().padding(if (role == AdminRole.CIRCUIT_OVERSEER) 12.dp else 24.dp),
                     verticalArrangement = Arrangement.spacedBy(if (role == AdminRole.CIRCUIT_OVERSEER) 8.dp else 20.dp),
                 ) {
-                    if (role != AdminRole.CIRCUIT_OVERSEER) SyncToServerButton()
+                    if (role != AdminRole.CIRCUIT_OVERSEER && hideMainFormButtons) SyncToServerButton()
 
                     // Circuit Overseer: circuit, name, assigned congregations — and the way into their dashboard.
                     if (role == AdminRole.CIRCUIT_OVERSEER) {
@@ -750,98 +750,6 @@ fun AdminHomeScreen(
                                 )
                             },
                         )
-                    }
-
-                    if (!hideMainFormButtons) {
-                        if (role != null) {
-                            DashboardSection(stringResource(Res.string.dashboard_section_graphical_reports)) {
-                                DashboardTile(stringResource(Res.string.dashboard_tile_reports_dashboard), Icons.Rounded.BarChart, { onNavigate(Destinations.DASHBOARD_REPORTS) })
-                            }
-                        }
-
-                        if (canManagePublishersAndGroups) {
-                            DashboardSection(stringResource(Res.string.dashboard_section_management)) {
-                                DashboardTile(stringResource(Res.string.dashboard_quick_action_publishers), Icons.Rounded.People, { onNavigate(Destinations.MANAGE_PUBLISHERS) })
-                                DashboardTile(stringResource(Res.string.side_groups), Icons.Rounded.Groups, { onNavigate(Destinations.MANAGE_GROUPS) })
-                            }
-                        }
-
-                        // Wider than the Management section above — also
-                        // reaches Service Overseer/Regular Elder, own
-                        // congregation only (see canViewTerritoryMap).
-                        if (canViewTerritoryMap || canEditMeetingAssignments) {
-                            DashboardSection(stringResource(Res.string.dashboard_section_territory)) {
-                                if (canViewTerritoryMap) {
-                                    DashboardTile(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, { onNavigate(Destinations.MANAGE_TERRITORIES_BASE) })
-                                }
-                                if (canEditMeetingAssignments) {
-                                    DashboardTile(stringResource(Res.string.home_tile_meeting_cart_assignment_title), Icons.Rounded.Event, { onNavigate(Destinations.MEETING_ASSIGNMENTS) })
-                                }
-                            }
-                        }
-
-                        if (role != null) {
-                            DashboardSection(stringResource(Res.string.dashboard_section_ministry)) {
-                                DashboardTile(stringResource(Res.string.side_group_chat_setting), Icons.Rounded.Chat, { onNavigate(Destinations.GROUP_CHAT_SETTING) })
-                                DashboardTile(stringResource(Res.string.dashboard_tile_share_location), Icons.Rounded.LocationOn, { onNavigate(Destinations.SHARE_LOCATION) })
-                                DashboardTile(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, { onNavigate(Destinations.FIND_LOCATION) })
-                                DashboardTile(stringResource(Res.string.home_tile_weather_title), Icons.Rounded.WbSunny, { onNavigate(Destinations.WEATHER) })
-                                DashboardTile(stringResource(Res.string.home_nav_calendar), Icons.Rounded.CalendarMonth, { onNavigate(Destinations.CALENDAR) })
-                            }
-                        }
-
-                        if (isSuperAdmin || canEnrollCoordinatorElder || canEnrollRegularElderOrPublisher) {
-                            DashboardSection(stringResource(Res.string.side_section_enrollment)) {
-                                if (isSuperAdmin) {
-                                    DashboardTile(stringResource(Res.string.side_congregations_groups), Icons.Rounded.AccountBalance, { onNavigate(Destinations.MANAGE_CONGREGATIONS) })
-                                    DashboardTile(stringResource(Res.string.side_admins), Icons.Rounded.AdminPanelSettings, { onNavigate(Destinations.MANAGE_ADMINS) })
-                                }
-                                if (canEnrollRegularElderOrPublisher) {
-                                    // "Consolidate Elder, Coordinator Elder,
-                                    // Service Overseer and Secretary
-                                    // Enrollment" — one "Elders" tile
-                                    // replaces the separate Coordinator
-                                    // Elder/Regular Elder tiles this old
-                                    // tile-grid layout used to show (see
-                                    // SidePanel's own identical
-                                    // consolidation for the drawer this
-                                    // grid is otherwise superseded by).
-                                    DashboardTile(stringResource(Res.string.side_elders), Icons.Rounded.PersonAdd, { onNavigate(Destinations.MANAGE_ELDERS) })
-                                    DashboardTile(stringResource(Res.string.side_publisher), Icons.Rounded.PersonAdd, { onNavigate(Destinations.ENROLL_PUBLISHER) })
-                                }
-                            }
-                        }
-
-                        if (canAccessControlPanel || isSuperAdmin || canViewUserLogs || canManageUsers || canManageAccountCredentials) {
-                            DashboardSection(stringResource(Res.string.dashboard_section_system)) {
-                                if (canAccessControlPanel) {
-                                    DashboardTile(stringResource(Res.string.dashboard_tile_control_panel), Icons.Rounded.Tune, { onNavigate(Destinations.CONTROL_PANEL) })
-                                }
-                                if (isSuperAdmin) {
-                                    DashboardTile(stringResource(Res.string.side_backup_restore), Icons.Rounded.Backup, { onNavigate(Destinations.BACKUP_RESTORE) })
-                                }
-                                if (canViewUserLogs) {
-                                    DashboardTile(stringResource(Res.string.side_user_logs), Icons.Rounded.History, { onNavigate(Destinations.USER_LOGS) })
-                                }
-                                if (canManageUsers) {
-                                    DashboardTile(stringResource(Res.string.side_user_management), Icons.Rounded.ManageAccounts, { onNavigate(Destinations.MANAGE_USERS) })
-                                }
-                                if (canManageAccountCredentials) {
-                                    DashboardTile(stringResource(Res.string.side_account_management), Icons.Rounded.ManageAccounts, { onNavigate(Destinations.ACCOUNT_MANAGEMENT) })
-                                }
-                                if (canAccessControlPanel) {
-                                    DashboardTile(stringResource(Res.string.side_credit_hour_categories), Icons.Rounded.Timer, { onNavigate(Destinations.CREDIT_HOUR_CATEGORIES) })
-                                }
-                            }
-                        }
-
-                        DashboardSection(stringResource(Res.string.dashboard_section_account)) {
-                            DashboardTile("Settings", Icons.Rounded.Settings, { onNavigate(Destinations.SETTINGS) })
-                            if (onSwitchToPublisher != null) {
-                                DashboardTile(stringResource(Res.string.side_ministry_report_app), Icons.Rounded.SwapHoriz, onSwitchToPublisher)
-                            }
-                            DashboardTile(stringResource(Res.string.side_sign_out), Icons.AutoMirrored.Rounded.Logout, viewModel::signOut)
-                        }
                     }
                 }
             }

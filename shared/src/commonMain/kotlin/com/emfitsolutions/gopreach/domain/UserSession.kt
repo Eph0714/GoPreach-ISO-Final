@@ -195,6 +195,7 @@ class UserSession(
     private val userAccessGrantRepository: UserAccessGrantRepository,
     private val groupRepository: GroupRepository,
     private val offlineSessionMarker: OfflineSessionMarker,
+    private val syncEngine: com.emfitsolutions.gopreach.data.sync.SyncEngine,
     appScope: CoroutineScope,
 ) {
     private fun authStateFlow(): Flow<String?> = auth.authState().map { personIdFromAuthEmail(it?.email) }
@@ -293,7 +294,8 @@ class UserSession(
                     if (person.activeCongregationId != congregationId || person.activeAdminRole != roleName || person.activeGroupId != groupId) {
                         runCatching {
                             personRepository.saveNow(person.copy(activeCongregationId = congregationId, activeAdminRole = roleName, activeGroupId = groupId))
-                        }.onFailure { Log.w("UserSession", "Failed to sync active role context: ${it.message}") }
+                        }.onSuccess { runCatching { syncEngine.resetCursor() } }
+                            .onFailure { Log.w("UserSession", "Failed to sync active role context: ${it.message}") }
                     }
                 }
         }

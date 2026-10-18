@@ -127,8 +127,20 @@ class SyncEngine(
         return if (data is JsonObject && field !in data) JsonObject(data + (field to JsonPrimitive(id))) else data
     }
 
-    private suspend fun readCursor(): Long =
-        cacheDao.get(META_COLLECTION, CURSOR_DOC)?.payloadJson?.toLongOrNull() ?: 0L
+    /** The cursor only moves forward, so a row the server hid from this account at some earlier pull (a role assignment or a
+     *  congregation's territory before the account's active role was known) would never come back. Bumping [CURSOR_EPOCH] makes every
+     *  device re-pull from the start once; [resetCursor] does the same on demand. */
+    private suspend fun readCursor(): Long {
+        if (cacheDao.get(META_COLLECTION, EPOCH_DOC)?.payloadJson != CURSOR_EPOCH) {
+            cacheDao.upsert(CachedDocumentEntity(META_COLLECTION, EPOCH_DOC, CURSOR_EPOCH, SyncState.SYNCED.name, nowMillis()))
+            writeCursor(0L)
+            return 0L
+        }
+        return cacheDao.get(META_COLLECTION, CURSOR_DOC)?.payloadJson?.toLongOrNull() ?: 0L
+    }
+
+    /** The next pull starts from the beginning (what this account may read changed, so rows skipped earlier must be fetched again). */
+    suspend fun resetCursor() = writeCursor(0L)
 
     private suspend fun writeCursor(cursor: Long) {
         cacheDao.upsert(CachedDocumentEntity(META_COLLECTION, CURSOR_DOC, cursor.toString(), SyncState.SYNCED.name, nowMillis()))
@@ -142,5 +154,7 @@ class SyncEngine(
         // Bookkeeping row in the cache table (never queued, so it is never uploaded).
         const val META_COLLECTION = "_sync"
         const val CURSOR_DOC = "cursor"
+        const val EPOCH_DOC = "cursorEpoch"
+        const val CURSOR_EPOCH = "3"
     }
 }
