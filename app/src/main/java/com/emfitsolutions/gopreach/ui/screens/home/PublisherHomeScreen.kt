@@ -83,6 +83,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.runtime.mutableStateListOf
 import com.emfitsolutions.gopreach.data.model.PipelineStage
@@ -112,12 +119,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.automirrored.rounded.Chat
 import androidx.compose.material.icons.automirrored.rounded.Forward
 import androidx.compose.material.icons.automirrored.rounded.ListAlt
@@ -356,6 +367,16 @@ fun PublisherHomeScreen(
     val mainFormTiles = remember(moduleLayout, tilesById) { moduleLayout.mainFormModules().mapNotNull { tilesById[it] } }
     val sidePanelTiles = remember(moduleLayout, tilesById) { moduleLayout.sidePanelModules().mapNotNull { tilesById[it] } }
 
+    // Main Form tabs: 0 = My Planner, 1 = Territory Map, 2 = Ministry (Searching / Return Visit / Bible Study).
+    var mainTab by rememberSaveable { mutableStateOf(0) }
+    var ministryStage by rememberSaveable { mutableStateOf(0) }
+    // My (default) / All records for Searching and Return Visit; Bible Study is always "My".
+    var ministryShowAll by rememberSaveable { mutableStateOf(false) }
+    // The recycle-bin icon: also list the records that were moved to Inactive.
+    var ministryShowInactive by rememberSaveable { mutableStateOf(false) }
+    val mainScroll = rememberScrollState()
+    BackHandler(enabled = mainTab != 0) { mainTab = 0 }
+
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val drawerScope = rememberCoroutineScope()
     // "If the publisher opens a form [from the Side Panel] and closes it, do
@@ -395,6 +416,9 @@ fun PublisherHomeScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        // On the Territory Map tab a drag belongs to the map (pan / rotate), so the swipe-to-open gesture is off there; the menu button still opens
+        // the panel, and an open panel can still be swiped shut.
+        gesturesEnabled = mainTab != 1 || drawerState.isOpen,
         drawerContent = {
             SidePanelDrawerContent(
                 tiles = sidePanelTiles,
@@ -414,7 +438,8 @@ fun PublisherHomeScreen(
     // remains reachable from the Side Panel exactly as before, this only
     // removes the second, redundant path to them. No more weight(1f) split
     // with a bottom bar below it — the scrolling content is the whole screen.
-    Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    // Only My Planner scrolls as a page; the Territory Map and Ministry tabs fill the space under the tabs themselves.
+    Column(modifier = Modifier.fillMaxSize().then(if (mainTab == 0) Modifier.verticalScroll(mainScroll) else Modifier)) {
             com.emfitsolutions.gopreach.ui.components.AlarmRingingBanner()
             com.emfitsolutions.gopreach.ui.components.OfflineSessionBanner()
             PublisherWelcomeHeader(
@@ -445,9 +470,69 @@ fun PublisherHomeScreen(
                 },
                 onSignOut = viewModel::signOut,
                 onSwitchRole = if (session.roleOptions.size > 1) viewModel::switchRole else null,
+                compact = mainTab != 0,
             )
 
-            Column(
+            PublisherMainTabs(selected = mainTab, onSelect = { mainTab = it })
+
+            // "Territory Map" tab: the same screen and the same scope/role restrictions the Territory Map route uses for a Publisher
+            // (own congregation only, view-only).
+            if (mainTab == 1) Box(modifier = Modifier.weight(1f).fillMaxWidth().consumeWindowInsets(WindowInsets.statusBars)) {
+                com.emfitsolutions.gopreach.ui.screens.territories.TerritoryMapScreen(
+                    fixedCongregationId = ownPublisherAssignment?.congregationId,
+                    currentPersonId = currentPersonId,
+                    embedded = true,
+                    onBack = { mainTab = 0 },
+                )
+            }
+
+            // "Ministry" tab: pick Searching / Return Visit / Bible Study, then manage that list (same screen and rules as the modules).
+            if (mainTab == 2) Column(modifier = Modifier.weight(1f).fillMaxWidth().consumeWindowInsets(WindowInsets.statusBars)) {
+                MinistryFilters(
+                    stage = ministryStage,
+                    onStage = { ministryStage = it; ministryShowAll = false },
+                    showAll = ministryShowAll,
+                    onShowAll = { ministryShowAll = it },
+                    showInactive = ministryShowInactive,
+                    onShowInactive = { ministryShowInactive = it },
+                )
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    androidx.compose.runtime.key(ministryStage) {
+                        com.emfitsolutions.gopreach.ui.screens.pipeline.PipelineScreen(
+                            publisherPersonId = currentPersonId,
+                            currentPersonId = currentPersonId,
+                            congregationId = ownPublisherAssignment?.congregationId.orEmpty(),
+                            stage = when (ministryStage) {
+                                1 -> com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT
+                                2 -> com.emfitsolutions.gopreach.data.model.PipelineStage.BIBLE_STUDY
+                                else -> com.emfitsolutions.gopreach.data.model.PipelineStage.SEARCHING
+                            },
+                            canPermanentlyDelete = ownPublisherAssignment != null,
+                            embedded = true,
+                            mineOnly = !ministryShowAll || ministryStage == 2,
+                            showInactive = ministryShowInactive,
+                            onShowInactiveChange = { ministryShowInactive = it },
+                            onOpenMap = { lat, lng, name -> onNavigate(Destinations.territoryMapFocusedOn(lat, lng, name)) },
+                            onBack = { mainTab = 0 },
+                        )
+                    }
+                }
+            }
+
+            // "Weather" tab: the same screen as the Weather route; territory places limited to the publisher's own congregation.
+            if (mainTab == 3) Box(modifier = Modifier.weight(1f).fillMaxWidth().consumeWindowInsets(WindowInsets.statusBars)) {
+                com.emfitsolutions.gopreach.ui.screens.weather.WeatherScreen(
+                    personId = currentPersonId,
+                    territoryScope = com.emfitsolutions.gopreach.ui.screens.weather.TerritoryWeatherScope(
+                        congregationId = ownPublisherAssignment?.congregationId,
+                        allCongregations = false,
+                    ),
+                    onBack = { mainTab = 0 },
+                    embedded = true,
+                )
+            }
+
+            if (mainTab == 0) Column(
                 modifier = Modifier.fillMaxSize().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -583,6 +668,7 @@ fun PublisherHomeScreen(
                             },
                             isCompareActive = showCompareView,
                             onSelectCompare = { showCompareView = true },
+                            showTitle = false,
                         )
                         run {
                             if (showCompareView) {
@@ -753,6 +839,115 @@ fun PublisherHomeScreen(
     }
 }
 
+private data class MainTabSpec(val label: String, val icon: ImageVector, val color: Color)
+
+/** The Main Form's four tabs, each with its own colour (planner blue, map green, ministry violet, weather amber): an icon over a label, the open tab filled with a soft tint and underlined in its colour, a thin line between
+ * the tabs and another under the whole strip, so the tabs read as buttons rather than plain text. */
+@Composable
+private fun PublisherMainTabs(selected: Int, onSelect: (Int) -> Unit) {
+    val tabs = listOf(
+        MainTabSpec("My Planner", Icons.Rounded.CalendarMonth, Color(0xFF1E6FD9)),
+        MainTabSpec("Territory Map", Icons.Rounded.Map, Color(0xFF2E8B57)),
+        MainTabSpec("Ministry", Icons.Rounded.PeopleAlt, Color(0xFF7E57C2)),
+        MainTabSpec("Weather", Icons.Rounded.WbSunny, Color(0xFFE39A00)),
+    )
+    val line = MaterialTheme.colorScheme.outlineVariant
+    androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp) {
+        Column {
+            Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                tabs.forEachIndexed { index, tab ->
+                    val isSelected = selected == index
+                    if (index > 0) Box(modifier = Modifier.width(1.dp).fillMaxHeight().padding(vertical = 10.dp).background(line))
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(if (isSelected) tab.color.copy(alpha = 0.12f) else Color.Transparent)
+                            .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(index) })
+                            .padding(top = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Icon(tab.icon, contentDescription = null, tint = if (isSelected) tab.color else tab.color.copy(alpha = 0.7f), modifier = Modifier.size(24.dp))
+                        Text(
+                            tab.label,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) tab.color else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(top = 2.dp, start = 2.dp, end = 2.dp),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(modifier = Modifier.fillMaxWidth().height(3.dp).background(if (isSelected) tab.color else tab.color.copy(alpha = 0.3f)))
+                    }
+                }
+            }
+            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(line))
+        }
+    }
+}
+
+/** Ministry tab controls: which list (Searching / Return Visit / Bible Study), then whose records (mine, or the whole congregation's — Bible Study is always mine). */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun MinistryFilters(stage: Int, onStage: (Int) -> Unit, showAll: Boolean, onShowAll: (Boolean) -> Unit, showInactive: Boolean, onShowInactive: (Boolean) -> Unit) {
+    val stages = listOf("Searching", "Return Visit", "Bible Study")
+    val colors = androidx.compose.material3.SegmentedButtonDefaults.colors(
+        activeContainerColor = MaterialTheme.colorScheme.primary,
+        activeContentColor = MaterialTheme.colorScheme.onPrimary,
+        activeBorderColor = MaterialTheme.colorScheme.primary,
+        inactiveContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+        inactiveContentColor = MaterialTheme.colorScheme.primary,
+        inactiveBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+    )
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        androidx.compose.material3.SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            stages.forEachIndexed { index, label ->
+                SegmentedButton(
+                    selected = stage == index,
+                    onClick = { onStage(index) },
+                    shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = index, count = stages.size),
+                    icon = {},
+                    colors = colors,
+                    modifier = Modifier.heightIn(min = 40.dp),
+                ) { Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1) }
+            }
+        }
+        // Whose records: one drop-down (My ... / Congregation ...), with the small recycle-bin icon at the end of the same row.
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (stage != 2) {
+                val scopes = listOf("My ${stages[stage]}", "Congregation ${stages[stage]}")
+                var open by remember { mutableStateOf(false) }
+                Box(modifier = Modifier.weight(1f)) {
+                    androidx.compose.material3.Surface(
+                        onClick = { open = true },
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(modifier = Modifier.heightIn(min = 44.dp).padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(scopes[if (showAll) 1 else 0], style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Choose whose records to show", tint = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                    androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                        scopes.forEachIndexed { index, label ->
+                            androidx.compose.material3.DropdownMenuItem(
+                                text = { Text(label, fontWeight = if ((index == 1) == showAll) FontWeight.Bold else FontWeight.Normal) },
+                                onClick = { open = false; onShowAll(index == 1) },
+                            )
+                        }
+                    }
+                }
+            } else {
+                Text("My Bible Study", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f).padding(start = 4.dp))
+            }
+            com.emfitsolutions.gopreach.ui.screens.pipeline.RecycleBinToggle(on = showInactive, onChange = onShowInactive)
+        }
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
+    }
+}
+
 /** Welcome header — a flat, solid panel in the theme's own primary color
  * (never hard-coded green/blue, and no gradient — "use solid color in
  * themes, not gradient color"), rounded at the bottom to read as one soft
@@ -789,13 +984,15 @@ private fun PublisherWelcomeHeader(
     // was missing before.
     onOpenAccountSettings: () -> Unit,
     weatherFooter: @Composable () -> Unit = {},
+    // Shorter header on the Territory Map / Ministry tabs so the content below gets the room.
+    compact: Boolean = false,
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp))
             .heroBackground()
-            .padding(bottom = 20.dp),
+            .padding(bottom = if (compact) 8.dp else 20.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth().statusBarsPadding()) {
             Row(
@@ -860,7 +1057,7 @@ private fun PublisherWelcomeHeader(
                 if (subtitle.isNotBlank()) {
                     Text(subtitle, color = Color.White.copy(alpha = 0.9f), style = MaterialTheme.typography.bodyMedium)
                 }
-                Box(Modifier.padding(top = 6.dp, bottom = 4.dp)) { weatherFooter() }
+                if (!compact) Box(Modifier.padding(top = 6.dp, bottom = 4.dp)) { weatherFooter() }
                 // Preserves the pre-existing behavior exactly (only "Online"
                 // ever shows for the online case, no sync suffix) — this is
                 // just the same three pieces now sourced from strings.xml.
@@ -873,7 +1070,7 @@ private fun PublisherWelcomeHeader(
                         stringResource(Res.string.home_status_all_synced_suffix)
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                if (!compact) Row(verticalAlignment = Alignment.CenterVertically) {
                     // "Show the icon if online and the other online users
                     // just like before" — restores the 🟢/🔴 connectivity
                     // glyph and the tappable Online Users count next to it,
@@ -1008,9 +1205,6 @@ private fun publisherModuleTiles(
     // "Allow the publisher to see all his submitted Report record" —
     // its own tile since MONTHLY_REPORT's form only ever shows the
     // current/previous month, not the full history.
-    add(PublisherModuleTile(DashboardModuleId.SEARCHING, stringResource(Res.string.home_tile_searching_title), stringResource(Res.string.home_tile_searching_subtitle), Icons.Rounded.PersonSearch, Destinations.SEARCHING))
-    add(PublisherModuleTile(DashboardModuleId.RETURN_VISIT, stringResource(Res.string.home_tile_return_visit_title), stringResource(Res.string.home_tile_return_visit_subtitle), Icons.Rounded.PeopleAlt, Destinations.RETURN_VISIT))
-    add(PublisherModuleTile(DashboardModuleId.BIBLE_STUDY, stringResource(Res.string.home_tile_bible_study_title), stringResource(Res.string.home_tile_bible_study_subtitle), Icons.AutoMirrored.Rounded.MenuBook, Destinations.BIBLE_STUDY))
     // "FORWARD TO OTHER PUBLISHER" — this Publisher's own incoming queue.
     add(PublisherModuleTile(DashboardModuleId.FORWARDED_TO_ME, stringResource(Res.string.home_tile_forwarded_to_me_title), stringResource(Res.string.home_tile_forwarded_to_me_subtitle), Icons.AutoMirrored.Rounded.Forward, Destinations.PUBLISHER_FORWARD_REQUESTS, pendingPublisherForwards))
     // "House Holder Assignment" — this Publisher's own incoming queue, same
@@ -1039,7 +1233,6 @@ private fun publisherModuleTiles(
     // TerritoryMapScreen), so reaching it here is already read-only by
     // construction; scoped to the Publisher's own congregation (see
     // GoPreachNavGraph's MANAGE_TERRITORIES composable).
-    add(PublisherModuleTile(DashboardModuleId.TERRITORY_MAP, stringResource(Res.string.home_tile_territory_map_title), stringResource(Res.string.home_tile_territory_map_subtitle), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
     // "The record will be seen in the publishers module... called
     // 'Meeting Assignments.' The publisher will see only meeting
     // assignments under their congregation" — read-only, see

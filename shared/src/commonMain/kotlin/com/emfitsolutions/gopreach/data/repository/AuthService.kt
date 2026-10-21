@@ -44,6 +44,9 @@ interface AuthService {
     /** Creates an account for someone else without signing the current admin out. */
     suspend fun createAccount(email: String, password: String)
 
+    /** Sets a temporary password for another person's account. The server allows it only to whoever may manage that person's credentials. */
+    suspend fun adminResetPassword(personId: String, newPassword: String): Unit = throw AuthFailure.Other("Resetting another person's password is not available on this device.")
+
     // ---- Passkeys (WebAuthn). Only the HTTP service implements these; the phone's passkey manager does the signing. ----
 
     /** Asks the server for a sign-in challenge (no login needed). */

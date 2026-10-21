@@ -183,6 +183,11 @@ class AccountManagementViewModel(
         }
     }
 
+    /** Sets a temporary password for [row]'s person; [onResult] gets it (to show once) or the reason it could not be set. */
+    fun resetPassword(row: AccountRow, actingPersonId: String, onResult: (Result<String>) -> Unit) {
+        viewModelScope.launch { onResult(authRepository.adminResetPassword(row.person.id, actingPersonId)) }
+    }
+
     /** Same shape as [com.emfitsolutions.gopreach.ui.screens.users.ManageUsersViewModel.setAccountStatus]
      * — writes [Person.accountStatus] and audit-logs the before/after. */
     fun setAccountStatus(row: AccountRow, status: AccountStatus, actingPersonId: String) {

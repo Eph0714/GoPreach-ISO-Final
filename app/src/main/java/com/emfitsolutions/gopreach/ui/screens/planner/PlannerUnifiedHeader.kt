@@ -6,6 +6,9 @@ import com.emfitsolutions.gopreach.platform.Date
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,6 +65,8 @@ internal fun UnifiedPlannerHeader(
     // as its own selection rather than a [QuickDateRange] value.
     isCompareActive: Boolean = false,
     onSelectCompare: () -> Unit = {},
+    // The Main Form's own "My Planner" tab already names this card.
+    showTitle: Boolean = true,
 ) {
     val todayLabel = remember { SimpleDateFormat("EEEE, MMMM d, yyyy", Locale.getDefault()).format(Date()) }
     val periodFormat = remember { SimpleDateFormat("MMM d, yyyy", Locale.getDefault()) }
@@ -88,7 +93,7 @@ internal fun UnifiedPlannerHeader(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text("My Planner", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                if (showTitle) Text("My Planner", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(
                     if (backLabel != null) "Back to $backLabel" else todayLabel,
                     style = MaterialTheme.typography.labelMedium,
@@ -98,8 +103,8 @@ internal fun UnifiedPlannerHeader(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            IconButton(onClick = onOpenSections) {
-                Icon(Icons.Rounded.Tune, contentDescription = "Planner Sections", tint = MaterialTheme.colorScheme.primary)
+            FilledTonalIconButton(onClick = onOpenSections, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Tune, contentDescription = "Planner Sections")
             }
         }
 
@@ -159,6 +164,7 @@ internal fun UnifiedPlannerHeader(
                 modifier = Modifier.padding(top = 6.dp),
             )
         }
+        Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, end = 12.dp).height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
     }
 }
 

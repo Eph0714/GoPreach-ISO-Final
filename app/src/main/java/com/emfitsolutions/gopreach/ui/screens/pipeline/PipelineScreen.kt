@@ -8,6 +8,7 @@ import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.platform.AppPermission
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,9 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.Forward
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Info
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.Streetview
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.RestoreFromTrash
@@ -184,6 +188,15 @@ fun PipelineScreen(
     // detail returns to wherever the user came from (the planner), not to
     // this screen's list they never saw.
     initialPersonId: String? = null,
+    /** Hosted as a Main Form tab (Ministry): the list drops its own title bar. */
+    embedded: Boolean = false,
+    /** Ministry tab "My ..." choice: list only this publisher's own records (otherwise everything visible to them). */
+    mineOnly: Boolean = false,
+    /** When the host (the Ministry tab) owns the recycle-bin toggle it passes the state here and the list shows no toggle of its own. */
+    showInactive: Boolean = false,
+    onShowInactiveChange: ((Boolean) -> Unit)? = null,
+    /** Show Maps: opens the Territory Map on a record's saved spot. Without it the spot opens in the phone's map app. */
+    onOpenMap: ((lat: Double, lng: Double, name: String) -> Unit)? = null,
     onBack: () -> Unit,
     viewModel: PipelineViewModel = koinViewModel(),
 ) {
@@ -208,6 +221,11 @@ fun PipelineScreen(
             congregationId = congregationId,
             stage = stage,
             canPermanentlyDelete = canPermanentlyDelete,
+            embedded = embedded,
+            mineOnly = mineOnly,
+            hostShowInactive = showInactive,
+            hostControlsInactive = onShowInactiveChange != null,
+            onOpenMap = onOpenMap,
             onBack = onBack,
             onOpenPerson = { selectedPerson = it },
             viewModel = viewModel,
@@ -220,8 +238,26 @@ fun PipelineScreen(
             congregationName = congregationName ?: "—",
             stage = stage,
             canManageAllVisitHistory = canManageAllVisitHistory,
+            canPermanentlyDelete = canPermanentlyDelete,
             onBack = { if (initialPersonId != null && current.id == initialPersonId) onBack() else selectedPerson = null },
             viewModel = viewModel,
+        )
+    }
+}
+
+/** A small recycle-bin icon: on = the list also shows the records that were moved to Inactive (each with a restore button); off = active records only. */
+@Composable
+internal fun RecycleBinToggle(on: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val primary = MaterialTheme.colorScheme.primary
+    IconButton(
+        onClick = { onChange(!on) },
+        modifier = modifier.size(40.dp).then(if (on) Modifier.background(primary.copy(alpha = 0.15f), androidx.compose.foundation.shape.CircleShape) else Modifier),
+    ) {
+        Icon(
+            Icons.Rounded.RestoreFromTrash,
+            contentDescription = if (on) "Recycle bin: hide inactive records" else "Recycle bin: show inactive records",
+            modifier = Modifier.size(22.dp),
+            tint = if (on) primary else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -234,16 +270,42 @@ private fun PipelineListScreen(
     congregationId: String,
     stage: PipelineStage,
     canPermanentlyDelete: Boolean,
+    embedded: Boolean,
+    mineOnly: Boolean,
+    hostShowInactive: Boolean,
+    hostControlsInactive: Boolean,
+    onOpenMap: ((Double, Double, String) -> Unit)?,
     onBack: () -> Unit,
     onOpenPerson: (InterestedPerson) -> Unit,
     viewModel: PipelineViewModel,
 ) {
     val peopleFlow = remember(publisherPersonId, congregationId, stage) { viewModel.visibleFor(publisherPersonId, congregationId, stage) }
     val allPeople by peopleFlow.collectAsStateWithLifecycle(initialValue = emptyList())
-    var showInactive by remember { mutableStateOf(false) }
-    val people = allPeople.filter { showInactive || it.status == RecordStatus.ACTIVE }
+    var localShowInactive by remember { mutableStateOf(false) }
+    val showInactive = if (hostControlsInactive) hostShowInactive else localShowInactive
+    // View: All Authorized Records (the default) / by municipality / by barangay. The choices come only from the person's authorized territory assignments.
+    var areaMode by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(AreaFilterMode.ALL) }
+    var areaMunicipality by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    var areaBarangay by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    var searchText by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    val publisherNames by viewModel.personNames.collectAsStateWithLifecycle(initialValue = emptyMap())
+    val territoryAreas by remember(currentPersonId, congregationId) { viewModel.authorizedAreasFor(currentPersonId, congregationId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    // With no territory assignment at all, the places of the records the person can already see stand in (never anyone else's).
+    val areaOptions = if (territoryAreas.isNotEmpty()) territoryAreas else allPeople.mapNotNull { p ->
+        val m = p.cityMunicipality?.trim().orEmpty(); val b = p.barangay?.trim().orEmpty()
+        if (m.isEmpty() || b.isEmpty()) null else AuthorizedArea(m, b)
+    }.distinct()
+    // Filtering happens here, before the count and the list are built.
+    val people = allPeople.filter { (showInactive || it.status == RecordStatus.ACTIVE) && (!mineOnly || it.publisherPersonId == publisherPersonId) }
+        .filterByArea(areaMode, areaMunicipality, areaBarangay)
+        .filter { it.matchesSearch(searchText, publisherNames[it.publisherPersonId]) }
+    // Searching and Return Visit show which publisher the record is enrolled to (Bible Study stays as it was).
+    val showPublisher = stage != PipelineStage.BIBLE_STUDY
     var showCreateDialog by remember { mutableStateOf(false) }
-    var pendingDelete by remember { mutableStateOf<InterestedPerson?>(null) }
+    // Show Street View / Show Maps: the record whose street photos are open, and the one that has no saved location to show
+    var streetViewFor by remember { mutableStateOf<InterestedPerson?>(null) }
+    var noLocationFor by remember { mutableStateOf<Pair<InterestedPerson, String>?>(null) }
+    val localContext = androidx.compose.ui.platform.LocalContext.current
     val showToast = rememberActionToast()
 
     // Bug fix: surfaces a save failure (e.g. from a corrupt/oversized photo)
@@ -253,7 +315,7 @@ private fun PipelineListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (!embedded) TopAppBar(
                 title = { Text(stage.label()) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )
@@ -276,12 +338,21 @@ private fun PipelineListScreen(
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             HideInFullScreen(true) {
-            androidx.compose.material3.FilterChip(selected = showInactive, onClick = { showInactive = !showInactive }, label = { Text("Include inactive") }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            if (!hostControlsInactive) Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.End) {
+                RecycleBinToggle(localShowInactive, onChange = { localShowInactive = it })
+            }
+            }
+            HideInFullScreen(true) {
+                AreaFilterBar(
+                    areas = areaOptions, mode = areaMode, municipality = areaMunicipality, barangay = areaBarangay,
+                    onChange = { m, mun, bar -> areaMode = m; areaMunicipality = mun; areaBarangay = bar },
+                    query = searchText, onQueryChange = { searchText = it },
+                )
             }
             if (people.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     RecordFound(0)
-                    Text("No records yet.", style = MaterialTheme.typography.bodyMedium)
+                    Text(if (areaMode != AreaFilterMode.ALL || searchText.isNotBlank()) "No records match. Clear the search or the filter to see all your authorized records." else "No records yet.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
                 val viewMode = rememberRecordViewMode("pipeline_people")
@@ -294,28 +365,28 @@ private fun PipelineListScreen(
                     item { RecordViewToggle(viewMode) }
                     recordItems(
                         viewMode, people, { it.id },
-                        listOf(
+                        listOf<UniversalColumn<InterestedPerson>>(
                                 UniversalColumn("Name", 200.dp) { it.name },
                                 UniversalColumn("Address", 280.dp) { it.address },
                                 UniversalColumn("Status", 90.dp) { if (it.status == RecordStatus.INACTIVE) "Inactive" else "Active" },
-                        ),
+                        ) + (if (showPublisher) listOf<UniversalColumn<InterestedPerson>>(UniversalColumn("Publisher", 200.dp) { if (it.publisherPersonId.isBlank()) "Unassigned" else publisherNames[it.publisherPersonId] ?: "—" }) else emptyList<UniversalColumn<InterestedPerson>>()),
                         onRowClick = { onOpenPerson(it) },
                     ) { person ->
                         Card(modifier = Modifier.fillMaxWidth().clickable { onOpenPerson(person) }) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Column {
-                                    Text(person.name, style = MaterialTheme.typography.titleMedium)
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     Text(person.address, style = MaterialTheme.typography.bodySmall)
-                                    if (person.publisherPersonId != publisherPersonId) {
-                                        val ownerName by remember(person.publisherPersonId) { viewModel.personName(person.publisherPersonId) }.collectAsStateWithLifecycle(initialValue = null)
+                                    if (showPublisher || person.publisherPersonId != publisherPersonId) {
+                                        val ownerName = publisherNames[person.publisherPersonId]
                                         Text(
-                                            if (person.publisherPersonId.isBlank()) "Unassigned" else "Assigned to: ${ownerName ?: "—"}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            if (person.publisherPersonId.isBlank()) "Unassigned" else if (showPublisher) "Publisher: ${ownerName ?: "—"}" else "Assigned to: ${ownerName ?: "—"}",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = if (showPublisher) androidx.compose.ui.text.font.FontWeight.SemiBold else null,
+                                            color = if (showPublisher) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
                                     if (person.status == RecordStatus.INACTIVE) {
@@ -328,15 +399,19 @@ private fun PipelineListScreen(
                                         PublisherForwardStatusBadge(person = person, viewModel = viewModel)
                                     }
                                 }
-                                if (person.publisherPersonId != publisherPersonId) {
-                                    // Someone else's (or an unassigned) record: view / add visit only, never delete or reactivate.
-                                } else if (person.status == RecordStatus.ACTIVE) {
-                                    IconButton(onClick = { pendingDelete = person }) { Icon(Icons.Rounded.Delete, contentDescription = "Delete") }
-                                } else {
-                                    IconButton(onClick = { viewModel.setStatus(person, RecordStatus.ACTIVE, currentPersonId); showToast("\"${person.name}\" reactivated.") }) {
-                                        Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Reactivate")
-                                    }
-                                }
+                                // Three clear actions beside the name. Edit and Delete live inside the details, never here.
+                                RecordQuickActions(
+                                    onDetails = { onOpenPerson(person) },
+                                    onMap = {
+                                        val c = person.validCoordinates()
+                                        when {
+                                            c == null -> noLocationFor = person to "it on the map"
+                                            onOpenMap != null -> onOpenMap(c.first, c.second, person.name)
+                                            else -> com.emfitsolutions.gopreach.ui.components.openCoordinatesInMaps(localContext, c.first, c.second, person.name)
+                                        }
+                                    },
+                                    onStreetView = { if (person.validCoordinates() == null) noLocationFor = person to "Street View" else streetViewFor = person },
+                                )
                             }
                         }
                     }
@@ -369,14 +444,20 @@ private fun PipelineListScreen(
         )
     }
 
-    val toDelete = pendingDelete
-    if (toDelete != null) {
-        DeleteChoiceDialog(
-            recordLabel = toDelete.name,
-            canPermanentlyDelete = canPermanentlyDelete,
-            onDismiss = { pendingDelete = null },
-            onMoveToInactive = { viewModel.setStatus(toDelete, RecordStatus.INACTIVE, currentPersonId) },
-            onDeletePermanently = { viewModel.permanentlyDelete(toDelete, currentPersonId) },
+    // Street View of the saved spot: real street photos where the provider has them, otherwise a clear message and the ordinary map (see StreetViewDialog)
+    streetViewFor?.let { p ->
+        val lat = p.gpsLat
+        val lng = p.gpsLng
+        if (lat != null && lng != null) com.emfitsolutions.gopreach.ui.components.StreetViewDialog(lat = lat, lng = lng, title = p.name, onClose = { streetViewFor = null })
+    }
+    // A record with no usable coordinates: say so, and offer the details (where an owner can add or correct the location) - never a guessed spot
+    noLocationFor?.let { (p, what) ->
+        AlertDialog(
+            onDismissRequest = { noLocationFor = null },
+            title = { Text("No saved location") },
+            text = { Text("${p.name} has no valid saved coordinates, so $what cannot be shown. Open the details to add or correct the location.") },
+            confirmButton = { TextButton(onClick = { noLocationFor = null; onOpenPerson(p) }) { Text("Open details") } },
+            dismissButton = { TextButton(onClick = { noLocationFor = null }) { Text("Close") } },
         )
     }
 }
@@ -833,6 +914,8 @@ internal fun PipelinePersonDetailScreen(
     congregationName: String,
     stage: PipelineStage,
     canManageAllVisitHistory: Boolean = false,
+    /** Whether Delete may offer a permanent delete (it always offers Move to Inactive). */
+    canPermanentlyDelete: Boolean = false,
     onBack: () -> Unit,
     viewModel: PipelineViewModel,
 ) {
@@ -849,6 +932,7 @@ internal fun PipelinePersonDetailScreen(
     val livePerson by livePersonFlow.collectAsStateWithLifecycle(initialValue = person)
     var showAddVisit by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
     var showForwardDialog by remember { mutableStateOf(false) }
     var showForwardToPublisherDialog by remember { mutableStateOf(false) }
     var selectedVisit by remember { mutableStateOf<Visit?>(null) }
@@ -892,6 +976,16 @@ internal fun PipelinePersonDetailScreen(
         PipelineStage.RETURN_VISIT -> true
     }
 
+    if (showDeleteDialog) {
+        DeleteChoiceDialog(
+            recordLabel = livePerson.name,
+            canPermanentlyDelete = canPermanentlyDelete,
+            onDismiss = { showDeleteDialog = false },
+            onMoveToInactive = { viewModel.setStatus(livePerson, RecordStatus.INACTIVE, currentPersonId); showDeleteDialog = false; onBack() },
+            onDeletePermanently = { viewModel.permanentlyDelete(livePerson, currentPersonId); showDeleteDialog = false; onBack() },
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -904,6 +998,12 @@ internal fun PipelinePersonDetailScreen(
                     // stage.
                     if (canManageParent) {
                         IconButton(onClick = { showEditDialog = true }) { Icon(Icons.Rounded.Edit, contentDescription = "Edit") }
+                        // Delete lives here, inside the details, and asks first. A record already moved to Inactive offers Reactivate instead.
+                        if (livePerson.status == RecordStatus.ACTIVE) {
+                            IconButton(onClick = { showDeleteDialog = true }) { Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error) }
+                        } else {
+                            IconButton(onClick = { viewModel.setStatus(livePerson, RecordStatus.ACTIVE, currentPersonId); showToast("\"${livePerson.name}\" reactivated.") }) { Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Reactivate") }
+                        }
                     }
                 },
             )
@@ -1755,4 +1855,31 @@ private fun VisitOutcomeDropdown(selected: VisitOutcome, onSelected: (VisitOutco
             }
         }
     }
+}
+
+/** The coordinates a record can really be shown at: both present, finite, in range and not the (0, 0) of an unset position. Anything else is "no saved location". */
+private fun InterestedPerson.validCoordinates(): Pair<Double, Double>? {
+    val lat = gpsLat ?: return null
+    val lng = gpsLng ?: return null
+    if (!lat.isFinite() || !lng.isFinite() || lat !in -90.0..90.0 || lng !in -180.0..180.0 || (lat == 0.0 && lng == 0.0)) return null
+    return lat to lng
+}
+
+/** Show Details, Show Maps and Show Street View beside a record's name: same size and spacing, each in its own colour (violet, green, gold). */
+@Composable
+private fun RecordQuickActions(onDetails: () -> Unit, onMap: () -> Unit, onStreetView: () -> Unit) {
+    androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        RecordQuickAction(Icons.Rounded.Info, "Show Details", androidx.compose.ui.graphics.Color(0xFF7E57C2), onDetails)
+        RecordQuickAction(Icons.Rounded.Map, "Show Maps", androidx.compose.ui.graphics.Color(0xFF2E8B57), onMap)
+        RecordQuickAction(Icons.Rounded.Streetview, "Show Street View", androidx.compose.ui.graphics.Color(0xFFC79100), onStreetView)
+    }
+}
+
+@Composable
+private fun RecordQuickAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    androidx.compose.material3.FilledTonalIconButton(
+        onClick = onClick,
+        modifier = Modifier.size(40.dp),
+        colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(containerColor = tint.copy(alpha = 0.14f), contentColor = tint),
+    ) { Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp)) }
 }

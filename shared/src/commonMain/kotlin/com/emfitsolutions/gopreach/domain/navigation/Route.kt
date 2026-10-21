@@ -67,3 +67,29 @@ object RouteFormat {
         }
     }
 }
+
+/** One route the driver can pick, with a label that is only ever drawn from the real numbers of the routes offered. */
+data class RouteChoice(val route: Route, val label: String)
+
+object RouteChoices {
+    /**
+     * The routes the provider returned, quickest first. "Fastest" goes to the least travel time and "Shortest" to the least distance (only when
+     * they are different routes); everything else is "Alternative". One lone route is just "Route" - it is never called fastest or shortest
+     * when there was nothing to compare it with.
+     */
+    fun label(routes: List<Route>): List<RouteChoice> {
+        if (routes.size <= 1) return routes.map { RouteChoice(it, "Route") }
+        val byTime = routes.sortedBy { it.durationSeconds }
+        val fastest = byTime.first()
+        val shortest = routes.minByOrNull { it.distanceMeters }
+        return byTime.map { r ->
+            val label = when {
+                r === fastest && r === shortest -> "Fastest and shortest"
+                r === fastest -> "Fastest"
+                r === shortest -> "Shortest"
+                else -> "Alternative"
+            }
+            RouteChoice(r, label)
+        }
+    }
+}

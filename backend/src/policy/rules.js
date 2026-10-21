@@ -109,6 +109,11 @@ function helpers(actor, grant, get) {
   };
 }
 
+/** May [actor] reset the sign-in of [targetId]? The same rule that lets them edit that person's username. */
+export async function canManageCredentials(actor, grant, targetId, get) {
+  return helpers(actor, grant, get).canManageCredentialsFor(targetId);
+}
+
 const isPrivilegedRoleType = (roleType) => roleType === 'ADMIN:SUPER_ADMIN' || roleType === 'ADMIN:CIRCUIT_OVERSEER';
 
 /** Owner-only collections: the document's own publisherPersonId must be the caller. */

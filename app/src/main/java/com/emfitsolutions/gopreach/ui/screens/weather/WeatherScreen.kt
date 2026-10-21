@@ -135,6 +135,8 @@ fun WeatherScreen(
     personId: String,
     territoryScope: TerritoryWeatherScope,
     onBack: () -> Unit,
+    /** Shown inside another screen (the Publisher home tab): no top bar of its own; refresh moves into the list. */
+    embedded: Boolean = false,
     viewModel: WeatherViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -171,7 +173,7 @@ fun WeatherScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            if (!embedded) TopAppBar(
                 title = { Text("Weather") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
                 actions = {
@@ -188,6 +190,12 @@ fun WeatherScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            if (embedded && state.place != null) item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    if (state.loading) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    IconButton(onClick = viewModel::refresh, enabled = !state.loading) { Icon(Icons.Rounded.Refresh, contentDescription = "Refresh weather") }
+                }
+            }
             item { LocationHeader(state, showPicker) { picker = !showPicker } }
             item {
                 AnimatedVisibility(showPicker) {

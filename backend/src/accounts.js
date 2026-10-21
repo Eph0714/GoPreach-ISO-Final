@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { rateLimit } from './rateLimit.js';
 import { loadActor } from './policy/index.js';
+import { loadGrant, canManageCredentials } from './policy/rules.js';
 import { hashPassword, verifyPassword } from './passwords.js';
 import { signAccessToken, ACCESS_TOKEN_SECONDS, personIdFromEmail } from './auth.js';
 import { config } from './config.js';
@@ -15,6 +16,7 @@ import { mountPasskeys } from './passkeys.js';
  *   POST /v1/auth/reauth    { password }           (login)  -> a new pair stamped "password just typed"
  *   POST /v1/auth/password  { newPassword }        (login)  -> changes the caller's password; needs a password typed in the last 10 minutes
  *   POST /v1/auth/accounts  { personId, password } (login)  -> creates an account for someone else (Super-Admin or an admin-role holder only)
+ *   POST /v1/auth/accounts/:personId/password { password } (login) -> sets a temporary password for someone whose credentials the caller may manage
  *
  * Failed sign-ins are limited per address and per account, and a wrong password and an unknown account look identical.
  */
@@ -130,6 +132,25 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       res.status(201).json({ ok: true });
     } catch (e) {
       console.error('account creation failed', e);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  app.post('/v1/auth/accounts/:personId/password', enabled, auth, async (req, res) => {
+    const { personId } = req.params;
+    const { password } = req.body ?? {};
+    if (!PERSON_ID_RE.test(personId)) return res.status(400).json({ error: 'bad-person-id' });
+    if (typeof password !== 'string' || password.length < 6 || password.length > 200) return res.status(400).json({ error: 'weak-password' });
+    try {
+      const get = (c, i) => store.get(c, i);
+      const actor = await loadActor(req.personId, get);
+      if (!actor.known || !(await canManageCredentials(actor, await loadGrant(req.personId, get), personId, get))) return res.status(403).json({ error: 'Not allowed' });
+      if (!(await store.getAccount(personId))) return res.status(404).json({ error: 'invalid-user' });
+      await store.setPassword(personId, await hashPassword(password));
+      await store.deleteRefreshTokens(personId); // sessions made with the old password end
+      res.json({ ok: true });
+    } catch (e) {
+      console.error('password reset failed', e);
       res.status(500).json({ error: 'Server error' });
     }
   });

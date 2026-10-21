@@ -37,8 +37,15 @@ interface LocationTracker {
     /** A separate question from [hasLocationPermission]: the device's location services (GPS/network provider) may be switched off. */
     fun isLocationServicesEnabled(): Boolean
 
+    /**
+     * A real, precise fix for capturing coordinates: answers at once from a recent precise fix, otherwise listens until one is precise
+     * enough (or time runs out and the best one heard is returned). Never invents a position; null when nothing real was heard.
+     */
     suspend fun getCurrentLocation(): LatLng?
     suspend fun getLastKnownLocation(): LatLng?
+
+    /** Called when the app comes to the front: lets the GPS settle so the first capture or map view starts from a precise fix. Does nothing by default. */
+    suspend fun warmUp() {}
 
     fun requestLocationUpdatesFlow(intervalMillis: Long = 15_000L, minUpdateIntervalMillis: Long = 8_000L): Flow<LatLng>
 

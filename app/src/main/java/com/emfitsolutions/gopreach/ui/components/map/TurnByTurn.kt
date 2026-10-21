@@ -51,6 +51,8 @@ import com.emfitsolutions.gopreach.domain.navigation.Maneuver
 import com.emfitsolutions.gopreach.domain.navigation.NavigationEngine
 import com.emfitsolutions.gopreach.domain.navigation.NavigationProgress
 import com.emfitsolutions.gopreach.domain.navigation.Route
+import com.emfitsolutions.gopreach.domain.navigation.RouteChoice
+import com.emfitsolutions.gopreach.domain.navigation.RouteChoices
 import com.emfitsolutions.gopreach.domain.navigation.RouteFormat
 import com.emfitsolutions.gopreach.domain.navigation.RoutingException
 import com.emfitsolutions.gopreach.platform.formatDate
@@ -60,7 +62,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
-enum class GuidancePhase { IDLE, ROUTING, ACTIVE, REROUTING, ARRIVED }
+/** PREVIEW: the routes were found and the driver is choosing one; nothing is being followed yet. */
+enum class GuidancePhase { IDLE, ROUTING, PREVIEW, ACTIVE, REROUTING, ARRIVED }
 
 data class GuidanceDestination(val name: String, val lat: Double, val lng: Double)
 
@@ -92,6 +95,12 @@ class TurnByTurnState(
     var voiceOn by mutableStateOf(initialVoiceOn)
         private set
 
+    /** The routes on offer while previewing (quickest first) and which one is picked. Empty outside the preview. */
+    var choices by mutableStateOf<List<RouteChoice>>(emptyList())
+        private set
+    var selectedIndex by mutableStateOf(0)
+        private set
+
     init { voice.muted = !initialVoiceOn }
 
     private var engine: NavigationEngine? = null
@@ -108,6 +117,44 @@ class TurnByTurnState(
         phase = GuidancePhase.ROUTING
         message = null
         job = scope.launch { fetch(fromLat, fromLng, first = true) }
+    }
+
+    /** Finds the routes (the best one and any alternatives) and shows them to choose from; nothing is followed until [begin]. */
+    fun preview(to: GuidanceDestination, fromLat: Double, fromLng: Double) {
+        stop()
+        destination = to
+        phase = GuidancePhase.ROUTING
+        message = null
+        job = scope.launch {
+            try {
+                val found = RouteChoices.label(routing.routes(fromLat, fromLng, to.lat, to.lng, alternatives = 2))
+                choices = found
+                selectedIndex = 0
+                route = found.first().route
+                phase = GuidancePhase.PREVIEW
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: RoutingException) {
+                phase = GuidancePhase.IDLE; destination = null; route = null; choices = emptyList()
+                message = e.message
+            }
+        }
+    }
+
+    fun select(index: Int) {
+        val c = choices.getOrNull(index) ?: return
+        selectedIndex = index
+        route = c.route
+    }
+
+    /** Starts guidance on the chosen route. */
+    fun begin() {
+        val r = route ?: return
+        if (phase != GuidancePhase.PREVIEW) return
+        engine = NavigationEngine(r)
+        progress = null
+        choices = emptyList()
+        phase = GuidancePhase.ACTIVE
     }
 
     private suspend fun fetch(fromLat: Double, fromLng: Double, first: Boolean) {
@@ -169,6 +216,7 @@ class TurnByTurnState(
         voice.stopSpeaking()
         phase = GuidancePhase.IDLE
         route = null; engine = null; progress = null; destination = null; message = null
+        choices = emptyList(); selectedIndex = 0
         warnedOfflineReroute = false
     }
 
@@ -234,6 +282,54 @@ fun GuidanceBanner(state: TurnByTurnState, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * "Choose a route": every route the provider found, with its real travel time, distance and arrival time, labelled only from those numbers
+ * (see [RouteChoices]). Picking one redraws it on the map; Start navigation follows it. Times are the routing service's estimate for normal
+ * driving, not live traffic.
+ */
+@Composable
+fun RoutePreviewPanel(state: TurnByTurnState, onStart: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+    val now = nowMillis()
+    Surface(modifier = modifier, shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 10.dp) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(if (state.choices.size > 1) "Choose a route" else "Route found", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    state.destination?.name?.let { Text("To $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                }
+                IconButton(onClick = onCancel) { Icon(Icons.Rounded.Close, contentDescription = "Cancel") }
+            }
+            state.choices.forEachIndexed { index, choice ->
+                val selected = index == state.selectedIndex
+                val r = choice.route
+                Surface(
+                    onClick = { state.select(index) },
+                    shape = RoundedCornerShape(14.dp),
+                    color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.10f) else MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(if (selected) 2.dp else 1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+                    modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) { contentDescription = "${choice.label}, ${RouteFormat.duration(r.durationSeconds)}, ${RouteFormat.distance(r.distanceMeters)}" },
+                ) {
+                    Row(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(choice.label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                "${RouteFormat.duration(r.durationSeconds)} · ${RouteFormat.distance(r.distanceMeters)}",
+                                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                            )
+                        }
+                        Text("Arrive ${formatDate(now + (r.durationSeconds * 1000).toLong(), "h:mm a")}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            Text(
+                "Estimated for normal driving, not live traffic. Follow road signs and traffic rules.",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            androidx.compose.material3.Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Start navigation") }
+        }
+    }
+}
+
 /** The bottom card: distance and time left, a note when something is wrong, the voice switch and End. */
 @Composable
 fun GuidancePanel(state: TurnByTurnState, onEnd: () -> Unit, modifier: Modifier = Modifier) {
@@ -268,34 +364,99 @@ fun GuidancePanel(state: TurnByTurnState, onEnd: () -> Unit, modifier: Modifier 
     }
 }
 
-/** The route drawn on the map: a white-edged blue line under the My Location arrow and above the base map. */
+/**
+ * The route drawn on the map, styled like a premium navigation app: a soft blue glow, a deep-blue edge, a bright blue road core, a thin light
+ * highlight down the middle, and small white chevrons pointing the way to go. Everything sits under the My Location arrow and above the base map,
+ * and every width grows with the zoom so it reads like a highway at any scale.
+ */
 object RouteLineLayer {
     private const val SRC = "gp-route-src"
+    private const val ALT_SRC = "gp-route-alt-src"
+    private const val ALT_CASING = "gp-route-alt-casing"
+    private const val ALT_LINE = "gp-route-alt-line"
+    private const val GLOW = "gp-route-glow"
     private const val CASING = "gp-route-casing"
     private const val LINE = "gp-route-line"
+    private const val SHINE = "gp-route-shine"
+    private const val ARROWS = "gp-route-arrows"
+    private const val ARROW_IMAGE = "gp-route-chevron"
 
-    fun set(style: org.maplibre.android.maps.Style, points: List<Pair<Double, Double>>?) {
+    private val glowColor = "#3D8BFF"
+    private val edgeColor = "#0B3C9E"
+    private val coreColor = "#2A7BFF"
+    private val shineColor = "#9CCBFF"
+
+    /** A width in pixels that grows with the zoom (values at zoom 12 / 15 / 17 / 19). */
+    private fun widthByZoom(at12: Float, at15: Float, at17: Float, at19: Float) = org.maplibre.android.style.expressions.Expression.interpolate(
+        org.maplibre.android.style.expressions.Expression.exponential(1.4f), org.maplibre.android.style.expressions.Expression.zoom(),
+        org.maplibre.android.style.expressions.Expression.stop(12, at12), org.maplibre.android.style.expressions.Expression.stop(15, at15),
+        org.maplibre.android.style.expressions.Expression.stop(17, at17), org.maplibre.android.style.expressions.Expression.stop(19, at19),
+    )
+
+    /** A white chevron pointing right (east); the map turns it to follow the line, so it always points the way to go. */
+    private fun chevron(): android.graphics.Bitmap {
+        val size = 64
+        val bitmap = android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        val path = android.graphics.Path().apply {
+            moveTo(size * 0.26f, size * 0.20f)
+            lineTo(size * 0.74f, size * 0.50f)
+            lineTo(size * 0.26f, size * 0.80f)
+            lineTo(size * 0.40f, size * 0.50f)
+            close()
+        }
+        canvas.drawPath(path, android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE; style = android.graphics.Paint.Style.FILL })
+        return bitmap
+    }
+
+    /** [points] is the route being followed or previewed; [alternatives] are the other choices, drawn thinner and greyer underneath it. */
+    fun set(style: org.maplibre.android.maps.Style, points: List<Pair<Double, Double>>?, alternatives: List<List<Pair<Double, Double>>> = emptyList()) {
+        val round = org.maplibre.android.style.layers.Property.LINE_CAP_ROUND
+        val roundJoin = org.maplibre.android.style.layers.Property.LINE_JOIN_ROUND
         if (style.getSource(SRC) == null) {
             style.addSource(org.maplibre.android.style.sources.GeoJsonSource(SRC, org.maplibre.geojson.FeatureCollection.fromFeatures(emptyList<org.maplibre.geojson.Feature>())))
+            style.addImage(ARROW_IMAGE, chevron())
+            style.addSource(org.maplibre.android.style.sources.GeoJsonSource(ALT_SRC, org.maplibre.geojson.FeatureCollection.fromFeatures(emptyList<org.maplibre.geojson.Feature>())))
+            val altCasing = org.maplibre.android.style.layers.LineLayer(ALT_CASING, ALT_SRC).withProperties(
+                org.maplibre.android.style.layers.PropertyFactory.lineColor("#FFFFFF"), org.maplibre.android.style.layers.PropertyFactory.lineOpacity(0.85f),
+                org.maplibre.android.style.layers.PropertyFactory.lineWidth(widthByZoom(8f, 14f, 22f, 30f)), org.maplibre.android.style.layers.PropertyFactory.lineCap(round), org.maplibre.android.style.layers.PropertyFactory.lineJoin(roundJoin),
+            )
+            val altLine = org.maplibre.android.style.layers.LineLayer(ALT_LINE, ALT_SRC).withProperties(
+                org.maplibre.android.style.layers.PropertyFactory.lineColor("#7C8CA6"),
+                org.maplibre.android.style.layers.PropertyFactory.lineWidth(widthByZoom(4.5f, 9f, 15f, 21f)), org.maplibre.android.style.layers.PropertyFactory.lineCap(round), org.maplibre.android.style.layers.PropertyFactory.lineJoin(roundJoin),
+            )
+            val glow = org.maplibre.android.style.layers.LineLayer(GLOW, SRC).withProperties(
+                org.maplibre.android.style.layers.PropertyFactory.lineColor(glowColor), org.maplibre.android.style.layers.PropertyFactory.lineOpacity(0.28f), org.maplibre.android.style.layers.PropertyFactory.lineBlur(6f), org.maplibre.android.style.layers.PropertyFactory.lineWidth(widthByZoom(14f, 30f, 46f, 62f)), org.maplibre.android.style.layers.PropertyFactory.lineCap(round), org.maplibre.android.style.layers.PropertyFactory.lineJoin(roundJoin),
+            )
             val casing = org.maplibre.android.style.layers.LineLayer(CASING, SRC).withProperties(
-                org.maplibre.android.style.layers.PropertyFactory.lineColor("#FFFFFF"),
-                org.maplibre.android.style.layers.PropertyFactory.lineWidth(10f),
-                org.maplibre.android.style.layers.PropertyFactory.lineCap(org.maplibre.android.style.layers.Property.LINE_CAP_ROUND),
-                org.maplibre.android.style.layers.PropertyFactory.lineJoin(org.maplibre.android.style.layers.Property.LINE_JOIN_ROUND),
+                org.maplibre.android.style.layers.PropertyFactory.lineColor(edgeColor), org.maplibre.android.style.layers.PropertyFactory.lineWidth(widthByZoom(9f, 20f, 32f, 44f)), org.maplibre.android.style.layers.PropertyFactory.lineCap(round), org.maplibre.android.style.layers.PropertyFactory.lineJoin(roundJoin),
             )
             val line = org.maplibre.android.style.layers.LineLayer(LINE, SRC).withProperties(
-                org.maplibre.android.style.layers.PropertyFactory.lineColor("#6A1B9A"),
-                org.maplibre.android.style.layers.PropertyFactory.lineWidth(6f),
-                org.maplibre.android.style.layers.PropertyFactory.lineCap(org.maplibre.android.style.layers.Property.LINE_CAP_ROUND),
-                org.maplibre.android.style.layers.PropertyFactory.lineJoin(org.maplibre.android.style.layers.Property.LINE_JOIN_ROUND),
+                org.maplibre.android.style.layers.PropertyFactory.lineColor(coreColor), org.maplibre.android.style.layers.PropertyFactory.lineWidth(widthByZoom(6f, 14f, 24f, 34f)), org.maplibre.android.style.layers.PropertyFactory.lineCap(round), org.maplibre.android.style.layers.PropertyFactory.lineJoin(roundJoin),
             )
-            if (style.getLayer(CurrentLocationLayer.LAYER_ID) != null) {
-                style.addLayerBelow(casing, CurrentLocationLayer.LAYER_ID)
-                style.addLayerBelow(line, CurrentLocationLayer.LAYER_ID)
-            } else {
-                style.addLayer(casing); style.addLayer(line)
-            }
+            val shine = org.maplibre.android.style.layers.LineLayer(SHINE, SRC).withProperties(
+                org.maplibre.android.style.layers.PropertyFactory.lineColor(shineColor), org.maplibre.android.style.layers.PropertyFactory.lineOpacity(0.7f), org.maplibre.android.style.layers.PropertyFactory.lineWidth(widthByZoom(1.5f, 4f, 7f, 10f)), org.maplibre.android.style.layers.PropertyFactory.lineCap(round), org.maplibre.android.style.layers.PropertyFactory.lineJoin(roundJoin),
+            )
+            val arrows = org.maplibre.android.style.layers.SymbolLayer(ARROWS, SRC).withProperties(
+                org.maplibre.android.style.layers.PropertyFactory.symbolPlacement(org.maplibre.android.style.layers.Property.SYMBOL_PLACEMENT_LINE),
+                org.maplibre.android.style.layers.PropertyFactory.symbolSpacing(64f),
+                org.maplibre.android.style.layers.PropertyFactory.iconImage(ARROW_IMAGE),
+                org.maplibre.android.style.layers.PropertyFactory.iconSize(widthByZoom(0.30f, 0.50f, 0.72f, 0.95f)),
+                org.maplibre.android.style.layers.PropertyFactory.iconRotationAlignment(org.maplibre.android.style.layers.Property.ICON_ROTATION_ALIGNMENT_MAP),
+                org.maplibre.android.style.layers.PropertyFactory.iconAllowOverlap(true),
+                org.maplibre.android.style.layers.PropertyFactory.iconIgnorePlacement(true),
+                org.maplibre.android.style.layers.PropertyFactory.iconOpacity(0.92f),
+            )
+            val layers = listOf(altCasing, altLine, glow, casing, line, shine, arrows)
+            if (style.getLayer(CurrentLocationLayer.LAYER_ID) != null) layers.forEach { style.addLayerBelow(it, CurrentLocationLayer.LAYER_ID) } else layers.forEach { style.addLayer(it) }
         }
+        style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>(ALT_SRC)?.setGeoJson(
+            org.maplibre.geojson.FeatureCollection.fromFeatures(
+                alternatives.filter { it.size >= 2 }.map { alt ->
+                    org.maplibre.geojson.Feature.fromGeometry(org.maplibre.geojson.LineString.fromLngLats(alt.map { org.maplibre.geojson.Point.fromLngLat(it.second, it.first) }))
+                },
+            ),
+        )
         val src = style.getSourceAs<org.maplibre.android.style.sources.GeoJsonSource>(SRC) ?: return
         if (points == null || points.size < 2) {
             src.setGeoJson(org.maplibre.geojson.FeatureCollection.fromFeatures(emptyList<org.maplibre.geojson.Feature>()))

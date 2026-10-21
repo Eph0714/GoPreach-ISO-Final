@@ -500,6 +500,7 @@ fun GoPreachNavGraph(
                 canPermanentlyDelete = currentRole == AdminRole.SUPER_ADMIN,
                 onBack = { navController.popBackStack() },
                 onAddNew = { navController.navigate(Destinations.ENROLL_PUBLISHER) },
+                canManageCredentials = canManageAccountCredentials,
             )
         }
         composable(Destinations.MANAGE_GROUPS) {
@@ -804,6 +805,7 @@ fun GoPreachNavGraph(
                 // is my own record," same as Super-Admin's existing
                 // unrestricted access.
                 canPermanentlyDelete = currentRole == AdminRole.SUPER_ADMIN || ownPublisherAssignment != null,
+                onOpenMap = { lat, lng, name -> navController.navigate(Destinations.territoryMapFocusedOn(lat, lng, name)) },
                 onBack = { navController.popBackStack() },
             )
         }
@@ -818,6 +820,7 @@ fun GoPreachNavGraph(
                 stage = PipelineStage.RETURN_VISIT,
                 canPermanentlyDelete = currentRole == AdminRole.SUPER_ADMIN || ownPublisherAssignment != null,
                 initialPersonId = backStackEntry.arguments?.getString("personId"),
+                onOpenMap = { lat, lng, name -> navController.navigate(Destinations.territoryMapFocusedOn(lat, lng, name)) },
                 onBack = { navController.popBackStack() },
             )
         }
@@ -832,6 +835,7 @@ fun GoPreachNavGraph(
                 stage = PipelineStage.BIBLE_STUDY,
                 canPermanentlyDelete = currentRole == AdminRole.SUPER_ADMIN || ownPublisherAssignment != null,
                 initialPersonId = backStackEntry.arguments?.getString("personId"),
+                onOpenMap = { lat, lng, name -> navController.navigate(Destinations.territoryMapFocusedOn(lat, lng, name)) },
                 onBack = { navController.popBackStack() },
             )
         }

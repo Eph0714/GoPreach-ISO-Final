@@ -112,6 +112,8 @@ fun ManagePublishersScreen(
     readOnly: Boolean = false,
     onBack: () -> Unit,
     onAddNew: () -> Unit,
+    /** Whether this role may change a publisher's username and set a temporary password (the same rule as Account Management). */
+    canManageCredentials: Boolean = false,
     viewModel: ManagePublishersViewModel = koinViewModel(),
 ) {
     // Super-Admin only (visibleCongregationId == null from the caller) — an
@@ -154,6 +156,10 @@ fun ManagePublishersScreen(
     val groupedByFsGroup = filterMode == PublisherFilterMode.GROUP && groupFilterId == null
     val filtering = filter.query.isNotBlank() || (filterMode == PublisherFilterMode.GROUP && groupFilterId != null) || (filterMode == PublisherFilterMode.STATUS && statusFilter != null)
     var lookupTarget by remember { mutableStateOf<Person?>(null) }
+    // Change username / Set temporary password, done right here in the publisher's own menu (no other screen).
+    var usernameTarget by remember { mutableStateOf<Person?>(null) }
+    var passwordTarget by remember { mutableStateOf<Person?>(null) }
+    val accountViewModel: com.emfitsolutions.gopreach.ui.screens.accountmanagement.AccountManagementViewModel = koinViewModel()
     var detailsOf by remember { mutableStateOf<PublisherRow?>(null) }
     var pendingEdit by remember { mutableStateOf<PublisherRow?>(null) }
     var pendingDelete by remember { mutableStateOf<PublisherRow?>(null) }
@@ -380,6 +386,10 @@ fun ManagePublishersScreen(
                         },
                         onShowSignIn = { lookupTarget = row.person },
                         menuExtras = { dismiss ->
+                            if (!readOnly && canManageCredentials) {
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("Change username") }, onClick = { dismiss(); usernameTarget = row.person })
+                                androidx.compose.material3.DropdownMenuItem(text = { Text("Set temporary password") }, onClick = { dismiss(); passwordTarget = row.person })
+                            }
                             if (!readOnly) {
                                 PublisherCategory.entries.filter { it != row.category && it != PublisherCategory.REMOVED_PUBLISHER }.forEach { target ->
                                     androidx.compose.material3.DropdownMenuItem(
@@ -442,6 +452,16 @@ fun ManagePublishersScreen(
         )
     }
 
+    usernameTarget?.let { person ->
+        com.emfitsolutions.gopreach.ui.screens.accountmanagement.ChangeUsernameFlow(
+            com.emfitsolutions.gopreach.ui.screens.accountmanagement.publisherAccountRow(person), accountViewModel, currentPersonId, showToast, onDismiss = { usernameTarget = null },
+        )
+    }
+    passwordTarget?.let { person ->
+        com.emfitsolutions.gopreach.ui.screens.accountmanagement.TemporaryPasswordFlow(
+            com.emfitsolutions.gopreach.ui.screens.accountmanagement.publisherAccountRow(person), accountViewModel, currentPersonId, showToast, onDismiss = { passwordTarget = null },
+        )
+    }
     lookupTarget?.let { person ->
         TempCredentialLookupDialog(person = person, onDismiss = { lookupTarget = null })
     }

@@ -41,6 +41,11 @@ import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.MyLocation
@@ -202,6 +207,8 @@ fun TerritoryMapScreen(
     allowedCongregationIds: Set<String>? = null,
     /** View-only: no drawing, no pins, and none of the publishers' personal Searching / Return Visit / Bible Study records. */
     readOnly: Boolean = false,
+    /** Hosted as a Main Form tab: the tab strip replaces this screen's own title bar. */
+    embedded: Boolean = false,
     onBack: () -> Unit,
     viewModel: TerritoryMapViewModel = koinViewModel(),
     pipelineViewModel: PipelineViewModel = koinViewModel(),
@@ -366,6 +373,13 @@ fun TerritoryMapScreen(
     val drawingViewModel: MapDrawingViewModel = koinViewModel()
     val drawingAccess by remember(currentPersonId) { drawingViewModel.access(currentPersonId) }
         .collectAsStateWithLifecycle(initialValue = DrawingAccess.NONE)
+    // "View only": another FS Group's territory (or every group, when this person may draw in only their own) can be looked at for reference, but seeing a
+    // territory never gives the right to draw or edit it - that is decided per group by DrawingAccess, here and again by the server.
+    val viewOnlyNote: String? = when {
+        selectedGroup != null -> if (drawingAccess.canDrawIn(selectedGroup.id)) null else "View only"
+        showingAll -> if (drawingAccess.scope is com.emfitsolutions.gopreach.domain.GroupAccessScope.OwnGroup || drawingAccess.scope == com.emfitsolutions.gopreach.domain.GroupAccessScope.None) "View only, except your own group" else null
+        else -> null
+    }
     // Admin / Service Overseer / Coordinator Elder / Secretary open on "Show FS Group" (every group of the congregation) once, as the initial choice.
     var initialScopeApplied by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(drawingAccess.scope) {
@@ -418,6 +432,8 @@ fun TerritoryMapScreen(
     // ---- Current location --------------------------------------------------
     var myLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) }
     var myAccuracy by remember { mutableStateOf<Float?>(null) }
+    // When the last real GPS fix arrived, for the status pill (a fix that stops coming is reported as lost, never shown as current).
+    var lastFixAt by remember { mutableStateOf(0L) }
     var permissionAsked by rememberSaveable { mutableStateOf(false) }
     var locationIssue by remember { mutableStateOf<LocationIssue?>(null) }
     var locationRefreshKey by remember { mutableIntStateOf(0) }
@@ -439,7 +455,7 @@ fun TerritoryMapScreen(
             locationIssue = LocationIssue.SERVICES_OFF
             return@LaunchedEffect
         }
-        runCatching { viewModel.currentLocation() }.getOrNull()?.let { myLocation = it.lat to it.lng; myAccuracy = it.accuracyMeters; locationIssue = null }
+        runCatching { viewModel.currentLocation() }.getOrNull()?.let { myLocation = it.lat to it.lng; myAccuracy = it.accuracyMeters; locationIssue = null; lastFixAt = com.emfitsolutions.gopreach.platform.nowMillis() }
             ?: run { if (myLocation == null) locationIssue = LocationIssue.UNAVAILABLE }
         // Live updates only while this screen is visible; small moves are ignored.
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -451,6 +467,7 @@ fun TerritoryMapScreen(
                         myLocation = fix.lat to fix.lng
                         myAccuracy = fix.accuracyMeters
                     }
+                    lastFixAt = com.emfitsolutions.gopreach.platform.nowMillis()
                     locationIssue = null
                 }
             }
@@ -478,12 +495,23 @@ fun TerritoryMapScreen(
         )
     }
     val routePoints = remember(guidance.route) { guidance.route?.points?.map { it.lat to it.lng } }
+    // While choosing a route: the other routes (greyer, underneath) and the frame that shows all of them.
+    val altRoutePoints = remember(guidance.choices, guidance.selectedIndex) {
+        guidance.choices.filterIndexed { i, _ -> i != guidance.selectedIndex }.map { c -> c.route.points.map { it.lat to it.lng } }
+    }
+    val fitRoutePoints = remember(guidance.phase, guidance.choices) {
+        if (guidance.phase == com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.PREVIEW) guidance.choices.flatMap { c -> c.route.points.map { it.lat to it.lng } } else null
+    }
     LaunchedEffect(driveSnap.lat, driveSnap.lng) {
         val la = driveSnap.lat
         val ln = driveSnap.lng
         if (guidance.active && la != null && ln != null) guidance.onPosition(la, ln, driveSnap.accuracyMeters, driveSnap.speedKmh?.let { it / 3.6f }, online)
     }
-    LaunchedEffect(driving.active) { if (!driving.active) guidance.stop() }
+    // Turning Driving Mode off ends a route being followed; a route still being chosen (or found) does not need Driving Mode yet.
+    LaunchedEffect(driving.active) {
+        val p = guidance.phase
+        if (!driving.active && (p == com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.ACTIVE || p == com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.REROUTING || p == com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.ARRIVED)) guidance.stop()
+    }
 
     // A missing GPS signal must turn the status stale even when no fix arrives.
     LaunchedEffect(driving.active) {
@@ -526,7 +554,18 @@ fun TerritoryMapScreen(
     }
     var basemap by rememberSaveable { mutableStateOf(TerritoryBasemap.STANDARD) }
     var is3d by rememberSaveable { mutableStateOf(false) }
+    // Driving Mode looks like a navigation app: it switches the map to 3D (tilted, heading up, the arrow low on the screen) and puts the map
+    // back the way it was when driving ends. The camera tilt it keeps follows the 3D switch, so turning 3D off while driving flattens it.
+    var is3dBeforeDriving by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(driving.active) {
+        if (driving.active) { is3dBeforeDriving = is3d; is3d = true } else is3dBeforeDriving?.let { is3d = it; is3dBeforeDriving = null }
+    }
+    LaunchedEffect(is3d, driving.active) { driving.tiltDeg = if (is3d && driving.active) 60.0 else 0.0 }
     var recenterToken by remember { mutableIntStateOf(0) }
+    // Follow mode (north stays up): the camera keeps me centred. [followPaused] = I moved the map, so following waits for the Recenter button.
+    var followMe by rememberSaveable { mutableStateOf(false) }
+    var followPaused by rememberSaveable { mutableStateOf(false) }
+    var bottomChromePx by remember { mutableIntStateOf(0) }
     var reloadToken by remember { mutableIntStateOf(0) }
     var mapLoadState by remember { mutableStateOf(MapLoadState.LOADING) }
 
@@ -557,17 +596,22 @@ fun TerritoryMapScreen(
             else -> driving.start()
         }
     }
+    // Navigate: find the routes (the best one and alternatives) and let the driver choose; Driving Mode starts when they press Start navigation.
     fun startNavigation(name: String, lat: Double, lng: Double) {
-        if (!driving.active) toggleDriving()
-        if (!driving.active) return // permission / location services are being asked for first - tap Navigate again afterwards
+        if (!viewModel.hasLocationPermission() || !viewModel.isLocationServicesEnabled()) { toggleDriving(); return } // asks for permission / explains location services; tap Navigate again afterwards
         val here = shownLocation ?: myLocation
         when {
             here == null -> toast("Waiting for your GPS location.")
-            !online -> toast("Turn-by-turn needs an internet connection to find the route.")
-            else -> {
-                guidance.start(com.emfitsolutions.gopreach.ui.components.map.GuidanceDestination(name, lat, lng), here.first, here.second)
-                toast("Guidance started. Follow road signs and traffic rules.")
-            }
+            !online -> toast(if (com.emfitsolutions.gopreach.data.offlinemap.OfflineMaps.isInstalled()) "The offline map is ready and the GPS works, but finding a route needs internet. Routes cannot be calculated offline yet." else "Finding a route needs an internet connection.")
+            else -> guidance.preview(com.emfitsolutions.gopreach.ui.components.map.GuidanceDestination(name, lat, lng), here.first, here.second)
+        }
+    }
+    // Start navigation (from the route preview): Driving Mode on, then follow the chosen route.
+    fun beginGuidance() {
+        if (!driving.active) toggleDriving()
+        if (driving.active) {
+            guidance.begin()
+            toast("Navigation started. Follow road signs and traffic rules.")
         }
     }
     // Driving Mode only belongs to the map: leaving the map view, or starting to draw, ends it (and so the faster GPS updates).
@@ -595,6 +639,22 @@ fun TerritoryMapScreen(
                 locationRefreshKey++
             }
             else -> recenterToken++
+        }
+    }
+    // Driving Mode and Draw Mode have their own camera: plain Follow stands down while either is on.
+    LaunchedEffect(drawingState.active, driving.active) {
+        if (drawingState.active || driving.active) { followMe = false; followPaused = false }
+    }
+    // The floating Recenter button: Driving Mode -> resume following the arrow; Follow on -> turn it off; otherwise centre on me and follow.
+    // Permission / location-services / no-fix problems are handled (and explained) by recenter() itself.
+    fun onRecenterButton() {
+        when {
+            driving.active -> if (driving.snapshot.hasPosition) driving.recenter() else toast("Waiting for a GPS location.")
+            followMe -> recenter() // already following: bring the map back onto me again
+            else -> {
+                recenter()
+                if (viewModel.hasLocationPermission() && viewModel.isLocationServicesEnabled() && myLocation != null) { followMe = true; followPaused = false }
+            }
         }
     }
     locationHelp?.let { issue ->
@@ -722,7 +782,7 @@ fun TerritoryMapScreen(
 
     Scaffold(
         topBar = {
-            if (!fullScreenActive) {
+            if (!fullScreenActive && !embedded) {
                 TopAppBar(
                     title = { Text("Territory Map") },
                     navigationIcon = {
@@ -791,6 +851,7 @@ fun TerritoryMapScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    viewOnlyNote?.let { ViewOnlyTag(it) }
                     if (effectiveScope == GroupScope.OTHER && (!isSuperAdmin || congregationId != null)) {
                         TextButton(onClick = { showGroupPicker = true }) { Text(if (selectedGroup == null) "Choose FS Group" else "Change") }
                     }
@@ -915,6 +976,8 @@ fun TerritoryMapScreen(
                         myAccuracyMeters = shownAccuracy,
                         driving = driving,
                         routePoints = routePoints,
+                        altRoutePoints = altRoutePoints,
+                        fitRoutePoints = fitRoutePoints,
                         focus = focus,
                         basemap = basemap,
                         is3d = is3d,
@@ -922,6 +985,9 @@ fun TerritoryMapScreen(
                         fitKey = fitKey,
                         fitReady = fitReady,
                         recenterToken = recenterToken,
+                        followMe = followMe,
+                        followHeadingUp = followMe,
+                        onFollowPaused = { followMe = false; followPaused = true },
                         flyToRecord = flyToRecord,
                         onRecordTap = { selectRecord(it, fly = false) },
                         // Tapping a barangay SELECTS it: the map zooms to it and shows everything in it - every FS Group's
@@ -947,16 +1013,19 @@ fun TerritoryMapScreen(
                         onLoadStateChange = { mapLoadState = it },
                         modifier = Modifier.fillMaxSize(),
                     )
+                    val bottomStripShown = datasetKey != null && !isLoading && mapLoadState == MapLoadState.LOADED && !drawingState.active && drawingState.selectedDrawingId == null && !guidance.active
                     // Map chrome: basemap + my-location buttons.
                     Column(
                         // Kept clear of the status bar / camera cut-out whenever the system bars are showing, so a tap never lands on them.
-                        modifier = Modifier.align(Alignment.TopEnd).windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top)).padding(10.dp),
+                        modifier = Modifier.align(Alignment.TopEnd).then(if (embedded) Modifier else Modifier.windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top))).padding(10.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalAlignment = Alignment.End,
                     ) {
+                        // In the Main Form tab the map is never really full screen (the header and tabs stay), so the toggle is
+                        // "Filters" (show the FS Group and record-type controls above the map) / "Map" (hide them again).
                         MapToolButton(
-                            icon = if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
-                            label = if (fullScreenActive) "Exit" else "Full screen",
+                            icon = if (embedded) { if (fullScreenActive) Icons.Rounded.Tune else Icons.Rounded.Fullscreen } else if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                            label = if (embedded) { if (fullScreenActive) "Filters" else "Map" } else if (fullScreenActive) "Exit" else "Full screen",
                             onClick = { fullScreen = !fullScreen },
                         )
                         // Hide / Show Icons: one setting for every Territory Map view (all groups, a group, a municipality, a Barangay).
@@ -967,7 +1036,19 @@ fun TerritoryMapScreen(
                             onClick = { drawingState.markersHidden = !drawingState.markersHidden },
                         )
                         // Every map style is one tap away and always visible: Standard, Satellite, Night, and 3D (for every role).
-                        Surface(
+                        if (embedded) {
+                            // One compact button with a menu, so the style row never spreads across the map beside the other buttons.
+                            var styleMenu by remember { mutableStateOf(false) }
+                            Box {
+                                MapToolButton(icon = Icons.Rounded.Layers, label = "Style", onClick = { styleMenu = true })
+                                DropdownMenu(expanded = styleMenu, onDismissRequest = { styleMenu = false }) {
+                                    TerritoryBasemap.entries.forEach { b ->
+                                        DropdownMenuItem(text = { Text(b.label, fontWeight = if (basemap == b) FontWeight.Bold else FontWeight.Normal) }, onClick = { basemap = b; styleMenu = false })
+                                    }
+                                    DropdownMenuItem(text = { Text("3D", fontWeight = if (is3d) FontWeight.Bold else FontWeight.Normal) }, onClick = { is3d = !is3d; styleMenu = false })
+                                }
+                            }
+                        } else Surface(
                             shape = RoundedCornerShape(12.dp),
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
                             shadowElevation = 3.dp,
@@ -977,11 +1058,6 @@ fun TerritoryMapScreen(
                                 MapStyleChip("3D", is3d) { is3d = !is3d }
                             }
                         }
-                        MapToolButton(
-                            icon = Icons.Rounded.MyLocation,
-                            label = "My location",
-                            onClick = { recenter() },
-                        )
                         MapToolButton(
                             icon = Icons.Rounded.Navigation,
                             label = if (driving.active) "Driving" else "Drive",
@@ -1008,13 +1084,6 @@ fun TerritoryMapScreen(
                                 onClick = { toast(driving.statusText(online)) },
                             )
                             MapToolButton(
-                                icon = Icons.Rounded.MyLocation,
-                                label = if (driving.following) "Following" else "Recenter",
-                                description = if (driving.following) "The map is following you. Tap to recenter." else "Following is paused. Tap to recenter on your position.",
-                                active = !driving.following,
-                                onClick = { if (driving.snapshot.hasPosition) driving.recenter() else toast("Waiting for a GPS location.") },
-                            )
-                            MapToolButton(
                                 icon = Icons.Rounded.Explore,
                                 label = if (driving.headingUp) "Heading up" else "North up",
                                 description = if (driving.headingUp) "The map turns with your direction of travel. Tap for north-up." else "North stays at the top. Tap for heading-up.",
@@ -1032,7 +1101,72 @@ fun TerritoryMapScreen(
                             )
                         }
                     }
-                    if (guidance.active) {
+                    // Status pill: connection and GPS state in one glance, bottom-left above whatever is at the bottom. Tap for a plain sentence.
+                    if (!drawingState.active) {
+                        val tick by androidx.compose.runtime.produceState(initialValue = com.emfitsolutions.gopreach.platform.nowMillis()) {
+                            while (true) { kotlinx.coroutines.delay(5_000L); value = com.emfitsolutions.gopreach.platform.nowMillis() }
+                        }
+                        var reconnecting by remember { mutableStateOf(false) }
+                        var wasOffline by remember { mutableStateOf(false) }
+                        LaunchedEffect(online) {
+                            if (!online) wasOffline = true
+                            else if (wasOffline) { reconnecting = true; kotlinx.coroutines.delay(3_000L); reconnecting = false; wasOffline = false }
+                        }
+                        val accuracy = shownAccuracy
+                        val gpsLevel: StatusLevel
+                        val gpsText: String
+                        when {
+                            locationIssue == LocationIssue.NO_PERMISSION -> { gpsLevel = StatusLevel.WARN; gpsText = "Location permission off" }
+                            locationIssue == LocationIssue.SERVICES_OFF -> { gpsLevel = StatusLevel.WARN; gpsText = "Location is off" }
+                            shownLocation == null -> { gpsLevel = StatusLevel.INFO; gpsText = "Finding GPS" }
+                            driving.active && (driveSnap.quality == com.emfitsolutions.gopreach.domain.navigation.GpsQuality.STALE) -> { gpsLevel = StatusLevel.WARN; gpsText = "GPS signal lost" }
+                            lastFixAt > 0L && tick - lastFixAt > 20_000L -> { gpsLevel = StatusLevel.WARN; gpsText = "GPS signal lost" }
+                            (accuracy ?: 0f) > 30f || (driving.active && driveSnap.quality == com.emfitsolutions.gopreach.domain.navigation.GpsQuality.WEAK) -> { gpsLevel = StatusLevel.WARN; gpsText = "GPS signal weak" + (accuracy?.let { " ±${it.toInt()} m" } ?: "") }
+                            else -> { gpsLevel = StatusLevel.OK; gpsText = "GPS" + (accuracy?.let { " ±${it.toInt()} m" } ?: "") }
+                        }
+                        val connText = if (online) (if (reconnecting) "Reconnecting" else "Online") else "Offline"
+                        val level = if (gpsLevel == StatusLevel.WARN) StatusLevel.WARN else if (!online || reconnecting) StatusLevel.INFO else gpsLevel
+                        val explain = when {
+                            driving.active -> driving.statusText(online)
+                            else -> buildString {
+                                append(
+                                    when {
+                                        locationIssue == LocationIssue.NO_PERMISSION -> "Location permission is off, so your position is not shown."
+                                        locationIssue == LocationIssue.SERVICES_OFF -> "The phone's location is turned off, so your position is not shown."
+                                        shownLocation == null -> "Looking for your GPS location."
+                                        gpsText.startsWith("GPS signal lost") -> "No recent GPS update. The arrow shows your last known position, not your live position."
+                                        gpsLevel == StatusLevel.WARN -> "Weak GPS signal (about ${accuracy?.toInt() ?: "?"} m). Your position may be off."
+                                        else -> "GPS is working" + (accuracy?.let { ", accurate to about ${it.toInt()} m." } ?: ".")
+                                    },
+                                )
+                                append(if (online) " You are online." else if (com.emfitsolutions.gopreach.data.offlinemap.OfflineMaps.isInstalled()) " You are offline: the GPS and the saved offline map still work, but finding a route needs internet." else " You are offline: the GPS still works, but map tiles that were not saved cannot load and routes need internet.")
+                            }
+                        }
+                        val liftForPill = (if (bottomStripShown) with(LocalDensity.current) { bottomChromePx.toDp() } else 0.dp) + (if (guidance.phase == com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.PREVIEW) 360.dp else if (guidance.active) 150.dp else 0.dp)
+                        NavStatusPill(
+                            text = "$connText · $gpsText", level = level, onClick = { toast(explain) },
+                            modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 16.dp + liftForPill),
+                        )
+                    }
+                    // Floating Recenter / Follow button: bottom-right, kept above whatever card or strip is at the bottom.
+                    if (!drawingState.active) {
+                        val followUi = when {
+                            driving.active -> if (driving.following) FollowUi.DRIVING else FollowUi.PAUSED
+                            followMe -> FollowUi.FOLLOWING
+                            followPaused -> FollowUi.PAUSED
+                            else -> FollowUi.OFF
+                        }
+                        val lift = (if (bottomStripShown) with(LocalDensity.current) { bottomChromePx.toDp() } else 0.dp) + (if (guidance.phase == com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.PREVIEW) 360.dp else if (guidance.active) 150.dp else 0.dp)
+                        RecenterFab(followUi, onClick = { onRecenterButton() }, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp + lift))
+                    }
+                    if (guidance.phase == com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.PREVIEW) {
+                        com.emfitsolutions.gopreach.ui.components.map.RoutePreviewPanel(
+                            state = guidance,
+                            onStart = { beginGuidance() },
+                            onCancel = { guidance.stop() },
+                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                        )
+                    } else if (guidance.active) {
                         com.emfitsolutions.gopreach.ui.components.map.GuidanceBanner(
                             state = guidance,
                             modifier = Modifier.align(Alignment.TopStart)
@@ -1048,13 +1182,16 @@ fun TerritoryMapScreen(
                     // Full screen: the controls above the map are hidden, so keep the
                     // essentials floating on it — exit, which group this is, and the
                     // record-type filter.
-                    if (fullScreenActive && !guidance.active) {
+                    if (fullScreenActive && !guidance.active && !(embedded && driving.active)) {
                         Column(
-                            modifier = Modifier.align(Alignment.TopStart).windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top)).padding(10.dp).fillMaxWidth(0.82f),
+                            modifier = Modifier.align(Alignment.TopStart).then(if (embedded) Modifier else Modifier.windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top)))
+                                .then(if (embedded) Modifier.padding(start = 10.dp, top = 10.dp, end = 78.dp) else Modifier.padding(10.dp).fillMaxWidth(0.82f))
+                                // In the tab the group and filter chips sit on one soft panel, ending before the button column on the right.
+                                .then(if (embedded) Modifier.clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)).padding(8.dp) else Modifier),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                MapToolButton(icon = Icons.AutoMirrored.Rounded.ArrowBack, label = "Exit", onClick = { fullScreen = false })
+                                if (!embedded) MapToolButton(icon = Icons.AutoMirrored.Rounded.ArrowBack, label = "Exit", onClick = { fullScreen = false })
                                 if (selectedGroup != null) {
                                     Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f), shadowElevation = 3.dp) {
                                         Row(
@@ -1064,19 +1201,20 @@ fun TerritoryMapScreen(
                                         ) {
                                             Box(Modifier.size(14.dp).clip(CircleShape).background(Color(android.graphics.Color.parseColor(groupColorHex))))
                                             Text(selectedGroup.name, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            viewOnlyNote?.let { ViewOnlyTag(it) }
                                         }
                                     }
-                                }
+                                } else viewOnlyNote?.let { ViewOnlyTag(it) }
                             }
-                            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(if (embedded) 4.dp else 8.dp)) {
                                 TypeFilter.entries.forEach { f ->
-                                    FilterChip(selected = typeFilter == f, onClick = { typeFilter = f }, label = { Text(f.label) })
+                                    FilterChip(selected = typeFilter == f, onClick = { typeFilter = f }, label = { Text(f.label, style = if (embedded) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge) })
                                 }
                             }
                         }
                     }
-                    if (datasetKey != null && !isLoading && mapLoadState == MapLoadState.LOADED && !drawingState.active && drawingState.selectedDrawingId == null && !guidance.active) {
-                        Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+                    if (bottomStripShown) {
+                        Column(modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { bottomChromePx = it.height }) {
                             if (areas.isEmpty()) {
                                 MessageCard("No territories have been assigned to this FS Group yet.", Modifier.padding(12.dp))
                             } else if (recordsWithDistance.isEmpty()) {
@@ -1480,6 +1618,72 @@ private fun MapToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector,
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(icon, contentDescription = description, modifier = Modifier.size(18.dp), tint = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
             Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+private enum class FollowUi { OFF, FOLLOWING, DRIVING, PAUSED }
+
+/** A small "View only" tag: the territory shown is for reference and cannot be drawn on or edited by this person. */
+@Composable
+private fun ViewOnlyTag(text: String) {
+    Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFE6B800).copy(alpha = 0.22f)) {
+        Text(text, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
+    }
+}
+
+/** How the status pill's dot is coloured: the theme purple when all is well, grey for information (offline, searching), medium yellow for a warning. */
+private enum class StatusLevel { OK, INFO, WARN }
+
+/** A compact "Online · GPS ±8 m" pill with a status dot. Colours are the app's own (never the traffic colours). */
+@Composable
+private fun NavStatusPill(text: String, level: StatusLevel, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val dot = when (level) {
+        StatusLevel.OK -> MaterialTheme.colorScheme.primary
+        StatusLevel.INFO -> MaterialTheme.colorScheme.onSurfaceVariant
+        StatusLevel.WARN -> Color(0xFFE6B800)
+    }
+    Surface(
+        onClick = onClick, shape = RoundedCornerShape(20.dp), shadowElevation = 3.dp, color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        modifier = modifier.semantics { contentDescription = "Status: $text. Tap for details." },
+    ) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.size(9.dp).clip(CircleShape).background(dot))
+            Text(text, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+/** The round Recenter / Follow button with a small caption that says what it is doing: nothing when off, "Following" / "Driving" while it follows,
+ * and a filled "Recenter" caption when following was paused by moving the map. */
+@Composable
+private fun RecenterFab(ui: FollowUi, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val following = ui == FollowUi.FOLLOWING || ui == FollowUi.DRIVING
+    val description = when (ui) {
+        FollowUi.OFF -> "Recenter on my location and follow me"
+        FollowUi.FOLLOWING -> "Following your location. Tap to recenter."
+        FollowUi.DRIVING -> "Driving Mode is following you. Tap to recenter."
+        FollowUi.PAUSED -> "Following is paused. Tap to recenter on your location."
+    }
+    Column(modifier = modifier, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Surface(
+            onClick = onClick, shape = CircleShape, shadowElevation = 8.dp, modifier = Modifier.size(60.dp),
+            border = androidx.compose.foundation.BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+            color = if (following) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    if (following) Icons.Rounded.NearMe else Icons.Rounded.MyLocation, contentDescription = description, modifier = Modifier.size(26.dp),
+                    tint = if (following) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        // The name of the button, always visible under it.
+        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primary, shadowElevation = 3.dp, modifier = Modifier.width(60.dp)) {
+            Text(
+                "Recenter", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary,
+                maxLines = 1, softWrap = false, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                modifier = Modifier.padding(vertical = 3.dp).fillMaxWidth(),
+            )
         }
     }
 }

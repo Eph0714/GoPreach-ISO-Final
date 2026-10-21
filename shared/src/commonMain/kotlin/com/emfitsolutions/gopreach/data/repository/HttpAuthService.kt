@@ -129,6 +129,11 @@ class HttpAuthService(
         post("/v1/auth/accounts", buildJsonObject { put("personId", JsonPrimitive(personId)); put("password", JsonPrimitive(password)) }, token)
     }
 
+    override suspend fun adminResetPassword(personId: String, newPassword: String) {
+        val token = idToken(false) ?: throw AuthFailure.InvalidUser()
+        post("/v1/auth/accounts/$personId/password", buildJsonObject { put("password", JsonPrimitive(newPassword)) }, token)
+    }
+
     override suspend fun passkeyLoginOptions(): PasskeyChallenge {
         val reply = post("/v1/auth/passkey/login/options", JsonObject(emptyMap()), token = null)
         val options = reply["options"] ?: throw AuthFailure.Other("The server sent no passkey challenge.")
@@ -202,6 +207,9 @@ class HttpAuthService(
             code == 403 && error == "requires-recent-login" -> AuthFailure.Other("For security, please sign in again before changing your password.")
             code == 400 && error == "weak-password" -> AuthFailure.Other("The password is too weak. Use at least 6 characters.")
             code == 409 -> AuthFailure.Other("An account for this person already exists.")
+            code == 403 && error == "Not allowed" -> AuthFailure.Other("You are not allowed to manage this account.")
+            code == 404 && error == "invalid-user" -> AuthFailure.Other("This person has no sign-in account yet.")
+            code == 404 -> AuthFailure.Other("The server does not support this yet. It needs the latest server update.")
             code == 503 && error == "passkeys-not-configured" -> AuthFailure.Other("Passkeys aren't set up on the server yet.")
             code == 400 && (error == "not-verified" || error == "challenge-expired") -> AuthFailure.Other("That passkey could not be verified. Please try again.")
             code == 503 -> AuthFailure.Other("Sign-in is not available right now. Please try again later.")

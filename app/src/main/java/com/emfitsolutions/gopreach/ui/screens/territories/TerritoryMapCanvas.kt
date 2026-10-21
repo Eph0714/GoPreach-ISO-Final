@@ -193,8 +193,17 @@ fun TerritoryMapCanvas(
     onStackTap: (List<String>) -> Unit = {},
     /** Driving Mode (a navigation aid): the arrow follows the GPS course and the camera follows the arrow. Null leaves the map exactly as it was. */
     driving: com.emfitsolutions.gopreach.ui.components.map.DrivingModeState? = null,
+    /** Follow mode (north stays up): the camera keeps the person centred as the location changes. Moving the map by hand calls [onFollowPaused]. */
+    followMe: Boolean = false,
+    /** While true the map is turned so the front of the arrow (the compass heading) is up. */
+    followHeadingUp: Boolean = false,
+    onFollowPaused: () -> Unit = {},
     /** The guided route to draw (lat, lng pairs), or null. */
     routePoints: List<Pair<Double, Double>>? = null,
+    /** The other routes on offer while previewing, drawn thinner and greyer under [routePoints]. */
+    altRoutePoints: List<List<Pair<Double, Double>>> = emptyList(),
+    /** Every point of every route on offer: when it changes, the camera frames all of them (the route preview). Null = leave the camera alone. */
+    fitRoutePoints: List<Pair<Double, Double>>? = null,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalContext.current.resources.displayMetrics.density
@@ -202,6 +211,9 @@ fun TerritoryMapCanvas(
     var styleVersion by remember { mutableIntStateOf(0) }
     var lastFitKey by remember { mutableStateOf<String?>(null) }
     var focusConsumed by remember { mutableStateOf(false) }
+    // When the focus (a record shown from a list) was applied: the map keeps that spot while the territories finish loading, instead of re-fitting to all of them
+    var focusAt by remember { mutableStateOf(0L) }
+    var compassHeading by remember { mutableStateOf<Float?>(null) }
 
     val latestOnRecordTap = rememberUpdatedState(onRecordTap)
     val latestOnAreaTap = rememberUpdatedState(onAreaTap)
@@ -219,6 +231,7 @@ fun TerritoryMapCanvas(
         recenterOnArrowTap = false,
         drivingMode = driving?.active == true,
         headingOverrideDeg = driving?.snapshot?.courseDeg,
+        onHeading = { compassHeading = it },
         content = { m, styleVer ->
             MapDrawingOverlay(
                 state = drawingState,
@@ -634,9 +647,58 @@ fun TerritoryMapCanvas(
 
     // Driving Mode camera (does nothing unless Driving Mode is on).
     com.emfitsolutions.gopreach.ui.components.map.DrivingCameraEffect(map, driving)
-    LaunchedEffect(map, styleVersion, routePoints) {
+
+    // Follow mode: a hand gesture on the map pauses it; otherwise the camera glides to each new location (same zoom, no rotation).
+    val latestOnFollowPaused = rememberUpdatedState(onFollowPaused)
+    DisposableEffect(map, followMe) {
+        val m = map
+        if (m == null || !followMe) return@DisposableEffect onDispose { }
+        // Only a finger on the map pauses it (a drag or a pinch) - never the camera's own animations (recentering, turning to the heading).
+        val move = object : org.maplibre.android.maps.MapLibreMap.OnMoveListener {
+            override fun onMoveBegin(detector: org.maplibre.android.gestures.MoveGestureDetector) = latestOnFollowPaused.value()
+            override fun onMove(detector: org.maplibre.android.gestures.MoveGestureDetector) = Unit
+            override fun onMoveEnd(detector: org.maplibre.android.gestures.MoveGestureDetector) = Unit
+        }
+        val scale = object : org.maplibre.android.maps.MapLibreMap.OnScaleListener {
+            override fun onScaleBegin(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) = latestOnFollowPaused.value()
+            override fun onScale(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) = Unit
+            override fun onScaleEnd(detector: org.maplibre.android.gestures.StandardScaleGestureDetector) = Unit
+        }
+        m.addOnMoveListener(move)
+        m.addOnScaleListener(scale)
+        onDispose { m.removeOnMoveListener(move); m.removeOnScaleListener(scale) }
+    }
+    // While following, the arrow sits in the lower part of the map so more of what is in front of it shows (as in Driving Mode). The padding is
+    // set BEFORE the camera moves (changing it afterwards cancels a running animation), and put back when following ends.
+    DisposableEffect(map, followMe) {
+        val m = map
+        onDispose { if (m != null && followMe) m.setPadding(0, 0, 0, 0) }
+    }
+    // One camera update for both the position and the turn: two separate animations (move, then rotate to the compass) keep cancelling each other.
+    LaunchedEffect(map, followMe, followHeadingUp, myLocation, recenterToken, compassHeading) {
+        val m = map ?: return@LaunchedEffect
+        val me = myLocation ?: return@LaunchedEffect
+        if (!followMe) return@LaunchedEffect
+        val top = (m.height * com.emfitsolutions.gopreach.ui.components.map.DrivingModeState.LOWER_THIRD).toInt()
+        if (m.padding[1] != top) m.setPadding(0, top, 0, 0)
+        val here = m.cameraPosition
+        val bearing = if (followHeadingUp) compassHeading?.toDouble() ?: here.bearing else here.bearing
+        m.easeCamera(
+            CameraUpdateFactory.newCameraPosition(org.maplibre.android.camera.CameraPosition.Builder().target(LatLng(me.first, me.second)).zoom(here.zoom.coerceIn(14.0, 18.0)).bearing(bearing).tilt(here.tilt).build()),
+            500,
+        )
+    }
+    LaunchedEffect(map, styleVersion, routePoints, altRoutePoints) {
         val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
-        com.emfitsolutions.gopreach.ui.components.map.RouteLineLayer.set(style, routePoints)
+        com.emfitsolutions.gopreach.ui.components.map.RouteLineLayer.set(style, routePoints, altRoutePoints)
+    }
+    // Route preview: frame every route on offer, leaving room for the panel at the bottom and the banner at the top.
+    LaunchedEffect(map, fitRoutePoints) {
+        val m = map ?: return@LaunchedEffect
+        val pts = fitRoutePoints?.takeIf { it.size >= 2 } ?: return@LaunchedEffect
+        m.setPadding(0, 0, 0, 0)
+        val bounds = LatLngBounds.Builder().includes(pts.map { LatLng(it.first, it.second) }).build()
+        m.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, (48 * density).toInt(), (130 * density).toInt(), (48 * density).toInt(), (330 * density).toInt()), 700)
     }
 
     // Focus pin (Share Location's "open in Territory Map").
@@ -650,6 +712,7 @@ fun TerritoryMapCanvas(
             src.setGeoJson(Feature.fromGeometry(pointOf(focus.first, focus.second)))
             if (!focusConsumed) {
                 focusConsumed = true
+                focusAt = com.emfitsolutions.gopreach.platform.nowMillis()
                 lastFitKey = fitKey // the focus takes priority over the first auto-fit
                 m.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(focus.first, focus.second), 16.0))
             }
@@ -660,6 +723,11 @@ fun TerritoryMapCanvas(
     LaunchedEffect(map, styleVersion, fitKey, fitReady) {
         val m = map ?: return@LaunchedEffect
         if (!fitReady || lastFitKey == fitKey || m.style?.isFullyLoaded != true) return@LaunchedEffect
+        if (focus != null && focusAt > 0L && com.emfitsolutions.gopreach.platform.nowMillis() - focusAt < 10_000L) {
+            lastFitKey = fitKey
+            m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(focus.first, focus.second), 16.5), 500)
+            return@LaunchedEffect
+        }
         val points = mutableListOf<LatLng>()
         areas.forEach { area ->
             boundaryJson[area.id]?.let { json ->
@@ -680,7 +748,8 @@ fun TerritoryMapCanvas(
         val m = map ?: return@LaunchedEffect
         val me = myLocation ?: return@LaunchedEffect
         // Camera only: keep the current zoom (within a sensible street-level range) so the map never jumps in too close.
-        if (recenterToken > 0) m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(me.first, me.second), m.cameraPosition.zoom.coerceIn(14.0, 17.0)), 600)
+        // While following, the follow effect above moves the camera (after setting its padding), so only a plain recenter animates here.
+        if (recenterToken > 0 && !followMe) m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(me.first, me.second), m.cameraPosition.zoom.coerceIn(14.0, 17.0)), 600)
     }
 
     // Selecting a record from the list/panel flies the map to it.

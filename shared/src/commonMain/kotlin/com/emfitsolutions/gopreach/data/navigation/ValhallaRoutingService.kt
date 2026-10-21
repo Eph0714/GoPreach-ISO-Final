@@ -22,6 +22,12 @@ import kotlin.coroutines.cancellation.CancellationException
 /** Where a route comes from. An interface so the screen and the tests never depend on a particular provider. */
 interface RoutingService {
     suspend fun route(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double): Route
+
+    /**
+     * The best route first, then up to [alternatives] different ones when the provider finds them. A provider without alternatives returns just the one route.
+     * Nothing here is invented: every route, distance and time is what the provider answered.
+     */
+    suspend fun routes(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, alternatives: Int = 2): List<Route> = listOf(route(fromLat, fromLng, toLat, toLng))
 }
 
 /**
@@ -34,8 +40,11 @@ class ValhallaRoutingService(
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val timeoutMillis: Long = 20_000L,
 ) : RoutingService {
-    override suspend fun route(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double): Route {
-        val body = """{"locations":[{"lat":$fromLat,"lon":$fromLng},{"lat":$toLat,"lon":$toLng}],"costing":"auto","directions_options":{"units":"kilometers","language":"en-US","directions_type":"instructions"}}"""
+    override suspend fun route(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double): Route = routes(fromLat, fromLng, toLat, toLng, alternatives = 0).first()
+
+    override suspend fun routes(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, alternatives: Int): List<Route> {
+        val alt = if (alternatives > 0) ""","alternates":$alternatives""" else ""
+        val body = """{"locations":[{"lat":$fromLat,"lon":$fromLng},{"lat":$toLat,"lon":$toLng}],"costing":"auto","directions_options":{"units":"kilometers","language":"en-US","directions_type":"instructions"}$alt}"""
         val text = try {
             withTimeout(timeoutMillis) {
                 val response = client.post(baseUrl.trimEnd('/') + "/route") { contentType(ContentType.Application.Json); setBody(body) }
@@ -58,18 +67,27 @@ class ValhallaRoutingService(
         } catch (e: Exception) {
             throw RoutingException(RoutingFailure.OFFLINE, "Could not reach the routing service. Check your internet connection.", e)
         }
-        return parse(text)
+        return parseAll(text)
     }
 
     companion object {
         const val DEFAULT_BASE_URL = "https://valhalla1.openstreetmap.de"
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
-        fun parse(text: String): Route {
+        fun parse(text: String): Route = parseAll(text).first()
+
+        /** The main route, then each alternative the server sent (an alternative it could not read is left out, never guessed). */
+        fun parseAll(text: String): List<Route> {
             val dto = try { json.decodeFromString(ValhallaResponse.serializer(), text) } catch (e: Exception) {
                 throw RoutingException(RoutingFailure.BAD_RESPONSE, "The routing service sent a route this app could not read.", e)
             }
-            val leg = dto.trip?.legs?.firstOrNull() ?: throw RoutingException(RoutingFailure.NO_ROUTE, "No driving route was found to this place.")
+            val main = routeOf(dto.trip)
+            val alternatives = dto.alternates.orEmpty().mapNotNull { runCatching { routeOf(it.trip) }.getOrNull() }
+            return listOf(main) + alternatives
+        }
+
+        private fun routeOf(trip: ValhallaTrip?): Route {
+            val leg = trip?.legs?.firstOrNull() ?: throw RoutingException(RoutingFailure.NO_ROUTE, "No driving route was found to this place.")
             val points = decodePolyline6(leg.shape ?: "")
             if (points.size < 2) throw RoutingException(RoutingFailure.NO_ROUTE, "No driving route was found to this place.")
             val steps = leg.maneuvers.orEmpty().map { m ->
@@ -85,7 +103,7 @@ class ValhallaRoutingService(
                 )
             }
             if (steps.isEmpty()) throw RoutingException(RoutingFailure.BAD_RESPONSE, "The route had no driving instructions.")
-            val summary = dto.trip?.summary
+            val summary = trip?.summary
             return Route(points, steps, (summary?.length ?: steps.sumOf { it.lengthMeters / 1000.0 }) * 1000.0, summary?.time ?: steps.sumOf { it.durationSeconds })
         }
 
@@ -132,7 +150,10 @@ class ValhallaRoutingService(
 }
 
 @Serializable
-private data class ValhallaResponse(val trip: ValhallaTrip? = null)
+private data class ValhallaResponse(val trip: ValhallaTrip? = null, val alternates: List<ValhallaAlternate>? = null)
+
+@Serializable
+private data class ValhallaAlternate(val trip: ValhallaTrip? = null)
 
 @Serializable
 private data class ValhallaTrip(val legs: List<ValhallaLeg>? = null, val summary: ValhallaSummary? = null)

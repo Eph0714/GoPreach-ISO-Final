@@ -550,6 +550,37 @@ class AuthRepository(
         }
     }
 
+    /**
+     * Sets a new temporary password for someone who forgot theirs. The server checks that the caller may manage that person's credentials; the password
+     * is kept on the person's record (as at enrollment) until they choose their own at the next sign-in, and is returned so the admin can hand it over.
+     * A password the person chose themselves is never readable.
+     */
+    suspend fun adminResetPassword(targetPersonId: String, actingPersonId: String): Result<String> {
+        val target = personRepository.get(targetPersonId) ?: return Result.failure(IllegalStateException("Account not found."))
+        val password = CredentialGenerator.temporaryPassword()
+        return try {
+            auth.adminResetPassword(targetPersonId, password)
+            val updated = target.copy(isTemporaryCredential = true, temporaryPassword = password)
+            personRepository.save(updated)
+            remote.pushNow("people", targetPersonId, updated)
+            auditLogRepository.log(
+                actorPersonId = actingPersonId,
+                action = "ACCOUNT_MGMT_PASSWORD_RESET",
+                targetType = "Person",
+                targetId = targetPersonId,
+                congregationId = target.activeCongregationId,
+                details = "temporary password set",
+            )
+            Result.success(password)
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            throw e
+        } catch (e: AuthFailure) {
+            Result.failure(IllegalStateException(e.message ?: "Could not reset the password."))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /** Spec §4.5 step 4: lost credentials are recovered from whoever enrolled the
      * person, not a self-service email link (email is optional on [Person]). */
     suspend fun requestPasswordReset(username: String) {

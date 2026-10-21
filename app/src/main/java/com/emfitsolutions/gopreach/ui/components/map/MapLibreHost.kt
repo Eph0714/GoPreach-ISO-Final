@@ -82,6 +82,10 @@ fun MapLibreHost(
     /** Driving Mode: the arrow turns to [headingOverrideDeg] (GPS course of travel, true-north degrees) instead of the compass, and the compass-driven map rotation is off. */
     drivingMode: Boolean = false,
     headingOverrideDeg: Float? = null,
+    /** True: turn the map to the compass heading (what is in front of the arrow is up), as if the compass dial had been tapped. False afterwards: back to north-up. */
+    headingUpRequest: Boolean = false,
+    /** The compass heading (rounded to 3 degrees), or null when there is none: lets a screen turn the map and move it in ONE camera update. */
+    onHeading: (Float?) -> Unit = {},
     onStyleReady: (MapLibreMap, Style) -> Unit,
     content: @Composable BoxScope.(map: MapLibreMap?, styleVersion: Int) -> Unit = { _, _ -> },
 ) {
@@ -96,6 +100,7 @@ fun MapLibreHost(
     val latestOnMapClick = rememberUpdatedState(onMapClick)
     val latestOnMapLongClick = rememberUpdatedState(onMapLongClick)
     val latestOnStyleReady = rememberUpdatedState(onStyleReady)
+    val latestOnHeading = rememberUpdatedState(onHeading)
     val latestMyLocation = rememberUpdatedState(myLocation)
 
     val mapView = remember {
@@ -167,6 +172,19 @@ fun MapLibreHost(
     val heading: Float? = if (drivingMode) headingOverrideDeg else compassHeading
     var orientationMode by remember { mutableStateOf(OrientationMode.NORTH_UP) }
     LaunchedEffect(heading == null) { if (heading == null) orientationMode = OrientationMode.NORTH_UP }
+    // A screen (Follow mode) can ask for heading-up; it is only applied when a compass reading exists (never invented), and undone when the request ends.
+    LaunchedEffect(heading?.let { (it / 3f).toInt() }) { latestOnHeading.value(heading?.let { (it / 3f).toInt() * 3f }) }
+    var headingUpRequested by remember { mutableStateOf(false) }
+    LaunchedEffect(headingUpRequest, heading != null) {
+        if (headingUpRequest) {
+            headingUpRequested = true
+            if (heading != null) orientationMode = OrientationMode.FOLLOW_HEADING
+        } else if (headingUpRequested) {
+            headingUpRequested = false
+            orientationMode = OrientationMode.NORTH_UP
+            map?.animateCamera(CameraUpdateFactory.bearingTo(0.0), 300)
+        }
+    }
     CurrentLocationUpdater(map, styleVersion, myLocation, heading, drivingMode = drivingMode, directionKnown = !drivingMode || headingOverrideDeg != null)
     LaunchedEffect(map, styleVersion, myLocation, myAccuracyMeters) {
         val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect

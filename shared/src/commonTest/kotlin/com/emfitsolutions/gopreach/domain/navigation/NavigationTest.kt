@@ -146,6 +146,57 @@ class NavigationTest {
             assertEquals(7, service(HttpStatusCode.OK, RESPONSE).route(16.5176, 121.183, 16.526, 121.19).steps.size)
         }
     }
+    // ---- alternative routes -------------------------------------------------------------------------------------------------------------
+
+    /** Google's polyline encoding at 6 decimals, only to build test answers without a network. */
+    private fun encode6(points: List<Pair<Double, Double>>): String {
+        val sb = StringBuilder()
+        var pLat = 0
+        var pLng = 0
+        fun put(v0: Int) {
+            var v = if (v0 < 0) (v0 shl 1).inv() else v0 shl 1
+            while (v >= 0x20) { sb.append((((v and 0x1f) or 0x20) + 63).toChar()); v = v shr 5 }
+            sb.append((v + 63).toChar())
+        }
+        for ((lat, lng) in points) {
+            val la = kotlin.math.round(lat * 1e6).toInt()
+            val ln = kotlin.math.round(lng * 1e6).toInt()
+            put(la - pLat); put(ln - pLng); pLat = la; pLng = ln
+        }
+        return sb.toString()
+    }
+
+    private fun tripJson(points: List<Pair<Double, Double>>, km: Double, seconds: Double): String =
+        """{"legs":[{"shape":"${encode6(points).replace("\\", "\\\\")}","maneuvers":[{"type":1,"instruction":"Drive north.","length":$km,"time":$seconds,"begin_shape_index":0,"end_shape_index":${points.lastIndex}},{"type":4,"instruction":"You have arrived.","length":0.0,"time":0.0,"begin_shape_index":${points.lastIndex},"end_shape_index":${points.lastIndex}}]}],"summary":{"length":$km,"time":$seconds}}"""
+
+    @Test
+    fun alternatives_are_read_after_the_main_route_and_labelled_from_the_real_numbers() {
+        val main = listOf(16.5 to 121.1, 16.51 to 121.1, 16.52 to 121.11)
+        val altA = listOf(16.5 to 121.1, 16.5 to 121.12, 16.52 to 121.11)
+        val altB = listOf(16.5 to 121.1, 16.515 to 121.09, 16.52 to 121.11)
+        val text = """{"trip":${tripJson(main, 3.0, 600.0)},"alternates":[{"trip":${tripJson(altA, 2.6, 780.0)}},{"trip":${tripJson(altB, 3.4, 640.0)}}]}"""
+        val routes = ValhallaRoutingService.parseAll(text)
+        assertEquals(3, routes.size)
+        assertEquals(3000.0, routes[0].distanceMeters, 0.5)
+        assertEquals(780.0, routes[1].durationSeconds, 0.5)
+        val choices = RouteChoices.label(routes)
+        assertEquals(listOf("Fastest", "Alternative", "Shortest"), choices.map { it.label })
+        assertEquals(600.0, choices.first().route.durationSeconds, 0.5)
+    }
+
+    @Test
+    fun one_lone_route_is_never_called_fastest_or_shortest() {
+        val routes = ValhallaRoutingService.parseAll("""{"trip":${tripJson(listOf(16.5 to 121.1, 16.52 to 121.11), 3.0, 600.0)}}""")
+        assertEquals(listOf("Route"), RouteChoices.label(routes).map { it.label })
+    }
+
+    @Test
+    fun a_route_that_is_both_the_quickest_and_the_shortest_says_so() {
+        val a = listOf(16.5 to 121.1, 16.52 to 121.11)
+        val routes = ValhallaRoutingService.parseAll("""{"trip":${tripJson(a, 2.0, 400.0)},"alternates":[{"trip":${tripJson(a, 2.5, 500.0)}}]}""")
+        assertEquals(listOf("Fastest and shortest", "Alternative"), RouteChoices.label(routes).map { it.label })
+    }
+
 }
 
 // A real Valhalla answer (trimmed of nothing): Solano, 16.5176/121.1830 to 16.5260/121.1900, car.

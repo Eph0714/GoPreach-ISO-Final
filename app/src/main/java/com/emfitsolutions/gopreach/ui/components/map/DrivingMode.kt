@@ -33,6 +33,9 @@ class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
     /** True: the map turns so the direction of travel is up. False: north stays up and only the arrow turns. */
     var headingUp by mutableStateOf(true)
 
+    /** Camera tilt while following: 60 when the map is in 3D (the Waze-style forward view), 0 for a flat map. Set by the screen. */
+    var tiltDeg by mutableStateOf(0.0)
+
     /** True while the camera is following the arrow; turns false when the person moves the map, and back on Recenter or after [RESUME_MS]. */
     var following by mutableStateOf(true)
         private set
@@ -100,12 +103,12 @@ class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
     }
 
     companion object {
-        const val RESUME_MS = 8_000L
+        const val RESUME_MS = 3_000L
         const val NAV_ZOOM = 17.0
         const val MIN_FOLLOW_ZOOM = 15.5
         const val MAX_FOLLOW_ZOOM = 18.5
         /** The arrow sits this far below the middle of the map, so more of the road ahead shows. */
-        const val LOWER_THIRD = 0.30
+        const val LOWER_THIRD = 0.36
     }
 }
 
@@ -142,7 +145,7 @@ fun DrivingCameraEffect(map: MapLibreMap?, state: DrivingModeState?) {
         }
     }
 
-    LaunchedEffect(map, state.active, state.following, state.headingUp, state.recenterTick, snap.lat, snap.lng, snap.courseDeg) {
+    LaunchedEffect(map, state.active, state.following, state.headingUp, state.tiltDeg, state.recenterTick, snap.lat, snap.lng, snap.courseDeg) {
         val m = map ?: return@LaunchedEffect
         val lat = snap.lat ?: return@LaunchedEffect
         val lng = snap.lng ?: return@LaunchedEffect
@@ -155,7 +158,7 @@ fun DrivingCameraEffect(map: MapLibreMap?, state: DrivingModeState?) {
             course != null -> course.toDouble()
             else -> current.bearing
         }
-        val update = CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(LatLng(lat, lng)).zoom(zoom).bearing(bearing).tilt(0.0).build())
+        val update = CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(LatLng(lat, lng)).zoom(zoom).bearing(bearing).tilt(state.tiltDeg).build())
         // A recenter is quicker; ordinary follow updates glide for about a second so the map never jumps.
         m.easeCamera(update, 800)
     }

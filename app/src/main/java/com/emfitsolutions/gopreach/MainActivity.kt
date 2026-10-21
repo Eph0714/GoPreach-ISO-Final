@@ -18,6 +18,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import org.koin.android.ext.android.getKoin
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.export.IncomingBibleTextImportHolder
@@ -60,6 +63,8 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         com.emfitsolutions.gopreach.data.sync.AppForeground.visible = true
+        // Let the GPS settle as the app opens, so the first map view or coordinate capture starts from a precise real fix (works offline too).
+        lifecycleScope.launch { runCatching { getKoin().get<com.emfitsolutions.gopreach.data.location.LocationTracker>().warmUp() } }
     }
 
     override fun onStop() {

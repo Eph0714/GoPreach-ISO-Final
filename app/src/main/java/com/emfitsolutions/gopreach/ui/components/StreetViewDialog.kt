@@ -82,6 +82,8 @@ private sealed interface StreetViewState {
     data class Available(val imageId: String, val google: Boolean = false) : StreetViewState
     data object None : StreetViewState
     data object Failed : StreetViewState
+    /** Photos were found but the viewer never showed one (it reported nothing within 15 seconds): said plainly instead of a blank black screen. */
+    data object NotShown : StreetViewState
 }
 
 private data class StreetPhoto(val id: String, val isPano: Boolean, val capturedAt: Long)
@@ -138,8 +140,17 @@ fun StreetViewDialog(lat: Double, lng: Double, title: String?, onClose: () -> Un
     val client: HttpClient = koinInject()
     var state by remember { mutableStateOf<StreetViewState>(StreetViewState.Checking) }
     var viewerLoading by remember { mutableStateOf(true) }
+    var photoReady by remember { mutableStateOf(false) }
     val webView = remember { mutableStateOf<WebView?>(null) }
     DisposableEffect(Unit) { onDispose { webView.value?.apply { stopLoading(); destroy() } } }
+
+    // The viewer must show a photo within 15 seconds, or the screen says so (and offers the standard map) instead of staying blank.
+    LaunchedEffect(state) {
+        if (state is StreetViewState.Available) {
+            kotlinx.coroutines.delay(15_000L)
+            if (!photoReady) state = StreetViewState.NotShown
+        }
+    }
 
     LaunchedEffect(lat, lng) {
         state = StreetViewState.Checking
@@ -172,7 +183,11 @@ fun StreetViewDialog(lat: Double, lng: Double, title: String?, onClose: () -> Un
                                     settings.allowContentAccess = false
                                     setBackgroundColor(android.graphics.Color.BLACK)
                                     webViewClient = object : WebViewClient() {
-                                        override fun onPageFinished(view: WebView?, url: String?) { viewerLoading = false }
+                                        override fun onPageFinished(view: WebView?, url: String?) { viewerLoading = false; if (s.google) photoReady = true }
+                                    }
+                                    // The Mapillary page names its title "gp-ready" once a street photo is really on screen.
+                                    webChromeClient = object : android.webkit.WebChromeClient() {
+                                        override fun onReceivedTitle(view: WebView?, title: String?) { if (title == "gp-ready") photoReady = true }
                                     }
                                     val page = if (s.google) """
                                         <html><body style="margin:0;background:#000">
@@ -184,7 +199,7 @@ fun StreetViewDialog(lat: Double, lng: Double, title: String?, onClose: () -> Un
                                         <script src="https://unpkg.com/mapillary-js@4.1.2/dist/mapillary.js"></script>
                                         <style>html,body{margin:0;height:100%;background:#000}#mly{width:100vw;height:100vh}</style></head>
                                         <body><div id="mly"></div>
-                                        <script>new mapillary.Viewer({accessToken:'${BuildConfig.MAPILLARY_TOKEN}',container:'mly',imageId:'${s.imageId}'});</script>
+                                        <script>var v=new mapillary.Viewer({accessToken:'${BuildConfig.MAPILLARY_TOKEN}',container:'mly',imageId:'${s.imageId}'});v.on('image',function(){document.title='gp-ready';});</script>
                                         </body></html>
                                     """.trimIndent()
                                     loadDataWithBaseURL("https://www.mapillary.com/", page, "text/html", "utf-8", null)
@@ -200,8 +215,9 @@ fun StreetViewDialog(lat: Double, lng: Double, title: String?, onClose: () -> Un
                             Text("Looking for street photos...", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                    StreetViewState.None -> Message("No Street View here", "There are no street photos close to this spot.")
-                    StreetViewState.Failed -> Message("Street View could not be checked", "Check your internet connection and try again.")
+                    StreetViewState.None -> Message("No Street View here", "There are no street photos close to this spot.") { OpenInMapsButton(lat, lng, title) }
+                    StreetViewState.NotShown -> Message("Street photo could not be displayed", "Street photos exist near this spot, but they could not be shown right now. Check your internet connection and try again, or open the standard map.") { OpenInMapsButton(lat, lng, title) }
+                    StreetViewState.Failed -> Message("Street View could not be checked", "Street View needs an internet connection. Check it and try again, or open the standard map instead.") { OpenInMapsButton(lat, lng, title) }
                 }
                 Row(
                     Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 4.dp, vertical = 4.dp),
@@ -216,6 +232,16 @@ fun StreetViewDialog(lat: Double, lng: Double, title: String?, onClose: () -> Un
             }
         }
     }
+}
+
+/** The fallback when there are no street photos (or they cannot be loaded): the ordinary map of the same saved spot, never passed off as Street View. */
+@Composable
+private fun OpenInMapsButton(lat: Double, lng: Double, title: String?) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.material3.OutlinedButton(
+        onClick = { openCoordinatesInMaps(context, lat, lng, title?.ifBlank { null }) },
+        colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+    ) { Text("Open the standard map") }
 }
 
 @Composable

@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -43,6 +44,17 @@ class AndroidLocationTracker(
 ) : LocationTracker {
     private companion object {
         const val TAG = "LocationTracker"
+        /** A remembered fix counts as fresh for this long. */
+        const val FRESH_MS = 15_000L
+        /** Within this, a remembered fix answers a capture at once. */
+        const val PRECISE_METERS = 10f
+        /** While capturing, stop listening as soon as a fix is this precise. */
+        const val GOOD_ENOUGH_METERS = 8f
+        /** The longest a capture waits for a precise fix before giving the best one heard. */
+        const val CAPTURE_TIMEOUT_MS = 15_000L
+        /** How long the app-open warm-up listens, and the precision it stops at. */
+        const val WARM_UP_MS = 30_000L
+        const val WARM_UP_TARGET_METERS = 5f
     }
 
     override fun hasLocationPermission(): Boolean =
@@ -63,6 +75,12 @@ class AndroidLocationTracker(
     @SuppressLint("MissingPermission") // caller checks hasLocationPermission() first
     override suspend fun getCurrentLocation(): LatLng? {
         if (!hasLocationPermission()) return null
+        // 1. A fix the warm-up (or an earlier capture) already has, if it is both precise and fresh, answers at once.
+        freshBest(maxAgeMs = FRESH_MS, maxAccuracy = PRECISE_METERS)?.let { return it }
+        // 2. Otherwise listen to the GPS: stop the moment a fix is precise, or when time is up give the best one heard. A first reading is
+        //    often 20-60 m off and tightens within seconds, so taking the first one is what made captured coordinates drift.
+        collectBest(timeoutMs = CAPTURE_TIMEOUT_MS, goodEnoughMeters = GOOD_ENOUGH_METERS)?.let { return it }
+        // 3. Nothing was heard (cold chip, no sky): the one-shot request as before, then a recent cached fix. Never an invented position.
         val client = LocationServices.getFusedLocationProviderClient(context)
         // PRIORITY_HIGH_ACCURACY, not BALANCED_POWER_ACCURACY — the latter
         // is free to answer from WiFi/cell towers alone (often 50-100+
@@ -73,8 +91,47 @@ class AndroidLocationTracker(
         // for a real GPS-chip fix (typically single-digit-to-low-tens of
         // meters outdoors), which is what that filter was written assuming.
         val request = CurrentLocationRequest.Builder().setPriority(Priority.PRIORITY_HIGH_ACCURACY).build()
-        val location = client.getCurrentLocation(request, null).await() ?: return null
-        return location.toFix()
+        val one = runCatching { client.getCurrentLocation(request, null).await() }.getOrNull()?.takeIf { !it.isMockFix() }?.toFix()
+        if (one != null) { note(one); return one }
+        return freshBest(maxAgeMs = 120_000L, maxAccuracy = Float.MAX_VALUE)
+    }
+
+    // ---- the best fix heard so far (kept in memory only) ------------------------------------------------------------------------------
+
+    @Volatile private var best: LatLng? = null
+
+    /** Remembers [fix] when it is more precise than what we have, or when what we have is no longer fresh. */
+    private fun note(fix: LatLng) {
+        val accuracy = fix.accuracyMeters ?: return
+        val current = best
+        val currentAccuracy = current?.accuracyMeters
+        if (current == null || currentAccuracy == null || System.currentTimeMillis() - current.timeMillis > FRESH_MS || accuracy <= currentAccuracy) best = fix
+    }
+
+    private fun freshBest(maxAgeMs: Long, maxAccuracy: Float): LatLng? =
+        best?.takeIf { System.currentTimeMillis() - it.timeMillis <= maxAgeMs && (it.accuracyMeters ?: Float.MAX_VALUE) <= maxAccuracy }
+
+    /** Listens to GPS fixes and returns the most precise one heard, as soon as one is within [goodEnoughMeters] or after [timeoutMs]. */
+    private suspend fun collectBest(timeoutMs: Long, goodEnoughMeters: Float): LatLng? {
+        var heard: LatLng? = null
+        withTimeoutOrNull(timeoutMs) {
+            requestLocationUpdatesFlow(1_000L, 500L).first { fix ->
+                val acc = fix.accuracyMeters ?: Float.MAX_VALUE
+                if (heard == null || acc <= (heard?.accuracyMeters ?: Float.MAX_VALUE)) heard = fix
+                acc <= goodEnoughMeters
+            }
+        }
+        return heard
+    }
+
+    /** Lets the GPS settle when the app opens (it works with no internet: the GPS chip needs only the sky), so the first map view or coordinate capture starts from a precise fix. */
+    @SuppressLint("MissingPermission")
+    override suspend fun warmUp() {
+        if (!hasLocationPermission() || !isLocationServicesEnabled()) return
+        runCatching { getLastKnownLocation() }.getOrNull()?.let { note(it) } // something real to start from, with its own accuracy and age
+        withTimeoutOrNull(WARM_UP_MS) {
+            requestLocationUpdatesFlow(1_000L, 500L).first { (it.accuracyMeters ?: Float.MAX_VALUE) <= WARM_UP_TARGET_METERS }
+        }
     }
 
     /** "The publisher cannot open Share Location fast, it will take time" —
@@ -90,8 +147,8 @@ class AndroidLocationTracker(
     override suspend fun getLastKnownLocation(): LatLng? {
         if (!hasLocationPermission()) return null
         val client = LocationServices.getFusedLocationProviderClient(context)
-        val location = client.lastLocation.await() ?: return null
-        return location.toFix()
+        val location = (client.lastLocation.await() ?: return null).takeIf { !it.isMockFix() } ?: return null
+        return location.toFix().also { note(it) }
     }
 
     /** "Fix the delay in the Shared Location feature" — root cause: the old
@@ -126,8 +183,9 @@ class AndroidLocationTracker(
             .build()
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { location ->
-                    trySend(location.toFix())
+                // A location faked by a mock-location app is never a real position: it is skipped here, for every caller.
+                result.lastLocation?.takeIf { !it.isMockFix() }?.let { location ->
+                    trySend(location.toFix().also { note(it) })
                 }
             }
         }
@@ -310,3 +368,7 @@ private fun android.location.Location.toFix(): LatLng {
         timeMillis = System.currentTimeMillis() - ageMs,
     )
 }
+
+/** True when the location was supplied by a mock-location app rather than the device's own GPS / network sources. */
+private fun android.location.Location.isMockFix(): Boolean =
+    if (android.os.Build.VERSION.SDK_INT >= 31) isMock else @Suppress("DEPRECATION") isFromMockProvider

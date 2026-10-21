@@ -211,42 +211,11 @@ fun AccountManagementScreen(
         }
     }
 
-    val usernameTarget = pendingUsernameChange
-    if (usernameTarget != null) {
-        ChangeUsernameDialog(
-            row = usernameTarget,
-            onDismiss = { pendingUsernameChange = null },
-            onConfirm = { newUsername ->
-                viewModel.changeUsername(usernameTarget, newUsername, currentPersonId) { result ->
-                    when (result) {
-                        is AuthResult.Success -> {
-                            showToast("Username updated for ${usernameTarget.person.fullName}.")
-                            pendingUsernameChange = null
-                        }
-                        is AuthResult.Error -> showToast(result.message)
-                    }
-                }
-            },
-        )
+    pendingUsernameChange?.let { row ->
+        ChangeUsernameFlow(row, viewModel, currentPersonId, showToast, onDismiss = { pendingUsernameChange = null })
     }
-
-    val resetTarget = pendingResetPasswordInfo
-    if (resetTarget != null) {
-        AlertDialog(
-            onDismissRequest = { pendingResetPasswordInfo = null },
-            title = { Text("Reset Password") },
-            text = {
-                Text(
-                    "Password reset for other accounts requires a small backend service " +
-                        "that isn't set up yet for this project (it needs the Firebase Blaze " +
-                        "plan plus a Cloud Function — Firebase's app-side login system can only " +
-                        "ever change the password of whoever is currently signed in). Ask " +
-                        "${resetTarget.person.fullName} to use their existing temporary-credential " +
-                        "sign-in from enrollment, or wait for this to be enabled.",
-                )
-            },
-            confirmButton = { TextButton(onClick = { pendingResetPasswordInfo = null }) { Text("Got It") } },
-        )
+    pendingResetPasswordInfo?.let { row ->
+        TemporaryPasswordFlow(row, viewModel, currentPersonId, showToast, onDismiss = { pendingResetPasswordInfo = null })
     }
 }
 
@@ -297,7 +266,7 @@ private fun AccountRowCard(
                         onClick = { menuOpen = false; onChangeUsername() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Reset password") },
+                        text = { Text("Set temporary password") },
                         leadingIcon = { Icon(Icons.Rounded.VpnKey, contentDescription = null) },
                         onClick = { menuOpen = false; onResetPassword() },
                     )
@@ -328,7 +297,7 @@ private fun AccountRowCard(
  * validation, then [FormDialog]'s own confirm step doubles as the
  * confirmation dialog step 5 asks for. */
 @Composable
-private fun ChangeUsernameDialog(
+internal fun ChangeUsernameDialog(
     row: AccountRow,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,

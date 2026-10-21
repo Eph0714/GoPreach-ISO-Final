@@ -62,6 +62,7 @@ class PipelineViewModel(
     private val philippineLocationRepository: PhilippineLocationRepository,
     private val publisherVisibilitySettingsRepository: com.emfitsolutions.gopreach.data.repository.PublisherVisibilitySettingsRepository,
     private val recycleBinRepository: com.emfitsolutions.gopreach.data.repository.RecycleBinRepository,
+    private val territoryAssignmentRepository: com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentRepository,
 ) : ViewModel() {
 
     /** Bug fix: [save] used to let any exception from the repository/Room/
@@ -98,6 +99,19 @@ class PipelineViewModel(
         combine(interestedPersonRepository.observeAll(), publisherVisibilitySettingsRepository.observeFor(congregationId)) { list, settings ->
             list.filter { it.pipelineStage == stage && it.isVisibleToPublisher(publisherPersonId, congregationId, settings) }
         }
+
+    /**
+     * The municipalities and barangays [personId] may filter [congregationId]'s records by: only territory assignments inside their own scope (their
+     * congregation for a congregation-wide role, otherwise the FS Group(s) they belong to), resolved from their real roles and the real assignments.
+     */
+    fun authorizedAreasFor(personId: String, congregationId: String): Flow<List<AuthorizedArea>> = combine(
+        personRepository.observeAll(),
+        roleAssignmentRepository.observeForPerson(personId),
+        territoryAssignmentRepository.observeBarangayClaims(),
+    ) { people, roles, claims ->
+        val myGroups = roles.filter { it.status == com.emfitsolutions.gopreach.data.model.RoleAssignmentStatus.ACTIVE }.mapNotNull { it.groupId }.toSet()
+        authorizedAreas(com.emfitsolutions.gopreach.domain.GroupAccessScope.resolve(people.firstOrNull { it.id == personId }, roles), congregationId, myGroups, claims)
+    }
 
     fun visibilitySettingsFor(congregationId: String): Flow<com.emfitsolutions.gopreach.data.model.PublisherVisibilitySettings> =
         publisherVisibilitySettingsRepository.observeFor(congregationId)

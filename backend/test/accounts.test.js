@@ -83,3 +83,37 @@ test('too many wrong passwords lock the account for a while', async () => {
   for (let i = 0; i < 10; i++) await login('admin1', 'bad');
   assert.equal((await login('admin1', 'AdminPass1')).status, 429);
 });
+
+test('an admin sets a temporary password for a member of their congregation; a member or another congregation cannot', async () => {
+  const st = new MemoryStore();
+  const put = (c, id, data) => st.transaction((tx) => tx.put(c, id, data, 'seed'));
+  await put('people', 'sa', { isSuperAdmin: true, activeAdminRole: 'SUPER_ADMIN', activeCongregationId: null });
+  await put('people', 'adminA', person('ADMIN_PER_CONGREGATION'));
+  await put('people', 'pubA01', person(null));
+  await put('people', 'pubB01', person(null, { activeCongregationId: 'congB' }));
+  for (const [id, pw] of [['sa', 'SuperPass1'], ['adminA', 'AdminPass1'], ['pubA01', 'Secret123'], ['pubB01', 'Other1234']]) await st.createAccount(id, await hashPassword(pw));
+  const srv = createApp(st, { authOptions: { secret: SECRET, limits: { login: { max: 1000 } } } }).listen(0);
+  const url = `http://127.0.0.1:${srv.address().port}`;
+  try {
+    const p = (path, body, token) => fetch(`${url}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
+    const signIn = (id, password) => p('/v1/auth/login', { email: `${id}@gopreach.app`, password });
+    const token = async (id, pw) => (await (await signIn(id, pw)).json()).accessToken;
+    const admin = await token('adminA', 'AdminPass1');
+    const member = await token('pubA01', 'Secret123');
+    const sa = await token('sa', 'SuperPass1');
+
+    assert.equal((await p('/v1/auth/accounts/pubA01/password', { password: 'abc' }, admin)).status, 400);
+    assert.equal((await p('/v1/auth/accounts/pubA01/password', { password: 'Temp12345' }, member)).status, 403);
+    assert.equal((await p('/v1/auth/accounts/pubB01/password', { password: 'Temp12345' }, admin)).status, 403);
+    assert.equal((await p('/v1/auth/accounts/ghost01/password', { password: 'Temp12345' }, sa)).status, 404);
+
+    assert.equal((await p('/v1/auth/accounts/pubA01/password', { password: 'Temp12345' }, admin)).status, 200);
+    assert.equal((await signIn('pubA01', 'Secret123')).status, 401);
+    assert.equal((await signIn('pubA01', 'Temp12345')).status, 200);
+
+    assert.equal((await p('/v1/auth/accounts/pubB01/password', { password: 'Temp67890' }, sa)).status, 200); // the Super Admin reaches every congregation
+    assert.equal((await signIn('pubB01', 'Temp67890')).status, 200);
+  } finally {
+    srv.close();
+  }
+});
