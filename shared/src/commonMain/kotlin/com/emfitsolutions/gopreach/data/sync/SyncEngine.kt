@@ -48,6 +48,21 @@ class SyncEngine(
         return up.copy(downloaded = down.downloaded, transportError = down.transportError)
     }
 
+    /**
+     * Waits (up to [timeoutSeconds]) for the server to say that something this person may read has changed since the last download, without downloading anything.
+     * True: pull now. False: nothing yet. Null: the server cannot say (an older server, or a network problem) - the caller falls back to timed rounds.
+     */
+    suspend fun waitForChange(timeoutSeconds: Int): Boolean? {
+        return try {
+            val result = api.watch(readCursor(), timeoutSeconds, collections) ?: return null
+            result.hasChanges
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SyncTransportException) {
+            null
+        }
+    }
+
     suspend fun flushOutbox(): SyncReport {
         var uploaded = 0
         var rejected = 0
@@ -104,7 +119,18 @@ class SyncEngine(
     /** Returns true if the change was written to the cache. */
     private suspend fun apply(change: PullChange): Boolean {
         val existing = cacheDao.get(change.collection, change.id)
-        if (existing?.syncState == SyncState.PENDING.name) return false // an unsent local edit wins until it is uploaded
+        if (existing?.syncState == SyncState.PENDING.name) {
+            // An unsent local edit wins over another device's EDIT until it is uploaded. But a record that was DELETED elsewhere must not come back from a stale local edit:
+            // the edit stays in the queue (never thrown away) marked as needing attention, is not uploaded, and the record goes away here like it did everywhere else.
+            if (change.deleted || change.data == null) {
+                queueDao.getAllPending()
+                    .filter { it.collectionPath == change.collection && it.documentId == change.id }
+                    .forEach { queueDao.markPermanentFailure(it.id, "deleted: This record was deleted on another device, so your change was not applied.") }
+                cacheDao.delete(change.collection, change.id)
+                return true
+            }
+            return false
+        }
         if (change.deleted || change.data == null) {
             cacheDao.delete(change.collection, change.id)
             return true

@@ -15,6 +15,12 @@ interface SyncApi {
     /** Everything changed after [since] (a server sequence number) that the caller may read. */
     suspend fun pull(since: Long, collections: List<String>? = null, limit: Int = 500): PullPage
 
+    /**
+     * The change feed (`GET /v1/sync/watch`): holds the request up to [timeoutSeconds] until something this caller may read has changed after [since], and answers
+     * which collections changed (never their contents). Returns null when the server has no change feed, so callers fall back to polling.
+     */
+    suspend fun watch(since: Long, timeoutSeconds: Int, collections: List<String>? = null): WatchResult? = null
+
     /** A plain authenticated POST to one of the server's own endpoints (territory claims, ...): the status code and JSON body, never thrown for 4xx. */
     suspend fun postJson(path: String, body: JsonObject): ApiReply = throw UnsupportedOperationException("postJson is not available")
 
@@ -83,6 +89,15 @@ data class PullPage(
     val cursor: Long = 0,
     val hasMore: Boolean = false,
 )
+
+/** One collection that changed, as the change feed reports it (what changed, not the records themselves). */
+@Serializable
+data class WatchChange(val collection: String, val count: Int = 0, val deletes: Int = 0, val ids: List<String> = emptyList())
+
+@Serializable
+data class WatchResult(val changed: List<WatchChange> = emptyList(), val cursor: Long = 0) {
+    val hasChanges get() = changed.isNotEmpty()
+}
 
 @Serializable
 data class PushRequest(val ops: List<PushOp>)

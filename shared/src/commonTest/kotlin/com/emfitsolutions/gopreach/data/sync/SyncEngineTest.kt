@@ -13,6 +13,8 @@ import com.emfitsolutions.gopreach.data.remote.PushOp
 import com.emfitsolutions.gopreach.data.remote.PushResult
 import com.emfitsolutions.gopreach.data.remote.SyncApi
 import com.emfitsolutions.gopreach.data.remote.SyncTransportException
+import com.emfitsolutions.gopreach.data.remote.WatchChange
+import com.emfitsolutions.gopreach.data.remote.WatchResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -66,6 +68,13 @@ class FakeApi : SyncApi {
     var down = false
     val pushed = mutableListOf<PushOp>()
     val pullSince = mutableListOf<Long>()
+    var watchAnswer: WatchResult? = null
+    var watchCalls = 0
+    override suspend fun watch(since: Long, timeoutSeconds: Int, collections: List<String>?): WatchResult? {
+        if (down) throw SyncTransportException("offline")
+        watchCalls++
+        return watchAnswer
+    }
     override suspend fun push(ops: List<PushOp>): List<PushResult> {
         if (down) throw SyncTransportException("offline")
         pushed += ops
@@ -152,5 +161,29 @@ class SyncEngineTest {
         api.pages += PullPage(listOf(PullChange("people", "juan", buildJsonObject { put("firstName", "Server") }, seq = 9)), cursor = 9)
         engine.pull()
         assertTrue(cache.get("people", "juan")!!.payloadJson.contains("Local"))
+    }
+
+    @Test fun aRecordDeletedElsewhereIsNotBroughtBackByAStaleLocalEdit() = runTest {
+        queueSet("people", "juan", """{"id":"juan","firstName":"Edited offline"}""")
+        api.pages += PullPage(listOf(PullChange("people", "juan", null, deleted = true, seq = 12)), cursor = 12)
+        engine.pull()
+        assertNull(cache.get("people", "juan"), "the deletion is applied here too")
+        val kept = queue.ops.single()
+        assertTrue(kept.isPermanentFailure, "the edit is kept for attention, not thrown away")
+        assertTrue(kept.lastError!!.contains("deleted on another device"))
+        assertTrue(queue.getAllPending().isEmpty(), "and it is never uploaded again")
+        engine.syncOnce()
+        assertTrue(api.pushed.isEmpty(), "so nothing can recreate the deleted record")
+    }
+
+    @Test fun waitingForTheChangeFeedSaysWhetherToPull() = runTest {
+        api.watchAnswer = WatchResult(listOf(WatchChange("people", 1, 0, listOf("ana"))), cursor = 20)
+        assertEquals(true, engine.waitForChange(8))
+        api.watchAnswer = WatchResult(emptyList(), cursor = 20)
+        assertEquals(false, engine.waitForChange(8))
+        api.watchAnswer = null
+        assertNull(engine.waitForChange(8), "an older server without the feed: the caller falls back to timed rounds")
+        api.down = true
+        assertNull(engine.waitForChange(8), "a network problem is not a change")
     }
 }

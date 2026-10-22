@@ -54,6 +54,25 @@ class HttpSyncApi(
         return DocJson.decodeFromString(PullPage.serializer(), text)
     }
 
+    override suspend fun watch(since: Long, timeoutSeconds: Int, collections: List<String>?): WatchResult? {
+        val response = try {
+            client.get("$baseUrl/v1/sync/watch") {
+                header(HttpHeaders.Authorization, "Bearer ${idToken()}")
+                parameter("since", since)
+                parameter("timeout", timeoutSeconds)
+                if (!collections.isNullOrEmpty()) parameter("collections", collections.joinToString(","))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw SyncTransportException("Network error: ${e.message}", cause = e)
+        }
+        if (response.status.value == 404) return null // an older server without the change feed
+        val text = response.bodyAsText()
+        if (!response.status.isSuccess()) throw SyncTransportException("Server answered ${response.status.value}: ${text.take(200)}", response.status.value)
+        return DocJson.decodeFromString(WatchResult.serializer(), text)
+    }
+
     override suspend fun postJson(path: String, body: kotlinx.serialization.json.JsonObject): ApiReply {
         val response = try {
             client.post("$baseUrl$path") {

@@ -117,6 +117,12 @@ export class MysqlStore {
     }
   }
 
+  /** The sequence number of the latest change (0 when there is none): where a new watcher starts. */
+  async headSeq() {
+    const [[row]] = await this.pool.query("SELECT value FROM counters WHERE name = 'seq'");
+    return Number(row?.value ?? 0);
+  }
+
   async changesSince(seq, { collections = null, limit = 500 } = {}) {
     const params = [seq];
     let where = 'seq > ?';

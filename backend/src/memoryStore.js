@@ -84,6 +84,9 @@ export class MemoryStore {
     return { version: next.version, seq: next.seq };
   }
 
+  /** The sequence number of the latest change (0 when there is none): where a new watcher starts. */
+  async headSeq() { return this.seq; }
+
   async changesSince(seq, { collections = null, congregations = null, limit = 500 } = {}) {
     return [...this.docs.values()]
       .filter((d) => d.seq > seq)

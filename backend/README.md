@@ -16,6 +16,15 @@ outbox. The server mirrors that: a versioned document store with a global change
 | `POST /v1/sync/push` | `{ ops: [{ collection, id, op: "set" \| "delete", data }] }` → a result per op (`ok` / `denied` / `invalid`). Each op is authorized on its own; one bad op never blocks the rest. |
 | `GET /v1/sync/pull?since=<seq>&collections=a,b&limit=500` | everything changed after `seq` that the caller may read, deletes as tombstones, plus the next `cursor` and `hasMore`. The app polls this every 15–30 s while open (Business hosting has no reliable WebSockets). |
 
+### Live updates (the change feed)
+
+| Call | Purpose |
+|---|---|
+| `GET /v1/sync/watch?since=<seq or head>&collections=a,b&timeout=0..25` | Long-poll change feed. Holds the request up to `timeout` seconds until something the caller may read has changed after `since`, then answers `{ changed: [{ collection, count, deletes, ids }], cursor }` - **what** changed, never the contents (fetch those with `/pull`). Every row is authorized exactly like `/pull`, so nobody is told about a record they cannot read. `since=head` answers at once with the current position. Plain HTTP, so it works on Business hosting without WebSockets. |
+| `POST /v1/sync/push` ops may carry `baseVersion` | Opt-in conflict check. A save built on an older version than the stored one is refused with `status: "conflict"`; a save of a document deleted since is refused with `status: "gone"` (a stale device cannot bring a deleted record back). Ops without `baseVersion` behave as before (a deliberate restore from Deleted Records has none). |
+
+The website polls the feed through `/live/changes` and refreshes only the lists and the map that changed; the Android app waits on it (8 s holds) and pulls the moment something changes. Tests: `test/live.test.js`.
+
 **Sign-in is GoPreach's own.** `POST /v1/auth/login` checks the password (scrypt) and returns a one-hour access token plus a rotating 90-day refresh
 token (`src/accounts.js`); every other request carries the access token, signed with `AUTH_SECRET`. The person id is the sign-in address's part
 before `@`. Accounts live in the `accounts` table; the 145 accounts that came from Firebase kept their password hashes and are converted to the

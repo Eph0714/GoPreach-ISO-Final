@@ -1,4 +1,5 @@
 import express from 'express';
+import { EventEmitter } from 'node:events';
 import helmet from 'helmet';
 import { authenticate } from './auth.js';
 import { randomBytes } from 'node:crypto';
@@ -15,6 +16,7 @@ import { saveGroupTerritory, removeGroupTerritory, removeAssignment, validateSav
 
 const MAX_OPS = 200;
 const MAX_PULL = 1000;
+const MAX_WATCH_SECONDS = 25;
 // Top-level names, or subcollection paths like "interestedPeople/abc/visits".
 const COLLECTION_RE = new RegExp("^[A-Za-z][A-Za-z0-9_]{0,63}(/[A-Za-z0-9_-]{1,100}/[A-Za-z][A-Za-z0-9_]{0,63})?$");
 const ID_RE = /^[^/\\\s][^/\\]{0,189}$/;
@@ -25,8 +27,14 @@ const ID_RE = /^[^/\\\s][^/\\]{0,189}$/;
  *   GET  /v1/health
  *   POST /v1/sync/push   { ops: [{ collection, id, op: "set" | "delete", data? }] }
  *        -> { results: [{ collection, id, status: "ok" | "denied" | "invalid", version?, seq?, reason? }] }
+ *        An op may carry "baseVersion" (the version the device last saw): if the stored document is newer the op is refused with
+ *        status "conflict" (and { current: { version, deleted } }), and a document that was deleted since is never brought back by an op that
+ *        carries it (status "gone"). Ops without it behave as they always did.
  *   GET  /v1/sync/pull?since=<seq>&collections=a,b&limit=500
  *        -> { changes: [{ collection, id, data, deleted, version, seq }], cursor, hasMore }
+ *   GET  /v1/sync/watch?since=<seq|head>&collections=a,b&timeout=<0..25 seconds>
+ *        -> { changed: [{ collection, count, deletes, ids }], cursor }   the change feed: WHAT changed that the caller may read (never the contents),
+ *        held open until something changes (long poll: works on plain HTTP hosting). Fetch the changed collections with /pull.
  *   POST /v1/public/lookup-username, /v1/public/password-reset-request   (no login, rate limited)
  *   POST /v1/territory/save | remove-group | remove                         (atomic barangay claims)
  *
@@ -41,6 +49,16 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   app.use(express.json({ limit: '2mb' }));
 
   app.get('/v1/health', (req, res) => res.json({ ok: true, ...health() }));
+
+  // Every committed write wakes the watchers (the change feed below). One process: a short check interval covers anything this misses.
+  const commits = new EventEmitter();
+  commits.setMaxListeners(0);
+  const runTransaction = store.transaction.bind(store);
+  store.transaction = async (fn) => {
+    const result = await runTransaction(fn);
+    commits.emit('commit');
+    return result;
+  };
 
   const auth = authenticate({ devMode: devAuth, secret: authOptions.secret });
   // The authoritative date and time (never the caller's device clock): used to decide which service months may be reported.
@@ -140,6 +158,12 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
           const existing = await tx.get(collection, id);
           const verdict = await authorizeWrite(actor, op.op, collection, id, op.data, existing, tx.get);
           if (!verdict.ok) return { status: 'denied', reason: verdict.reason };
+          // A device that says which version it last saw never overwrites a newer one, and never brings back a document that was deleted since.
+          if (Number.isInteger(op.baseVersion) && existing && existing.version > op.baseVersion) {
+            return existing.deleted
+              ? { status: 'gone', reason: 'This record was deleted on another device.', current: { version: existing.version, deleted: true } }
+              : { status: 'conflict', reason: 'This record was changed on another device.', current: { version: existing.version, deleted: false } };
+          }
           if (op.op === 'delete') {
             if (!existing || existing.deleted) return { status: 'ok', version: existing?.version ?? 0, seq: existing?.seq ?? 0 };
             return { status: 'ok', ...(await tx.remove(collection, id, req.personId)) };
@@ -184,6 +208,60 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
     } catch (e) {
       console.error('pull failed', e);
       res.status(500).json({ error: 'Server error' });
+    }
+  });
+
+  // The change feed. Holds the request open (at most MAX_WATCH_SECONDS) until a change the caller may read exists after `since`, then answers which
+  // collections and ids changed - never the contents - so a device pulls only what it needs. `since=head` answers at once with the current position.
+  // Each row is authorized exactly as in /pull, so a person is never told that a record they may not read changed.
+  app.get('/v1/sync/watch', auth, async (req, res) => {
+    const collections = req.query.collections ? String(req.query.collections).split(',').filter((c) => COLLECTION_RE.test(c)) : null;
+    const seconds = Math.max(0, Math.min(Number.parseInt(String(req.query.timeout ?? '0'), 10) || 0, MAX_WATCH_SECONDS));
+    try {
+      if (req.query.since === 'head') return res.json({ changed: [], cursor: await store.headSeq() });
+      let since = Number.parseInt(String(req.query.since ?? '0'), 10);
+      if (!Number.isFinite(since) || since < 0) return res.status(400).json({ error: 'since must be >= 0 or "head"' });
+      const cache = new Map();
+      const get = (c, i) => {
+        const key = c + '/' + i;
+        if (!cache.has(key)) cache.set(key, store.get(c, i));
+        return cache.get(key);
+      };
+      const actor = await loadActor(req.personId, get);
+      if (!actor.known) return res.status(403).json({ error: 'Unknown user' });
+      const deadline = Date.now() + seconds * 1000;
+      let closed = false;
+      req.on('close', () => { closed = true; });
+      for (;;) {
+        cache.clear();
+        const grant = await loadGrant(req.personId, get);
+        const rows = await store.changesSince(since, { collections, limit: 500 });
+        if (rows.length) {
+          const readable = await Promise.all(rows.map((r) => canReadRow(actor, grant, r, get)));
+          const byCollection = new Map();
+          rows.forEach((r, i) => {
+            if (!readable[i]) return;
+            const e = byCollection.get(r.collection) ?? { collection: r.collection, count: 0, deletes: 0, ids: [] };
+            e.count += 1;
+            if (r.deleted) e.deletes += 1;
+            if (e.ids.length < 50) e.ids.push(r.id);
+            byCollection.set(r.collection, e);
+          });
+          const cursor = rows[rows.length - 1].seq;
+          if (byCollection.size) return res.json({ changed: [...byCollection.values()], cursor });
+          since = cursor; // nothing here for this person: move past it and keep waiting
+        }
+        if (closed || Date.now() >= deadline) return res.json({ changed: [], cursor: since });
+        await new Promise((resolve) => {
+          const done = () => { clearTimeout(timer); commits.off('commit', done); resolve(); };
+          const timer = setTimeout(done, Math.min(3000, Math.max(0, deadline - Date.now())));
+          commits.once('commit', done);
+          req.once('close', done);
+        });
+      }
+    } catch (e) {
+      console.error('watch failed', e);
+      if (!res.headersSent) res.status(500).json({ error: 'Server error' });
     }
   });
 
