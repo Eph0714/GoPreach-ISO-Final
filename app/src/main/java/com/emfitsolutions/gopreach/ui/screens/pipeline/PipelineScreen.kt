@@ -349,22 +349,8 @@ private fun PipelineListScreen(
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )
         },
-        floatingActionButton = {
-            // "The Publisher can directly add from Return Visit and Bible
-            // Study Module... use the same entity as the Searching Fields.
-            // If it save under Return Visit Module then the status will be
-            // automatically 'Return Visit'" — a new record can now be
-            // created directly at whichever stage screen it's added from,
-            // not just Searching; [PipelinePersonDialog] sets the new
-            // record's initial [InterestedPerson.pipelineStage] to this
-            // [stage] rather than always defaulting to Searching. A record
-            // still gains further stages the normal way too ([MOVE TO
-            // RETURN VISIT]/[MOVE TO BIBLE STUDY] on an existing record) —
-            // this is an additional entry point, not a replacement for that
-            // one.
-            // Inside the Ministry tab the add icon sits at the upper left, under the tab strip (see below); only the stand-alone screen keeps the corner button.
-            if (!embedded) androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showCreateDialog = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("New ${stage.label()} Record") })
-        },
+        // The add icon is at the upper left of the list (see the first row below), not in a corner button. A new record takes the stage of the open list:
+        // "If it save under Return Visit Module then the status will be automatically 'Return Visit'" ([PipelinePersonDialog] reads [stage]).
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             // One slim toolbar: the drop-down (Ministry tab) on the left, then PDF, Excel and the recycle bin.
@@ -392,10 +378,10 @@ private fun PipelineListScreen(
                     if (wrote) { showToast("Exported to Excel (CSV)."); actions.openFile(uri.toString(), "text/csv") } else showToast("Couldn't write the file.")
                 }
             }
-            if (embedded || !householderHistory) HideInFullScreen(true) {
+            HideInFullScreen(true) {
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     // Upper left: add a new Searching / Return Visit / Bible Study record (it takes the stage of the open list).
-                    if (embedded) androidx.compose.material3.FilledIconButton(onClick = { showCreateDialog = true }, modifier = Modifier.size(44.dp)) { Icon(Icons.Rounded.Add, contentDescription = "New ${stage.label()} Record") } else androidx.compose.foundation.layout.Spacer(Modifier.size(1.dp))
+                    androidx.compose.material3.FilledIconButton(onClick = { showCreateDialog = true }, modifier = Modifier.size(44.dp)) { Icon(Icons.Rounded.Add, contentDescription = "New ${stage.label()} Record") }
                     if (!householderHistory) RecycleBinToggle(showInactive, onChange = { if (hostControlsInactive) onHostShowInactiveChange?.invoke(it) else localShowInactive = it })
                 }
             }

@@ -206,14 +206,14 @@ fun PublisherAssignmentScreen(
                 }
             }
         },
-        floatingActionButton = {
-            // Bible Studies are viewed and (re)assigned here, not created or edited.
-            if (stage != PipelineStage.BIBLE_STUDY) {
-                androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showCreate = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("Add ${stage.assignmentLabel()} Record") })
-            }
-        },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // The add icon: upper left (it used to be a corner button). Bible Studies are viewed and (re)assigned here, not created or edited.
+            if (stage != PipelineStage.BIBLE_STUDY) {
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                    androidx.compose.material3.FilledIconButton(onClick = { showCreate = true }, modifier = Modifier.size(44.dp)) { Icon(Icons.Rounded.Add, contentDescription = "Add ${stage.assignmentLabel()} Record") }
+                }
+            }
             if (fixedCongregationId == null) {
                 CongregationFilterDropdown(
                     congregations = congregations,
