@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.components.co
 
+import androidx.compose.ui.unit.sp
 import com.emfitsolutions.gopreach.ui.theme.glass
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -73,7 +74,7 @@ import com.emfitsolutions.gopreach.ui.screens.circuit.CongregationQuickStats
  */
 
 /** The meaning of a color — never pick a color for an individual button, pick the kind. */
-enum class CoKind { Primary, Secondary, Success, Warning, Danger, Neutral }
+enum class CoKind { Primary, Secondary, Success, Warning, Danger, Neutral, Accent }
 
 /** Semantic colors that stay readable on both light and dark surfaces. */
 class CoPalette(val primary: Color, val success: Color, val warning: Color, val danger: Color, val onFilled: Color)
@@ -98,11 +99,13 @@ fun CoKind.color(): Color {
         CoKind.Warning -> p.warning
         CoKind.Danger -> p.danger
         CoKind.Neutral -> MaterialTheme.colorScheme.onSurfaceVariant
+        // GoPreach's yellow: the Send to Circuit Overseer button
+        CoKind.Accent -> Color(0xFFF2B705)
     }
 }
 
 private val ButtonShape = RoundedCornerShape(12.dp)
-private val ButtonHeight = 48.dp
+private val ButtonHeight = 40.dp
 
 /**
  * The only button of the Circuit Overseer account.
@@ -123,20 +126,20 @@ fun CoButton(
 ) {
     val p = coPalette()
     val mod = modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier).heightIn(min = ButtonHeight)
-    val padding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+    val padding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
     val content: @Composable RowScope.() -> Unit = {
         if (icon != null) {
-            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(6.dp))
         }
-        Text(text, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
+        Text(text, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
     }
     when (kind) {
         CoKind.Secondary -> FilledTonalButton(onClick, mod, enabled, ButtonShape, contentPadding = padding, content = content)
         CoKind.Neutral -> OutlinedButton(onClick, mod, enabled, ButtonShape, contentPadding = padding, content = content)
         else -> Button(
             onClick, mod, enabled, ButtonShape,
-            colors = ButtonDefaults.buttonColors(containerColor = kind.color(), contentColor = p.onFilled),
+            colors = ButtonDefaults.buttonColors(containerColor = kind.color(), contentColor = if (kind == CoKind.Accent) Color(0xFF1B1500) else p.onFilled),
             contentPadding = padding, content = content,
         )
     }

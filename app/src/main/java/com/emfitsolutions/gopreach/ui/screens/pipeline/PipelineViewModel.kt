@@ -91,6 +91,17 @@ class PipelineViewModel(
     fun observePerson(interestedPersonId: String): Flow<InterestedPerson?> =
         interestedPersonRepository.observeAll().map { list -> list.firstOrNull { it.id == interestedPersonId } }
 
+    /** The publishers who share an FS Group with [personId] (themselves included), from the active role assignments. */
+    fun groupMembersOf(personId: String): Flow<Set<String>> = roleAssignmentRepository.observeAll().map { all ->
+        val active = all.filter { it.status == com.emfitsolutions.gopreach.data.model.RoleAssignmentStatus.ACTIVE && !it.groupId.isNullOrBlank() }
+        val myGroups = active.filter { it.personId == personId }.mapNotNull { it.groupId }.toSet()
+        active.filter { it.groupId in myGroups }.map { it.personId }.toSet() + personId
+    }
+
+    /** House Holder Visit History logic: every record of the congregation at [stage] (the Ministry tab then keeps "mine" or shows them all with their publisher). */
+    fun congregationFor(congregationId: String, stage: PipelineStage): Flow<List<InterestedPerson>> =
+        interestedPersonRepository.observeAll().map { list -> list.filter { it.pipelineStage == stage && it.congregationId == congregationId } }
+
     /** What a Publisher sees at [stage]: always their own records; plus, for Searching/Return Visit, every unassigned
      * record of the congregation; plus (only when the Admin switched it on in Publisher Assignment) records assigned to
      * other Publishers of the same congregation. Bible Studies of others are view-only — see

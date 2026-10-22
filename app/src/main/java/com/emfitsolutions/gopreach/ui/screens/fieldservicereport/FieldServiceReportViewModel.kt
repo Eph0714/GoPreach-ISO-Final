@@ -68,6 +68,8 @@ data class FieldServiceReportRow(
     val remarks: String,
     /** The publisher this line belongs to (for the Table View's Edit / Delete). */
     val personId: String = "",
+    /** False for a publisher who has no report in the period (their line is only a placeholder): the "No Report" filter shows these. */
+    val hasReport: Boolean = true,
 ) {
     val reported: Boolean get() = reportsCount > 0
 }
@@ -720,6 +722,7 @@ class FieldServiceReportViewModel(
                             status = status,
                             name = person.lastName.trim() + ", " + person.firstName.trim(),
                             reportsCount = 1,
+                            hasReport = own.isNotEmpty(),
                             // Hours only exist for pioneer statuses; Bible Studies for every status.
                             hours = if (status.isPioneer && own.isNotEmpty()) own.sumOf { it.hoursRendered ?: 0.0 } else null,
                             bibleStudies = if (own.isNotEmpty()) own.sumOf { it.bibleStudiesCount } else null,

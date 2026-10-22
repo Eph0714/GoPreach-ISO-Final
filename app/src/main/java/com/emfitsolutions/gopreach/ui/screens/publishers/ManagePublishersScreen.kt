@@ -168,6 +168,7 @@ fun ManagePublishersScreen(
     var permanentDeleteChecked by remember { mutableStateOf(false) }
 
     Scaffold(
+        adminTab = com.emfitsolutions.gopreach.ui.components.AdminTab.PUBLISHERS,
         topBar = {
             TopAppBar(
                 title = { Text(if (congregationName != null) "Publishers – $congregationName" else "Publishers") },
@@ -389,6 +390,17 @@ fun ManagePublishersScreen(
                             if (!readOnly && canManageCredentials) {
                                 androidx.compose.material3.DropdownMenuItem(text = { Text("Change username") }, onClick = { dismiss(); usernameTarget = row.person })
                                 androidx.compose.material3.DropdownMenuItem(text = { Text("Set temporary password") }, onClick = { dismiss(); passwordTarget = row.person })
+                                // The sign-in account's status: Active, Inactive or Suspended (what Account Management used to offer for publishers).
+                                com.emfitsolutions.gopreach.data.model.AccountStatus.entries.filter { it != row.person.accountStatus }.forEach { target ->
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text("Set account " + target.name.lowercase()) },
+                                        onClick = {
+                                            dismiss()
+                                            accountViewModel.setAccountStatus(com.emfitsolutions.gopreach.ui.screens.accountmanagement.publisherAccountRow(row.person), target, currentPersonId)
+                                            showToast("Account of \"" + row.person.fullName + "\" set " + target.name.lowercase() + ".")
+                                        },
+                                    )
+                                }
                             }
                             if (!readOnly) {
                                 PublisherCategory.entries.filter { it != row.category && it != PublisherCategory.REMOVED_PUBLISHER }.forEach { target ->

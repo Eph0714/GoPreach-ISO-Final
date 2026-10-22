@@ -498,6 +498,16 @@ fun AdminHomeScreen(
 
     // Drag from the side panel to Quick Access: shared drag state, the modules the side panel currently offers, and the overlay origin.
     val dragState = remember { QuickAccessDragState() }
+    // The tab strip's modules for this role (the same permissions the drawer and Quick Access used for them).
+    val tabsAllowed = buildSet {
+        if (role != AdminRole.CIRCUIT_OVERSEER) {
+            if (canEnrollPublisher) add(com.emfitsolutions.gopreach.ui.components.AdminTab.PUBLISHERS)
+            if (canViewFieldServiceGroupReport) add(com.emfitsolutions.gopreach.ui.components.AdminTab.FIELD_SERVICE)
+            if (role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles && !session.isGroupRole) add(com.emfitsolutions.gopreach.ui.components.AdminTab.ATTENDANCE)
+            if (canViewTerritoryMap) add(com.emfitsolutions.gopreach.ui.components.AdminTab.TERRITORY)
+        }
+    }
+    androidx.compose.runtime.SideEffect { com.emfitsolutions.gopreach.ui.components.AdminTabsStore.allowed = tabsAllowed }
     // The panel's profile header names the user's congregation (their scope).
     val congregationRepository = org.koin.compose.koinInject<com.emfitsolutions.gopreach.data.repository.CongregationRepository>()
     val allCongregations by remember(congregationRepository) { congregationRepository.observeAll() }.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -659,6 +669,8 @@ fun AdminHomeScreen(
                         }
                     },
                 )
+                if (role != AdminRole.CIRCUIT_OVERSEER) com.emfitsolutions.gopreach.ui.components.AdminMainTabs(com.emfitsolutions.gopreach.ui.components.AdminTab.HOME)
+                else com.emfitsolutions.gopreach.ui.components.CircuitMainTabs(null)
                 Column(
                     modifier = Modifier.fillMaxSize().padding(if (role == AdminRole.CIRCUIT_OVERSEER) 12.dp else 24.dp),
                     verticalArrangement = Arrangement.spacedBy(if (role == AdminRole.CIRCUIT_OVERSEER) 8.dp else 20.dp),
@@ -684,6 +696,9 @@ fun AdminHomeScreen(
                             onOpenReceived = { onNavigate(Destinations.RECEIVED_REPORTS) },
                             onOpenSnapshot = { onNavigate(Destinations.RECEIVED_SNAPSHOTS) },
                             onOpenAnnouncements = { onNavigate(Destinations.CO_ANNOUNCEMENTS) },
+                            onOpenManualRecord = { onNavigate(Destinations.CO_MANUAL_RECORD) },
+                            onNavigateRoute = { onNavigate(it) },
+                            onOpenFileManager = { onNavigate(Destinations.CO_FILE_MANAGER) },
                         )
                     }
 
@@ -724,15 +739,12 @@ fun AdminHomeScreen(
                             quickAccess = { stats ->
                                 val allowedQuickAccess = buildSet {
                                     if (canManageTerritoryAssignments) add(QuickAccessItem.TERRITORY_ASSIGNMENT)
-                                    if (canViewTerritoryMap) add(QuickAccessItem.TERRITORY_MAP)
                                     if (canManageHouseholderAssignment) add(QuickAccessItem.PUBLISHER_ASSIGNMENT)
                                     if (canViewInterestedPeopleScope) add(QuickAccessItem.HOUSEHOLDER_RECORDS)
                                     if (role in setOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY)) add(QuickAccessItem.COMPARATIVE_REPORT)
-                                    if (canEnrollPublisher) addAll(listOf(QuickAccessItem.PUBLISHER_MODULE, QuickAccessItem.REGULAR_PIONEERS, QuickAccessItem.AUXILIARY_PIONEERS, QuickAccessItem.SPECIAL_PIONEERS, QuickAccessItem.UNBAPTIZED_PUBLISHERS))
-                                    if (canViewFieldServiceGroupReport) add(QuickAccessItem.FIELD_SERVICE_REPORT)
+                                    if (canEnrollPublisher) addAll(listOf(QuickAccessItem.REGULAR_PIONEERS, QuickAccessItem.AUXILIARY_PIONEERS, QuickAccessItem.SPECIAL_PIONEERS, QuickAccessItem.UNBAPTIZED_PUBLISHERS))
                                     add(QuickAccessItem.SETTINGS)
                                     if (canManageGroups) add(QuickAccessItem.FIELD_SERVICE_GROUP)
-                                    if (role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles && !session.isGroupRole) add(QuickAccessItem.MEETING_ATTENDANCE)
                                     if (canManageRegularEldersForDrawer) add(QuickAccessItem.TOTAL_ELDERS)
                                     if (canEnrollMinisterialServant) add(QuickAccessItem.TOTAL_MINISTERIAL)
                                 }

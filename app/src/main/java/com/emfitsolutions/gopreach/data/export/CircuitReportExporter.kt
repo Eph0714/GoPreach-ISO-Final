@@ -81,9 +81,8 @@ object CircuitReportExporter {
         r++
         r++; row(text(0, "Summary", 1))
         summaryOf(header, total).forEach { (k, v) -> r++; row(text(0, k, 1), number(1, v)) }
-        val widths = listOf(8, 28, 18, 26, 14, 16, 18, 20, 9, 20)
-        val cols = widths.mapIndexed { i, w -> "<col min=\"${i + 1}\" max=\"${i + 1}\" width=\"$w\" customWidth=\"1\"/>" }.joinToString("")
-        val sheet = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><cols>$cols</cols><sheetData>$xml</sheetData></worksheet>"
+        val layout = com.emfitsolutions.gopreach.data.export.ExcelLayout.parts(xml.toString())
+        val sheet = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">${layout.sheetPr}${layout.cols}<sheetData>$xml</sheetData>${layout.pageSetup}</worksheet>"
         val styles = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
             "<fonts count=\"2\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font><font><b/><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>" +
             "<fills count=\"3\"><fill><patternFill patternType=\"none\"/></fill><fill><patternFill patternType=\"gray125\"/></fill>" +

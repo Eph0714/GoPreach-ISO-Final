@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material.icons.rounded.TableChart
+import androidx.compose.material.icons.rounded.ViewAgenda
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.FilterChip
@@ -61,24 +63,24 @@ fun rememberRecordViewMode(screenKey: String, defaultTable: Boolean = false): Re
 /** [hScroll] is shared by the pinned heading and every row of Table View, so they slide sideways together. */
 class RecordViewMode(val table: Boolean, val hScroll: ScrollState, val set: (Boolean) -> Unit)
 
-@OptIn(ExperimentalLayoutApi::class)
+/** One slim row of three round icon buttons (List, Table, Full Screen), so the switch takes no more room than the "Record Found" line it sits beside. */
 @Composable
 fun RecordViewToggle(mode: RecordViewMode, modifier: Modifier = Modifier) {
-    FlowRow(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        FilterChip(selected = !mode.table, onClick = { mode.set(false) }, label = { Text("List View") })
-        FilterChip(selected = mode.table, onClick = { mode.set(true) }, label = { Text("Table View") })
-        FilterChip(
-            selected = RecordFullScreen.active,
-            onClick = { RecordFullScreen.active = !RecordFullScreen.active },
-            label = { Text(if (RecordFullScreen.active) "Exit Full Screen" else "Full Screen") },
-            leadingIcon = {
-                Icon(
-                    if (RecordFullScreen.active) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-            },
-        )
+    val primary = MaterialTheme.colorScheme.primary
+    val idle = MaterialTheme.colorScheme.onSurfaceVariant
+    @Composable
+    fun Choice(selected: Boolean, icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+        androidx.compose.material3.IconButton(
+            onClick = onClick,
+            modifier = Modifier.size(40.dp).background(if (selected) primary.copy(alpha = 0.15f) else Color.Transparent, androidx.compose.foundation.shape.CircleShape),
+        ) { Icon(icon, contentDescription = label, tint = if (selected) primary else idle, modifier = Modifier.size(22.dp)) }
+    }
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        Choice(!mode.table, Icons.Rounded.ViewAgenda, "List View") { mode.set(false) }
+        Choice(mode.table, Icons.Rounded.TableChart, "Table View") { mode.set(true) }
+        Choice(RecordFullScreen.active, if (RecordFullScreen.active) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, if (RecordFullScreen.active) "Exit Full Screen" else "Full Screen") {
+            RecordFullScreen.active = !RecordFullScreen.active
+        }
     }
 }
 

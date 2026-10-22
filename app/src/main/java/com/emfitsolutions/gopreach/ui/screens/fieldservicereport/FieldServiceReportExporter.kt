@@ -229,9 +229,18 @@ object FieldServiceReportExporter {
             if (r > 1) add(col(bibleStart) + "7:" + col(bibleStart + r - 1) + "7")
         }
 
+        // The page is set from the width of the table: A4 upright, A4 across, or A3 across, and always scaled to the page width so no column is cut off.
+        val widthChars = 30.14 + 26.86 + 8.43 * (remarksCol - 2).coerceAtLeast(0)
+        val (paperCode, pageOrientation) = when {
+            widthChars <= 88 -> 9 to "portrait"
+            widthChars <= 130 -> 9 to "landscape"
+            else -> 8 to "landscape"
+        }
+
         val sheetXml = buildString {
             append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>")
             append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">")
+            append("<sheetPr><pageSetUpPr fitToPage=\"1\"/></sheetPr>")
             append("<dimension ref=\"B1:").append(col(remarksCol)).append(lastRow).append("\"/>")
             append("<sheetViews><sheetView tabSelected=\"1\" workbookViewId=\"0\"/></sheetViews>")
             append("<sheetFormatPr defaultRowHeight=\"15\"/>")
@@ -242,7 +251,7 @@ object FieldServiceReportExporter {
             merges.forEach { append("<mergeCell ref=\"").append(it).append("\"/>") }
             append("</mergeCells>")
             append("<pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/>")
-            append("<pageSetup paperSize=\"9\" orientation=\"portrait\"/>")
+            append("<pageSetup paperSize=\"").append(paperCode).append("\" orientation=\"").append(pageOrientation).append("\" fitToWidth=\"1\" fitToHeight=\"0\"/>")
             append("</worksheet>")
         }
 

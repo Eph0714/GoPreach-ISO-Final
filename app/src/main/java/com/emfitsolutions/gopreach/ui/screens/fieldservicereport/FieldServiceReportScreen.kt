@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Add
 import com.emfitsolutions.gopreach.ui.components.ViewSegments
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
@@ -236,7 +240,10 @@ fun FieldServiceReportScreen(
     val fsMetrics = remember(metricsAState, metricsBState) { fieldServiceGraphMetrics(metricsAState, metricsBState) }
     var query by rememberSaveable { mutableStateOf("") }
     fun matches(name: String, remarks: String = "") = query.isBlank() || name.contains(query, ignoreCase = true) || remarks.contains(query, ignoreCase = true)
-    val searchedSheets = if (query.isBlank()) sheets else sheets?.map { s -> s.copy(rows = s.rows.filter { matches(it.name, it.remarks) }) }
+    // Which publishers to list: everyone, those with a report, or those with no report (to find who still needs a record entered by hand).
+    var reportFilter by rememberSaveable { mutableStateOf(0) }
+    fun passes(hasReport: Boolean) = reportFilter == 0 || (reportFilter == 1) == hasReport
+    val searchedSheets = if (query.isBlank() && reportFilter == 0) sheets else sheets?.map { s -> s.copy(rows = s.rows.filter { matches(it.name, it.remarks) && passes(it.hasReport) }) }
     val singleReady = searchedSheets?.takeIf { s -> s.isNotEmpty() && s.any { it.rows.isNotEmpty() } }
     val compareSheets = (sheetsA.orEmpty() + sheetsB.orEmpty()).filter { it.rows.isNotEmpty() }
     val ready = if (compareMode) compareSheets.takeIf { it.isNotEmpty() } else singleReady
@@ -276,7 +283,7 @@ fun FieldServiceReportScreen(
         if (reportGroups.isEmpty()) emptyFlow() else viewModel.listItemsFor(reportGroups, fromMonth, toMonth)
     }
     val allListItems by itemsFlow.collectAsStateWithLifecycle(initialValue = null)
-    val listItems = if (query.isBlank()) allListItems else allListItems?.filter { matches(it.publisherName) || it.groupName.contains(query, ignoreCase = true) }
+    val listItems = if (query.isBlank() && reportFilter == 0) allListItems else allListItems?.filter { (matches(it.publisherName) || it.groupName.contains(query, ignoreCase = true)) && passes(it.report != null) }
     var pendingLock by remember { mutableStateOf<FieldServiceReportListItem?>(null) }
     var pendingUnlock by remember { mutableStateOf<FieldServiceReportListItem?>(null) }
     var confirmLockAll by remember { mutableStateOf(false) }
@@ -292,7 +299,24 @@ fun FieldServiceReportScreen(
     androidx.activity.compose.BackHandler(enabled = backToPicker || sendOpen) { goBack() }
     var shareMenu by remember { mutableStateOf(false) }
 
-    Scaffold(
+    // One month at a time (e.g. September 2026), with arrows to the previous / next month and the full list one tap away. Built once so the Full Screen views
+    // keep the month on screen and selectable.
+    val monthKeys = (if (coMode) visibleMonths.map { it.periodMonth } else months).distinct().sortedDescending()
+    val monthAt = monthKeys.indexOf(fromMonth)
+    val monthStepper: @Composable (Modifier) -> Unit = { modifier ->
+        Box(modifier) {
+            MonthStepper(
+                label = labelOf(fromMonth),
+                options = monthKeys.map { it.toString() to labelOf(it) },
+                onPick = { key -> fromMonth = key.toLong(); toMonth = fromMonth },
+                onOlder = if (monthAt >= 0 && monthAt < monthKeys.lastIndex) ({ fromMonth = monthKeys[monthAt + 1]; toMonth = fromMonth }) else null,
+                onNewer = if (monthAt > 0) ({ fromMonth = monthKeys[monthAt - 1]; toMonth = fromMonth }) else null,
+            )
+        }
+    }
+
+    com.emfitsolutions.gopreach.ui.components.Scaffold(
+        adminTab = if (tableOnly || restricted) null else com.emfitsolutions.gopreach.ui.components.AdminTab.FIELD_SERVICE,
         topBar = {
             if (!tableOnly) TopAppBar(
                 title = { Text("Field Service Report", style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
@@ -303,7 +327,10 @@ fun FieldServiceReportScreen(
                     IconButton(onClick = { fullScreen = !fullScreen }) {
                         Icon(if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, contentDescription = if (fullScreenActive) "Show filters" else "Full screen")
                     }
-                    Box {
+                    if (!compareMode) IconButton(onClick = { tableOnly = true }, enabled = congregationId != null && !listView) {
+                        Icon(Icons.Rounded.OpenInFull, contentDescription = "View the table full screen")
+                    }
+                    if (compareMode) Box {
                         IconButton(onClick = { shareMenu = true }) { Icon(Icons.Rounded.IosShare, contentDescription = "Export and view options") }
                         androidx.compose.material3.DropdownMenu(expanded = shareMenu, onDismissRequest = { shareMenu = false }) {
                             androidx.compose.material3.DropdownMenuItem(
@@ -327,6 +354,8 @@ fun FieldServiceReportScreen(
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // The slim bar with the month and the way back floats over the top of the table-only view: leave room for it.
+            if (tableOnly) androidx.compose.foundation.layout.Spacer(Modifier.height(64.dp))
             if (!tableOnly && restricted && congregationId != null) {
                 SelectedCongregationBar(
                     name = congregations.firstOrNull { it.id == congregationId }?.name.orEmpty(),
@@ -370,18 +399,11 @@ fun FieldServiceReportScreen(
                         onApply = { a, b -> periods = a to b },
                     )
                 } else {
-                // One month at a time (e.g. September 2026), with arrows to the previous / next month and the full list one tap away.
-                val monthKeys = (if (coMode) visibleMonths.map { it.periodMonth } else months).distinct().sortedDescending()
-                val at = monthKeys.indexOf(fromMonth)
-                MonthStepper(
-                    label = labelOf(fromMonth),
-                    options = monthKeys.map { it.toString() to labelOf(it) },
-                    onPick = { key -> fromMonth = key.toLong(); toMonth = fromMonth },
-                    onOlder = if (at >= 0 && at < monthKeys.lastIndex) ({ fromMonth = monthKeys[at + 1]; toMonth = fromMonth }) else null,
-                    onNewer = if (at > 0) ({ fromMonth = monthKeys[at - 1]; toMonth = fromMonth }) else null,
-                )
+                monthStepper(Modifier)
+
                 }
             }
+                if (fullScreenActive && !tableOnly && !compareMode && congregationId != null) monthStepper(Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
                 if (!fullScreenActive && !tableOnly && !(restricted && congregationId == null)) Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val mainIndex = if (compareMode) 2 else if (listView) 1 else 0
                     ViewSegments(listOf("Report" to Icons.Rounded.TableChart, "List" to Icons.Rounded.ViewList, "Compare" to Icons.Rounded.CompareArrows), mainIndex) { picked ->
@@ -428,6 +450,23 @@ fun FieldServiceReportScreen(
             }
             // Sending is about the whole congregation's month(s) - the panel picks its own months - so it shows in Report View and List View alike,
             // whichever FS Group, grouping or month is on screen.
+            // The module's actions in one uniform row (the same button design as every admin module): Add Record, then Send to Circuit Overseer.
+            if (!tableOnly && (editingEnabled || showSendToggle)) {
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    if (editingEnabled) com.emfitsolutions.gopreach.ui.components.co.CoButton("Add Record", { adding = true }, kind = com.emfitsolutions.gopreach.ui.components.co.CoKind.Primary, icon = Icons.Rounded.Add)
+                    if (showSendToggle) {
+                        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                        androidx.compose.material3.Surface(
+                            onClick = { sendOpen = !sendOpen }, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), color = Color(0xFFF2B705),
+                            modifier = Modifier.size(40.dp).semantics { contentDescription = if (sendOpen) "Hide Send to Circuit Overseer" else "Send to Circuit Overseer" },
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(if (sendOpen) Icons.Rounded.Close else Icons.AutoMirrored.Rounded.Send, contentDescription = null, tint = Color(0xFF1B1500), modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                }
+            }
             // How to view the publishers: all of them as ONE report, or one table per FS Group. (Sending to the Circuit Overseer is always one report.)
             if (!tableOnly && showingAll && congregationId != null && !compareMode && !listView && !sendOpen) {
                 Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -435,14 +474,7 @@ fun FieldServiceReportScreen(
                     androidx.compose.material3.FilterChip(selected = !groupByCongregation, onClick = { groupByCongregation = false }, label = { Text("By FS Group") })
                 }
             }
-            if (!tableOnly && (editingEnabled || showSendToggle)) {
-                Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (editingEnabled) androidx.compose.material3.Button(onClick = { adding = true }) { Text("Add Record") }
-                    if (showSendToggle) androidx.compose.material3.OutlinedButton(onClick = { sendOpen = !sendOpen }) {
-                        Text(if (sendOpen) "Hide Send to Circuit Overseer" else "Send to Circuit Overseer")
-                    }
-                }
-            }
+
             // Send to Circuit Overseer opens as its own view (the report and its publishers list would only repeat what is already there).
             val sending = !tableOnly && showSendToggle && sendOpen
             if (!tableOnly && congregationId != null && !compareMode && !sending && !coModeEmpty(coMode, visibleMonths.size)) {
@@ -451,6 +483,23 @@ fun FieldServiceReportScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
                 )
+                // All / With Report / No Report, with how many of each, so the publishers still to be entered are one tap away.
+                val withReport = if (listView) allListItems.orEmpty().count { it.report != null } else sheets.orEmpty().sumOf { s -> s.rows.count { it.hasReport } }
+                val noReport = if (listView) allListItems.orEmpty().count { it.report == null } else sheets.orEmpty().sumOf { s -> s.rows.count { !it.hasReport } }
+                Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("All" to withReport + noReport, "With Report" to withReport, "No Report" to noReport).forEachIndexed { index, (label, n) ->
+                            androidx.compose.material3.FilterChip(selected = reportFilter == index, onClick = { reportFilter = index }, label = { Text("$label ($n)") })
+                        }
+                    }
+                    // Print / Save as PDF and Export to Excel, on the same line as the chips to save room.
+                    IconButton(onClick = { ready?.let { FieldServiceReportExporter.printPdf(context, it, null) } }, enabled = ready != null, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Print / Save as PDF", modifier = Modifier.size(22.dp))
+                    }
+                    IconButton(onClick = { ready?.let { FieldServiceReportExporter.shareExcel(context, it) } }, enabled = ready != null, modifier = Modifier.size(40.dp)) {
+                        Icon(Icons.Rounded.TableChart, contentDescription = "Export to Excel", modifier = Modifier.size(22.dp))
+                    }
+                }
             }
             val current = searchedSheets
             when {
@@ -541,12 +590,18 @@ fun FieldServiceReportScreen(
             }
         }
         if (tableOnly) {
-            // The one control left on screen: a small round button to come back.
-            androidx.compose.material3.SmallFloatingActionButton(
-                onClick = { tableOnly = false },
-                modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(12.dp),
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-            ) { Icon(Icons.Rounded.CloseFullscreen, contentDescription = "Exit full screen table") }
+            // What is left on screen besides the table: the month (to change it) and a small round button to come back.
+            Row(
+                modifier = Modifier.align(androidx.compose.ui.Alignment.TopCenter).fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                monthStepper(Modifier.weight(1f))
+                androidx.compose.material3.SmallFloatingActionButton(
+                    onClick = { tableOnly = false },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                ) { Icon(Icons.Rounded.CloseFullscreen, contentDescription = "Exit full screen table") }
+            }
         }
         }
     }
@@ -906,26 +961,33 @@ private fun NumberPill(label: String, value: String) {
 @Composable
 private fun MonthStepper(label: String, options: List<Pair<String, String>>, onPick: (String) -> Unit, onOlder: (() -> Unit)?, onNewer: (() -> Unit)?) {
     var open by remember { mutableStateOf(false) }
+    // A solid block in the app's colour, so the month is the first thing the eye finds on the report.
+    val onTone = MaterialTheme.colorScheme.onPrimary
     androidx.compose.material3.Card(
-        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = onTone),
+        elevation = androidx.compose.material3.CardDefaults.cardElevation(defaultElevation = 3.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(enabled = onOlder != null, onClick = { onOlder?.invoke() }) { Icon(Icons.Rounded.ChevronLeft, contentDescription = "Previous month") }
+            IconButton(enabled = onOlder != null, onClick = { onOlder?.invoke() }) {
+                Icon(Icons.Rounded.ChevronLeft, contentDescription = "Previous month", tint = onTone.copy(alpha = if (onOlder != null) 1f else 0.35f))
+            }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                androidx.compose.material3.TextButton(onClick = { open = true }) {
-                    Icon(Icons.Rounded.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Text("  " + label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                androidx.compose.material3.TextButton(onClick = { open = true }, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = onTone)) {
+                    Icon(Icons.Rounded.CalendarMonth, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Text("  " + label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
                 }
                 androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                    options.forEach { (key, text) -> androidx.compose.material3.DropdownMenuItem(text = { Text(text) }, onClick = { open = false; onPick(key) }) }
+                    options.forEach { (key, text) -> androidx.compose.material3.DropdownMenuItem(text = { Text(text, fontWeight = if (text == label) FontWeight.Bold else FontWeight.Normal) }, onClick = { open = false; onPick(key) }) }
                 }
             }
-            IconButton(enabled = onNewer != null, onClick = { onNewer?.invoke() }) { Icon(Icons.Rounded.ChevronRight, contentDescription = "Next month") }
+            IconButton(enabled = onNewer != null, onClick = { onNewer?.invoke() }) {
+                Icon(Icons.Rounded.ChevronRight, contentDescription = "Next month", tint = onTone.copy(alpha = if (onNewer != null) 1f else 0.35f))
+            }
         }
     }
 }
-
 
 /** Side-by-side totals for the two selected periods, summed over every sheet shown for each. */
 @Composable

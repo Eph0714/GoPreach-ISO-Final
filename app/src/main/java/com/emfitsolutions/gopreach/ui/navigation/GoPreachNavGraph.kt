@@ -255,6 +255,26 @@ fun GoPreachNavGraph(
         currentRole == AdminRole.SERVICE_OVERSEER ||
         currentRole == AdminRole.SECRETARY
 
+    // The Admin Main Form's tab strip: a tab goes to its module (or back to Home) without piling screens on the back stack.
+    androidx.compose.runtime.SideEffect {
+        com.emfitsolutions.gopreach.ui.components.AdminTabsStore.navigate = { tab ->
+            navController.navigate(tab.route) {
+                popUpTo(Destinations.ADMIN_HOME) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
+    }
+
+    // The Circuit Overseer's tab strip: a tab goes to its module without piling screens on the back stack.
+    androidx.compose.runtime.SideEffect {
+        com.emfitsolutions.gopreach.ui.components.CircuitTabsStore.navigate = { tab ->
+            navController.navigate(tab.route) {
+                popUpTo(Destinations.ADMIN_HOME) { inclusive = false }
+                launchSingleTop = true
+            }
+        }
+    }
+
     NavHost(navController = navController, startDestination = Destinations.LOGIN) {
         composable(Destinations.LOGIN) {
             LoginScreen(
@@ -292,7 +312,8 @@ fun GoPreachNavGraph(
                 // sign-out + sign-in + re-selecting, per spec §11.
                 onSwitchToPublisher = null,
                 canManageUsers = canManageUsers,
-                canManageAccountCredentials = canManageAccountCredentials,
+                // The drawer's Account Management now covers the non-publisher accounts only (Admin and Super-Admin); publishers' accounts live in the Publisher module.
+                canManageAccountCredentials = canManageAccountCredentials && (currentRole == AdminRole.SUPER_ADMIN || currentRole == AdminRole.ADMIN_PER_CONGREGATION),
                 // Side panel/dashboard-tile navigation always sits directly on
                 // top of the Main Form, never chained onto whichever menu
                 // screen happened to be open before it — tapping Groups then
@@ -457,6 +478,11 @@ fun GoPreachNavGraph(
         // [groupId] stays null for every scope wider than "own Group" (see
         // [ElderInterestedRecordsScreen]'s own null-means-no-narrowing convention).
         composable(Destinations.SCOPED_INTERESTED_RECORDS) {
+            // Circuit Overseer: a congregation is chosen first, every time (see CircuitHouseHolderRecordsScreen).
+            if (currentRole == AdminRole.CIRCUIT_OVERSEER) {
+                com.emfitsolutions.gopreach.ui.screens.circuit.CircuitHouseHolderRecordsScreen(currentPersonId = circuitScope, onBack = { navController.popBackStack() })
+                return@composable
+            }
             // Super-Admin: every congregation (null). Circuit Overseer: the congregations assigned on their grant
             // (null when the grant covers all). Everyone else: their own congregation only.
             HouseHolderRecordsScreen(
@@ -872,17 +898,6 @@ fun GoPreachNavGraph(
                 onBack = { navController.popBackStack() },
             )
         }
-        composable(Destinations.MANUAL_FIELD_SERVICE) {
-            // Super-Admin (picks a congregation first), Admin, Service Overseer, Secretary and Coordinator Elder — own congregation only;
-            // the screen and its ViewModel both re-check the role and the congregation.
-            com.emfitsolutions.gopreach.ui.screens.manualreport.ManualFieldServiceScreen(
-                fixedCongregationId = if (currentRole == AdminRole.SUPER_ADMIN) null else (ownCongregationId ?: ownGroupAssignment?.congregationId),
-                currentPersonId = currentPersonId,
-                currentRole = currentRole,
-                scopeGroupId = session.activeGroupId,
-                onBack = { navController.popBackStack() },
-            )
-        }
         composable(Destinations.COMPARATIVE_REPORT) {
             // Same access set and congregation scoping as PUBLISHER_ASSIGNMENT; Super-Admin picks a congregation first.
             com.emfitsolutions.gopreach.ui.screens.reports.ComparativeReportScreen(
@@ -1170,6 +1185,9 @@ fun GoPreachNavGraph(
                     onOpenReceived = { navController.navigate(Destinations.RECEIVED_REPORTS) },
                     onOpenSnapshot = { navController.navigate(Destinations.RECEIVED_SNAPSHOTS) },
                     onOpenAnnouncements = { navController.navigate(Destinations.CO_ANNOUNCEMENTS) },
+                    onOpenManualRecord = { navController.navigate(Destinations.CO_MANUAL_RECORD) },
+                    onNavigateRoute = { navController.navigate(it) },
+                    onOpenFileManager = { navController.navigate(Destinations.CO_FILE_MANAGER) },
                 )
             } else NoAccessScreen(onBack = { navController.popBackStack() })
         }
@@ -1244,6 +1262,17 @@ fun GoPreachNavGraph(
                 )
             } else NoAccessScreen(onBack = { navController.popBackStack() })
         }
+        composable(Destinations.CO_MANUAL_RECORD) {
+            // Circuit Overseer (and the Super-Admin) only; the server checks it again and only ever returns this person's own imports.
+            if (isCircuitViewer) {
+                com.emfitsolutions.gopreach.ui.screens.circuit.PreviousManualRecordScreen(currentPersonId = circuitScope, onBack = { navController.popBackStack() })
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.CO_FILE_MANAGER) {
+            if (isCircuitViewer) {
+                com.emfitsolutions.gopreach.ui.screens.circuit.FileManagerScreen(onBack = { navController.popBackStack() })
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
         composable(Destinations.RECEIVED_SNAPSHOTS) {
             if (isCircuitViewer) {
                 com.emfitsolutions.gopreach.ui.screens.circuit.ReceivedReportsScreen(
@@ -1275,12 +1304,16 @@ fun GoPreachNavGraph(
         }
         composable(
             route = Destinations.CIRCUIT_LEADERS,
-            arguments = listOf(navArgument("congregationId") { type = NavType.StringType; defaultValue = "" }),
+            arguments = listOf(
+                navArgument("congregationId") { type = NavType.StringType; defaultValue = "" },
+                navArgument("kind") { type = NavType.StringType; defaultValue = "" },
+            ),
         ) { entry ->
             if (isCircuitViewer) {
                 CircuitLeadersScreen(
                     currentPersonId = circuitScope,
                     initialCongregationId = entry.arguments?.getString("congregationId"),
+                    kind = entry.arguments?.getString("kind")?.takeIf { it.isNotBlank() },
                     onBack = { navController.popBackStack() },
                 )
             } else NoAccessScreen(onBack = { navController.popBackStack() })

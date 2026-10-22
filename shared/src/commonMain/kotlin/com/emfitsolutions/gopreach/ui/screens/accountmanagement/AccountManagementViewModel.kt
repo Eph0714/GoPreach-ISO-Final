@@ -77,9 +77,9 @@ class AccountManagementViewModel(
      * since Super-Admin's tree doesn't change per congregation, it only adds
      * the selector above it. */
     fun availableAccountTypes(actingRole: AdminRole?): List<AccountType> = when (actingRole) {
-        AdminRole.SUPER_ADMIN -> AccountType.entries
-        AdminRole.ADMIN_PER_CONGREGATION -> listOf(AccountType.PUBLISHER, AccountType.ELDER, AccountType.MINISTERIAL_SERVANT)
-        AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY -> listOf(AccountType.PUBLISHER)
+        // Publishers' accounts are managed in the Publisher module itself (username, temporary password and account status), so they are not repeated here.
+        AdminRole.SUPER_ADMIN -> AccountType.entries.filter { it != AccountType.PUBLISHER }
+        AdminRole.ADMIN_PER_CONGREGATION -> listOf(AccountType.ELDER, AccountType.MINISTERIAL_SERVANT)
         else -> emptyList()
     }
 

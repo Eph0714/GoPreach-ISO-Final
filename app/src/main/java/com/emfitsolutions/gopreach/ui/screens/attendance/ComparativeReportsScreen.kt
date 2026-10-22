@@ -1,5 +1,13 @@
 package com.emfitsolutions.gopreach.ui.screens.attendance
 
+import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.PictureAsPdf
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.Add
 import com.emfitsolutions.gopreach.ui.components.co.CoButton
 import com.emfitsolutions.gopreach.ui.components.co.CoKind
 import androidx.compose.material.icons.rounded.Print
@@ -318,27 +326,27 @@ fun ComparativeReportsScreen(
 
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (!isCo && canEdit && open.status.congregationCanEdit) {
-                                if (open.status == ComparativeStatus.DRAFT) OutlinedButton(onClick = { editPeriods = true }) { Text("Edit Period") }
-                                OutlinedButton(onClick = {
+                                if (open.status == ComparativeStatus.DRAFT) CoButton("Edit Period", { editPeriods = true }, kind = CoKind.Neutral, icon = Icons.Rounded.Edit)
+                                CoButton("Regenerate", kind = CoKind.Neutral, icon = Icons.Rounded.Refresh, onClick = {
                                     scope.launch {
                                         val gen = viewModel.generatedBy(currentPersonId)
                                         val p = ComparativePeriodsInput(open.periodAStart, open.periodAEnd, open.periodBStart, open.periodBEnd)
                                         val (s, ids) = buildSnapshot(congregation.name, stats, p, rounding, gen)
                                         handleSave(viewModel.updateSnapshot(open, s, ids, rounding, currentPersonId, roleName, "Regenerated"), "Report regenerated from the latest historical statistics.", openAfter = false)
                                     }
-                                }) { Text("Regenerate") }
-                                Button(onClick = { confirm = "submit" }) { Text(if (open.status == ComparativeStatus.RETURNED) "Resubmit" else "Submit to CO") }
-                                if (open.status == ComparativeStatus.DRAFT) OutlinedButton(onClick = { confirm = "delete" }) { Text("Delete Draft") }
+                                })
+                                CoButton(if (open.status == ComparativeStatus.RETURNED) "Resubmit" else "Submit to CO", { confirm = "submit" }, kind = CoKind.Accent, icon = Icons.AutoMirrored.Rounded.Send)
+                                if (open.status == ComparativeStatus.DRAFT) CoButton("Delete Draft", { confirm = "delete" }, kind = CoKind.Neutral, icon = Icons.Rounded.Delete)
                             }
                             if (isCo && open.status == ComparativeStatus.SUBMITTED) {
-                                Button(onClick = { confirm = "receive" }) { Text("Receive Report") }
-                                OutlinedButton(onClick = { dialogText = ""; dialog = "return" }) { Text("Return for Correction") }
+                                CoButton("Receive Report", { confirm = "receive" }, kind = CoKind.Success, icon = Icons.Rounded.CheckCircle)
+                                CoButton("Return for Correction", { dialogText = ""; dialog = "return" }, kind = CoKind.Warning, icon = Icons.AutoMirrored.Rounded.Undo)
                             }
                             if (isCo && (open.status == ComparativeStatus.SUBMITTED || open.status == ComparativeStatus.RETURNED)) {
-                                OutlinedButton(onClick = { dialogText = ""; dialog = "remark" }) { Text("Add Remarks") }
+                                CoButton("Add Remarks", { dialogText = ""; dialog = "remark" }, kind = CoKind.Neutral, icon = Icons.Rounded.Edit)
                             }
-                            OutlinedButton(onClick = { doExport(open, "Print") }) { Text("Print") }
-                            OutlinedButton(onClick = { doExport(open, "PDF") }) { Text("PDF") }
+                            CoButton("Print", { doExport(open, "Print") }, kind = CoKind.Neutral, icon = Icons.Rounded.Print)
+                            CoButton("PDF", { doExport(open, "PDF") }, kind = CoKind.Neutral, icon = Icons.Rounded.PictureAsPdf)
                             CoButton("Excel", { doExport(open, "Excel") }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart)
                         }
 
@@ -382,7 +390,7 @@ fun ComparativeReportsScreen(
                         }
                     }
                     Column(modifier = Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (!isCo && canEdit) Button(onClick = { creating = true }) { Text("Create Comparative Report") }
+                        if (!isCo && canEdit) CoButton("Create Comparative Report", { creating = true }, kind = CoKind.Primary, icon = Icons.Rounded.Add)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             val filters = if (isCo) listOf("ALL" to "All", "SUBMITTED" to "Submitted", "RETURNED" to "Returned", "RECEIVED" to "Received")
                             else listOf("ALL" to "All", "DRAFT" to "Draft", "SUBMITTED" to "Submitted", "RETURNED" to "Returned", "RECEIVED" to "Received")
@@ -399,7 +407,7 @@ fun ComparativeReportsScreen(
                         )
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.Center) {
                             if (filter != "ALL") FilterChip(selected = true, onClick = { filter = "ALL" }, label = { Text("${filter.lowercase().replaceFirstChar { it.uppercase() }} ×") })
-                            if (filter != "ALL" || query.isNotBlank()) OutlinedButton(onClick = { filter = "ALL"; query = "" }) { Text("Clear All") }
+                            if (filter != "ALL" || query.isNotBlank()) CoButton("Clear All", { filter = "ALL"; query = "" }, kind = CoKind.Neutral, icon = Icons.Rounded.Close)
                             FilterChip(selected = !table, onClick = { table = false }, label = { Text("List View") })
                             FilterChip(selected = table, onClick = { table = true }, label = { Text("Table View") })
                         }
@@ -423,8 +431,8 @@ fun ComparativeReportsScreen(
                             generatedAt = SimpleDateFormat("MMMM d, yyyy h:mm a", Locale.getDefault()).format(Date()),
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(enabled = visible.isNotEmpty(), onClick = { com.emfitsolutions.gopreach.data.export.TableReportExporter.print(context, listExport()) }) { Text("Print") }
-                            OutlinedButton(enabled = visible.isNotEmpty(), onClick = { com.emfitsolutions.gopreach.data.export.TableReportExporter.print(context, listExport()) }) { Text("PDF") }
+                            CoButton("Print", { com.emfitsolutions.gopreach.data.export.TableReportExporter.print(context, listExport()) }, kind = CoKind.Neutral, icon = Icons.Rounded.Print, enabled = visible.isNotEmpty())
+                            CoButton("PDF", { com.emfitsolutions.gopreach.data.export.TableReportExporter.print(context, listExport()) }, kind = CoKind.Neutral, icon = Icons.Rounded.PictureAsPdf, enabled = visible.isNotEmpty())
                             CoButton("Excel", { com.emfitsolutions.gopreach.data.export.TableReportExporter.shareExcel(context, listExport()) }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart, enabled = visible.isNotEmpty())
                         }
                     }

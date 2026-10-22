@@ -3,6 +3,9 @@
 import com.emfitsolutions.gopreach.data.location.AndroidLocationTracker
 import com.emfitsolutions.gopreach.data.location.LocationTracker
 import com.emfitsolutions.gopreach.data.repository.AnnouncementRepository
+import com.emfitsolutions.gopreach.data.repository.CoDocumentsRepository
+import com.emfitsolutions.gopreach.ui.screens.circuit.FileManagerViewModel
+import com.emfitsolutions.gopreach.ui.screens.circuit.PreviousManualRecordViewModel
 import com.emfitsolutions.gopreach.data.repository.AnnouncementSeenStore
 import com.emfitsolutions.gopreach.data.repository.AppSettingsRepository
 import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
@@ -285,6 +288,7 @@ val appModule = module {
 
     // Repositories, services, stores
     singleOf(::AnnouncementRepository)
+    singleOf(::CoDocumentsRepository)
     singleOf(::AnnouncementSeenStore)
     singleOf(::AppSettingsRepository)
     singleOf(::AuditLogRepository)
@@ -422,6 +426,8 @@ val appModule = module {
     viewModelOf(::ManageAdminsViewModel)
     viewModelOf(::ManageAnnouncementsViewModel)
     viewModelOf(::CoAnnouncementsViewModel)
+    viewModelOf(::FileManagerViewModel)
+    viewModelOf(::PreviousManualRecordViewModel)
     viewModelOf(::ForcedPasswordChangeViewModel)
     viewModelOf(::ForgotPasswordViewModel)
     viewModelOf(::BackupRestoreViewModel)

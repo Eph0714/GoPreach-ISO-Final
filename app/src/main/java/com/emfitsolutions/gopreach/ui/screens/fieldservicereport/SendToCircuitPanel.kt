@@ -276,29 +276,17 @@ fun SendToCircuitPanel(
 
             // Send
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Button(
+                CoButton(
+                    when {
+                        sendCandidates.size > 1 -> "Send " + sendCandidates.size + " months"
+                        soleStatus == CoReportStatus.SUBMITTED && soleMonth != null -> "Send update"
+                        soleStatus == CoReportStatus.RETURNED && soleMonth != null -> "Send corrected report"
+                        else -> "Send"
+                    },
+                    { confirmSend = true },
+                    kind = CoKind.Accent, icon = Icons.AutoMirrored.Rounded.Send,
                     enabled = monthsReady && !busy && sendCandidates.isNotEmpty(),
-                    onClick = { confirmSend = true },
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.Black),
-                    modifier = Modifier.fillMaxWidth().height(52.dp),
-                ) {
-                    if (busy) {
-                        androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.Black)
-                    } else {
-                        Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(20.dp))
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        when {
-                            sendCandidates.size > 1 -> "Send " + sendCandidates.size + " months"
-                            soleStatus == CoReportStatus.SUBMITTED && soleMonth != null -> "Send update"
-                            soleStatus == CoReportStatus.RETURNED && soleMonth != null -> "Send corrected report"
-                            else -> "Send"
-                        },
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
+                )
                 if (soleMonth != null && soleStatus.canUndo) {
                     TextButton(enabled = !busy, onClick = { confirmUndo = true }, modifier = Modifier.fillMaxWidth()) { Text("Undo sending") }
                 }

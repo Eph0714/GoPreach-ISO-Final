@@ -74,6 +74,9 @@ fun CircuitDashboardBody(
     onOpenReceived: () -> Unit = {},
     onOpenSnapshot: () -> Unit = {},
     onOpenAnnouncements: () -> Unit = {},
+    onOpenManualRecord: () -> Unit = {},
+    onNavigateRoute: (String) -> Unit = {},
+    onOpenFileManager: () -> Unit = {},
     viewModel: CircuitDashboardViewModel = koinViewModel(),
     people: CircuitPeopleViewModel = koinViewModel(),
 ) {
@@ -81,7 +84,7 @@ fun CircuitDashboardBody(
     CircuitHomeDashboard(
         currentPersonId = currentPersonId, onOpenReport = onOpenReport, onOpenPublishers = onOpenPublishers, onOpenCongregations = onOpenCongregations,
         onOpenTerritory = onOpenTerritory, onOpenCircuitReport = onOpenCircuitReport, onOpenAttendance = onOpenAttendance, onOpenComparative = onOpenComparative,
-        onOpenReportSubmission = onOpenReportSubmission, onOpenCongregation = onOpenCongregation, onOpenLeaders = onOpenLeaders, onOpenReceived = onOpenReceived, onOpenSnapshot = onOpenSnapshot, onOpenAnnouncements = onOpenAnnouncements, modifier = modifier,
+        onOpenReportSubmission = onOpenReportSubmission, onOpenCongregation = onOpenCongregation, onOpenLeaders = onOpenLeaders, onOpenReceived = onOpenReceived, onOpenSnapshot = onOpenSnapshot, onOpenAnnouncements = onOpenAnnouncements, onOpenManualRecord = onOpenManualRecord, onOpenFileManager = onOpenFileManager, onNavigateRoute = onNavigateRoute, modifier = modifier,
     )
 }
 
@@ -101,6 +104,9 @@ fun CircuitDashboardScreen(
     onOpenReceived: () -> Unit = {},
     onOpenSnapshot: () -> Unit = {},
     onOpenAnnouncements: () -> Unit = {},
+    onOpenManualRecord: () -> Unit = {},
+    onNavigateRoute: (String) -> Unit = {},
+    onOpenFileManager: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
@@ -115,7 +121,7 @@ fun CircuitDashboardScreen(
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
             onOpenReport = onOpenReport, onOpenPublishers = onOpenPublishers, onOpenCongregations = onOpenCongregations,
             onOpenTerritory = onOpenTerritory, onOpenCircuitReport = onOpenCircuitReport,
-            onOpenAttendance = onOpenAttendance, onOpenComparative = onOpenComparative, onOpenReceived = onOpenReceived, onOpenSnapshot = onOpenSnapshot, onOpenAnnouncements = onOpenAnnouncements,
+            onOpenAttendance = onOpenAttendance, onOpenComparative = onOpenComparative, onOpenReceived = onOpenReceived, onOpenSnapshot = onOpenSnapshot, onOpenAnnouncements = onOpenAnnouncements, onOpenManualRecord = onOpenManualRecord, onOpenFileManager = onOpenFileManager, onNavigateRoute = onNavigateRoute,
         )
     }
 }

@@ -82,6 +82,7 @@ import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.ManageAccounts
 import androidx.compose.material.icons.rounded.Map
@@ -264,7 +265,6 @@ fun GoPreachSidePanelContent(
             // Elder had no way to reach the Publisher list/edit screen at all
             // once the old tile grid (their only other route to it) was
             // hidden for them.
-            if (canEnrollPublisher) add(SideItem(stringResource(Res.string.side_publisher), Icons.Rounded.People, Destinations.MANAGE_PUBLISHERS))
         }
         if (enrollmentItems.isNotEmpty()) add(SideSection(stringResource(Res.string.side_section_enrollment), enrollmentItems))
 
@@ -288,24 +288,17 @@ fun GoPreachSidePanelContent(
             // tile grid gets hidden next.
             if (isCircuitOverseer) {
                 add(SideItem("Congregations", Icons.Rounded.AccountBalance, Destinations.CIRCUIT_CONGREGATIONS))
-                add(SideItem("Received Reports", Icons.Rounded.Inbox, Destinations.RECEIVED_REPORTS))
                 add(SideItem("Announcements", Icons.Rounded.Campaign, Destinations.CO_ANNOUNCEMENTS))
                 add(SideItem("Publishers", Icons.Rounded.People, Destinations.circuitPublishers()))
-                add(SideItem("Elders & Ministerial Servants", Icons.Rounded.PersonAdd, Destinations.circuitLeaders()))
+                add(SideItem("Elders", Icons.Rounded.PersonAdd, Destinations.circuitLeaders(kind = "elders")))
+                add(SideItem("Ministerial Servants", Icons.Rounded.PersonAdd, Destinations.circuitLeaders(kind = "servants")))
                 add(SideItem("Report Submission", Icons.Rounded.Assessment, Destinations.REPORT_SUBMISSION))
-                add(SideItem("Meeting Attendance", Icons.Rounded.Groups, Destinations.MEETING_ATTENDANCE))
-                add(SideItem("Comparative Report", Icons.Rounded.Assessment, Destinations.CONGREGATION_COMPARATIVE))
-            }
-            if (canManageMeetingAttendance) {
-                add(SideItem("Meeting Attendance", Icons.Rounded.Groups, Destinations.MEETING_ATTENDANCE))
             }
             // The Circuit Overseer's dashboard is their Main Form (and the Circuit Dashboard above) — the general Dashboard is not offered to them.
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_dashboard_header), Icons.Rounded.BarChart, Destinations.DASHBOARD_REPORTS))
             // The Circuit Overseer reaches the Field Service Report through Received Reports (above), not as a separate module.
-            if (canViewFieldServiceReport && !isCircuitOverseer) add(SideItem("Field Service Report", Icons.Rounded.Assessment, Destinations.FIELD_SERVICE_REPORT))
             if (canViewSentReports && !isCircuitOverseer) add(SideItem("My Submitted Reports", Icons.Rounded.Inbox, Destinations.SENT_REPORTS))
             if (canViewSentReports && !isCircuitOverseer) add(SideItem("Comparative Report", Icons.Rounded.Assessment, Destinations.ADMIN_COMPARATIVE))
-            if (canEnterManualFieldService) add(SideItem("Manual Field Service Record", Icons.Rounded.EditNote, Destinations.MANUAL_FIELD_SERVICE))
             if (canViewDeletedRecords) add(SideItem("Deleted Records", Icons.Rounded.RestoreFromTrash, Destinations.DELETED_RECORDS))
             // "Consolidate 'Forward Request' Modules for Super Admin" — one
             // entry only. For Super-Admin, GoPreachNavGraph passes
@@ -323,7 +316,8 @@ fun GoPreachSidePanelContent(
                 add(SideItem(stringResource(Res.string.side_publisher_assignment), Icons.Rounded.AssignmentInd, Destinations.PUBLISHER_ASSIGNMENT))
                 add(SideItem("Searching & Study Comparison", Icons.Rounded.BarChart, Destinations.COMPARATIVE_REPORT))
             }
-            if (canViewInterestedPeopleScope) add(SideItem(stringResource(Res.string.side_interested_records_scoped), Icons.Rounded.Groups, Destinations.SCOPED_INTERESTED_RECORDS))
+            // The Circuit Overseer reaches House Holder Records from the Quick Access tiles of the Main Form instead.
+            if (canViewInterestedPeopleScope && !isCircuitOverseer) add(SideItem(stringResource(Res.string.side_interested_records_scoped), Icons.Rounded.Groups, Destinations.SCOPED_INTERESTED_RECORDS))
             // "The super admin can see all congregation Search[ing]/Bible
             // Study/Return Visit record[s]... Add, Edit, [and permanently]
             // Delete the record" — Super-Admin only, unlike every other
@@ -348,7 +342,7 @@ fun GoPreachSidePanelContent(
             if (canManageAnnouncements) add(SideItem(stringResource(Res.string.side_announcements), Icons.Rounded.Campaign, Destinations.MANAGE_ANNOUNCEMENTS))
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_nav_calendar), Icons.Rounded.CalendarMonth, Destinations.CALENDAR))
             if (canEditMeetingAssignments) add(SideItem(stringResource(Res.string.home_tile_meeting_cart_assignment_title), Icons.Rounded.Event, Destinations.MEETING_ASSIGNMENTS))
-            if (canManageTerritories) add(SideItem(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
+            if (canManageTerritories && isCircuitOverseer) add(SideItem(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.side_share_location_settings), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
             add(SideItem(stringResource(Res.string.home_tile_weather_title), Icons.Rounded.WbSunny, Destinations.WEATHER))

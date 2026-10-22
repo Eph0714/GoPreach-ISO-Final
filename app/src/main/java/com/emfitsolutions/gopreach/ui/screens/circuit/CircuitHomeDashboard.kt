@@ -1,5 +1,6 @@
 ﻿package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.navigation.Destinations
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.animateIntAsState
@@ -27,7 +28,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountBalance
 import androidx.compose.material.icons.rounded.Inbox
+import androidx.compose.material.icons.rounded.AssignmentInd
 import androidx.compose.material.icons.rounded.Campaign
+import androidx.compose.material.icons.rounded.Folder
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Assessment
 import androidx.compose.material.icons.rounded.BarChart
@@ -193,6 +197,10 @@ fun CircuitHomeDashboard(
     /** Opens the submitted snapshot a "New Field Service Report Received" card points at (the card sets which one just before). */
     onOpenSnapshot: () -> Unit = {},
     onOpenAnnouncements: () -> Unit = {},
+    onOpenManualRecord: () -> Unit = {},
+    /** Opens any route of the app (a Circuit Overview figure opens the list behind it, e.g. the Publishers of one category). */
+    onNavigateRoute: (String) -> Unit = {},
+    onOpenFileManager: () -> Unit = {},
     modifier: Modifier = Modifier,
     received: ReceivedReportsViewModel = koinViewModel(),
     dashboard: CircuitDashboardViewModel = koinViewModel(),
@@ -284,13 +292,14 @@ fun CircuitHomeDashboard(
                     val cols = if (maxWidth < 600.dp) 2 else 3
                     val stats: List<@Composable (Modifier) -> Unit> = listOf(
                         // Congregations has no earlier-month figure to compare with: the assignment list keeps no history.
-                        { m -> OverviewStatCard(Icons.Rounded.AccountBalance, COLOR_CONGREGATIONS, "Congregations", t.congregations, m) },
-                        { m -> OverviewStatCard(Icons.Rounded.People, COLOR_PUBLISHERS, "Publishers", t.publishers, m, change = t.publishersChange) },
-                        { m -> OverviewStatCard(Icons.Rounded.SupervisorAccount, Color(0xFF3949AB), "Elders", t.elders, m, change = t.eldersChange) },
-                        { m -> OverviewStatCard(Icons.Rounded.WorkspacePremium, Color(0xFF2E7D32), "Regular Pioneers", t.regularPioneers, m, change = t.regularPioneersChange) },
-                        { m -> OverviewStatCard(Icons.Rounded.EventAvailable, Color(0xFF00897B), "Auxiliary Pioneers", t.auxiliaryPioneers, m, change = t.auxiliaryPioneersChange) },
-                        { m -> OverviewStatCard(Icons.Rounded.Stars, Color(0xFFF9A825), "Special Pioneers", t.specialPioneers, m, change = t.specialPioneersChange) },
-                        { m -> OverviewStatCard(Icons.Rounded.PersonOutline, Color(0xFFEF6C00), "Unbaptized Publishers", t.unbaptized, m, change = t.unbaptizedChange) },
+                        { m -> OverviewStatCard(Icons.Rounded.AccountBalance, COLOR_CONGREGATIONS, "Congregations", t.congregations, m, onClick = onOpenCongregations) },
+                        { m -> OverviewStatCard(Icons.Rounded.People, COLOR_PUBLISHERS, "Publishers", t.publishers, m, change = t.publishersChange, onClick = { CircuitScopeStore.selectCongregation(null); onOpenPublishers() }) },
+                        { m -> OverviewStatCard(Icons.Rounded.SupervisorAccount, Color(0xFF3949AB), "Elders", t.elders, m, change = t.eldersChange, onClick = { CircuitScopeStore.selectCongregation(null); onNavigateRoute(Destinations.circuitLeaders(kind = "elders")) }) },
+                        { m -> OverviewStatCard(Icons.Rounded.AssignmentInd, Color(0xFF6A1B9A), "Ministerial Servants", t.ministerialServants, m, change = t.ministerialServantsChange, onClick = { CircuitScopeStore.selectCongregation(null); onNavigateRoute(Destinations.circuitLeaders(kind = "servants")) }) },
+                        { m -> OverviewStatCard(Icons.Rounded.WorkspacePremium, Color(0xFF2E7D32), "Regular Pioneers", t.regularPioneers, m, change = t.regularPioneersChange, onClick = { CircuitScopeStore.selectCongregation(null); onNavigateRoute(Destinations.circuitPublishers("REGULAR_PIONEER")) }) },
+                        { m -> OverviewStatCard(Icons.Rounded.EventAvailable, Color(0xFF00897B), "Auxiliary Pioneers", t.auxiliaryPioneers, m, change = t.auxiliaryPioneersChange, onClick = { CircuitScopeStore.selectCongregation(null); onNavigateRoute(Destinations.circuitPublishers("AUXILIARY_PIONEER")) }) },
+                        { m -> OverviewStatCard(Icons.Rounded.Stars, Color(0xFFF9A825), "Special Pioneers", t.specialPioneers, m, change = t.specialPioneersChange, onClick = { CircuitScopeStore.selectCongregation(null); onNavigateRoute(Destinations.circuitPublishers("SPECIAL_PIONEER")) }) },
+                        { m -> OverviewStatCard(Icons.Rounded.PersonOutline, Color(0xFFEF6C00), "Unbaptized Publishers", t.unbaptized, m, change = t.unbaptizedChange, onClick = { CircuitScopeStore.selectCongregation(null); onNavigateRoute(Destinations.circuitPublishers("UNBAPTIZED_PUBLISHER")) }) },
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         stats.chunked(cols).forEachIndexed { rowIndex, row ->
@@ -310,13 +319,11 @@ fun CircuitHomeDashboard(
                 class Shortcut(val icon: androidx.compose.ui.graphics.vector.ImageVector, val color: Color, val title: String, val caption: String, val onClick: () -> Unit)
                 val shortcuts = listOf(
                     Shortcut(Icons.Rounded.AccountBalance, COLOR_CONGREGATIONS, "Congregations", "View and select a congregation", onOpenCongregations),
-                    Shortcut(Icons.Rounded.Inbox, COLOR_REPORT, "Received Reports", "Field Service and Circuit Attendance Reports", onOpenReceived),
-                    Shortcut(Icons.Rounded.Campaign, Color(0xFFD84315), "Announcements", "Write to a congregation or its elders", onOpenAnnouncements),
                     Shortcut(Icons.Rounded.Map, COLOR_TERRITORY, "Territory Map", "Select a congregation's territory", onOpenTerritory),
                     Shortcut(Icons.Rounded.People, COLOR_PUBLISHERS, "Publishers", "Publishers by category", onOpenPublishers),
-                    Shortcut(Icons.Rounded.SupervisorAccount, Color(0xFF3949AB), "Elders & Servants", "Elders and ministerial servants", onOpenLeaders),
-                    Shortcut(Icons.Rounded.Groups, COLOR_ATTENDANCE, "Meeting Attendance", "Weekly attendance records", onOpenAttendance),
-                    Shortcut(Icons.Rounded.CompareArrows, COLOR_COMPARE, "Comparative Report", "Compare periods", onOpenComparative),
+                    Shortcut(Icons.Rounded.SupervisorAccount, Color(0xFF3949AB), "Elders", "Elders of a congregation") { CircuitScopeStore.selectCongregation(null); onNavigateRoute(Destinations.circuitLeaders(kind = "elders")) },
+                    Shortcut(Icons.Rounded.Groups, Color(0xFF546E7A), "House Holder Records", "Searching, Return Visit and Bible Study records") { CircuitScopeStore.selectCongregation(null); onNavigateRoute(Destinations.SCOPED_INTERESTED_RECORDS) },
+                    Shortcut(Icons.Rounded.AssignmentInd, Color(0xFF6A1B9A), "Ministerial Servants", "Ministerial servants of a congregation") { CircuitScopeStore.selectCongregation(null); onNavigateRoute(Destinations.circuitLeaders(kind = "servants")) },
                 )
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val cols = when { maxWidth < 360.dp -> 1; maxWidth < 700.dp -> 2; else -> 3 }

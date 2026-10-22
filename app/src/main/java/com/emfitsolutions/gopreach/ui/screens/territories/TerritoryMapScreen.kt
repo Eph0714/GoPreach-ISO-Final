@@ -529,6 +529,10 @@ fun TerritoryMapScreen(
 
     // ---- Filters / ordering / view mode -----------------------------------
     var typeFilter by rememberSaveable { mutableStateOf(TypeFilter.ALL) }
+    // Publisher's map (hosted in the Ministry tab): "Show my Ministry Record Only" starts ticked, so only the publisher's own pins show; unticked, the
+    // Congregation drop-down is offered too and picks the congregation's records.
+    var mineOnly by rememberSaveable { mutableStateOf(true) }
+    var congregationRecords by rememberSaveable { mutableStateOf(false) }
     // Nothing is auto-selected on load. "Show Next Nearest/Farthest" steps through the
     // current (filtered) records by distance; stepping restarts whenever a filter changes.
     var stepOrder by remember(datasetKey, typeFilter, municipalityFilter, territoryFilter) { mutableStateOf<SortOrder?>(null) }
@@ -689,6 +693,7 @@ fun TerritoryMapScreen(
     }
     val visibleRecords = recordsState.orEmpty().filter { r ->
         (typeFilter.type == null || r.type == typeFilter.type) &&
+            (!embedded || (congregationRecords && !mineOnly) || r.person.publisherPersonId == currentPersonId) &&
             (municipalityFilter == null || normalizePlaceName(r.municipality) == normalizePlaceName(municipalityFilter)) &&
             (territoryFilter == null || (r.areaId == territoryFilter && (barangayGroupFilter == null || r.groupId == barangayGroupFilter)))
     }
@@ -782,13 +787,14 @@ fun TerritoryMapScreen(
 
     Scaffold(
         topBar = {
-            if (!fullScreenActive && !embedded) {
+            if (!fullScreenActive && !embedded) Column {
                 TopAppBar(
                     title = { Text("Territory Map") },
                     navigationIcon = {
                         IconButton(onClick = { if (territoryFilter != null && !drawingState.active) backFromBarangay() else if (fixedCongregationId == null && congregationId != null) backToPicker() else onBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
                     },
                 )
+                if (!restricted) com.emfitsolutions.gopreach.ui.components.AdminMainTabs(com.emfitsolutions.gopreach.ui.components.AdminTab.TERRITORY)
             }
         },
     ) { padding ->
@@ -861,7 +867,24 @@ fun TerritoryMapScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TypeFilter.entries.forEach { f ->
+                    if (embedded) {
+                        val types = listOf(TypeFilter.SEARCHING, TypeFilter.RETURN_VISIT, TypeFilter.BIBLE_STUDY)
+                        Row(
+                            modifier = Modifier.clickable { mineOnly = !mineOnly; if (mineOnly) congregationRecords = false },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            androidx.compose.material3.Checkbox(checked = mineOnly, onCheckedChange = { mineOnly = it; if (it) congregationRecords = false })
+                            Text("Show my Ministry Record Only", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                        }
+                        com.emfitsolutions.gopreach.ui.components.MinistryPicker(
+                            "My Records", "My", types.indexOf(typeFilter).takeIf { it >= 0 && !congregationRecords },
+                            { k -> congregationRecords = false; typeFilter = k?.let { types[it] } ?: TypeFilter.ALL }, Modifier.width(210.dp), allowAll = true,
+                        )
+                        if (!mineOnly) com.emfitsolutions.gopreach.ui.components.MinistryPicker(
+                            "Congregation Records", "Congregation", types.indexOf(typeFilter).takeIf { it >= 0 && congregationRecords },
+                            { k -> congregationRecords = true; typeFilter = k?.let { types[it] } ?: TypeFilter.ALL }, Modifier.width(230.dp), allowAll = true,
+                        )
+                    } else TypeFilter.entries.forEach { f ->
                         FilterChip(selected = typeFilter == f, onClick = { typeFilter = f }, label = { Text(f.label) })
                     }
                     // Province -> Municipality -> Barangay, over every claimed Barangay of the congregation. Picking a
@@ -1206,8 +1229,29 @@ fun TerritoryMapScreen(
                                     }
                                 } else viewOnlyNote?.let { ViewOnlyTag(it) }
                             }
-                            Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(if (embedded) 4.dp else 8.dp)) {
+                            if (embedded) {
+                                // Same as the Ministry tab: "Show my Ministry Record Only" (ticked at first), the My drop-down and, once unticked, the Congregation one.
+                                val types = listOf(TypeFilter.SEARCHING, TypeFilter.RETURN_VISIT, TypeFilter.BIBLE_STUDY)
+                                Row(
+                                    modifier = Modifier.clickable { mineOnly = !mineOnly; if (mineOnly) congregationRecords = false },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    androidx.compose.material3.Checkbox(checked = mineOnly, onCheckedChange = { mineOnly = it; if (it) congregationRecords = false })
+                                    Text("Show my Ministry Record Only", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    com.emfitsolutions.gopreach.ui.components.MinistryPicker(
+                                        "My Records", "My", types.indexOf(typeFilter).takeIf { it >= 0 && !congregationRecords },
+                                        { k -> congregationRecords = false; typeFilter = k?.let { types[it] } ?: TypeFilter.ALL }, Modifier.fillMaxWidth(), allowAll = true,
+                                    )
+                                    if (!mineOnly) com.emfitsolutions.gopreach.ui.components.MinistryPicker(
+                                        "Congregation Records", "Congregation", types.indexOf(typeFilter).takeIf { it >= 0 && congregationRecords },
+                                        { k -> congregationRecords = true; typeFilter = k?.let { types[it] } ?: TypeFilter.ALL }, Modifier.fillMaxWidth(), allowAll = true,
+                                    )
+                                }
+                            } else Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 TypeFilter.entries.forEach { f ->
+
                                     FilterChip(selected = typeFilter == f, onClick = { typeFilter = f }, label = { Text(f.label, style = if (embedded) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge) })
                                 }
                             }

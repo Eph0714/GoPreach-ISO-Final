@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
+import com.emfitsolutions.gopreach.ui.components.stageColor
+import com.emfitsolutions.gopreach.ui.components.stageWeight
 import androidx.compose.foundation.clickable
 import com.emfitsolutions.gopreach.ui.components.HideInFullScreen
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
@@ -109,6 +111,8 @@ fun HouseHolderRecordsScreen(
     congregationIds: Set<String>?,
     groupId: String?,
     onBack: () -> Unit,
+    /** Circuit Overseer: shows the chosen congregation with a "Change Congregation" button (the records are then of that congregation only). */
+    onChangeCongregation: (() -> Unit)? = null,
     viewModel: HouseHolderRecordsViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
@@ -162,6 +166,12 @@ fun HouseHolderRecordsScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            if (onChangeCongregation != null) {
+                com.emfitsolutions.gopreach.ui.screens.circuit.SelectedCongregationBar(
+                    scopedCongregations.firstOrNull()?.name.orEmpty(), onChange = onChangeCongregation,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), title = "House Holder Records",
+                )
+            }
             HideInFullScreen(hideWhileTyping = true) {
             Text(
                 "Scope: $scopeLabel",
@@ -255,7 +265,7 @@ fun HouseHolderRecordsScreen(
                         val publisherName by remember(person.publisherPersonId) { viewModel.personName(person.publisherPersonId) }.collectAsStateWithLifecycle(initialValue = null)
                         Card(modifier = Modifier.fillMaxWidth().clickable { selectedPerson = person }) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = person.pipelineStage.stageWeight(), color = person.pipelineStage.stageColor())
                                 Text(
                                     publisherName?.let { "Publisher: $it" } ?: "Unassigned",
                                     style = MaterialTheme.typography.labelSmall,

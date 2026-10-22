@@ -164,15 +164,17 @@ class PublisherEnrollmentViewModel(
         }
         val form = state.form
         if (form.lastName.isBlank() || form.firstName.isBlank() || form.address.isBlank() || form.contact.isBlank() ||
-            form.groupId == null || form.category == null ||
+            form.category == null ||
             form.province.isNullOrBlank() || form.cityMunicipality.isNullOrBlank() || form.barangay.isNullOrBlank()
         ) {
-            _uiState.update { it.copy(errorMessage = "First name, last name, full address, Province, Municipality/City, Barangay, contact, category and group are all required.") }
+            _uiState.update { it.copy(errorMessage = "First name, last name, full address, Province, Municipality/City, Barangay, contact and category are all required. The Field Service Group is optional.") }
             return
         }
         form.formProblem?.let { problem -> _uiState.update { it.copy(errorMessage = problem) }; return }
-        val group = groups.value.firstOrNull { it.id == form.groupId }
-        if (group == null || (fixedCongregationId != null && group.congregationId != fixedCongregationId)) {
+        // The Field Service Group is optional: with none chosen the publisher is enrolled unassigned, in the congregation being worked in.
+        val group = form.groupId?.let { id -> groups.value.firstOrNull { it.id == id } }
+        val congregationId = group?.congregationId ?: fixedCongregationId ?: state.selectedCongregationId
+        if (congregationId == null || (form.groupId != null && group == null) || (group != null && fixedCongregationId != null && group.congregationId != fixedCongregationId)) {
             // The second half of that check is a defense-in-depth guard, not
             // just a UI nicety: it's the same "never trust a caller-supplied
             // congregation/group id without re-verifying it against the
@@ -196,8 +198,8 @@ class PublisherEnrollmentViewModel(
                         RoleAssignment(
                             personId = personId,
                             roleType = RoleType.serialize(RoleType.Publisher(category)),
-                            congregationId = group.congregationId,
-                            groupId = group.id,
+                            congregationId = congregationId,
+                            groupId = group?.id,
                             status = RoleAssignmentStatus.ACTIVE,
                             dateAssigned = System.currentTimeMillis(),
                             assignedByPersonId = enrollingPersonId,

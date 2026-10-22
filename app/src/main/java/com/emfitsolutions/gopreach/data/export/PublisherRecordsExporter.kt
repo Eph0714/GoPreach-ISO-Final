@@ -258,12 +258,8 @@ object PublisherRecordsExporter {
         fun str(ref: String, text: String, style: Int = 0) = if (text.isEmpty()) "" else "<c r=\"$ref\" s=\"$style\" t=\"inlineStr\"><is><t xml:space=\"preserve\">${esc(text)}</t></is></c>"
         fun num(ref: String, v: Number, style: Int = 0) = "<c r=\"$ref\" s=\"$style\"><v>$v</v></c>"
 
-        val sheet = buildString {
-            append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">")
-            append("<sheetViews><sheetView workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews>")
-            append("<cols>")
-            widths.forEachIndexed { i, w -> append("<col min=\"${i + 1}\" max=\"${i + 1}\" width=\"$w\" customWidth=\"1\"/>") }
-            append("</cols><sheetData><row r=\"1\">")
+        val rowsXml = buildString {
+            append("<row r=\"1\">")
             headers.forEachIndexed { i, h -> append(str("${colName(i)}1", h, 1)) }
             append("</row>")
             var r = 1
@@ -284,8 +280,12 @@ object PublisherRecordsExporter {
                 sr++
                 append("<row r=\"$sr\">"); append(str("B$sr", row[0])); append(str("C$sr", row[1])); append("</row>")
             }
-            append("</sheetData></worksheet>")
         }
+        val layout = ExcelLayout.parts(rowsXml, widths.size)
+        val sheet = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
+            layout.sheetPr +
+            "<sheetViews><sheetView workbookViewId=\"0\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/></sheetView></sheetViews>" +
+            layout.cols + "<sheetData>" + rowsXml + "</sheetData>" + layout.pageSetup + "</worksheet>"
         val styles = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
             "<numFmts count=\"1\"><numFmt numFmtId=\"164\" formatCode=\"mmmm d, yyyy\"/></numFmts>" +
             "<fonts count=\"2\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font><font><b/><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>" +

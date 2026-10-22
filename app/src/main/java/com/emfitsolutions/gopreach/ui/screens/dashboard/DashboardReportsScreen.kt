@@ -311,7 +311,20 @@ fun DashboardStatsContent(
             )
         }
 
-        Text(if (quickAccess != null) "Quick Access" else stringResource(Res.string.dashboard_overview), style = MaterialTheme.typography.titleMedium)
+        // Quick Access can be hidden and shown again; the choice is kept on this phone.
+        val quickAccessPrefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("gopreach_ui", android.content.Context.MODE_PRIVATE)
+        var quickAccessHidden by remember { mutableStateOf(quickAccess != null && quickAccessPrefs.getBoolean("quick_access_hidden", false)) }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text(
+                if (quickAccess != null) "Quick Access" else stringResource(Res.string.dashboard_overview),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            if (quickAccess != null) androidx.compose.material3.TextButton(onClick = {
+                quickAccessHidden = !quickAccessHidden
+                quickAccessPrefs.edit().putBoolean("quick_access_hidden", quickAccessHidden).apply()
+            }) { Text(if (quickAccessHidden) "Show Quick Access" else "Hide Quick Access") }
+        }
         // Per explicit request: no icons, no per-item color coding on these
         // cards — Total Publishers and Total Elders are also their own
         // separate cards here now, not one combined "Publishers vs Elders"
@@ -324,7 +337,7 @@ fun DashboardStatsContent(
         // row, regardless of screen width, rather than reflowing to 3+ on a
         // wider phone/tablet. Chunked manually (9 cards is small enough that
         // a LazyVerticalGrid would be more machinery than this needs).
-        if (quickAccess != null) quickAccess(displayed) else statCards.chunked(2).forEach { rowItems ->
+        if (quickAccess != null) { if (!quickAccessHidden) quickAccess(displayed) } else statCards.chunked(2).forEach { rowItems ->
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 rowItems.forEach { detail ->
                     StatCard(detail.label, detail.value, onClick = { selectedDetail = detail }, modifier = Modifier.weight(1f))

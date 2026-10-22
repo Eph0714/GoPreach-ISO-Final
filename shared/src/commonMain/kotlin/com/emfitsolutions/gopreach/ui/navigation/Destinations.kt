@@ -96,8 +96,9 @@ object Destinations {
     const val CIRCUIT_PUBLISHERS = "circuit_publishers?category={category}&congregationId={congregationId}"
     fun circuitPublishers(category: String? = null, congregationId: String? = null) =
         "circuit_publishers?category=${category.orEmpty()}&congregationId=${congregationId.orEmpty()}"
-    const val CIRCUIT_LEADERS = "circuit_leaders?congregationId={congregationId}"
-    fun circuitLeaders(congregationId: String? = null) = "circuit_leaders?congregationId=${congregationId.orEmpty()}"
+    const val CIRCUIT_LEADERS = "circuit_leaders?congregationId={congregationId}&kind={kind}"
+    /** [kind] is "elders" or "servants" (one list only); null shows both, as before. */
+    fun circuitLeaders(congregationId: String? = null, kind: String? = null) = "circuit_leaders?congregationId=${congregationId.orEmpty()}&kind=${kind.orEmpty()}"
     const val CIRCUIT_CONGREGATIONS = "circuit_congregations"
     // Consolidated summary of every congregation in one circuit.
     const val CIRCUIT_REPORT = "circuit_report"
@@ -114,6 +115,9 @@ object Destinations {
     const val ADMIN_COMPARATIVE = "admin_comparative"
     // The Circuit Overseer's announcements to a congregation or to chosen elders of it, with attachments.
     const val CO_ANNOUNCEMENTS = "co_announcements"
+    // The Circuit Overseer's Previous Manual Record (old Excel visit records imported into a searchable table) and private File Manager.
+    const val CO_MANUAL_RECORD = "co_manual_record"
+    const val CO_FILE_MANAGER = "co_file_manager"
     // Weekly meeting attendance, and the congregation's two-period comparison (reports, headcounts, attendance) built from monthly snapshots.
     const val MEETING_ATTENDANCE = "meeting_attendance"
     // The user's workspace of every report they have to prepare / follow for a saved month range.

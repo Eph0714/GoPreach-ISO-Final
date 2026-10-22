@@ -222,6 +222,8 @@ private fun PersonCard(row: CircuitPersonRow, showCongregation: Boolean) {
 fun CircuitLeadersScreen(
     currentPersonId: String,
     initialCongregationId: String?,
+    /** "elders" or "servants" shows that list alone; null shows both. */
+    kind: String? = null,
     onBack: () -> Unit,
     viewModel: CircuitPeopleViewModel = koinViewModel(),
 ) {
@@ -238,14 +240,15 @@ fun CircuitLeadersScreen(
     }
         .collectAsStateWithLifecycle(initialValue = emptyList<CircuitPersonRow>() to emptyList())
     val filter: (CircuitPersonRow) -> Boolean = { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
-    val elders = leaders.first.filter(filter)
-    val servants = leaders.second.filter(filter)
+    val elders = if (kind == "servants") emptyList() else leaders.first.filter(filter)
+    val servants = if (kind == "elders") emptyList() else leaders.second.filter(filter)
+    val listTitle = when (kind) { "elders" -> "Elders"; "servants" -> "Ministerial Servants"; else -> "Elders & Ministerial Servants" }
     val showCongregation = false
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Elders & Ministerial Servants") },
+                title = { Text(listTitle) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
                 actions = { if (selected != null) CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
             )
@@ -257,9 +260,9 @@ fun CircuitLeadersScreen(
         }
         val people = elders.map { "Elder" to it } + servants.map { "Ministerial Servant" to it }
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            SelectedCongregationBar(selected.name, onChange = { CircuitScopeStore.selectCongregation(null) }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), title = "Elders & Servants")
+            SelectedCongregationBar(selected.name, onChange = { CircuitScopeStore.selectCongregation(null) }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), title = if (kind == null) "Elders & Servants" else listTitle)
             com.emfitsolutions.gopreach.ui.components.UniversalReport(
-                title = "Elders & Ministerial Servants",
+                title = listTitle,
                 details = listOf("Congregation" to selected.name),
                 items = people,
                 key = { (type, row) -> type + row.personId + row.roleLabel + row.congregationId },
@@ -272,7 +275,7 @@ fun CircuitLeadersScreen(
                     com.emfitsolutions.gopreach.ui.components.UniversalColumn<Pair<String, CircuitPersonRow>>("Contact", 130.dp) { it.second.contact },
                 ),
                 searchText = { (type, r) -> listOf(r.name, type, r.categoryLabel, r.groupName, r.contact) },
-                filters = listOf(
+                filters = if (kind != null) emptyList() else listOf(
                     com.emfitsolutions.gopreach.ui.components.UniversalFilter<Pair<String, CircuitPersonRow>>("type", "Types", listOf("Elder" to "Elders", "Ministerial Servant" to "Ministerial Servants")) { p, v -> p.first == v },
                 ),
                 sorts = listOf(
@@ -288,7 +291,7 @@ fun CircuitLeadersScreen(
                 },
                 generatedBy = "Circuit Overseer",
                 card = { (_, row) -> PersonCard(row, showCongregation) },
-                emptyMessage = "No elders or ministerial servants found.",
+                emptyMessage = when (kind) { "elders" -> "No elders found."; "servants" -> "No ministerial servants found."; else -> "No elders or ministerial servants found." },
                 modifier = Modifier.weight(1f),
             )
         }

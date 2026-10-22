@@ -42,6 +42,10 @@ fun HideInFullScreen(hideWhileTyping: Boolean = false, content: @Composable () -
 fun Scaffold(
     modifier: Modifier = Modifier,
     topBar: @Composable () -> Unit = {},
+    /** Admin modules: the Admin Main Form's tab strip, under the top bar. */
+    adminTab: AdminTab? = null,
+    /** Circuit Overseer modules: the Circuit Overseer's tab strip, under the top bar. */
+    circuitTab: CircuitTab? = null,
     bottomBar: @Composable () -> Unit = {},
     snackbarHost: @Composable () -> Unit = {},
     floatingActionButton: @Composable () -> Unit = {},
@@ -53,7 +57,7 @@ fun Scaffold(
 ) {
     androidx.compose.material3.Scaffold(
         modifier = modifier,
-        topBar = { if (!RecordFullScreen.active) topBar() },
+        topBar = { if (!RecordFullScreen.active) androidx.compose.foundation.layout.Column { topBar(); if (adminTab != null) AdminMainTabs(adminTab); if (circuitTab != null) CircuitMainTabs(circuitTab) } },
         bottomBar = bottomBar,
         snackbarHost = snackbarHost,
         floatingActionButton = floatingActionButton,

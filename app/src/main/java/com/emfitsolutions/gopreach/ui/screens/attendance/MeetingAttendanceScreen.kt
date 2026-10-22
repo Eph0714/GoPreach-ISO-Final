@@ -278,7 +278,9 @@ fun MeetingAttendanceScreen(
     var fullScreen by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     com.emfitsolutions.gopreach.ui.components.co.CoFullScreenEffect(fullScreen)
     androidx.activity.compose.BackHandler(enabled = fullScreen) { fullScreen = false }
-    Scaffold(
+    com.emfitsolutions.gopreach.ui.components.Scaffold(
+        adminTab = if (circuitScope == null) com.emfitsolutions.gopreach.ui.components.AdminTab.ATTENDANCE else null,
+        circuitTab = if (circuitScope != null) com.emfitsolutions.gopreach.ui.components.CircuitTab.ATTENDANCE else null,
         topBar = {
             TopAppBar(
                 actions = {
@@ -364,15 +366,13 @@ fun MeetingAttendanceScreen(
                 }
                 if (canEdit) {
                     item(key = "add") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            androidx.compose.material3.Button(onClick = { adding = true }) {
-                                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Text("  Add Attendance")
-                            }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            CoButton("Add Attendance", { adding = true }, kind = CoKind.Primary, icon = Icons.Rounded.Add)
                             // Collapsed until asked for, so the attendance records are what the screen shows.
-                            if (circuitScope == null) androidx.compose.material3.OutlinedButton(onClick = { sendOpen = !sendOpen }) {
-                                Text(if (sendOpen) "Hide Send" else "Send to Circuit Overseer", maxLines = 1)
-                            }
+                            if (circuitScope == null) CoButton(
+                                if (sendOpen) "Hide Send" else "Send to Circuit Overseer", { sendOpen = !sendOpen },
+                                kind = CoKind.Accent, icon = Icons.AutoMirrored.Rounded.Send,
+                            )
                         }
                     }
                 }

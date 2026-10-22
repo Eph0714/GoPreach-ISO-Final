@@ -32,6 +32,13 @@ interface SyncApi {
 
     suspend fun deleteAnnouncementFile(announcementId: String, fileId: String) { throw UnsupportedOperationException("announcement files are not available") }
 
+    /**
+     * A plain authenticated call to one of the server's own endpoints with raw bytes either way: the Circuit Overseer's File Manager and Previous Manual Record
+     * (`/v1/co/...`). [json] is sent as the JSON body, or [bytes] as the raw body of [mime]; [query] becomes the query string. Never thrown for 4xx/5xx.
+     */
+    suspend fun callServer(method: String, path: String, query: Map<String, String> = emptyMap(), json: JsonObject? = null, bytes: ByteArray? = null, mime: String? = null): ServerReply =
+        throw UnsupportedOperationException("callServer is not available")
+
     /** The sign-in screen's public username lookup (no login yet): the person record with its id, or null. */
     suspend fun lookupUsername(username: String): JsonObject? = null
 }
@@ -85,3 +92,9 @@ data class PushResponse(val results: List<PushResult> = emptyList())
 
 /** Thrown for network problems and non-2xx answers; the engine treats these as "try again later", not as a bad record. */
 class SyncTransportException(message: String, val statusCode: Int? = null, cause: Throwable? = null) : Exception(message, cause)
+
+/** The answer of [SyncApi.callServer]: the status code and the raw body (JSON text, or the bytes of a downloaded file). */
+class ServerReply(val status: Int, val bytes: ByteArray) {
+    val ok get() = status in 200..299
+    val text get() = bytes.decodeToString()
+}

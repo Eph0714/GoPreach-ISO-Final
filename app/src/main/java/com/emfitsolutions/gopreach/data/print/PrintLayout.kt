@@ -8,8 +8,14 @@ import java.util.Locale
 
 /** Paper sizes GoPreach users print on. The system print dialog (which doubles as the print preview) can still change it per print. */
 /** Android's media size for a paper size and orientation. */
-fun PaperSize.mediaSize(landscape: Boolean): PrintAttributes.MediaSize {
+fun PaperSize.mediaSize(landscape: Boolean, wide: Boolean = false): PrintAttributes.MediaSize {
     val media = when (this) {
+        // Automatic: the usual page for the region, and A3 when the table is too wide to stay readable on it.
+        PaperSize.AUTO -> when {
+            wide -> PrintAttributes.MediaSize.ISO_A3
+            defaultPaperSizeFor(Locale.getDefault()) == PaperSize.LETTER -> PrintAttributes.MediaSize.NA_LETTER
+            else -> PrintAttributes.MediaSize.ISO_A4
+        }
         PaperSize.A4 -> PrintAttributes.MediaSize.ISO_A4
         PaperSize.LETTER -> PrintAttributes.MediaSize.NA_LETTER
         PaperSize.LEGAL -> PrintAttributes.MediaSize.NA_LEGAL
@@ -28,7 +34,7 @@ class PrintPreferences(context: Context) {
     private val prefs = context.getSharedPreferences("gopreach_settings", Context.MODE_PRIVATE)
 
     var paperSize: PaperSize
-        get() = runCatching { PaperSize.valueOf(prefs.getString(KEY_PAPER, null)!!) }.getOrDefault(defaultPaperSizeFor(Locale.getDefault()))
+        get() = runCatching { PaperSize.valueOf(prefs.getString(KEY_PAPER, null)!!) }.getOrDefault(PaperSize.AUTO)
         set(value) { prefs.edit().putString(KEY_PAPER, value.name).apply() }
 
     var orientation: OrientationMode
@@ -58,9 +64,10 @@ object PrintLayout {
 
     private val numeric = Regex("^[-+()$₱%\\s]*[0-9][0-9.,:/%\\s-]*$")
 
-    fun attributes(context: Context, landscape: Boolean): PrintAttributes =
+    /** [wide]: the table is too wide for a normal page, so automatic paper moves up to A3. */
+    fun attributes(context: Context, landscape: Boolean, wide: Boolean = false): PrintAttributes =
         PrintAttributes.Builder()
-            .setMediaSize(PrintPreferences(context).paperSize.mediaSize(landscape))
+            .setMediaSize(PrintPreferences(context).paperSize.mediaSize(landscape || wide, wide))
             .setMinMargins(PrintAttributes.Margins(MARGIN_MILS, MARGIN_MILS, MARGIN_MILS, MARGIN_MILS))
             .build()
 
@@ -159,6 +166,9 @@ object PrintLayout {
         }
         return html to landscape
     }
+
+    /** True when the table is wider than a landscape page holds at body size, i.e. automatic paper should go to A3. */
+    fun needsLargePaper(table: ReportTable): Boolean = estimatedWidthChars(table) > LANDSCAPE_CAPACITY
 
     /** Approximate width of the table in characters: each column as wide as its longest typical cell (capped). */
     private fun estimatedWidthChars(table: ReportTable): Double =

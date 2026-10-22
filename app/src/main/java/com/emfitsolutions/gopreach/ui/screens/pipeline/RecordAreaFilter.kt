@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.FilterList
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -104,18 +105,32 @@ internal fun AreaFilterBar(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    /** Small buttons (export, recycle bin) at the end of the search line. */
+    actions: (@Composable () -> Unit)? = null,
 ) {
     val active = mode != AreaFilterMode.ALL
+    // The place filter folds away behind a funnel button beside the search box, and opens by itself while a filter is on.
+    var showFilter by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(active) }
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Find a record by name (or by the place or publisher shown on it); works together with the area filter below.
+        Row(verticalAlignment = Alignment.CenterVertically) {
         androidx.compose.material3.OutlinedTextField(
-            value = query, onValueChange = onQueryChange, singleLine = true, modifier = Modifier.fillMaxWidth(),
+            value = query, onValueChange = onQueryChange, singleLine = true, modifier = Modifier.weight(1f),
             placeholder = { Text("Search by name") },
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-            trailingIcon = { if (query.isNotEmpty()) androidx.compose.material3.IconButton(onClick = { onQueryChange("") }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (query.isNotEmpty()) androidx.compose.material3.IconButton(onClick = { onQueryChange("") }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") }
+                    androidx.compose.material3.IconButton(onClick = { showFilter = !showFilter }) {
+                        Icon(Icons.Rounded.FilterList, contentDescription = "Filter by place", tint = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            },
             shape = RoundedCornerShape(12.dp),
         )
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        actions?.invoke()
+        }
+        if (showFilter || active) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterDropdown(
                 value = AreaFilterMode.labels[mode],
                 options = AreaFilterMode.labels.mapIndexed { i, l -> i to l },
@@ -125,7 +140,7 @@ internal fun AreaFilterBar(
             )
             if (active) TextButton(onClick = { onChange(AreaFilterMode.ALL, null, null) }) { Text("Clear") }
         }
-        if (mode != AreaFilterMode.ALL) {
+        if ((showFilter || active) && mode != AreaFilterMode.ALL) {
             val municipalities = areas.municipalities()
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterDropdown(

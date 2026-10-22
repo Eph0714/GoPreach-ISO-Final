@@ -82,6 +82,9 @@ data class CircuitTotals(
     val auxiliaryPioneersChange: Int? = null,
     val specialPioneersChange: Int? = null,
     val unbaptizedChange: Int? = null,
+    /** Ministerial servants, kept apart from the elders: from today's records or a saved snapshot; null otherwise (never 0). */
+    val ministerialServants: Int? = null,
+    val ministerialServantsChange: Int? = null,
     /** How many congregations the figures above cover (a snapshot month may be partial). */
     val covered: Int,
 )
@@ -197,6 +200,7 @@ object CircuitOverviewBuilder {
         val auxiliaryNow = total { it.auxiliaryPioneers }
         val specialNow = total { it.specialPioneers }
         val unbaptizedNow = total { it.unbaptized }
+        val servantsNow = total { it.ministerialServants }
         val totals = CircuitTotals(
             congregations = cards.size,
             publishers = publishersNow, elders = eldersNow, regularPioneers = regularNow,
@@ -208,6 +212,8 @@ object CircuitOverviewBuilder {
             auxiliaryPioneersChange = change(auxiliaryNow) { it.auxiliaryPioneerCount },
             specialPioneersChange = change(specialNow) { it.specialPioneerCount },
             unbaptizedChange = change(unbaptizedNow) { it.unbaptizedPublisherCount },
+            ministerialServants = servantsNow,
+            ministerialServantsChange = change(servantsNow) { it.ministerialServantCount },
         )
         return CircuitOverview(totals, ReportStanding.entries.associateWith { s -> cards.count { it.standing == s } }, cards, actions)
     }

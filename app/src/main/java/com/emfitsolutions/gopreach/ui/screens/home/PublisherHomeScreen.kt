@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import com.emfitsolutions.gopreach.ui.theme.heroBackground
 import com.emfitsolutions.gopreach.ui.theme.glass
 import com.emfitsolutions.gopreach.shared.resources.app_name
@@ -367,11 +371,12 @@ fun PublisherHomeScreen(
     val mainFormTiles = remember(moduleLayout, tilesById) { moduleLayout.mainFormModules().mapNotNull { tilesById[it] } }
     val sidePanelTiles = remember(moduleLayout, tilesById) { moduleLayout.sidePanelModules().mapNotNull { tilesById[it] } }
 
+    androidx.compose.runtime.SideEffect { com.emfitsolutions.gopreach.ui.components.AdminTabsStore.allowed = emptySet() }
     // Main Form tabs: 0 = My Planner, 1 = Territory Map, 2 = Ministry (Searching / Return Visit / Bible Study).
     var mainTab by rememberSaveable { mutableStateOf(0) }
     var ministryStage by rememberSaveable { mutableStateOf(0) }
-    // My (default) / All records for Searching and Return Visit; Bible Study is always "My".
-    var ministryShowAll by rememberSaveable { mutableStateOf(false) }
+    // Whose records: 0 My (default), 1 My FS Group, 2 Congregation.
+    var ministryScope by rememberSaveable { mutableStateOf(0) }
     // The recycle-bin icon: also list the records that were moved to Inactive.
     var ministryShowInactive by rememberSaveable { mutableStateOf(false) }
     val mainScroll = rememberScrollState()
@@ -488,16 +493,10 @@ fun PublisherHomeScreen(
 
             // "Ministry" tab: pick Searching / Return Visit / Bible Study, then manage that list (same screen and rules as the modules).
             if (mainTab == 2) Column(modifier = Modifier.weight(1f).fillMaxWidth().consumeWindowInsets(WindowInsets.statusBars)) {
-                MinistryFilters(
-                    stage = ministryStage,
-                    onStage = { ministryStage = it; ministryShowAll = false },
-                    showAll = ministryShowAll,
-                    onShowAll = { ministryShowAll = it },
-                    showInactive = ministryShowInactive,
-                    onShowInactive = { ministryShowInactive = it },
-                )
+                MinistrySubTabs(ministryStage) { ministryStage = it; ministryScope = 0 }
+                MinistryScopeButtons(ministryStage, ministryScope) { ministryScope = it }
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    androidx.compose.runtime.key(ministryStage) {
+                    androidx.compose.runtime.key(ministryStage, ministryScope) {
                         com.emfitsolutions.gopreach.ui.screens.pipeline.PipelineScreen(
                             publisherPersonId = currentPersonId,
                             currentPersonId = currentPersonId,
@@ -509,7 +508,8 @@ fun PublisherHomeScreen(
                             },
                             canPermanentlyDelete = ownPublisherAssignment != null,
                             embedded = true,
-                            mineOnly = !ministryShowAll || ministryStage == 2,
+                            ministryScope = ministryScope,
+                            householderHistory = true,
                             showInactive = ministryShowInactive,
                             onShowInactiveChange = { ministryShowInactive = it },
                             onOpenMap = { lat, lng, name -> onNavigate(Destinations.territoryMapFocusedOn(lat, lng, name)) },
@@ -886,67 +886,64 @@ private fun PublisherMainTabs(selected: Int, onSelect: (Int) -> Unit) {
     }
 }
 
-/** Ministry tab controls: which list (Searching / Return Visit / Bible Study), then whose records (mine, or the whole congregation's — Bible Study is always mine). */
-@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+private val ministryKinds = listOf("Searching", "Return Visit", "Bible Study")
+private val ministryTones = listOf(Color(0xFF212121), Color(0xFF2E7D32), Color(0xFF1565C0))
+
+/** The three sub-tabs of the Ministry tab: Searching (the first), Return Visit and Bible Study, in the colour of each list (black, green, blue). */
 @Composable
-private fun MinistryFilters(stage: Int, onStage: (Int) -> Unit, showAll: Boolean, onShowAll: (Boolean) -> Unit, showInactive: Boolean, onShowInactive: (Boolean) -> Unit) {
-    val stages = listOf("Searching", "Return Visit", "Bible Study")
-    val colors = androidx.compose.material3.SegmentedButtonDefaults.colors(
-        activeContainerColor = MaterialTheme.colorScheme.primary,
-        activeContentColor = MaterialTheme.colorScheme.onPrimary,
-        activeBorderColor = MaterialTheme.colorScheme.primary,
-        inactiveContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-        inactiveContentColor = MaterialTheme.colorScheme.primary,
-        inactiveBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-    )
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        androidx.compose.material3.SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            stages.forEachIndexed { index, label ->
-                SegmentedButton(
-                    selected = stage == index,
-                    onClick = { onStage(index) },
-                    shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = index, count = stages.size),
-                    icon = {},
-                    colors = colors,
-                    modifier = Modifier.heightIn(min = 40.dp),
-                ) { Text(label, style = MaterialTheme.typography.labelLarge, maxLines = 1) }
-            }
-        }
-        // Whose records: one drop-down (My ... / Congregation ...), with the small recycle-bin icon at the end of the same row.
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (stage != 2) {
-                val scopes = listOf("My ${stages[stage]}", "Congregation ${stages[stage]}")
-                var open by remember { mutableStateOf(false) }
-                Box(modifier = Modifier.weight(1f)) {
-                    androidx.compose.material3.Surface(
-                        onClick = { open = true },
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Row(modifier = Modifier.heightIn(min = 44.dp).padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(scopes[if (showAll) 1 else 0], style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Choose whose records to show", tint = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                    androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                        scopes.forEachIndexed { index, label ->
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text(label, fontWeight = if ((index == 1) == showAll) FontWeight.Bold else FontWeight.Normal) },
-                                onClick = { open = false; onShowAll(index == 1) },
-                            )
-                        }
-                    }
+private fun MinistrySubTabs(stage: Int, onStage: (Int) -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ministryKinds.forEachIndexed { index, label ->
+            val tone = if (index == 0) MaterialTheme.colorScheme.onSurface else ministryTones[index]
+            val on = index == stage
+            androidx.compose.material3.Surface(
+                onClick = { onStage(index) },
+                shape = RoundedCornerShape(12.dp),
+                color = if (on) (if (index == 0) MaterialTheme.colorScheme.onSurface else tone) else tone.copy(alpha = 0.08f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, tone.copy(alpha = if (on) 1f else 0.35f)),
+                modifier = Modifier.weight(1f).semantics { this.role = Role.Tab; this.selected = on },
+            ) {
+                Box(modifier = Modifier.heightIn(min = 44.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
+                    Text(
+                        label, style = MaterialTheme.typography.labelLarge, fontWeight = if (on) FontWeight.Bold else FontWeight.SemiBold,
+                        color = if (on) (if (index == 0) MaterialTheme.colorScheme.surface else Color.White) else tone, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
                 }
-            } else {
-                Text("My Bible Study", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f).padding(start = 4.dp))
             }
-            com.emfitsolutions.gopreach.ui.screens.pipeline.RecycleBinToggle(on = showInactive, onChange = onShowInactive)
         }
-        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
     }
 }
+
+/** Under a sub-tab, a radio group of three: whose records to list - mine, my FS Group's, or the whole congregation's. Choosing one lists its records at once. */
+@Composable
+private fun MinistryScopeButtons(stage: Int, scope: Int, onScope: (Int) -> Unit) {
+    val names = when (stage) {
+        1 -> listOf("My Return Visits", "My FS Group Return Visits", "Congregation Return Visits")
+        2 -> listOf("My Bible Studies", "My FS Group Bible Studies", "Congregation Bible Studies")
+        else -> listOf("My Searching", "My FS Group Searching", "Congregation Searching")
+    }
+    val tone = if (stage == 0) MaterialTheme.colorScheme.primary else ministryTones[stage]
+    // One row of three: each option takes a third of the width, the radio above-left of a small label that wraps inside its own third.
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        names.forEachIndexed { index, label ->
+            val on = index == scope
+            Row(
+                modifier = Modifier.weight(1f).heightIn(min = 44.dp).selectable(selected = on, onClick = { onScope(index) }, role = Role.RadioButton),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                androidx.compose.material3.RadioButton(
+                    selected = on, onClick = null, modifier = Modifier.size(30.dp),
+                    colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = tone),
+                )
+                Text(
+                    label, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                    color = if (on) tone else MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp), maxLines = 3,
+                )
+            }
+        }
+    }
+}
+
 
 /** Welcome header — a flat, solid panel in the theme's own primary color
  * (never hard-coded green/blue, and no gradient — "use solid color in
@@ -1210,12 +1207,7 @@ private fun publisherModuleTiles(
     // "House Holder Assignment" — this Publisher's own incoming queue, same
     // "actionable inbox with a live badge" shape as "Forwarded to Me" above.
     add(PublisherModuleTile(DashboardModuleId.INCOMING_HOUSEHOLDER_ASSIGNMENTS, stringResource(Res.string.home_tile_incoming_assignments_title), stringResource(Res.string.home_tile_incoming_assignments_subtitle), Icons.Rounded.AssignmentInd, Destinations.INCOMING_HOUSEHOLDER_ASSIGNMENTS, pendingHouseholderAssignments))
-    // "House Holder Visit History" — a read-only, consolidated view of
-    // this Publisher's own congregation's Searching/Return Visit/Bible
-    // Study records and their visit history (see
-    // HouseholderVisitHistoryScreen's own doc comment); Super-Admin
-    // reaches the same screen unscoped via the drawer instead.
-    add(PublisherModuleTile(DashboardModuleId.HOUSEHOLDER_VISIT_HISTORY, stringResource(Res.string.home_tile_householder_visit_history_title), stringResource(Res.string.home_tile_householder_visit_history_subtitle), Icons.Rounded.History, Destinations.HOUSEHOLDER_VISIT_HISTORY))
+    // House Holder Visit History is consolidated into the Ministry tab (My / Congregation Searching, Return Visit and Bible Study records).
     // "My Total Hours" is no longer offered here: hours are entered in My Planner.
     // "My Bible Text Record" module — every Publisher, not just Pioneers.
     // A distinct icon from "Bible Study" (also MenuBook) — this is a

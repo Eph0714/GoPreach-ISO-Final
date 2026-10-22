@@ -7,6 +7,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.request
 import io.ktor.client.request.put
 import io.ktor.client.request.delete
 import io.ktor.client.request.setBody
@@ -125,6 +126,28 @@ class HttpSyncApi(
         call {
             client.delete("$baseUrl/v1/announcements/$announcementId/files/$fileId") { header(HttpHeaders.Authorization, "Bearer ${idToken()}") }
         }
+    }
+
+    override suspend fun callServer(method: String, path: String, query: Map<String, String>, json: kotlinx.serialization.json.JsonObject?, bytes: ByteArray?, mime: String?): ServerReply {
+        val response = try {
+            client.request("$baseUrl$path") {
+                this.method = io.ktor.http.HttpMethod.parse(method)
+                header(HttpHeaders.Authorization, "Bearer ${idToken()}")
+                query.forEach { (key, value) -> parameter(key, value) }
+                if (json != null) {
+                    contentType(ContentType.Application.Json)
+                    setBody(DocJson.encodeToString(kotlinx.serialization.json.JsonObject.serializer(), json))
+                } else if (bytes != null) {
+                    contentType(ContentType.parse(mime ?: "application/octet-stream"))
+                    setBody(bytes)
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw SyncTransportException("Network error: ${e.message}", cause = e)
+        }
+        return ServerReply(response.status.value, response.body())
     }
 
     override suspend fun lookupUsername(username: String): kotlinx.serialization.json.JsonObject? {

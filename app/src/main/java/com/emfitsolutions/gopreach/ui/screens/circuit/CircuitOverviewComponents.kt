@@ -60,14 +60,14 @@ internal fun OverviewIconBadge(icon: ImageVector, color: Color, size: Int = 28) 
 
 /**
  * One statistic of the Circuit Overview, on a single row: icon, its name, and the quantity (bold, right-aligned). Under it, when known, how the
- * figure changed from the previous month. It only displays; navigation lives in the shortcuts below. A figure that is not available shows "—",
+ * figure changed from the previous month. When [onClick] is given the card opens the list behind the figure. A figure that is not available shows "—",
  * never a zero, and no change is shown unless the previous month is known for every congregation.
  */
 @Composable
-internal fun OverviewStatCard(icon: ImageVector, color: Color, label: String, value: Int?, modifier: Modifier = Modifier, change: Int? = null) {
+internal fun OverviewStatCard(icon: ImageVector, color: Color, label: String, value: Int?, modifier: Modifier = Modifier, change: Int? = null, onClick: (() -> Unit)? = null) {
     val animated by animateIntAsState(value ?: 0, animationSpec = tween(600), label = "stat")
     Column(
-        modifier = modifier.heightIn(min = 52.dp).clip(RoundedCornerShape(12.dp))
+        modifier = modifier.heightIn(min = 52.dp).clip(RoundedCornerShape(12.dp)).then(if (onClick != null) Modifier.clickable(onClickLabel = "Open $label", onClick = onClick) else Modifier)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),

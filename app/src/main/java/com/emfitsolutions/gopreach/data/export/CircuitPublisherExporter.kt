@@ -153,9 +153,9 @@ object CircuitPublisherExporter {
             g.byCategory.forEach { (c, n) -> next(); row(cell(0, c.displayName), numCell(1, n)) }
         }
 
-        val colWidths = columns.mapIndexed { i, c -> "<col min=\"${i + 1}\" max=\"${i + 1}\" width=\"${(c.width / 7.0).coerceAtLeast(8.0)}\" customWidth=\"1\"/>" }.joinToString("")
+        val layout = com.emfitsolutions.gopreach.data.export.ExcelLayout.parts(rowsXml.toString(), columns.size)
         val sheet = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
-            "<cols>$colWidths</cols><sheetData>$rowsXml</sheetData></worksheet>"
+            "${layout.sheetPr}${layout.cols}<sheetData>$rowsXml</sheetData>${layout.pageSetup}</worksheet>"
         val styles = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?><styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
             "<fonts count=\"2\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font><font><b/><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>" +
             "<fills count=\"3\"><fill><patternFill patternType=\"none\"/></fill><fill><patternFill patternType=\"gray125\"/></fill>" +

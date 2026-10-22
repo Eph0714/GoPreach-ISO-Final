@@ -22,7 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+import com.emfitsolutions.gopreach.ui.components.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -68,6 +68,7 @@ fun ReceivedReportsHubScreen(
     val newAttendance = unreadAttendance.count { it.congregationId in ids }
 
     Scaffold(
+        circuitTab = com.emfitsolutions.gopreach.ui.components.CircuitTab.RECEIVED,
         topBar = {
             TopAppBar(
                 title = { Text("Received Reports") },

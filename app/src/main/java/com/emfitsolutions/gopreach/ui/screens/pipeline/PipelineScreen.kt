@@ -7,6 +7,7 @@ import com.emfitsolutions.gopreach.ui.components.recordItems
 import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.platform.AppPermission
 import com.emfitsolutions.gopreach.ui.components.RecordFound
+import com.emfitsolutions.gopreach.ui.components.stageColor
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,6 +34,8 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.Forward
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.TableChart
+import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Map
@@ -192,9 +195,13 @@ fun PipelineScreen(
     embedded: Boolean = false,
     /** Ministry tab "My ..." choice: list only this publisher's own records (otherwise everything visible to them). */
     mineOnly: Boolean = false,
+    /** Ministry tab: the list follows the House Holder Visit History rules (all of the congregation's records, each with its assigned publisher). */
+    householderHistory: Boolean = false,
     /** When the host (the Ministry tab) owns the recycle-bin toggle it passes the state here and the list shows no toggle of its own. */
     showInactive: Boolean = false,
     onShowInactiveChange: ((Boolean) -> Unit)? = null,
+    /** Ministry tab: whose records to list - 0 My, 1 My FS Group, 2 Congregation. */
+    ministryScope: Int? = null,
     /** Show Maps: opens the Territory Map on a record's saved spot. Without it the spot opens in the phone's map app. */
     onOpenMap: ((lat: Double, lng: Double, name: String) -> Unit)? = null,
     onBack: () -> Unit,
@@ -223,6 +230,9 @@ fun PipelineScreen(
             canPermanentlyDelete = canPermanentlyDelete,
             embedded = embedded,
             mineOnly = mineOnly,
+            householderHistory = householderHistory,
+            ministryScope = ministryScope,
+            onHostShowInactiveChange = onShowInactiveChange,
             hostShowInactive = showInactive,
             hostControlsInactive = onShowInactiveChange != null,
             onOpenMap = onOpenMap,
@@ -272,6 +282,9 @@ private fun PipelineListScreen(
     canPermanentlyDelete: Boolean,
     embedded: Boolean,
     mineOnly: Boolean,
+    householderHistory: Boolean,
+    ministryScope: Int?,
+    onHostShowInactiveChange: ((Boolean) -> Unit)?,
     hostShowInactive: Boolean,
     hostControlsInactive: Boolean,
     onOpenMap: ((Double, Double, String) -> Unit)?,
@@ -279,7 +292,9 @@ private fun PipelineListScreen(
     onOpenPerson: (InterestedPerson) -> Unit,
     viewModel: PipelineViewModel,
 ) {
-    val peopleFlow = remember(publisherPersonId, congregationId, stage) { viewModel.visibleFor(publisherPersonId, congregationId, stage) }
+    val peopleFlow = remember(publisherPersonId, congregationId, stage, householderHistory) {
+        if (householderHistory) viewModel.congregationFor(congregationId, stage) else viewModel.visibleFor(publisherPersonId, congregationId, stage)
+    }
     val allPeople by peopleFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var localShowInactive by remember { mutableStateOf(false) }
     val showInactive = if (hostControlsInactive) hostShowInactive else localShowInactive
@@ -296,12 +311,16 @@ private fun PipelineListScreen(
         if (m.isEmpty() || b.isEmpty()) null else AuthorizedArea(m, b)
     }.distinct()
     // Filtering happens here, before the count and the list are built.
-    val people = allPeople.filter { (showInactive || it.status == RecordStatus.ACTIVE) && (!mineOnly || it.publisherPersonId == publisherPersonId) }
+    val groupMembers by remember(publisherPersonId) { viewModel.groupMembersOf(publisherPersonId) }.collectAsStateWithLifecycle(initialValue = setOf(publisherPersonId))
+    val inScope = { p: InterestedPerson -> when (ministryScope) { 0 -> p.publisherPersonId == publisherPersonId; 1 -> p.publisherPersonId in groupMembers; 2 -> true; else -> !mineOnly || p.publisherPersonId == publisherPersonId } }
+    val people = allPeople.filter { (showInactive || it.status == RecordStatus.ACTIVE) && inScope(it) }
         .filterByArea(areaMode, areaMunicipality, areaBarangay)
         .filter { it.matchesSearch(searchText, publisherNames[it.publisherPersonId]) }
     // Searching and Return Visit show which publisher the record is enrolled to (Bible Study stays as it was).
-    val showPublisher = stage != PipelineStage.BIBLE_STUDY
+    val showPublisher = householderHistory || stage != PipelineStage.BIBLE_STUDY
     var showCreateDialog by remember { mutableStateOf(false) }
+    // The inactive record whose "restore or delete permanently" choice is open
+    var binTarget by remember { mutableStateOf<InterestedPerson?>(null) }
     // Show Street View / Show Maps: the record whose street photos are open, and the one that has no saved location to show
     var streetViewFor by remember { mutableStateOf<InterestedPerson?>(null) }
     var noLocationFor by remember { mutableStateOf<Pair<InterestedPerson, String>?>(null) }
@@ -312,6 +331,16 @@ private fun PipelineListScreen(
     // as a toast instead of the app silently closing — see
     // PipelineViewModel.errorEvents' doc comment.
     LaunchedEffect(Unit) { viewModel.errorEvents.collect { showToast(it) } }
+
+    binTarget?.let { target ->
+        RecycleBinChoiceDialog(
+            recordLabel = target.name,
+            canDeletePermanently = canPermanentlyDelete,
+            onRestore = { viewModel.setStatus(target, RecordStatus.ACTIVE, currentPersonId); binTarget = null; showToast("\"${target.name}\" restored.") },
+            onDeletePermanently = { viewModel.permanentlyDelete(target, currentPersonId); binTarget = null; showToast("\"${target.name}\" deleted permanently.") },
+            onDismiss = { binTarget = null },
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -333,20 +362,53 @@ private fun PipelineListScreen(
             // RETURN VISIT]/[MOVE TO BIBLE STUDY] on an existing record) —
             // this is an additional entry point, not a replacement for that
             // one.
-            androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showCreateDialog = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("New ${stage.label()} Record") })
+            // Inside the Ministry tab the add icon sits at the upper left, under the tab strip (see below); only the stand-alone screen keeps the corner button.
+            if (!embedded) androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showCreateDialog = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("New ${stage.label()} Record") })
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            HideInFullScreen(true) {
-            if (!hostControlsInactive) Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.End) {
-                RecycleBinToggle(localShowInactive, onChange = { localShowInactive = it })
+            // One slim toolbar: the drop-down (Ministry tab) on the left, then PDF, Excel and the recycle bin.
+            val actions = com.emfitsolutions.gopreach.platform.rememberPlatformActions()
+            val kind = when (stage) { PipelineStage.SEARCHING -> "Searching"; PipelineStage.RETURN_VISIT -> "Return Visit"; PipelineStage.BIBLE_STUDY -> "Bible Study" }
+            val exportTable = remember(people, publisherNames) {
+                com.emfitsolutions.gopreach.data.print.ReportTable(
+                    title = (if (ministryScope == 1) "My FS Group " else if (ministryScope == 0 || (ministryScope == null && mineOnly)) "My " else "Congregation ") + kind + " Record",
+                    count = people.size,
+                    countLabel = "Total Records",
+                    columns = listOf("House Holder", "Place", "Province", "Municipality/City", "Barangay", "Contact", "Assigned Publisher", "Status"),
+                    rows = people.map { p ->
+                        listOf(
+                            p.name, p.address, p.province.orEmpty(), p.cityMunicipality.orEmpty(), p.barangay.orEmpty(), p.contact.orEmpty(),
+                            if (p.publisherPersonId.isBlank()) "Unassigned" else publisherNames[p.publisherPersonId] ?: "—",
+                            if (p.status == RecordStatus.INACTIVE) "Inactive" else "Active",
+                        )
+                    },
+                    totals = listOf("Total Records" to people.size.toString()),
+                )
             }
+            val exportLauncher = com.emfitsolutions.gopreach.platform.rememberFileCreator("text/csv") { uri ->
+                if (uri != null) {
+                    val wrote = runCatching { actions.writeCsv(uri.toString(), exportTable) }.getOrDefault(false)
+                    if (wrote) { showToast("Exported to Excel (CSV)."); actions.openFile(uri.toString(), "text/csv") } else showToast("Couldn't write the file.")
+                }
+            }
+            if (embedded || !householderHistory) HideInFullScreen(true) {
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    // Upper left: add a new Searching / Return Visit / Bible Study record (it takes the stage of the open list).
+                    if (embedded) androidx.compose.material3.FilledIconButton(onClick = { showCreateDialog = true }, modifier = Modifier.size(44.dp)) { Icon(Icons.Rounded.Add, contentDescription = "New ${stage.label()} Record") } else androidx.compose.foundation.layout.Spacer(Modifier.size(1.dp))
+                    if (!householderHistory) RecycleBinToggle(showInactive, onChange = { if (hostControlsInactive) onHostShowInactiveChange?.invoke(it) else localShowInactive = it })
+                }
             }
             HideInFullScreen(true) {
                 AreaFilterBar(
                     areas = areaOptions, mode = areaMode, municipality = areaMunicipality, barangay = areaBarangay,
                     onChange = { m, mun, bar -> areaMode = m; areaMunicipality = mun; areaBarangay = bar },
                     query = searchText, onQueryChange = { searchText = it },
+                    actions = if (householderHistory) ({
+                        IconButton(onClick = { actions.print(exportTable) }, enabled = people.isNotEmpty(), modifier = Modifier.size(40.dp)) { Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Print / Export as PDF", modifier = Modifier.size(22.dp)) }
+                        IconButton(onClick = { exportLauncher.launch("gopreach-${kind.lowercase().replace(' ', '-')}-records.csv") }, enabled = people.isNotEmpty(), modifier = Modifier.size(40.dp)) { Icon(Icons.Rounded.TableChart, contentDescription = "Export as Excel", modifier = Modifier.size(22.dp)) }
+                        RecycleBinToggle(showInactive, onChange = { if (hostControlsInactive) onHostShowInactiveChange?.invoke(it) else localShowInactive = it })
+                    }) else null,
                 )
             }
             if (people.isEmpty()) {
@@ -358,11 +420,11 @@ private fun PipelineListScreen(
                 val viewMode = rememberRecordViewMode("pipeline_people")
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 88.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    item { RecordFound(people.size) }
-                    item { RecordViewToggle(viewMode) }
+                    // "Record Found" and the List / Table / Full Screen switch share one line.
+                    item { Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.weight(1f)) { RecordFound(people.size) }; RecordViewToggle(viewMode) } }
                     recordItems(
                         viewMode, people, { it.id },
                         listOf<UniversalColumn<InterestedPerson>>(
@@ -378,7 +440,7 @@ private fun PipelineListScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                    Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = person.pipelineStage.stageColor(), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     Text(person.address, style = MaterialTheme.typography.bodySmall)
                                     if (showPublisher || person.publisherPersonId != publisherPersonId) {
                                         val ownerName = publisherNames[person.publisherPersonId]
@@ -391,6 +453,10 @@ private fun PipelineListScreen(
                                     }
                                     if (person.status == RecordStatus.INACTIVE) {
                                         Text("Inactive", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                                        if (person.publisherPersonId == currentPersonId) androidx.compose.material3.OutlinedButton(onClick = { binTarget = person }, modifier = Modifier.padding(top = 4.dp)) {
+                                            Icon(Icons.Rounded.RestoreFromTrash, contentDescription = null, modifier = Modifier.size(18.dp))
+                                            Text("Restore or delete", modifier = Modifier.padding(start = 6.dp))
+                                        }
                                     }
                                     if (person.pendingForwardRequestId != null) {
                                         ForwardStatusBadge(person = person, viewModel = viewModel)
@@ -931,6 +997,7 @@ internal fun PipelinePersonDetailScreen(
     }
     val livePerson by livePersonFlow.collectAsStateWithLifecycle(initialValue = person)
     var showAddVisit by remember { mutableStateOf(false) }
+    var showBinChoice by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showForwardDialog by remember { mutableStateOf(false) }
@@ -976,6 +1043,15 @@ internal fun PipelinePersonDetailScreen(
         PipelineStage.RETURN_VISIT -> true
     }
 
+    if (showBinChoice) {
+        RecycleBinChoiceDialog(
+            recordLabel = livePerson.name,
+            canDeletePermanently = canPermanentlyDelete,
+            onRestore = { viewModel.setStatus(livePerson, RecordStatus.ACTIVE, currentPersonId); showBinChoice = false; showToast("\"${livePerson.name}\" restored.") },
+            onDeletePermanently = { viewModel.permanentlyDelete(livePerson, currentPersonId); showBinChoice = false; onBack() },
+            onDismiss = { showBinChoice = false },
+        )
+    }
     if (showDeleteDialog) {
         DeleteChoiceDialog(
             recordLabel = livePerson.name,
@@ -1002,7 +1078,7 @@ internal fun PipelinePersonDetailScreen(
                         if (livePerson.status == RecordStatus.ACTIVE) {
                             IconButton(onClick = { showDeleteDialog = true }) { Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error) }
                         } else {
-                            IconButton(onClick = { viewModel.setStatus(livePerson, RecordStatus.ACTIVE, currentPersonId); showToast("\"${livePerson.name}\" reactivated.") }) { Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Reactivate") }
+                            IconButton(onClick = { showBinChoice = true }) { Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Restore or delete permanently") }
                         }
                     }
                 },
@@ -1882,4 +1958,34 @@ private fun RecordQuickAction(icon: androidx.compose.ui.graphics.vector.ImageVec
         modifier = Modifier.size(40.dp),
         colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(containerColor = tint.copy(alpha = 0.14f), contentColor = tint),
     ) { Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp)) }
+}
+/**
+ * A record in the recycle bin (Inactive): choose to restore it (Active again) or delete it permanently. A permanent delete asks once more, and the record
+ * is kept whole in Deleted Records ([PipelineViewModel.permanentlyDelete]).
+ */
+@Composable
+internal fun RecycleBinChoiceDialog(recordLabel: String, canDeletePermanently: Boolean, onRestore: () -> Unit, onDeletePermanently: () -> Unit, onDismiss: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+    if (!confirming) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("\"$recordLabel\" is in the recycle bin") },
+            text = { Text("Restore it to make it active again, or delete it permanently.") },
+            confirmButton = { TextButton(onClick = onRestore) { Text("Restore") } },
+            dismissButton = {
+                Row {
+                    if (canDeletePermanently) TextButton(onClick = { confirming = true }) { Text("Delete permanently", color = MaterialTheme.colorScheme.error) }
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                }
+            },
+        )
+    } else {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Delete \"$recordLabel\" permanently?") },
+            text = { Text("It leaves your lists for good, with all of its visits. A copy stays in Deleted Records.") },
+            confirmButton = { TextButton(onClick = onDeletePermanently) { Text("Delete permanently", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        )
+    }
 }

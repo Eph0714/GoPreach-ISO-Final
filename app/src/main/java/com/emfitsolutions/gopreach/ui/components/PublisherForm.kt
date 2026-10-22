@@ -151,7 +151,7 @@ data class PublisherFormState(
  * Province, Municipality, Barangay, Coordinates, Email, Category, Field Service Group, Status, Remarks.
  *
  * [groupEnabled] false greys the group dropdown (e.g. a Super-Admin who hasn't picked a congregation yet);
- * [allowUnassigned] adds an "Unassigned" choice (Edit only). [onUseCurrentLocation] fills the address
+ * [allowUnassigned] adds the "Unassigned" choice: the Field Service Group is always optional (default on). [onUseCurrentLocation] fills the address
  * levels and coordinates from GPS.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -164,7 +164,7 @@ fun PublisherFormFields(
     congregations: List<Congregation> = emptyList(),
     congregationEditable: Boolean = false,
     groupEnabled: Boolean = true,
-    allowUnassigned: Boolean = false,
+    allowUnassigned: Boolean = true,
     capturingLocation: Boolean = false,
     locationError: String? = null,
     onUseCurrentLocation: () -> Unit,
@@ -343,6 +343,7 @@ fun PublisherFormFields(
             enabled = groupEnabled,
             options = (if (allowUnassigned) listOf("Unassigned" to null) else emptyList<Pair<String, String?>>()) + groups.map { it.name to it.id },
             onSelected = { onChange(form.copy(groupId = it)) },
+            searchable = true,
         )
         SimpleChoiceDropdown(
             label = "Status",
@@ -373,8 +374,11 @@ private fun <T> SimpleChoiceDropdown(
     onSelected: (T) -> Unit,
     enabled: Boolean = true,
     placeholder: String? = null,
+    /** With many options a search box at the top of the list narrows them (shown from 8 options up). */
+    searchable: Boolean = false,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
     ExposedDropdownMenuBox(expanded = expanded && enabled, onExpandedChange = { if (enabled) expanded = it }) {
         OutlinedTextField(
             value = selectedText,
@@ -387,10 +391,15 @@ private fun <T> SimpleChoiceDropdown(
             visualTransformation = VisualTransformation.None,
             modifier = Modifier.fillMaxWidth().menuAnchor(),
         )
-        ExposedDropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false }) {
-            options.forEach { (text, value) ->
-                DropdownMenuItem(text = { Text(text) }, onClick = { onSelected(value); expanded = false })
+        ExposedDropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false; query = "" }) {
+            if (searchable && options.size > 8) {
+                OutlinedTextField(value = query, onValueChange = { query = it }, singleLine = true, placeholder = { Text("Search...") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
             }
+            val shown = if (searchable && query.isNotBlank()) options.filter { it.first.contains(query.trim(), ignoreCase = true) } else options
+            shown.forEach { (text, value) ->
+                DropdownMenuItem(text = { Text(text) }, onClick = { onSelected(value); expanded = false; query = "" })
+            }
+            if (shown.isEmpty()) DropdownMenuItem(text = { Text("No match") }, onClick = {}, enabled = false)
         }
     }
 }

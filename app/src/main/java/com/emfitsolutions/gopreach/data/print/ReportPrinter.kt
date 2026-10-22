@@ -37,7 +37,7 @@ object ReportPrinter {
     /** Prints a [ReportTable] in the standard compact layout. */
     fun print(context: Context, table: ReportTable, options: PrintOptions = PrintOptions()) {
         val (html, landscape) = PrintLayout.tableDocument(context, table, options)
-        handOff(context, table.title, html, landscape)
+        handOff(context, table.title, html, landscape, PrintLayout.needsLargePaper(table))
     }
 
     /**
@@ -50,15 +50,15 @@ object ReportPrinter {
     }
 
     /** Every report opens the zoomable print preview first (when there is an Activity to show it in); Print then goes to the system dialog. */
-    private fun handOff(context: Context, title: String, html: String, landscape: Boolean) {
+    private fun handOff(context: Context, title: String, html: String, landscape: Boolean, wide: Boolean = false) {
         var c: Context? = context
         while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
         val activity = c as? android.app.Activity
-        if (activity == null || activity.isFinishing) sendToPrinter(context, title, html, landscape)
-        else PrintPreviewDialog.show(activity, title, html) { sendToPrinter(context, title, html, landscape) }
+        if (activity == null || activity.isFinishing) sendToPrinter(context, title, html, landscape, wide)
+        else PrintPreviewDialog.show(activity, title, html) { sendToPrinter(context, title, html, landscape, wide) }
     }
 
-    private fun sendToPrinter(context: Context, title: String, html: String, landscape: Boolean) {
+    private fun sendToPrinter(context: Context, title: String, html: String, landscape: Boolean, wide: Boolean) {
         val webView = WebView(context)
         inFlightWebViews += webView
         webView.webViewClient = object : WebViewClient() {
@@ -71,7 +71,7 @@ object ReportPrinter {
                         return
                     }
                     val adapter = view.createPrintDocumentAdapter(title)
-                    printManager.print(title, adapter, PrintLayout.attributes(context, landscape))
+                    printManager.print(title, adapter, PrintLayout.attributes(context, landscape, wide))
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to open print dialog", e)
                     Toast.makeText(context, "Couldn't open the print dialog: ${e.localizedMessage ?: "unknown error"}", Toast.LENGTH_LONG).show()

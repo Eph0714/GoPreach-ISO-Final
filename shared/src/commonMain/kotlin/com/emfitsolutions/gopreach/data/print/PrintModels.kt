@@ -18,6 +18,7 @@ data class ReportTable(
 
 /** Paper sizes GoPreach users print on. The system print dialog (which doubles as the print preview) can still change it per print. */
 enum class PaperSize(val label: String) {
+    AUTO("Automatic (best fit)"),
     A4("A4"),
     LETTER("Letter (8.5 x 11 in)"),
     LEGAL("Legal (8.5 x 14 in)");
