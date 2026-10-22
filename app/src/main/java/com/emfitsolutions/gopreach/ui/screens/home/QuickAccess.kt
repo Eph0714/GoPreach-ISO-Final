@@ -33,6 +33,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.CompareArrows
 import androidx.compose.material.icons.rounded.Assessment
+import androidx.compose.material.icons.rounded.AssignmentTurnedIn
+import androidx.compose.material.icons.rounded.Campaign
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.AssignmentInd
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -116,8 +122,14 @@ enum class QuickAccessItem(
     PUBLISHER_ASSIGNMENT("Publisher Assignment", "Manage Searching, Return Visit, Bible Study and Publisher assignments", Icons.Rounded.AssignmentInd, Color(0xFF3F51B5), false, Destinations.PUBLISHER_ASSIGNMENT),
     HOUSEHOLDER_RECORDS("House Holder Records", "Search Records, Return Visits and Bible Studies by FS Group", Icons.Rounded.Groups, Color(0xFF7B1FA2), false, Destinations.SCOPED_INTERESTED_RECORDS),
     FIELD_SERVICE_GROUP("Field Service Group", "Groups and their members", Icons.Rounded.GroupWork, Color(0xFF6A1B9A), false, Destinations.MANAGE_GROUPS),
-    PUBLISHER_MODULE("Publisher Module", "Manage publishers", Icons.Rounded.Groups, Color(0xFF1E88E5), false, Destinations.MANAGE_PUBLISHERS),
+    PUBLISHER_MODULE("Publisher Account", "Publisher records, their group and status", Icons.Rounded.Groups, Color(0xFF1E88E5), false, Destinations.MANAGE_PUBLISHERS),
     FIELD_SERVICE_REPORT("Field Service Report", "Open the field service report", Icons.Rounded.Assessment, Color(0xFFEF6C00), false, Destinations.FIELD_SERVICE_REPORT),
+    MY_ASSIGNMENTS("My Assignment", "Householders and assignments that are yours", Icons.Rounded.AssignmentTurnedIn, Color(0xFF5E35B1), false, Destinations.MY_ASSIGNMENTS),
+    HOUSEHOLDER_VISIT_HISTORY("Householder Visit History", "The visits made to each householder", Icons.Rounded.History, Color(0xFF00796B), false, Destinations.HOUSEHOLDER_VISIT_HISTORY),
+    MEETING_CART_ASSIGNMENT("Meeting and Cart Assignment", "Meeting parts and cart witnessing assignments", Icons.Rounded.Event, Color(0xFFAD1457), false, Destinations.MEETING_ASSIGNMENTS),
+    PUBLISHER_SCHEDULE("Publisher Schedule", "The days each publisher can go out (view only)", Icons.Rounded.CalendarMonth, Color(0xFF283593), false, Destinations.PUBLISHER_SCHEDULES),
+    FIND_LOCATION("Find Location", "Find a place and the records near it", Icons.Rounded.Navigation, Color(0xFF00838F), false, Destinations.FIND_LOCATION),
+    ANNOUNCEMENT("Announcement", "Announcements for your congregation", Icons.Rounded.Campaign, Color(0xFFE65100), false, Destinations.MANAGE_ANNOUNCEMENTS),
     MEETING_ATTENDANCE("Meeting Attendance", "Enter and review weekly meeting attendance", Icons.Rounded.HowToReg, Color(0xFF0097A7), false, Destinations.MEETING_ATTENDANCE),
     SETTINGS("Settings", "Account, appearance and app settings", Icons.Rounded.Settings, Color(0xFF616161), false, Destinations.SETTINGS),
     COMPARATIVE_REPORT("Comparative Report", "Compare report periods", Icons.AutoMirrored.Rounded.CompareArrows, Color(0xFF6D4C41), false, Destinations.ADMIN_COMPARATIVE),
@@ -611,4 +623,6 @@ private fun QuickAccessCard(
 }
 
 /** Cards introduced after people may already have customised their Quick Access: shown for them once, at the end, until they remove them. */
-private val NEWER_CARDS = setOf(QuickAccessItem.TERRITORY_MAP, QuickAccessItem.MEETING_ATTENDANCE, QuickAccessItem.SETTINGS, QuickAccessItem.HOUSEHOLDER_RECORDS, QuickAccessItem.FIELD_SERVICE_GROUP)
+private val NEWER_CARDS = setOf(QuickAccessItem.TERRITORY_MAP, QuickAccessItem.MEETING_ATTENDANCE, QuickAccessItem.SETTINGS, QuickAccessItem.HOUSEHOLDER_RECORDS, QuickAccessItem.FIELD_SERVICE_GROUP,
+    QuickAccessItem.WEATHER, QuickAccessItem.FIELD_SERVICE_REPORT, QuickAccessItem.PUBLISHER_MODULE, QuickAccessItem.MY_ASSIGNMENTS, QuickAccessItem.HOUSEHOLDER_VISIT_HISTORY,
+    QuickAccessItem.MEETING_CART_ASSIGNMENT, QuickAccessItem.PUBLISHER_SCHEDULE, QuickAccessItem.FIND_LOCATION, QuickAccessItem.ANNOUNCEMENT)

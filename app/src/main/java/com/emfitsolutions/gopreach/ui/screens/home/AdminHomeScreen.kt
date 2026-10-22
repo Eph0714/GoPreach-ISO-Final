@@ -748,6 +748,20 @@ fun AdminHomeScreen(
                                     if (canEnrollPublisher) addAll(listOf(QuickAccessItem.REGULAR_PIONEERS, QuickAccessItem.AUXILIARY_PIONEERS, QuickAccessItem.SPECIAL_PIONEERS, QuickAccessItem.UNBAPTIZED_PUBLISHERS))
                                     add(QuickAccessItem.SETTINGS)
                                     if (canManageGroups) add(QuickAccessItem.FIELD_SERVICE_GROUP)
+                                    // The other Quick Access modules are offered exactly where the side panel offers them (or where this screen's own role check allows them), so a card never
+                                    // reaches a module the role could not already open: no new permission comes from Quick Access.
+                                    val offered = sideItems.map { it.route }.toSet()
+                                    if (canViewTerritoryMap) add(QuickAccessItem.TERRITORY_MAP)
+                                    add(QuickAccessItem.WEATHER)
+                                    if (Destinations.FIELD_SERVICE_REPORT in offered) add(QuickAccessItem.FIELD_SERVICE_REPORT)
+                                    if (Destinations.MANAGE_PUBLISHERS in offered) add(QuickAccessItem.PUBLISHER_MODULE)
+                                    val hasCongregation = !session.person?.activeCongregationId.isNullOrBlank() && role != AdminRole.CIRCUIT_OVERSEER
+                                    if (hasCongregation) add(QuickAccessItem.MY_ASSIGNMENTS)
+                                    if (canViewInterestedPeopleScope && role != AdminRole.CIRCUIT_OVERSEER) add(QuickAccessItem.HOUSEHOLDER_VISIT_HISTORY)
+                                    if (canEditMeetingAssignments) add(QuickAccessItem.MEETING_CART_ASSIGNMENT)
+                                    if (hasCongregation) add(QuickAccessItem.PUBLISHER_SCHEDULE)
+                                    if (role != AdminRole.CIRCUIT_OVERSEER) add(QuickAccessItem.FIND_LOCATION)
+                                    if (canManageAnnouncements) add(QuickAccessItem.ANNOUNCEMENT)
                                     if (canManageRegularEldersForDrawer) add(QuickAccessItem.TOTAL_ELDERS)
                                     if (canEnrollMinisterialServant) add(QuickAccessItem.TOTAL_MINISTERIAL)
                                 }

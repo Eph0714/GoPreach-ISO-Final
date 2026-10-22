@@ -793,7 +793,7 @@ fun GoPreachNavGraph(
             // MeetingAssignmentsViewModel.myAssignmentsFor's doc comment).
             MyAssignmentsScreen(
                 currentPersonName = session.person?.fullName ?: "—",
-                congregationId = ownPublisherAssignment?.congregationId,
+                congregationId = ownPublisherAssignment?.congregationId ?: ownCongregationId ?: ownGroupAssignment?.congregationId,
                 onBack = { navController.popBackStack() },
             )
         }
@@ -1119,7 +1119,7 @@ fun GoPreachNavGraph(
             // only (reached from Account Settings' own Publisher-gated link).
             val scheduleContext = androidx.compose.ui.platform.LocalContext.current
             PublisherSchedulesScreen(
-                congregationId = ownPublisherAssignment?.congregationId,
+                congregationId = ownPublisherAssignment?.congregationId ?: ownCongregationId ?: ownGroupAssignment?.congregationId,   // read-only list of the own congregation, for an elder or admin too
                 currentPersonId = currentPersonId,
                 onBack = { navController.popBackStack() },
                 onPrint = { rows -> TableReportExporter.print(scheduleContext, scheduleReport(rows, session.person?.fullName)) },
