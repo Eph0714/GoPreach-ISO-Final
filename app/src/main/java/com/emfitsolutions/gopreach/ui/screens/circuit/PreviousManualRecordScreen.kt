@@ -7,6 +7,18 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.geometry.isSpecified
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.FitScreen
+import androidx.compose.material.icons.rounded.Remove
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -389,19 +401,69 @@ private fun SheetCanvas(
     val totalW = HDR_W + colX[snap.cols]
     val totalH = HDR_H + rowY[snap.rows]
 
+    // Zoom: two fingers pinch the sheet (around the fingers), double-tap fits it to the screen and back, and the buttons zoom with a short glide. One finger still scrolls.
+    // [dz] is the pixels per sheet unit at the current zoom. A zoom keeps the point under the fingers where it was (the scroll is set again once the new size is laid out).
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var zoom by remember(snap) { mutableFloatStateOf(1f) }
+    var autoFit by remember(snap) { mutableStateOf(false) }
+    var pendingScroll by remember { mutableStateOf<Pair<Float, Float>?>(null) }
+    var backZoom by remember(snap) { mutableStateOf<Float?>(null) }
+    val dz = density * zoom
+    val fitZoom = remember(viewport, snap) { if (viewport.width > 0) ((viewport.width / density - 2f) / totalW).coerceIn(MIN_ZOOM, 1f) else 1f }
+    fun applyZoom(target: Float, cx: Float, cy: Float) {
+        val nz = target.coerceIn(MIN_ZOOM, MAX_ZOOM); if (nz == zoom) return
+        val k = nz / zoom
+        pendingScroll = ((hs.value + cx) * k - cx) to ((vs.value + cy) * k - cy)
+        zoom = nz
+    }
+    fun glideTo(target: Float, cx: Float = viewport.width / 2f, cy: Float = viewport.height / 2f) {
+        scope.launch { androidx.compose.animation.core.animate(zoom, target.coerceIn(MIN_ZOOM, MAX_ZOOM), animationSpec = androidx.compose.animation.core.tween(240)) { v, _ -> applyZoom(v, cx, cy) } }
+    }
+    LaunchedEffect(zoom) {
+        val p = pendingScroll ?: return@LaunchedEffect
+        androidx.compose.runtime.withFrameNanos { }
+        hs.scrollTo(p.first.toInt().coerceAtLeast(0)); vs.scrollTo(p.second.toInt().coerceAtLeast(0)); pendingScroll = null
+    }
+    // while on automatic fit (after Fit was pressed) the sheet follows the size of the screen, e.g. when the phone is turned
+    LaunchedEffect(fitZoom, autoFit) { if (autoFit && kotlin.math.abs(zoom - fitZoom) > 0.002f) { pendingScroll = 0f to 0f; zoom = fitZoom } }
+
     LaunchedEffect(current, viewport) {
         val k = current ?: return@LaunchedEffect
         val r = (k shr 32).toInt(); val c = (k and 0xffffffffL).toInt()
-        val x = (HDR_W + colX[c.coerceIn(0, snap.cols - 1)]) * density; val y = (HDR_H + rowY[r.coerceIn(0, snap.rows - 1)]) * density
+        val x = (HDR_W + colX[c.coerceIn(0, snap.cols - 1)]) * dz; val y = (HDR_H + rowY[r.coerceIn(0, snap.rows - 1)]) * dz
         hs.animateScrollTo((x - viewport.width / 2f).toInt().coerceAtLeast(0))
         vs.animateScrollTo((y - viewport.height / 2f).toInt().coerceAtLeast(0))
     }
 
-    Box(modifier.onSizeChanged { viewport = it }.horizontalScroll(hs).verticalScroll(vs)) {
+    Box(modifier.onSizeChanged { viewport = it }) {
+    Box(
+        Modifier.fillMaxSize()
+            // two fingers pinch (seen first, before the scroll, and only then consumed); one finger is left to the scroll
+            .pointerInput(snap) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    do {
+                        val event = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        if (event.changes.size >= 2 && event.changes.count { it.pressed } >= 2) {
+                            val z = event.calculateZoom(); val c = event.calculateCentroid()
+                            if (z != 1f && c.isSpecified) { autoFit = false; applyZoom(zoom * z, c.x, c.y) }
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
+            }
+            .pointerInput(snap, fitZoom) {
+                detectTapGestures(onDoubleTap = { off ->
+                    if (backZoom != null && kotlin.math.abs(zoom - fitZoom) < 0.02f) { autoFit = false; glideTo(backZoom!!, off.x, off.y); backZoom = null }
+                    else { backZoom = zoom; autoFit = true; pendingScroll = 0f to 0f; glideTo(fitZoom, 0f, 0f) }
+                })
+            }
+            .horizontalScroll(hs).verticalScroll(vs),
+    ) {
         Canvas(
-            Modifier.size(totalW.dp, totalH.dp).pointerInput(snap, editing) {
+            Modifier.size((totalW * zoom).dp, (totalH * zoom).dp).pointerInput(snap, editing, zoom) {
                 if (editing) detectTapGestures { off ->
-                    val x = off.x / density - HDR_W; val y = off.y / density - HDR_H
+                    val x = off.x / dz - HDR_W; val y = off.y / dz - HDR_H
                     if (x < 0 || y < 0) return@detectTapGestures
                     var c = colX.indexOfLast { it <= x }; var r = rowY.indexOfLast { it <= y }
                     if (c < 0 || r < 0 || c >= snap.cols || r >= snap.rows) return@detectTapGestures
@@ -410,7 +472,7 @@ private fun SheetCanvas(
                 }
             },
         ) {
-            val d = density
+            val d = dz
             drawIntoCanvas { canvas ->
                 val cv = canvas.nativeCanvas
                 val fill = android.graphics.Paint().apply { style = android.graphics.Paint.Style.FILL }
@@ -474,6 +536,47 @@ private fun SheetCanvas(
                 line.color = 0xFF43A047.toInt(); line.strokeWidth = 2f * d
                 for (k in edited) { val r = (k shr 32).toInt(); val c = (k and 0xffffffffL).toInt(); if (r < snap.rows && c < snap.cols) { val b = rectOf(r, c); cv.drawRect(b[0], b[1], b[2], b[3], line) } }
                 if (current != null) { line.color = 0xFFE65100.toInt(); val r = (current shr 32).toInt(); val c = (current and 0xffffffffL).toInt(); if (r < snap.rows && c < snap.cols) { val b = rectOf(r, c); cv.drawRect(b[0], b[1], b[2], b[3], line) } }
+            }
+        }
+    }
+    ZoomPill(
+        percent = kotlin.math.round(zoom * 100).toInt(), atFit = kotlin.math.abs(zoom - fitZoom) < 0.01f,
+        onOut = { autoFit = false; glideTo(zoom / 1.35f) }, onIn = { autoFit = false; glideTo(zoom * 1.35f) },
+        onFit = { backZoom = null; autoFit = true; pendingScroll = 0f to 0f; glideTo(fitZoom, 0f, 0f) },
+        modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+    )
+    }
+}
+
+private const val MIN_ZOOM = 0.05f
+private const val MAX_ZOOM = 3f
+
+/** A small floating pill over the sheet: zoom out, the level, zoom in, and Fit (the whole width on the screen). It slides in when the sheet opens and fades its hint away. */
+@Composable
+private fun ZoomPill(percent: Int, atFit: Boolean, onOut: () -> Unit, onIn: () -> Unit, onFit: () -> Unit, modifier: Modifier = Modifier) {
+    var hint by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(3500); hint = false }
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    androidx.compose.animation.AnimatedVisibility(
+        visible = shown, modifier = modifier,
+        enter = androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(350)) + androidx.compose.animation.slideInVertically(androidx.compose.animation.core.tween(450)) { it / 2 } + androidx.compose.animation.scaleIn(initialScale = 0.9f),
+    ) {
+        Column(horizontalAlignment = Alignment.End) {
+            androidx.compose.animation.AnimatedVisibility(visible = hint, enter = androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(500))) {
+                Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(50), color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.9f), modifier = Modifier.padding(bottom = 8.dp)) {
+                    Text("Pinch to zoom  ·  double-tap to fit", Modifier.padding(horizontal = 14.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.inverseOnSurface)
+                }
+            }
+            Surface(shape = androidx.compose.foundation.shape.RoundedCornerShape(50), shadowElevation = 10.dp, color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)) {
+                Row(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onOut) { Icon(androidx.compose.material.icons.Icons.Rounded.Remove, "Zoom out") }
+                    Text("$percent%", Modifier.widthIn(min = 44.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    IconButton(onClick = onIn) { Icon(androidx.compose.material.icons.Icons.Rounded.Add, "Zoom in") }
+                    androidx.compose.material3.FilledTonalButton(onClick = onFit, contentPadding = PaddingValues(horizontal = 12.dp), colors = if (atFit) androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) else androidx.compose.material3.ButtonDefaults.filledTonalButtonColors()) {
+                        Icon(androidx.compose.material.icons.Icons.Rounded.FitScreen, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Fit")
+                    }
+                }
             }
         }
     }
