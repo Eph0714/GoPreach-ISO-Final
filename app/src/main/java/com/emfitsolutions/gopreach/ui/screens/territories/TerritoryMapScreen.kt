@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -70,6 +71,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -767,6 +773,10 @@ fun TerritoryMapScreen(
     var scopeBeforeBarangay by rememberSaveable { mutableStateOf<GroupScope?>(null) }
     val hasFsGroupOverview = drawingAccess.scope is com.emfitsolutions.gopreach.domain.GroupAccessScope.Congregation ||
         drawingAccess.scope == com.emfitsolutions.gopreach.domain.GroupAccessScope.AllCongregations
+    // Search Barangay: the text and the open results survive opening a barangay, so closing it brings the same results back.
+    var barangayQuery by rememberSaveable(congregationId) { mutableStateOf("") }
+    var searchOpen by remember { mutableStateOf(false) }
+    var openedFromSearch by rememberSaveable(congregationId) { mutableStateOf(false) }
     fun selectBarangay(id: String) {
         if (territoryFilter == null) scopeBeforeBarangay = scope
         territoryFilter = id
@@ -775,12 +785,16 @@ fun TerritoryMapScreen(
     }
     fun backFromBarangay() {
         territoryFilter = null
+        if (openedFromSearch && barangayQuery.isNotBlank()) searchOpen = true   // back to the search results, ready for another barangay
+        openedFromSearch = false
         selectedAreaId = null
         barangayGroupFilter = null
         scope = if (hasFsGroupOverview) GroupScope.ALL else (scopeBeforeBarangay ?: if (hasMine) GroupScope.MINE else GroupScope.OTHER)
         scopeBeforeBarangay = null
     }
     BackHandler(enabled = territoryFilter != null && !drawingState.active) { if (fullScreenActive) fullScreen = false else backFromBarangay() }
+    // Back closes the search results first; only then a selected barangay, and only after that the module (the handlers above and below decide that).
+    BackHandler(enabled = searchOpen && !drawingState.active) { searchOpen = false }
     // Back from a chosen congregation returns to the congregation picker (Super-Admin / Circuit Overseer).
     fun backToPicker() { pickedCongregationId = null; if (restricted) CircuitScopeStore.selectCongregation(null); otherGroupId = null; selectedRecordId = null }
     BackHandler(enabled = fixedCongregationId == null && congregationId != null && territoryFilter == null && !drawingState.active) { backToPicker() }
@@ -865,6 +879,65 @@ fun TerritoryMapScreen(
                     viewOnlyNote?.let { ViewOnlyTag(it) }
                     if (effectiveScope == GroupScope.OTHER && (!isSuperAdmin || congregationId != null)) {
                         TextButton(onClick = { showGroupPicker = true }) { Text(if (selectedGroup == null) "Choose FS Group" else "Change") }
+                    }
+                }
+                // Search Barangay: partial names, any case; results show the municipality, province, congregation and FS Group. Only barangays this role may already see are searched.
+                run {
+                    val q = normalizePlaceName(barangayQuery.trim())
+                    val congName = allCongregations.firstOrNull { it.id == congregationId }?.name.orEmpty()
+                    val found = if (q.isEmpty()) emptyList() else allAreas.map { a ->
+                        val b = normalizePlaceName(a.barangay)
+                        a to when {
+                            b == q -> 0
+                            b.startsWith(q) -> 1
+                            b.contains(q) -> 2
+                            normalizePlaceName(a.barangay + " " + a.municipality + " " + a.provinceName + " " + a.groupName).contains(q) -> 3
+                            else -> 9
+                        }
+                    }.filter { it.second < 9 }.sortedWith(compareBy({ it.second }, { it.first.barangay.lowercase() }, { it.first.municipality.lowercase() })).map { it.first }
+                    Column(Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = barangayQuery,
+                            onValueChange = { barangayQuery = it; searchOpen = it.isNotBlank() },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            placeholder = { Text("Search Barangay") },
+                            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                            trailingIcon = {
+                                if (barangayQuery.isNotEmpty()) IconButton(onClick = { barangayQuery = ""; searchOpen = false }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") }
+                            },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = { searchOpen = barangayQuery.isNotBlank() }),
+                        )
+                        if (searchOpen && q.isNotEmpty()) {
+                            Surface(shape = RoundedCornerShape(14.dp), tonalElevation = 3.dp, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                                Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
+                                    if (found.isEmpty()) {
+                                        Text("No barangay matches \"${barangayQuery.trim()}\". Check the spelling or try a shorter name.", Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    found.take(40).forEach { a ->
+                                        Row(
+                                            Modifier.fillMaxWidth().clickable {
+                                                searchOpen = false; openedFromSearch = true
+                                                provinceFilter = null; municipalityFilter = null   // so the barangay is never hidden by an earlier choice
+                                                selectBarangay(a.id)
+                                            }.padding(horizontal = 14.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            androidx.compose.foundation.layout.Box(Modifier.size(12.dp).background(groupColors[a.groupId]?.let { hex -> runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(hex)) }.getOrNull() } ?: MaterialTheme.colorScheme.outline, CircleShape))
+                                            Column(Modifier.padding(start = 12.dp)) {
+                                                Text(a.barangay, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                Text(
+                                                    listOf(a.municipality, a.provinceName, congName, a.groupName).filter { it.isNotBlank() }.joinToString(" · "),
+                                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 Row(
