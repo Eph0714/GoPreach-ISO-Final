@@ -1,5 +1,6 @@
 import mysql from 'mysql2/promise';
 import { congregationOf } from './store.js';
+import { MysqlCoData, attachCo } from './coStore.js';
 
 /** MySQL implementation of the store contract (see store.js). */
 export class MysqlStore {
@@ -36,10 +37,11 @@ export class MysqlStore {
       token_hash CHAR(64) NOT NULL PRIMARY KEY, person_id VARCHAR(190) NOT NULL, auth_time BIGINT NOT NULL, expires_at BIGINT NOT NULL,
       KEY idx_person (person_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    await MysqlCoData.migrate(pool);
     return new MysqlStore(pool);
   }
 
-  constructor(pool) { this.pool = pool; }
+  constructor(pool) { this.pool = pool; this.co = new MysqlCoData(pool); }
 
   static row(r) {
     const data = typeof r.data === 'string' ? JSON.parse(r.data) : r.data;
@@ -222,3 +224,5 @@ export class MysqlStore {
 
   async close() { await this.pool.end(); }
 }
+
+attachCo(MysqlStore);

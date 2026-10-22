@@ -1,4 +1,5 @@
 import { congregationOf } from './store.js';
+import { MemoryCoData, attachCo } from './coStore.js';
 
 /** In-memory store with the same contract as MysqlStore — for tests and for running the API with no database. */
 export class MemoryStore {
@@ -6,6 +7,7 @@ export class MemoryStore {
     this.docs = new Map(); // "collection/id" -> { collection, id, data, version, seq, deleted, congregationId, updatedAt, updatedBy }
     this.seq = 0;
     this.queue = Promise.resolve();
+    this.co = new MemoryCoData(); // the Circuit Overseer's File Manager and Previous Manual Record (see coStore.js)
   }
 
   key(collection, id) { return `${collection}/${id}`; }
@@ -142,3 +144,5 @@ export class MemoryStore {
 
   async close() {}
 }
+
+attachCo(MemoryStore);

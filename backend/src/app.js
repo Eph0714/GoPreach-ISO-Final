@@ -8,6 +8,8 @@ import { mountFiles } from './files.js';
 import { mountVoice } from './voice.js';
 import { mountAnnouncementFiles } from './announcementFiles.js';
 import { mountPresence } from './presence.js';
+import { mountCoFiles } from './coFiles.js';
+import { mountCoManual } from './coManual.js';
 import { mountAccounts } from './accounts.js';
 import { saveGroupTerritory, removeGroupTerritory, removeAssignment, validateSave } from './territory.js';
 
@@ -111,6 +113,8 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   mountVoice(app, store, auth, voiceOptions);
   mountAnnouncementFiles(app, store, auth);
   mountPresence(app, store, auth);
+  mountCoFiles(app, store, auth);
+  mountCoManual(app, store, auth);
   mountAccounts(app, store, auth, authOptions);
 
   app.post('/v1/sync/push', auth, async (req, res) => {

@@ -25,7 +25,7 @@ const OLE = (b) => b.length > 7 && b[0] === 0xd0 && b[1] === 0xcf && b[2] === 0x
 const text = (b) => !b.subarray(0, 8192).includes(0);
 
 /** extension -> { mimes the phone may declare, sniff: does the content match } */
-const TYPES = {
+export const TYPES = {
   pdf: { mimes: ['application/pdf'], sniff: (b) => b.subarray(0, 5).toString('latin1') === '%PDF-' },
   doc: { mimes: ['application/msword'], sniff: OLE },
   docx: { mimes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'], sniff: ZIP },

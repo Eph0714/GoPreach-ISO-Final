@@ -46,6 +46,27 @@ server's own format at their first sign-in (`scripts/import-auth.js`, `FIREBASE_
 
 Territory calls are the server version of the app's three Firestore transactions; every write transaction locks the sequence counter, so concurrent claims are serialized (tested).
 
+### Circuit Overseer: File Manager and Previous Manual Record
+
+Private to the signed-in Circuit Overseer (or the Super-Admin); not part of the sync API, so phones never mirror it. Code: `coFiles.js`, `coManual.js`,
+`coStore.js` (tables `co_folders`, `co_files`, `co_manual_imports`, `co_manual_sheets`; created by `npm run migrate` and on first start), `sheetSnapshot.js`, `excel.js`.
+Tests: `test/co.test.js`.
+
+| Call | Purpose |
+|---|---|
+| `GET /v1/co/files/list?folderId=&sort=&dir=`, `GET /tree`, `GET /search?q=` | browse, folder tree + storage used, search all folders by name |
+| `POST /v1/co/files/folders`, `PATCH /folders/:id`, `DELETE /folders/:id[?confirm=1]` | folders (a non-empty one answers 409 `needsConfirm` first) |
+| `PUT /v1/co/files/upload?name=&folderId=` (raw bytes) | upload one file: extension, declared type and first bytes must agree; no executables |
+| `GET /v1/co/files/:id`, `GET /:id/download[?inline=1]`, `PATCH /:id`, `DELETE /:id` | details, download / preview (PDF, images, text only), rename / move, to the recycle bin |
+| `POST /v1/co/files/bulk`, `GET /trash`, `POST /trash/restore`, `DELETE /trash[/:kind/:id]` | bulk move / delete, recycle bin |
+| `GET /v1/co/manual/congregations` | the congregations on the caller's grant |
+| `POST /v1/co/manual/preview`, `POST /v1/co/manual/import` | raw workbook body (or `?fileId=` of a File Manager file); `congregationId` and `visitDate=YYYY-MM-DD` are required; all-or-nothing |
+| `GET /v1/co/manual/records?q=&page=&pageSize=` | congregation A-Z, then visit date newest first; searched on the server |
+| `GET /v1/co/manual/imports`, `DELETE /v1/co/manual/imports/:id` | earlier imports |
+
+Settings: `CO_FILE_MAX_MB` (default 25) and `CO_STORAGE_MB` (default 500). Excel is read with SheetJS 0.20.3 (installed from `cdn.sheetjs.com`, see
+`package.json`; the npm registry only has an old vulnerable release). Formulas are never evaluated, macros never loaded.
+
 ### Not ported / still open
 
 - [ ] Image / file upload and download endpoints (`files` table exists).

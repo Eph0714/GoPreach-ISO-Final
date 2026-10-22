@@ -39,3 +39,24 @@ CREATE TABLE IF NOT EXISTS files (
   size_bytes  INT          NOT NULL,
   created_at  BIGINT       NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Circuit Overseer File Manager (the bytes are in file_blobs under "co-files/<owner>/<id>") and Previous Manual Record.
+-- Also created on first start by MysqlCoData.migrate (coStore.js). None of this is part of the sync API.
+CREATE TABLE IF NOT EXISTS co_folders (
+  id VARCHAR(40) NOT NULL PRIMARY KEY, owner VARCHAR(190) NOT NULL, name VARCHAR(200) NOT NULL, parent_id VARCHAR(40) NULL,
+  created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, deleted_at BIGINT NULL, deleted_with VARCHAR(40) NULL, KEY idx_owner (owner, parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS co_files (
+  id VARCHAR(40) NOT NULL PRIMARY KEY, owner VARCHAR(190) NOT NULL, name VARCHAR(255) NOT NULL, ext VARCHAR(10) NOT NULL, mime VARCHAR(100) NOT NULL,
+  size_bytes BIGINT NOT NULL, folder_id VARCHAR(40) NULL, created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, deleted_at BIGINT NULL, deleted_with VARCHAR(40) NULL,
+  KEY idx_owner (owner, folder_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS co_manual_imports (
+  id VARCHAR(40) NOT NULL PRIMARY KEY, owner VARCHAR(190) NOT NULL, congregation_id VARCHAR(190) NOT NULL, congregation_name VARCHAR(255) NOT NULL, remarks VARCHAR(500) NOT NULL DEFAULT '',
+  file_name VARCHAR(255) NOT NULL, sheets JSON NOT NULL, content_hash CHAR(64) NOT NULL, created_at BIGINT NOT NULL,
+  KEY idx_owner (owner, content_hash)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS co_manual_sheets (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, import_id VARCHAR(40) NOT NULL, owner VARCHAR(190) NOT NULL, sheet_index INT NOT NULL, name VARCHAR(255) NOT NULL,
+  data LONGTEXT NOT NULL, search_text MEDIUMTEXT NOT NULL, UNIQUE KEY idx_sheet (import_id, sheet_index), KEY idx_owner (owner)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
