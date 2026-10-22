@@ -545,6 +545,8 @@ fun TerritoryMapScreen(
     // the system bars so the map fills the display; Back exits it first.
     // The Territory Map opens in full screen (the controls come back with Exit); the user can leave it at any time.
     var fullScreen by rememberSaveable { mutableStateOf(true) }
+    // The map opens clean (Filters, Hide Icons, Style, Drive only). Filters opens the filter panel; every other tool is in the long-press menu.
+    var showFilterPanel by rememberSaveable { mutableStateOf(false) }
     val fullScreenActive = fullScreen && viewMode == ViewMode.MAP
     BackHandler(enabled = fullScreenActive) { fullScreen = false }
     DisposableEffect(fullScreenActive) {
@@ -1023,7 +1025,7 @@ fun TerritoryMapScreen(
                         // Long-press asks what to do at that exact spot.
                         // For someone who may draw, a long press turns Drawing Mode on; everyone else keeps the old choice.
                         // Long press: a small menu - Draw (only where the role allows it), Start navigation, Street View and Open in Maps.
-                        onLongPress = { lat, lng -> if (!drawingState.active && !readOnly) longPressPoint = lat to lng },
+                        onLongPress = { lat, lng -> if (!drawingState.active) longPressPoint = lat to lng },
                         drawingState = drawingState,
                         drawingAccess = drawingAccess,
                         drawingTerritories = drawingTerritories,
@@ -1047,9 +1049,10 @@ fun TerritoryMapScreen(
                         // In the Main Form tab the map is never really full screen (the header and tabs stay), so the toggle is
                         // "Filters" (show the FS Group and record-type controls above the map) / "Map" (hide them again).
                         MapToolButton(
-                            icon = if (embedded) { if (fullScreenActive) Icons.Rounded.Tune else Icons.Rounded.Fullscreen } else if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
-                            label = if (embedded) { if (fullScreenActive) "Filters" else "Map" } else if (fullScreenActive) "Exit" else "Full screen",
-                            onClick = { fullScreen = !fullScreen },
+                            icon = if (fullScreenActive) Icons.Rounded.Tune else Icons.Rounded.Fullscreen,
+                            label = if (fullScreenActive) "Filters" else if (embedded) "Map" else "Full screen",
+                            active = fullScreenActive && showFilterPanel,
+                            onClick = { if (fullScreenActive) showFilterPanel = !showFilterPanel else fullScreen = true },
                         )
                         // Hide / Show Icons: one setting for every Territory Map view (all groups, a group, a municipality, a Barangay).
                         MapToolButton(
@@ -1125,7 +1128,7 @@ fun TerritoryMapScreen(
                         }
                     }
                     // Status pill: connection and GPS state in one glance, bottom-left above whatever is at the bottom. Tap for a plain sentence.
-                    if (!drawingState.active) {
+                    if (!drawingState.active && (driving.active || guidance.active)) {
                         val tick by androidx.compose.runtime.produceState(initialValue = com.emfitsolutions.gopreach.platform.nowMillis()) {
                             while (true) { kotlinx.coroutines.delay(5_000L); value = com.emfitsolutions.gopreach.platform.nowMillis() }
                         }
@@ -1171,8 +1174,8 @@ fun TerritoryMapScreen(
                             modifier = Modifier.align(Alignment.BottomStart).padding(start = 12.dp, bottom = 16.dp + liftForPill),
                         )
                     }
-                    // Floating Recenter / Follow button: bottom-right, kept above whatever card or strip is at the bottom.
-                    if (!drawingState.active) {
+                    // Floating Recenter / Follow button: bottom-right, kept above whatever card or strip is at the bottom (only while driving or navigating).
+                    if (!drawingState.active && (driving.active || guidance.active)) {
                         val followUi = when {
                             driving.active -> if (driving.following) FollowUi.DRIVING else FollowUi.PAUSED
                             followMe -> FollowUi.FOLLOWING
@@ -1205,7 +1208,7 @@ fun TerritoryMapScreen(
                     // Full screen: the controls above the map are hidden, so keep the
                     // essentials floating on it — exit, which group this is, and the
                     // record-type filter.
-                    if (fullScreenActive && !guidance.active && !(embedded && driving.active)) {
+                    if (fullScreenActive && showFilterPanel && !guidance.active && !driving.active) {
                         Column(
                             modifier = Modifier.align(Alignment.TopStart).then(if (embedded) Modifier else Modifier.windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top)))
                                 .then(if (embedded) Modifier.padding(start = 10.dp, top = 10.dp, end = 78.dp) else Modifier.padding(10.dp).fillMaxWidth(0.82f))
@@ -1254,6 +1257,11 @@ fun TerritoryMapScreen(
 
                                     FilterChip(selected = typeFilter == f, onClick = { typeFilter = f }, label = { Text(f.label, style = if (embedded) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge) })
                                 }
+                            }
+                            // Province / Municipality / Barangay, the status chips and Next Nearest / Farthest are in the full filter view.
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(onClick = { showFilterPanel = false; fullScreen = false }) { Text("More filters") }
+                                TextButton(onClick = { showFilterPanel = false }) { Text("Close") }
                             }
                         }
                     }
@@ -1346,10 +1354,26 @@ fun TerritoryMapScreen(
             onDismissRequest = { longPressPoint = null },
             title = { Text("What would you like to do?") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     com.emfitsolutions.gopreach.ui.components.RecordLocationActions(lat = lat, lng = lng, name = null)
                     val here = com.emfitsolutions.gopreach.domain.map.GeoPoint(lat, lng)
-                    val canDraw = congregationId != null && !isLoading && drawingAccess.canDrawAt(here, drawingTerritories, congregationId)
+                    val canDraw = !readOnly && congregationId != null && !isLoading && drawingAccess.canDrawAt(here, drawingTerritories, congregationId)
+                    // Map tools: everything that is not on the clean map (Recenter, Nearest, Farthest, Filters, Full screen, GPS status).
+                    val tools = buildList<Triple<androidx.compose.ui.graphics.vector.ImageVector, String, () -> Unit>> {
+                        add(Triple(Icons.Rounded.Tune, "Filters", { longPressPoint = null; fullScreen = true; showFilterPanel = true }))
+                        add(Triple(Icons.Rounded.MyLocation, "Recenter", { longPressPoint = null; onRecenterButton() }))
+                        add(Triple(Icons.Rounded.NearMe, "Nearest", { longPressPoint = null; stepTo(SortOrder.NEAREST) }))
+                        add(Triple(Icons.Rounded.Navigation, "Farthest", { longPressPoint = null; stepTo(SortOrder.FARTHEST) }))
+                        if (!embedded) add(Triple(if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, if (fullScreenActive) "Exit full screen" else "Full screen", { longPressPoint = null; fullScreen = !fullScreen }))
+                        add(Triple(Icons.Rounded.GpsFixed, "GPS status", { longPressPoint = null; toast(if (myLocation == null) "Finding your GPS location." else "GPS is working." + (shownAccuracy?.let { " Accurate to about ${it.toInt()} m." } ?: "")) }))
+                    }
+                    Text("Map tools", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    tools.chunked(3).forEach { rowTools ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            rowTools.forEach { (icon, label, action) -> MapToolTile(icon, label, action, Modifier.weight(1f)) }
+                            repeat(3 - rowTools.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
                     // Draw is offered only where this role may draw (inside the assigned territory for group-level users,
                     // anywhere on their congregation's map for the wider roles); the map links are always available.
                     if (canDraw) {
@@ -1662,6 +1686,17 @@ private fun MapToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector,
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(icon, contentDescription = description, modifier = Modifier.size(18.dp), tint = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface)
             Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+/** One tile of the long-press "Map tools" grid: the tools that are not on the clean map. */
+@Composable
+private fun MapToolTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Surface(onClick = onClick, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f), modifier = modifier.height(64.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(horizontal = 4.dp)) {
+            Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
+            Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
     }
 }
