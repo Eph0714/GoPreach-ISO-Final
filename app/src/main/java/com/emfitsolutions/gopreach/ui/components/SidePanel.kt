@@ -172,6 +172,8 @@ fun GoPreachSidePanelContent(
      * Service Overseer/Secretary). */
     canManageTerritoryAssignments: Boolean,
     canManageTerritories: Boolean,
+    /** The Ministerial Servant's simple menu: only the dashboard, the Territory Map, the calendar and the weather are offered. */
+    simpleMenu: Boolean = false,
     canEditMeetingAssignments: Boolean,
     canAccessControlPanel: Boolean,
     isSuperAdmin: Boolean,
@@ -342,7 +344,7 @@ fun GoPreachSidePanelContent(
             if (canManageAnnouncements) add(SideItem(stringResource(Res.string.side_announcements), Icons.Rounded.Campaign, Destinations.MANAGE_ANNOUNCEMENTS))
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_nav_calendar), Icons.Rounded.CalendarMonth, Destinations.CALENDAR))
             if (canEditMeetingAssignments) add(SideItem(stringResource(Res.string.home_tile_meeting_cart_assignment_title), Icons.Rounded.Event, Destinations.MEETING_ASSIGNMENTS))
-            if (canManageTerritories && isCircuitOverseer) add(SideItem(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
+            if (canManageTerritories && (isCircuitOverseer || simpleMenu)) add(SideItem(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.side_share_location_settings), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
             add(SideItem(stringResource(Res.string.home_tile_weather_title), Icons.Rounded.WbSunny, Destinations.WEATHER))
@@ -366,7 +368,8 @@ fun GoPreachSidePanelContent(
         if (controlPanelItems.isNotEmpty()) add(SideSection(stringResource(Res.string.side_section_control_panel), controlPanelItems))
     }
 
-    val availableItems = sections.flatMap { it.items }
+    val simpleRoutes = setOf(Destinations.DASHBOARD_REPORTS, Destinations.MANAGE_TERRITORIES_BASE, Destinations.CALENDAR, Destinations.WEATHER)
+    val availableItems = sections.flatMap { it.items }.let { all -> if (simpleMenu) all.filter { it.route in simpleRoutes } else all }
     LaunchedEffect(availableItems.map { it.route }) { onItemsAvailable(availableItems) }
 
     // The same design system for every role: the modules this session is authorized to see (decided above, unchanged) are shown under

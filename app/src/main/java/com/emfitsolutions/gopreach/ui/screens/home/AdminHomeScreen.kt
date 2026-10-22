@@ -265,8 +265,10 @@ fun AdminHomeScreen(
     // Admin, Coordinator Elder, Service Overseer, and Regular Elder. Always
     // view-only regardless of role — the screen itself has no edit/delete
     // action for anyone (see TerritoryMapScreen).
+    // The Ministerial Servant sees it too (as a reference): the Territory Map is the first card of their simple Quick Access.
+    val isMinisterialServant = role == AdminRole.MINISTERIAL_SERVANT
     val canViewTerritoryMap = role == AdminRole.SUPER_ADMIN || role == AdminRole.ADMIN_PER_CONGREGATION ||
-        role == AdminRole.COORDINATOR_ELDER || role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY || role == AdminRole.REGULAR_ELDER
+        role == AdminRole.COORDINATOR_ELDER || role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY || role == AdminRole.REGULAR_ELDER || isMinisterialServant
     // Spec §15 — "Elders should be able to see Interested Person information
     // according to their existing Congregation/Group access scope." Own
     // Congregation/Group only, read-only (see ElderInterestedRecordsScreen).
@@ -544,6 +546,7 @@ fun AdminHomeScreen(
                 canManageGroups = canManageGroups,
                 canManageTerritoryAssignments = canManageTerritoryAssignments,
                 canManageTerritories = canViewTerritoryMap || role == AdminRole.CIRCUIT_OVERSEER,
+                simpleMenu = isMinisterialServant,
                 canEditMeetingAssignments = canEditMeetingAssignments,
                 canAccessControlPanel = canAccessControlPanel,
                 isSuperAdmin = isSuperAdmin,
@@ -737,7 +740,7 @@ fun AdminHomeScreen(
                                 )
                             },
                             quickAccess = { stats ->
-                                val allowedQuickAccess = buildSet {
+                                val allowedQuickAccess = if (isMinisterialServant) setOf(QuickAccessItem.TERRITORY_MAP, QuickAccessItem.SETTINGS) else buildSet {
                                     if (canManageTerritoryAssignments) add(QuickAccessItem.TERRITORY_ASSIGNMENT)
                                     if (canManageHouseholderAssignment) add(QuickAccessItem.PUBLISHER_ASSIGNMENT)
                                     if (canViewInterestedPeopleScope) add(QuickAccessItem.HOUSEHOLDER_RECORDS)

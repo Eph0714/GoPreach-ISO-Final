@@ -611,4 +611,4 @@ private fun QuickAccessCard(
 }
 
 /** Cards introduced after people may already have customised their Quick Access: shown for them once, at the end, until they remove them. */
-private val NEWER_CARDS = setOf(QuickAccessItem.MEETING_ATTENDANCE, QuickAccessItem.SETTINGS, QuickAccessItem.HOUSEHOLDER_RECORDS, QuickAccessItem.FIELD_SERVICE_GROUP)
+private val NEWER_CARDS = setOf(QuickAccessItem.TERRITORY_MAP, QuickAccessItem.MEETING_ATTENDANCE, QuickAccessItem.SETTINGS, QuickAccessItem.HOUSEHOLDER_RECORDS, QuickAccessItem.FIELD_SERVICE_GROUP)

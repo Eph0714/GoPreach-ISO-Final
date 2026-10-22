@@ -1363,7 +1363,8 @@ fun TerritoryMapScreen(
                         add(Triple(Icons.Rounded.Tune, "Filters", { longPressPoint = null; fullScreen = true; showFilterPanel = true }))
                         add(Triple(Icons.Rounded.MyLocation, "Recenter", { longPressPoint = null; onRecenterButton() }))
                         add(Triple(Icons.Rounded.NearMe, "Nearest", { longPressPoint = null; stepTo(SortOrder.NEAREST) }))
-                        add(Triple(Icons.Rounded.Navigation, "Farthest", { longPressPoint = null; stepTo(SortOrder.FARTHEST) }))
+                        add(Triple(Icons.Rounded.Explore, "Farthest", { longPressPoint = null; stepTo(SortOrder.FARTHEST) }))
+                        add(Triple(Icons.Rounded.Navigation, if (driving.active) "Stop driving" else "Drive", { longPressPoint = null; toggleDriving() }))
                         if (!embedded) add(Triple(if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, if (fullScreenActive) "Exit full screen" else "Full screen", { longPressPoint = null; fullScreen = !fullScreen }))
                         add(Triple(Icons.Rounded.GpsFixed, "GPS status", { longPressPoint = null; toast(if (myLocation == null) "Finding your GPS location." else "GPS is working." + (shownAccuracy?.let { " Accurate to about ${it.toInt()} m." } ?: "")) }))
                     }
