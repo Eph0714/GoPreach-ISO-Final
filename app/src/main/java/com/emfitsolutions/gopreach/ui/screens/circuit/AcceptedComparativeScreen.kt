@@ -1,6 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Headphones
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -30,6 +32,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -137,6 +140,32 @@ private fun ComparisonTypeCards(selected: CompareType?, compact: Boolean, onSele
 }
 
 /** First period = dark grey, second period = GoPreach's medium yellow (the same on screen and in the printed graph). */
+/** How tall a table may grow before it scrolls inside itself: more in the full-screen viewer. */
+private val LocalTableMaxHeight = androidx.compose.runtime.compositionLocalOf { 460.dp }
+
+/** The one-line toolbar of the full-screen viewer: the title, the listen controls and Exit as compact icons (each at least 40 dp to touch). */
+@Composable
+private fun FullScreenBar(title: String, narrator: ReportNarrator, onExit: () -> Unit) {
+    val state = narrator.state
+    Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            androidx.compose.material3.IconButton(
+                enabled = state != NarrationState.PLAYING && state != NarrationState.UNAVAILABLE, onClick = { narrator.play() }, modifier = Modifier.size(40.dp),
+            ) { Icon(if (state == NarrationState.PAUSED) Icons.Rounded.PlayArrow else Icons.Rounded.Headphones, contentDescription = if (state == NarrationState.PAUSED) "Resume listening" else "Listen to summary", modifier = Modifier.size(22.dp)) }
+            androidx.compose.material3.IconButton(enabled = state == NarrationState.PLAYING, onClick = { narrator.pause() }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Pause, contentDescription = "Pause", modifier = Modifier.size(22.dp))
+            }
+            androidx.compose.material3.IconButton(enabled = state == NarrationState.PLAYING || state == NarrationState.PAUSED, onClick = { narrator.stop() }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.Stop, contentDescription = "Stop", modifier = Modifier.size(22.dp))
+            }
+            androidx.compose.material3.IconButton(onClick = { narrator.stop(); onExit() }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Rounded.FullscreenExit, contentDescription = "Exit full screen", modifier = Modifier.size(22.dp))
+            }
+        }
+    }
+}
+
 private val firstBarColor = Color(0xFF3A3A3A)
 private val secondBarColor = Color(0xFFF2B705)
 
@@ -483,6 +512,57 @@ fun AcceptedComparativeScreen(
 
         fun selectionChanged(block: () -> Unit) { generated = null; block() }
 
+        val summary = fieldServiceSummary ?: attendanceResult?.summary
+        var fullScreen by rememberSaveable(selected.id, typeName) { mutableStateOf(false) }
+        // The report viewer: shown inside the page, and again - with the same state - in the full-screen viewer.
+        val resultsContent: androidx.compose.foundation.lazy.LazyListScope.(Boolean) -> Unit = { full ->
+            if (summary != null) {
+                if (!full) {
+                    item { PeriodsHeader(selected.name, summary.firstLabel, summary.secondLabel) }
+                    item { ReadReportPanel(narrator, narrationScript) }
+                }
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            ComparisonView.entries.forEach { v -> FilterChip(selected = viewName == v.name, onClick = { viewName = v.name }, label = { Text(v.label) }) }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            fun exportNow() = if (result != null) fieldServiceExport(selected.name, result, sheets, summary, comparisonView, author, noun) else attendanceExport(selected.name, attendanceResult!!, comparisonView, author, noun, dayLabel)
+                            OutlinedButton(onClick = { ComparativeStatisticsExporter.print(context, exportNow()) }) {
+                                Icon(Icons.Rounded.Print, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Print / PDF")
+                            }
+                            OutlinedButton(onClick = { ComparativeStatisticsExporter.shareExcel(context, exportNow()) }) {
+                                Icon(Icons.Rounded.TableChart, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Excel")
+                            }
+                            if (!full) OutlinedButton(onClick = { fullScreen = true }) {
+                                Icon(Icons.Rounded.Fullscreen, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Full screen")
+                            }
+                        }
+                    }
+                }
+                when (comparisonView) {
+                    ComparisonView.GRAPH -> item { ComparisonBarsView(summary) }
+                    ComparisonView.LIST -> item { ComparisonListView(summary) }
+                    ComparisonView.DETAILS -> {
+                        if (result != null) {
+                            itemsIndexed(sheets) { index, sheet -> SheetView(sheet, periodColors[index % periodColors.size]) }
+                            itemsIndexed(result.periods) { index, p -> MonthlyPeriod(p, periodColors[index % periodColors.size], monthLabel, adminMode, onOpenSnapshot) }
+                        } else if (attendanceResult != null) {
+                            attendanceResult.periods.forEach { p ->
+                                AttendanceComparative.sheetTables(p, dayLabel).forEach { (title, rows) ->
+                                    item { Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) }
+                                    item { ReportGrid(rows, firstColumn = 190.dp, column = 100.dp) }
+                                }
+                            }
+                            itemsIndexed(attendanceResult.periods) { index, p -> AttendanceMonthlyPeriod(p, periodColors[index % periodColors.size], monthLabel, adminMode, onOpenAttendanceSnapshot) }
+                        }
+                    }
+                }
+                // The summary always closes the comparison, whichever view is open.
+                item { ComparisonSummaryView(summary) }
+            }
+        }
+
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(16.dp),
@@ -559,46 +639,27 @@ fun AcceptedComparativeScreen(
                 }
             }
 
-            val summary = fieldServiceSummary ?: attendanceResult?.summary
-            if (summary != null) {
-                item { PeriodsHeader(selected.name, summary.firstLabel, summary.secondLabel) }
-                item { ReadReportPanel(narrator, narrationScript) }
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            ComparisonView.entries.forEach { v -> FilterChip(selected = viewName == v.name, onClick = { viewName = v.name }, label = { Text(v.label) }) }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            fun exportNow() = if (result != null) fieldServiceExport(selected.name, result, sheets, summary, comparisonView, author, noun) else attendanceExport(selected.name, attendanceResult!!, comparisonView, author, noun, dayLabel)
-                            OutlinedButton(onClick = { ComparativeStatisticsExporter.print(context, exportNow()) }) {
-                                Icon(Icons.Rounded.Print, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Print / PDF")
-                            }
-                            OutlinedButton(onClick = { ComparativeStatisticsExporter.shareExcel(context, exportNow()) }) {
-                                Icon(Icons.Rounded.TableChart, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Excel")
-                            }
-                        }
-                    }
-                }
-                when (comparisonView) {
-                    ComparisonView.GRAPH -> item { ComparisonBarsView(summary) }
-                    ComparisonView.LIST -> item { ComparisonListView(summary) }
-                    ComparisonView.DETAILS -> {
-                        if (result != null) {
-                            itemsIndexed(sheets) { index, sheet -> SheetView(sheet, periodColors[index % periodColors.size]) }
-                            itemsIndexed(result.periods) { index, p -> MonthlyPeriod(p, periodColors[index % periodColors.size], monthLabel, adminMode, onOpenSnapshot) }
-                        } else if (attendanceResult != null) {
-                            attendanceResult.periods.forEach { p ->
-                                AttendanceComparative.sheetTables(p, dayLabel).forEach { (title, rows) ->
-                                    item { Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold) }
-                                    item { ReportGrid(rows, firstColumn = 190.dp, column = 100.dp) }
-                                }
-                            }
-                            itemsIndexed(attendanceResult.periods) { index, p -> AttendanceMonthlyPeriod(p, periodColors[index % periodColors.size], monthLabel, adminMode, onOpenAttendanceSnapshot) }
+            resultsContent(false)
+        }
+        if (fullScreen && summary != null) {
+            // Full screen: the report fills the screen (safe areas kept), a one-line toolbar of compact icons, the table gets all the height that is left.
+            androidx.compose.ui.window.Dialog(
+                onDismissRequest = { fullScreen = false },
+                properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+            ) {
+                com.emfitsolutions.gopreach.ui.components.map.HideSystemBarsEffect(hidden = true)
+                val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
+                androidx.compose.runtime.CompositionLocalProvider(LocalTableMaxHeight provides (screenH - 120.dp).coerceAtLeast(240.dp)) {
+                    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+                            FullScreenBar(
+                                title = selected.name + " - " + (if (type == CompareType.FIELD_SERVICE) "Field Service" else "Attendance"),
+                                narrator = narrator, onExit = { fullScreen = false },
+                            )
+                            LazyColumn(Modifier.weight(1f).fillMaxWidth(), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { resultsContent(true) }
                         }
                     }
                 }
-                // The summary always closes the comparison, whichever view is open.
-                item { ComparisonSummaryView(summary) }
             }
         }
     }
@@ -682,21 +743,23 @@ private fun AttendanceMonthlyPeriod(p: AttendanceComparative.PeriodResult, color
 @Composable
 private fun ReportGrid(rows: List<List<String>>, firstColumn: Dp = 190.dp, column: Dp = 110.dp) {
     if (rows.isEmpty()) return
-    Column(Modifier.horizontalScroll(rememberScrollState())) {
-        rows.forEachIndexed { r, cells ->
-            Row {
-                cells.forEachIndexed { c, text ->
-                    val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(if (r == 0) Color(0xFFDDE6F2) else Color.Transparent)
-                    Box(
-                        Modifier.width(if (c == 0) firstColumn else column).height(34.dp)
-                            .background(cellBg)
-                            .border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
-                        contentAlignment = if (c == 0) Alignment.CenterStart else Alignment.Center,
-                    ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (r == 0) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1) }
-                }
+    val drawRow: @Composable (Int) -> Unit = { r ->
+        Row {
+            rows[r].forEachIndexed { c, text ->
+                val (cellBg, cellFg) = com.emfitsolutions.gopreach.ui.theme.cellColors(if (r == 0) Color(0xFFDDE6F2) else Color.Transparent)
+                Box(
+                    Modifier.width(if (c == 0) firstColumn else column).height(34.dp)
+                        .background(cellBg)
+                        .border(0.5.dp, com.emfitsolutions.gopreach.ui.theme.cellBorder()).padding(horizontal = 6.dp),
+                    contentAlignment = if (c == 0) Alignment.CenterStart else Alignment.Center,
+                ) { Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = if (r == 0) FontWeight.Bold else FontWeight.Normal, color = cellFg, maxLines = 1) }
             }
         }
     }
+    // the heading row stays at the top while the rows scroll, and heading and rows scroll sideways together
+    com.emfitsolutions.gopreach.ui.components.PinnedTable(
+        rowCount = rows.size - 1, maxHeight = LocalTableMaxHeight.current, header = { drawRow(0) },
+    ) { n -> drawRow(n + 1) }
 }
 
 /**
@@ -783,6 +846,7 @@ private fun SheetView(sheet: ConsolidatedSheet, color: Color) {
             }
         com.emfitsolutions.gopreach.ui.components.PinnedTable(
             rowCount = (table.size - 2).coerceAtLeast(0),
+            maxHeight = LocalTableMaxHeight.current,
             header = {
                 Column {
             // band: No. of Reports | Hours | Bible Studies
