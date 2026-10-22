@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.rounded.Assessment
 import androidx.compose.material.icons.rounded.CompareArrows
 import androidx.compose.material.icons.rounded.Dashboard
@@ -109,22 +111,35 @@ enum class CircuitTab(val label: String, val icon: ImageVector, val color: Color
 /** How to move between the Circuit Overseer's tabs (set by the navigation graph). */
 object CircuitTabsStore {
     var navigate: ((CircuitTab) -> Unit)? = null
+    /** Back to the Circuit Overseer's main form (set by the navigation graph). */
+    var goHome: (() -> Unit)? = null
 }
 
 /** The Circuit Overseer's tab strip, drawn exactly like the Admin / Publisher one. [selected] is null on the Main Form (no tab open). */
 @Composable
 fun CircuitMainTabs(selected: CircuitTab?) {
-    TabStrip(CircuitTab.entries.map { StripTab(it.label, it.icon, it.color) }, selected?.ordinal ?: -1, maxLabelLines = 2) { i -> CircuitTabsStore.navigate?.invoke(CircuitTab.entries[i]) }
+    // Inside a module the strip starts with a Home icon that goes back to the main form (on the main form itself there is nothing to go back to).
+    TabStrip(CircuitTab.entries.map { StripTab(it.label, it.icon, it.color) }, selected?.ordinal ?: -1, maxLabelLines = 2, onHome = if (selected != null) ({ CircuitTabsStore.goHome?.invoke() }) else null) { i -> CircuitTabsStore.navigate?.invoke(CircuitTab.entries[i]) }
 }
 
 private class StripTab(val label: String, val icon: ImageVector, val color: Color)
 
 @Composable
-private fun TabStrip(tabs: List<StripTab>, selected: Int, maxLabelLines: Int, onSelect: (Int) -> Unit) {
+private fun TabStrip(tabs: List<StripTab>, selected: Int, maxLabelLines: Int, onHome: (() -> Unit)? = null, onSelect: (Int) -> Unit) {
     val line = MaterialTheme.colorScheme.outlineVariant
     Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp) {
         Column {
             Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+                if (onHome != null) {
+                    Column(
+                        modifier = Modifier.width(56.dp).fillMaxHeight().clickable(onClickLabel = "Back to the main form", role = Role.Button, onClick = onHome).padding(top = 9.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Icon(Icons.Rounded.Home, contentDescription = "Back to the main form", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                        Text("Main form", fontSize = 10.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center, lineHeight = 11.sp, color = MaterialTheme.colorScheme.primary, maxLines = 2, modifier = Modifier.padding(top = 2.dp, start = 2.dp, end = 2.dp).weight(1f))
+                    }
+                    Box(modifier = Modifier.width(1.dp).fillMaxHeight().padding(vertical = 10.dp).background(line))
+                }
                 tabs.forEachIndexed { index, tab ->
                     val on = index == selected
                     if (index > 0) Box(modifier = Modifier.width(1.dp).fillMaxHeight().padding(vertical = 10.dp).background(line))

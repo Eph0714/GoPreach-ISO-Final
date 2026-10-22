@@ -275,6 +275,13 @@ fun GoPreachNavGraph(
         }
     }
 
+    // The Circuit Overseer's Home icon: back to the main form (everything opened from it is closed).
+    androidx.compose.runtime.SideEffect {
+        com.emfitsolutions.gopreach.ui.components.CircuitTabsStore.goHome = {
+            if (!navController.popBackStack(Destinations.ADMIN_HOME, false)) navController.navigate(Destinations.ADMIN_HOME) { launchSingleTop = true }
+        }
+    }
+
     NavHost(navController = navController, startDestination = Destinations.LOGIN) {
         composable(Destinations.LOGIN) {
             LoginScreen(
