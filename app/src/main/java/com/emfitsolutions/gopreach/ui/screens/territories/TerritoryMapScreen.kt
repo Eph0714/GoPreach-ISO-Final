@@ -97,6 +97,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.rounded.NearMe
+import androidx.compose.material.icons.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.GpsFixed
 import androidx.compose.material.icons.rounded.GpsNotFixed
@@ -440,10 +441,11 @@ fun TerritoryMapScreen(
     // Driving Mode (navigation aid only). It reuses the one live GPS stream below; it never opens a second one.
     val driving = remember { com.emfitsolutions.gopreach.ui.components.map.DrivingModeState() }
     var driveAfterPermission by remember { mutableStateOf(false) }
+    var walkAfterPermission by remember { mutableStateOf(false) }
     val permissionLauncher = rememberPermissionRequester() { granted ->
         locationRefreshKey++
-        if (granted && driveAfterPermission) driving.start()
-        driveAfterPermission = false
+        if (granted && driveAfterPermission) driving.start(walking = walkAfterPermission)
+        driveAfterPermission = false; walkAfterPermission = false
     }
     LaunchedEffect(locationRefreshKey, driving.active) {
         if (!viewModel.hasLocationPermission()) {
@@ -582,39 +584,40 @@ fun TerritoryMapScreen(
         permissionLauncher.launch(AppPermission.LOCATION)
     }
     // Driving Mode: a navigation aid only - it never edits territories, assignments, statuses or reports.
-    fun toggleDriving() {
+    fun toggleDriving(walking: Boolean = false) {
         when {
-            driving.active -> driving.stop()
-            drawingState.active -> toast("Finish or close Draw Mode before starting Driving Mode.")
+            driving.active && driving.walking == walking -> driving.stop()
+            driving.active -> { driving.stop(); driving.start(walking) }   // switching between driving and walking
+            drawingState.active -> toast("Finish or close Draw Mode before starting ${if (walking) "Walking" else "Driving"} Mode.")
             !viewModel.hasLocationPermission() -> {
                 val activity = context as? Activity
                 val canAskAgain = activity == null || !permissionAsked ||
                     androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.ACCESS_FINE_LOCATION)
                 if (canAskAgain) {
-                    toast("Location permission is needed for Driving Mode.")
-                    driveAfterPermission = true
+                    toast("Location permission is needed for ${if (walking) "Walking" else "Driving"} Mode.")
+                    driveAfterPermission = true; walkAfterPermission = walking
                     requestLocationPermission()
                 } else {
                     locationHelp = LocationIssue.NO_PERMISSION
                 }
             }
             !viewModel.isLocationServicesEnabled() -> locationHelp = LocationIssue.SERVICES_OFF
-            else -> driving.start()
+            else -> driving.start(walking)
         }
     }
     // Navigate: find the routes (the best one and alternatives) and let the driver choose; Driving Mode starts when they press Start navigation.
-    fun startNavigation(name: String, lat: Double, lng: Double) {
-        if (!viewModel.hasLocationPermission() || !viewModel.isLocationServicesEnabled()) { toggleDriving(); return } // asks for permission / explains location services; tap Navigate again afterwards
+    fun startNavigation(name: String, lat: Double, lng: Double, walking: Boolean = false) {
+        if (!viewModel.hasLocationPermission() || !viewModel.isLocationServicesEnabled()) { toggleDriving(walking); return } // asks for permission / explains location services; tap Navigate again afterwards
         val here = shownLocation ?: myLocation
         when {
             here == null -> toast("Waiting for your GPS location.")
             !online -> toast(if (com.emfitsolutions.gopreach.data.offlinemap.OfflineMaps.isInstalled()) "The offline map is ready and the GPS works, but finding a route needs internet. Routes cannot be calculated offline yet." else "Finding a route needs an internet connection.")
-            else -> guidance.preview(com.emfitsolutions.gopreach.ui.components.map.GuidanceDestination(name, lat, lng), here.first, here.second)
+            else -> guidance.preview(com.emfitsolutions.gopreach.ui.components.map.GuidanceDestination(name, lat, lng), here.first, here.second, walking)
         }
     }
     // Start navigation (from the route preview): Driving Mode on, then follow the chosen route.
     fun beginGuidance() {
-        if (!driving.active) toggleDriving()
+        if (!driving.active) toggleDriving(guidance.walking)
         if (driving.active) {
             guidance.begin()
             toast("Navigation started. Follow road signs and traffic rules.")
@@ -1084,12 +1087,19 @@ fun TerritoryMapScreen(
                                 MapStyleChip("3D", is3d) { is3d = !is3d }
                             }
                         }
-                        MapToolButton(
+                        if (!(driving.active && driving.walking)) MapToolButton(
                             icon = Icons.Rounded.Navigation,
                             label = if (driving.active) "Driving" else "Drive",
                             description = if (driving.active) "Driving Mode is on. Tap to turn it off." else "Start Driving Mode: the map follows you and the arrow shows your direction of travel",
                             active = driving.active,
                             onClick = { toggleDriving() },
+                        )
+                        if (!(driving.active && !driving.walking)) MapToolButton(
+                            icon = Icons.Rounded.DirectionsWalk,
+                            label = if (driving.active && driving.walking) "Walking" else "Walk",
+                            description = if (driving.active && driving.walking) "Walking Mode is on. Tap to turn it off." else "Start Walking Mode: the map follows you at walking pace and a walking person shows where you are",
+                            active = driving.active && driving.walking,
+                            onClick = { toggleDriving(walking = true) },
                         )
                         if (driving.active) {
                             val q = driving.snapshot.quality
@@ -1364,7 +1374,8 @@ fun TerritoryMapScreen(
                         add(Triple(Icons.Rounded.MyLocation, "Recenter", { longPressPoint = null; onRecenterButton() }))
                         add(Triple(Icons.Rounded.NearMe, "Nearest", { longPressPoint = null; stepTo(SortOrder.NEAREST) }))
                         add(Triple(Icons.Rounded.Explore, "Farthest", { longPressPoint = null; stepTo(SortOrder.FARTHEST) }))
-                        add(Triple(Icons.Rounded.Navigation, if (driving.active) "Stop driving" else "Drive", { longPressPoint = null; toggleDriving() }))
+                        add(Triple(Icons.Rounded.Navigation, if (driving.active && !driving.walking) "Stop driving" else "Drive", { longPressPoint = null; toggleDriving() }))
+                        add(Triple(Icons.Rounded.DirectionsWalk, if (driving.active && driving.walking) "Stop walking" else "Walk", { longPressPoint = null; toggleDriving(walking = true) }))
                         if (!embedded) add(Triple(if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, if (fullScreenActive) "Exit full screen" else "Full screen", { longPressPoint = null; fullScreen = !fullScreen }))
                         add(Triple(Icons.Rounded.GpsFixed, "GPS status", { longPressPoint = null; toast(if (myLocation == null) "Finding your GPS location." else "GPS is working." + (shownAccuracy?.let { " Accurate to about ${it.toInt()} m." } ?: "")) }))
                     }
@@ -1387,6 +1398,10 @@ fun TerritoryMapScreen(
                         onClick = { longPressPoint = null; startNavigation("Selected place", lat, lng) },
                         modifier = Modifier.fillMaxWidth().height(48.dp),
                     ) { Text("Start navigation") }
+                    OutlinedButton(
+                        onClick = { longPressPoint = null; startNavigation("Selected place", lat, lng, walking = true) },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                    ) { Text("Walk there") }
                     TextButton(onClick = { longPressPoint = null }, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
                 }
             },

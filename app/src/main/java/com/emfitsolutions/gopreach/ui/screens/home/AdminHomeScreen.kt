@@ -740,7 +740,13 @@ fun AdminHomeScreen(
                                 )
                             },
                             quickAccess = { stats ->
-                                val allowedQuickAccess = if (isMinisterialServant) setOf(QuickAccessItem.TERRITORY_MAP, QuickAccessItem.SETTINGS) else buildSet {
+                                val hasCongregation = !session.person?.activeCongregationId.isNullOrBlank() && role != AdminRole.CIRCUIT_OVERSEER
+                                // A Ministerial Servant keeps a short list: the modules the role already uses or only views (no management module).
+                                val allowedQuickAccess = if (isMinisterialServant) buildSet {
+                                    add(QuickAccessItem.TERRITORY_MAP); add(QuickAccessItem.WEATHER)
+                                    if (hasCongregation) { add(QuickAccessItem.MY_ASSIGNMENTS); add(QuickAccessItem.MEETING_CART_ASSIGNMENT); add(QuickAccessItem.PUBLISHER_SCHEDULE); add(QuickAccessItem.ANNOUNCEMENT) }
+                                    add(QuickAccessItem.SETTINGS)
+                                } else buildSet {
                                     if (canManageTerritoryAssignments) add(QuickAccessItem.TERRITORY_ASSIGNMENT)
                                     if (canManageHouseholderAssignment) add(QuickAccessItem.PUBLISHER_ASSIGNMENT)
                                     if (canViewInterestedPeopleScope) add(QuickAccessItem.HOUSEHOLDER_RECORDS)
@@ -755,13 +761,12 @@ fun AdminHomeScreen(
                                     add(QuickAccessItem.WEATHER)
                                     if (Destinations.FIELD_SERVICE_REPORT in offered) add(QuickAccessItem.FIELD_SERVICE_REPORT)
                                     if (Destinations.MANAGE_PUBLISHERS in offered) add(QuickAccessItem.PUBLISHER_MODULE)
-                                    val hasCongregation = !session.person?.activeCongregationId.isNullOrBlank() && role != AdminRole.CIRCUIT_OVERSEER
                                     if (hasCongregation) add(QuickAccessItem.MY_ASSIGNMENTS)
-                                    if (canViewInterestedPeopleScope && role != AdminRole.CIRCUIT_OVERSEER) add(QuickAccessItem.HOUSEHOLDER_VISIT_HISTORY)
-                                    if (canEditMeetingAssignments) add(QuickAccessItem.MEETING_CART_ASSIGNMENT)
+                                    if (hasCongregation) add(QuickAccessItem.HOUSEHOLDER_VISIT_HISTORY)
+                                    if (hasCongregation) add(QuickAccessItem.MEETING_CART_ASSIGNMENT)   // read-only for roles that may not edit (the screen decides)
                                     if (hasCongregation) add(QuickAccessItem.PUBLISHER_SCHEDULE)
                                     if (role != AdminRole.CIRCUIT_OVERSEER) add(QuickAccessItem.FIND_LOCATION)
-                                    if (canManageAnnouncements) add(QuickAccessItem.ANNOUNCEMENT)
+                                    if (hasCongregation) add(QuickAccessItem.ANNOUNCEMENT)   // read-only for everyone who may not manage announcements
                                     if (canManageRegularEldersForDrawer) add(QuickAccessItem.TOTAL_ELDERS)
                                     if (canEnrollMinisterialServant) add(QuickAccessItem.TOTAL_MINISTERIAL)
                                 }

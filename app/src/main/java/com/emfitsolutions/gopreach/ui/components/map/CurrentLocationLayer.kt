@@ -43,11 +43,16 @@ object CurrentLocationLayer {
     private const val SRC_ACC = "gp-loc-acc-src"
     private const val LYR_ACC = "gp-loc-acc"
     private const val IMG_ARROW = "gp-loc-img-arrow"
+    private const val IMG_POINTER = "gp-loc-img-pointer"
+    private const val IMG_PERSON = "gp-loc-img-person"
+    private const val LYR_PERSON = "gp-loc-person"
 
     /** Adds the arrow layer on top of everything already in [style]. Safe to call again after a style reload. */
     fun install(style: Style, density: Float) {
         if (style.getLayer(LYR_ARROW) != null) return
         style.addImage(IMG_ARROW, buildArrowBitmap(density))
+        style.addImage(IMG_POINTER, buildPointerBitmap(density))
+        style.addImage(IMG_PERSON, buildPersonBitmap(density))
         style.addSource(GeoJsonSource(SRC, FeatureCollection.fromFeatures(emptyList<Feature>())))
         // Accuracy: a faint circle of the GPS error radius under the arrow (only drawn when the fix is meaningfully imprecise).
         style.addSource(GeoJsonSource(SRC_ACC, FeatureCollection.fromFeatures(emptyList<Feature>())))
@@ -72,6 +77,24 @@ object CurrentLocationLayer {
                 PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_MAP),
             ),
         )
+        // Walking Mode: the person sits on the same spot and stays upright on the screen (it is the pointer above that turns).
+        style.addLayer(
+            SymbolLayer(LYR_PERSON, SRC).withProperties(
+                PropertyFactory.iconImage(IMG_PERSON),
+                PropertyFactory.iconAllowOverlap(true),
+                PropertyFactory.iconIgnorePlacement(true),
+                PropertyFactory.iconAnchor(Property.ICON_ANCHOR_CENTER),
+                PropertyFactory.iconRotationAlignment(Property.ICON_ROTATION_ALIGNMENT_VIEWPORT),
+                PropertyFactory.iconPitchAlignment(Property.ICON_PITCH_ALIGNMENT_VIEWPORT),
+                PropertyFactory.visibility(Property.NONE),
+            ),
+        )
+    }
+
+    /** Walking Mode on: the pointer replaces the arrow and the person shows; off: the arrow again. */
+    fun setWalking(style: Style, on: Boolean) {
+        style.getLayerAs<SymbolLayer>(LYR_ARROW)?.setProperties(PropertyFactory.iconImage(if (on) IMG_POINTER else IMG_ARROW))
+        style.getLayerAs<SymbolLayer>(LYR_PERSON)?.setProperties(PropertyFactory.visibility(if (on) Property.VISIBLE else Property.NONE))
     }
 
     /** The layer id, for hit-testing taps on the arrow. */
@@ -131,6 +154,44 @@ object CurrentLocationLayer {
         // box query would swallow taps meant for the markers around it).
         val at = map.projection.toScreenLocation(org.maplibre.android.geometry.LatLng(location.first, location.second))
         return Math.hypot((screen.x - at.x).toDouble(), (screen.y - at.y).toDouble()) <= radiusPx
+    }
+
+    /** The pointer of Walking Mode: a small arrowhead above the person, so the icon box is centred on the person. */
+    private fun buildPointerBitmap(density: Float): Bitmap {
+        val w = (56f * density).toInt()
+        val h = (64f * density).toInt()
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val cx = w / 2f
+        val tri = Path().apply {
+            moveTo(cx, 2f * density); lineTo(cx + 9f * density, 15f * density); lineTo(cx - 9f * density, 15f * density); close()
+        }
+        c.drawPath(tri, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = 4f * density; strokeJoin = Paint.Join.ROUND })
+        c.drawPath(tri, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1A73E8.toInt(); style = Paint.Style.FILL })
+        return bmp
+    }
+
+    /** A blue disc with a white outline and a walking person, centred in the same-size box as the arrow. */
+    private fun buildPersonBitmap(density: Float): Bitmap {
+        val w = (56f * density).toInt()
+        val h = (64f * density).toInt()
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        val cx = w / 2f
+        val cy = h / 2f
+        val r = 15f * density
+        c.drawCircle(cx, cy + 1f * density, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x66000000; style = Paint.Style.FILL; setShadowLayer(4f * density, 0f, 2f * density, 0x99000000.toInt()) })
+        c.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = 4f * density })
+        c.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1A73E8.toInt(); style = Paint.Style.FILL })
+        val white = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = 2.4f * density; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+        c.drawCircle(cx + 1.2f * density, cy - 8f * density, 2.2f * density, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); style = Paint.Style.FILL })
+        val body = Path().apply {
+            moveTo(cx - 2.5f * density, cy + 9f * density); lineTo(cx - 0.5f * density, cy + 2f * density); lineTo(cx - 3f * density, cy - 1.5f * density)
+            lineTo(cx - 0.8f * density, cy - 6f * density); lineTo(cx + 2.6f * density, cy - 2.5f * density); lineTo(cx + 6f * density, cy - 1.5f * density)
+            moveTo(cx - 0.5f * density, cy + 2f * density); lineTo(cx + 3.2f * density, cy + 5f * density); lineTo(cx + 3.2f * density, cy + 9f * density)
+        }
+        c.drawPath(body, white)
+        return bmp
     }
 
     /** An arrowhead pointing up: tip = front. Dark blue body, white outline, soft drop shadow. */
@@ -244,6 +305,8 @@ fun CurrentLocationUpdater(
     map: MapLibreMap?, styleVersion: Int, location: Pair<Double, Double>?, headingDeg: Float?,
     /** Driving Mode: a larger arrow, and a faded one while no direction of travel is known yet (it must not point anywhere false). */
     drivingMode: Boolean = false, directionKnown: Boolean = true,
+    /** Walking Mode: a walking person on the spot, with a pointer toward the heading. */
+    walkingMode: Boolean = false,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val lastHeading = remember { FloatArray(2) } // [0] = stabilized heading, [1] = 1 once seeded
@@ -262,6 +325,10 @@ fun CurrentLocationUpdater(
         if (location == null) track.reset() else track.onFix(location, SystemClock.elapsedRealtime())
     }
     val hasLocation = location != null
+    LaunchedEffect(map, styleVersion, walkingMode) {
+        val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
+        CurrentLocationLayer.setWalking(style, walkingMode)
+    }
     LaunchedEffect(map, styleVersion, hasLocation) {
         if (!hasLocation || map == null) return@LaunchedEffect
         var shownHeading = lastHeading[0]

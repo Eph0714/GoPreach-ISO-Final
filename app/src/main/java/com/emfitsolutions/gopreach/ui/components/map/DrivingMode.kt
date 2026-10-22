@@ -25,7 +25,22 @@ import org.maplibre.android.maps.MapLibreMap
  */
 @Stable
 class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
-    private val tracker = DrivingTracker(config)
+    private var tracker = DrivingTracker(config)
+
+    /** Walking Mode: the same navigation aid at walking pace (slower speeds count as moving, closer zoom, a walking marker). */
+    var walking by mutableStateOf(false)
+        private set
+
+    /** The compass heading, used while walking when no direction of travel is known yet (standing still or very slow); changes under 5 degrees are ignored. */
+    var compassDeg by mutableStateOf<Float?>(null)
+        private set
+
+    fun setCompass(deg: Float?) {
+        val old = compassDeg
+        if (deg == null || old == null) { compassDeg = deg; return }
+        var d = deg - old; while (d > 180f) d -= 360f; while (d < -180f) d += 360f
+        if (kotlin.math.abs(d) >= 5f) compassDeg = deg
+    }
 
     var active by mutableStateOf(false)
         private set
@@ -49,7 +64,9 @@ class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
     var recenterTick by mutableStateOf(0)
         private set
 
-    fun start() {
+    fun start(walking: Boolean = false) {
+        this.walking = walking
+        tracker = DrivingTracker(if (walking) config.copy(minCourseSpeedMps = 0.5f, minDerivedMoveMeters = 3.0, courseAccuracyMeters = 35f) else config)
         tracker.reset()
         snapshot = DrivingSnapshot()
         following = true
@@ -58,6 +75,8 @@ class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
 
     fun stop() {
         active = false
+        walking = false
+        compassDeg = null
         following = true
         tracker.reset()
         snapshot = DrivingSnapshot()
@@ -145,17 +164,18 @@ fun DrivingCameraEffect(map: MapLibreMap?, state: DrivingModeState?) {
         }
     }
 
-    LaunchedEffect(map, state.active, state.following, state.headingUp, state.tiltDeg, state.recenterTick, snap.lat, snap.lng, snap.courseDeg) {
+    LaunchedEffect(map, state.active, state.following, state.headingUp, state.tiltDeg, state.recenterTick, snap.lat, snap.lng, snap.courseDeg, state.compassDeg) {
         val m = map ?: return@LaunchedEffect
         val lat = snap.lat ?: return@LaunchedEffect
         val lng = snap.lng ?: return@LaunchedEffect
         if (!state.active || !state.following) return@LaunchedEffect
         val current = m.cameraPosition
-        val zoom = if (current.zoom in DrivingModeState.MIN_FOLLOW_ZOOM..DrivingModeState.MAX_FOLLOW_ZOOM) current.zoom else DrivingModeState.NAV_ZOOM
+        val zoom = if (current.zoom in DrivingModeState.MIN_FOLLOW_ZOOM..DrivingModeState.MAX_FOLLOW_ZOOM) current.zoom else if (state.walking) DrivingModeState.NAV_ZOOM + 1.0 else DrivingModeState.NAV_ZOOM
         val course = snap.courseDeg
         val bearing = when {
             !state.headingUp -> 0.0
             course != null -> course.toDouble()
+            state.walking && state.compassDeg != null -> state.compassDeg!!.toDouble()   // standing still: the way the phone faces
             else -> current.bearing
         }
         val update = CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(LatLng(lat, lng)).zoom(zoom).bearing(bearing).tilt(state.tiltDeg).build())

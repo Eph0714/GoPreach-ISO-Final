@@ -94,6 +94,9 @@ class TurnByTurnState(
         private set
     var voiceOn by mutableStateOf(initialVoiceOn)
         private set
+    /** True when the route being followed is a walking route (the pedestrian profile of the routing service). */
+    var walking by mutableStateOf(false)
+        private set
 
     /** The routes on offer while previewing (quickest first) and which one is picked. Empty outside the preview. */
     var choices by mutableStateOf<List<RouteChoice>>(emptyList())
@@ -111,8 +114,9 @@ class TurnByTurnState(
     val active: Boolean get() = phase != GuidancePhase.IDLE
 
     /** Asks for a route from the current position. [from] is the filtered GPS position. */
-    fun start(to: GuidanceDestination, fromLat: Double, fromLng: Double) {
+    fun start(to: GuidanceDestination, fromLat: Double, fromLng: Double, walking: Boolean = false) {
         stop()
+        this.walking = walking
         destination = to
         phase = GuidancePhase.ROUTING
         message = null
@@ -120,14 +124,15 @@ class TurnByTurnState(
     }
 
     /** Finds the routes (the best one and any alternatives) and shows them to choose from; nothing is followed until [begin]. */
-    fun preview(to: GuidanceDestination, fromLat: Double, fromLng: Double) {
+    fun preview(to: GuidanceDestination, fromLat: Double, fromLng: Double, walking: Boolean = false) {
         stop()
+        this.walking = walking
         destination = to
         phase = GuidancePhase.ROUTING
         message = null
         job = scope.launch {
             try {
-                val found = RouteChoices.label(routing.routes(fromLat, fromLng, to.lat, to.lng, alternatives = 2))
+                val found = RouteChoices.label(routing.routes(fromLat, fromLng, to.lat, to.lng, alternatives = 2, walking = walking))
                 choices = found
                 selectedIndex = 0
                 route = found.first().route
@@ -160,7 +165,7 @@ class TurnByTurnState(
     private suspend fun fetch(fromLat: Double, fromLng: Double, first: Boolean) {
         val to = destination ?: return
         try {
-            val r = routing.route(fromLat, fromLng, to.lat, to.lng)
+            val r = routing.route(fromLat, fromLng, to.lat, to.lng, walking)
             route = r
             engine = NavigationEngine(r)
             progress = null

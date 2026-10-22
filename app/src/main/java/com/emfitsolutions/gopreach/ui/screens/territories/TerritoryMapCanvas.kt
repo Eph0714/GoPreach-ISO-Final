@@ -231,7 +231,8 @@ fun TerritoryMapCanvas(
         recenterOnArrowTap = false,
         drivingMode = driving?.active == true,
         headingOverrideDeg = driving?.snapshot?.courseDeg,
-        onHeading = { compassHeading = it },
+        walkingMode = driving?.active == true && driving.walking,
+        onHeading = { compassHeading = it; if (driving?.walking == true) driving.setCompass(it) },
         content = { m, styleVer ->
             MapDrawingOverlay(
                 state = drawingState,

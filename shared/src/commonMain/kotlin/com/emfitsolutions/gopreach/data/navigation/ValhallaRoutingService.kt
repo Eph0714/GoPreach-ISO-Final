@@ -21,13 +21,13 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /** Where a route comes from. An interface so the screen and the tests never depend on a particular provider. */
 interface RoutingService {
-    suspend fun route(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double): Route
+    suspend fun route(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, walking: Boolean = false): Route
 
     /**
      * The best route first, then up to [alternatives] different ones when the provider finds them. A provider without alternatives returns just the one route.
      * Nothing here is invented: every route, distance and time is what the provider answered.
      */
-    suspend fun routes(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, alternatives: Int = 2): List<Route> = listOf(route(fromLat, fromLng, toLat, toLng))
+    suspend fun routes(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, alternatives: Int = 2, walking: Boolean = false): List<Route> = listOf(route(fromLat, fromLng, toLat, toLng, walking))
 }
 
 /**
@@ -40,11 +40,11 @@ class ValhallaRoutingService(
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val timeoutMillis: Long = 20_000L,
 ) : RoutingService {
-    override suspend fun route(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double): Route = routes(fromLat, fromLng, toLat, toLng, alternatives = 0).first()
+    override suspend fun route(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, walking: Boolean): Route = routes(fromLat, fromLng, toLat, toLng, alternatives = 0, walking = walking).first()
 
-    override suspend fun routes(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, alternatives: Int): List<Route> {
+    override suspend fun routes(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, alternatives: Int, walking: Boolean): List<Route> {
         val alt = if (alternatives > 0) ""","alternates":$alternatives""" else ""
-        val body = """{"locations":[{"lat":$fromLat,"lon":$fromLng},{"lat":$toLat,"lon":$toLng}],"costing":"auto","directions_options":{"units":"kilometers","language":"en-US","directions_type":"instructions"}$alt}"""
+        val body = """{"locations":[{"lat":$fromLat,"lon":$fromLng},{"lat":$toLat,"lon":$toLng}],"costing":"${if (walking) "pedestrian" else "auto"}","directions_options":{"units":"kilometers","language":"en-US","directions_type":"instructions"}$alt}"""
         val text = try {
             withTimeout(timeoutMillis) {
                 val response = client.post(baseUrl.trimEnd('/') + "/route") { contentType(ContentType.Application.Json); setBody(body) }
@@ -53,7 +53,7 @@ class ValhallaRoutingService(
                 when {
                     code == 429 -> throw RoutingException(RoutingFailure.RATE_LIMITED, "The routing service is busy. Try again in a moment.")
                     code in 500..599 -> throw RoutingException(RoutingFailure.SERVER, "The routing service is unavailable right now.")
-                    code == 400 || code == 404 -> throw RoutingException(RoutingFailure.NO_ROUTE, "No driving route was found to this place.")
+                    code == 400 || code == 404 -> throw RoutingException(RoutingFailure.NO_ROUTE, "No ${if (walking) "walking" else "driving"} route was found to this place.")
                     code !in 200..299 -> throw RoutingException(RoutingFailure.SERVER, "The routing service answered with an error ($code).")
                 }
                 payload

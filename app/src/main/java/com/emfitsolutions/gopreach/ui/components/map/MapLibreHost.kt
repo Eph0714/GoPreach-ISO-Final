@@ -82,6 +82,8 @@ fun MapLibreHost(
     /** Driving Mode: the arrow turns to [headingOverrideDeg] (GPS course of travel, true-north degrees) instead of the compass, and the compass-driven map rotation is off. */
     drivingMode: Boolean = false,
     headingOverrideDeg: Float? = null,
+    /** Walking Mode (on top of [drivingMode]): a walking person marker, and the compass heading is used while no direction of travel is known. */
+    walkingMode: Boolean = false,
     /** True: turn the map to the compass heading (what is in front of the arrow is up), as if the compass dial had been tapped. False afterwards: back to north-up. */
     headingUpRequest: Boolean = false,
     /** The compass heading (rounded to 3 degrees), or null when there is none: lets a screen turn the map and move it in ONE camera update. */
@@ -166,10 +168,10 @@ fun MapLibreHost(
     }
 
     // ---- shared location + orientation -----------------------------------------
-    val needsCompass = interactive && !drivingMode && (showOrientation || myLocation != null)
+    val needsCompass = interactive && (!drivingMode || walkingMode) && (showOrientation || myLocation != null)
     val compassHeading: Float? = if (needsCompass) rememberDeviceHeading(myLocation).value else null
     // While driving, the direction is the GPS course of travel - never the way the phone happens to face.
-    val heading: Float? = if (drivingMode) headingOverrideDeg else compassHeading
+    val heading: Float? = if (drivingMode) (headingOverrideDeg ?: if (walkingMode) compassHeading else null) else compassHeading
     var orientationMode by remember { mutableStateOf(OrientationMode.NORTH_UP) }
     LaunchedEffect(heading == null) { if (heading == null) orientationMode = OrientationMode.NORTH_UP }
     // A screen (Follow mode) can ask for heading-up; it is only applied when a compass reading exists (never invented), and undone when the request ends.
@@ -185,7 +187,7 @@ fun MapLibreHost(
             map?.animateCamera(CameraUpdateFactory.bearingTo(0.0), 300)
         }
     }
-    CurrentLocationUpdater(map, styleVersion, myLocation, heading, drivingMode = drivingMode, directionKnown = !drivingMode || headingOverrideDeg != null)
+    CurrentLocationUpdater(map, styleVersion, myLocation, heading, drivingMode = drivingMode, directionKnown = !drivingMode || headingOverrideDeg != null || (walkingMode && compassHeading != null), walkingMode = walkingMode && drivingMode)
     LaunchedEffect(map, styleVersion, myLocation, myAccuracyMeters) {
         val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         CurrentLocationLayer.setAccuracy(style, myLocation, myAccuracyMeters)
