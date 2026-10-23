@@ -26,7 +26,7 @@ const ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** The personal details a publisher record keeps, with how each is checked (the same set the website and the app forms edit). */
 const TEXT = { firstName: 80, lastName: 80, middleInitial: 3, extensionName: 10, address: 300, contact: 60, province: 100, cityMunicipality: 100, barangay: 100, contactPerson: 100, contactPersonNumber: 60, remarks: 500 };
-const REQUIRED = ['firstName', 'lastName', 'address', 'contact', 'province', 'cityMunicipality', 'barangay'];
+const REQUIRED = ['firstName', 'lastName', 'address'];   // Contact, Province, Municipality and Barangay may be left blank (a value that is given is still checked)
 export const PROFILE_KEYS = GROUP_PROFILE_FIELDS;
 
 class Refused extends Error {

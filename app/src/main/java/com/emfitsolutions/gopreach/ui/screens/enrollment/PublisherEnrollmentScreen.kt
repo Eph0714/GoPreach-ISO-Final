@@ -103,6 +103,7 @@ fun PublisherEnrollmentScreen(
                     PublisherFormFields(
                         form = uiState.form,
                         onChange = viewModel::onFormChange,
+                        contactOptional = true,
                         groups = groups,
                         // A Super-Admin's new publisher starts in the congregation they are working in and they may
                         // change it; anyone else is fixed to their own congregation (shown, not editable).

@@ -163,11 +163,9 @@ class PublisherEnrollmentViewModel(
             return
         }
         val form = state.form
-        if (form.lastName.isBlank() || form.firstName.isBlank() || form.address.isBlank() || form.contact.isBlank() ||
-            form.category == null ||
-            form.province.isNullOrBlank() || form.cityMunicipality.isNullOrBlank() || form.barangay.isNullOrBlank()
-        ) {
-            _uiState.update { it.copy(errorMessage = "First name, last name, full address, Province, Municipality/City, Barangay, contact and category are all required. The Field Service Group is optional.") }
+        // Contact, Province, Municipality/City and Barangay may be left blank; a value that is given is saved as given and nothing is filled in for a blank one.
+        if (form.lastName.isBlank() || form.firstName.isBlank() || form.address.isBlank() || form.category == null) {
+            _uiState.update { it.copy(errorMessage = "First name, last name, full address and category are required. Contact, Province, Municipality/City, Barangay and the Field Service Group are optional.") }
             return
         }
         form.formProblem?.let { problem -> _uiState.update { it.copy(errorMessage = problem) }; return }

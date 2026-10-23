@@ -59,4 +59,20 @@ class PublisherEditBodyTest {
         assertTrue(AccountStatus.entries.map { it.name }.containsAll(listOf("ACTIVE", "INACTIVE", "SUSPENDED")))
         assertEquals(JsonPrimitive("INACTIVE"), body(PublisherEdit(person, accountStatus = "INACTIVE")).getValue("accountStatus"))
     }
+
+    @Test fun provinceMunicipalityBarangayAndContactMayBeBlankAndAreSentAsBlankNeverInvented() {
+        val blank = person.copy(contact = "", province = null, cityMunicipality = null, barangay = null)
+        val d = body(PublisherEdit(blank)).getValue("person").jsonObject
+        assertEquals("", d.getValue("contact").jsonPrimitive.content)
+        for (k in listOf("province", "cityMunicipality", "barangay")) assertEquals(k, JsonNull, d.getValue(k))
+        assertEquals("the required details are still sent", "MARIA", d.getValue("firstName").jsonPrimitive.content)
+        // and a given value goes out exactly as given
+        val given = body(PublisherEdit(person.copy(contact = "0918", province = "PANGASINAN"))).getValue("person").jsonObject
+        assertEquals(listOf("0918", "PANGASINAN"), listOf(given.getValue("contact").jsonPrimitive.content, given.getValue("province").jsonPrimitive.content))
+    }
+
+    @Test fun aSaveThatLeavesTheUsernameAloneSendsNoUsernameAtAll() {
+        assertFalse(body(PublisherEdit(person)).containsKey("username"))
+        assertFalse(body(PublisherEdit(person, username = "  ")).containsKey("username"))
+    }
 }

@@ -556,7 +556,6 @@ private fun EditPublisherDialog(
             "First Name" to form.firstName.isNotBlank(),
             "Last Name" to form.lastName.isNotBlank(),
             "Full Address" to form.address.isNotBlank(),
-            "Contact" to form.contact.isNotBlank(),
         ) ?: form.formProblem
         if (message != null) {
             errorMessage = message
@@ -643,6 +642,7 @@ private fun EditPublisherDialog(
                 PublisherFormFields(
                     form = form,
                     onChange = { form = it },
+                    contactOptional = true,
                     groups = groups,
                     congregations = congregations,
                     congregationEditable = canChangeCongregation,

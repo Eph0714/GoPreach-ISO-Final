@@ -182,3 +182,34 @@ test('an edit built on an older version of the record is refused instead of over
   assert.equal(stale.status, 409); assert.equal(stale.body.status, 'conflict');
   assert.equal((await get('people', 'pub1')).remarks, 'fresh');
 });
+
+test('Province, Municipality, Barangay and Contact may be blank; every other required field and every given value is still checked', async () => {
+  const blanks = { contact: '', province: '', cityMunicipality: '', barangay: '' };
+  const ok = await edit('adm', 'pub1', { person: details(blanks) });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  const p = await get('people', 'pub1');
+  for (const k of Object.keys(blanks)) assert.equal(p[k], null, `${k} is saved blank, never invented`);
+  assert.equal(p.firstName, 'MARIA', 'the other details are untouched');
+  // a record whose fields are already blank can be edited again, with them still blank or filled in
+  assert.equal((await edit('adm', 'pub1', { person: details({ ...blanks, remarks: 'second edit' }) })).status, 200);
+  assert.equal((await edit('adm', 'pub1', { person: details({ province: 'PANGASINAN', contact: '0918' }) })).status, 200);
+  assert.deepEqual([(await get('people', 'pub1')).province, (await get('people', 'pub1')).contact], ['PANGASINAN', '0918']);
+  // still required
+  for (const f of ['firstName', 'lastName', 'address']) assert.equal((await edit('adm', 'pub1', { person: details({ [f]: '' }) })).status, 422, f);
+  // a value that is given keeps its limits
+  assert.equal((await edit('adm', 'pub1', { person: details({ contact: '9'.repeat(61) }) })).status, 422);
+  assert.equal((await edit('adm', 'pub1', { person: details({ province: 'x'.repeat(101) }) })).status, 422);
+});
+
+test('saving with the username left as it is is not a duplicate and changes nothing about the sign-in', async () => {
+  const before = (await get('people', 'pub1')).username;
+  const same = await edit('adm', 'pub1', { person: details({ remarks: 'unchanged username' }), username: before });
+  assert.equal(same.status, 200, JSON.stringify(same.body));
+  assert.equal((await get('people', 'pub1')).username, before);
+  assert.ok(!same.body.changed.includes('username'), 'an unchanged username is not a username change');
+  const absent = await edit('adm', 'pub1', { person: details({ remarks: 'no username sent' }) });
+  assert.equal(absent.status, 200);
+  assert.equal((await get('people', 'pub1')).username, before);
+  // only a real change is checked for a clash
+  assert.equal((await edit('adm', 'pub1', { username: (await get('people', 'pub2')).username })).status, 409, 'another publisher already has it');
+});

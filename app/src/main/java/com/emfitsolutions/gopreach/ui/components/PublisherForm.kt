@@ -160,6 +160,8 @@ fun PublisherFormFields(
     form: PublisherFormState,
     onChange: (PublisherFormState) -> Unit,
     groups: List<Group>,
+    /** The Add / Edit Publisher forms: Contact may be left blank (the account's own setup and settings forms still ask for it). */
+    contactOptional: Boolean = false,
     /** Every congregation to pick from, and whether the user may change it (a Super-Admin may; everyone else is fixed to their own and sees it read-only). */
     congregations: List<Congregation> = emptyList(),
     congregationEditable: Boolean = false,
@@ -236,7 +238,7 @@ fun PublisherFormFields(
     OutlinedTextField(
         value = form.contact,
         onValueChange = { onChange(form.copy(contact = it.uppercase())) },
-        label = { Text("Contact") },
+        label = { Text(if (contactOptional) "Contact (optional)" else "Contact") },
         singleLine = true,
         visualTransformation = VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
