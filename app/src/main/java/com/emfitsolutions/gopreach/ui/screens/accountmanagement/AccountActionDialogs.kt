@@ -65,6 +65,8 @@ fun TemporaryPasswordFlow(
 ) {
     var working by remember { mutableStateOf(false) }
     var reason by remember { mutableStateOf("") }
+    var typedPassword by remember { mutableStateOf("") }
+    var showTyped by remember { mutableStateOf(false) }
     var password by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val shown = password
@@ -77,14 +79,23 @@ fun TemporaryPasswordFlow(
                     "A new temporary password will be set for ${row.person.fullName} (@${row.person.username}). Their current password stops working. " +
                         "Give them the temporary password; they choose their own when they sign in.",
                 )
-                androidx.compose.material3.OutlinedTextField(value = reason, onValueChange = { reason = it }, label = { Text("Reason (optional)") }, singleLine = true, modifier = Modifier.padding(top = 8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = typedPassword, onValueChange = { typedPassword = it.take(200) }, label = { Text("New temporary password") },
+                        supportingText = { Text("At least 6 characters. Leave it empty for a random one.") }, singleLine = true,
+                        visualTransformation = if (showTyped) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = { TextButton(onClick = { showTyped = !showTyped }) { Text(if (showTyped) "Hide" else "Show") } },
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    androidx.compose.material3.OutlinedTextField(value = reason, onValueChange = { reason = it }, label = { Text("Reason (optional)") }, singleLine = true)
+                }
             },
             confirmButton = {
                 TextButton(
                     enabled = !working,
                     onClick = {
                         working = true
-                        viewModel.resetPassword(row, actingPersonId, keepReadable, reason) { result ->
+                        viewModel.resetPassword(row, actingPersonId, keepReadable, reason, typedPassword) { result ->
                             working = false
                             result.onSuccess { password = it }.onFailure { showToast(it.message ?: "Could not set the password."); onDismiss() }
                         }

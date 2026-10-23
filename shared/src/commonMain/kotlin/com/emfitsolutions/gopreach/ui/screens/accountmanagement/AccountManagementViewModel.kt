@@ -249,8 +249,8 @@ class AccountManagementViewModel(
     }
 
     /** Sets a temporary password for [row]'s person; [onResult] gets it (to show once) or the reason it could not be set. */
-    fun resetPassword(row: AccountRow, actingPersonId: String, keepReadable: Boolean = true, reason: String? = null, onResult: (Result<String>) -> Unit) {
-        viewModelScope.launch { onResult(authRepository.adminResetPassword(row.person.id, actingPersonId, keepReadable, reason)) }
+    fun resetPassword(row: AccountRow, actingPersonId: String, keepReadable: Boolean = true, reason: String? = null, chosenPassword: String? = null, onResult: (Result<String>) -> Unit) {
+        viewModelScope.launch { onResult(authRepository.adminResetPassword(row.person.id, actingPersonId, keepReadable, reason, chosenPassword)) }
     }
 
     /** Records in the audit log that a still-temporary sign-in was looked at (the password itself is never recorded). */

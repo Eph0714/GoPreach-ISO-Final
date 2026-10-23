@@ -564,9 +564,12 @@ class AuthRepository(
      * A password the person chose themselves is never readable.
      */
     /** [keepReadable] false (a Super Admin's reset): the temporary password is shown once and never kept on the person's record. [reason] goes into the audit entry (never the password). */
-    suspend fun adminResetPassword(targetPersonId: String, actingPersonId: String, keepReadable: Boolean = true, reason: String? = null): Result<String> {
+    suspend fun adminResetPassword(targetPersonId: String, actingPersonId: String, keepReadable: Boolean = true, reason: String? = null, chosenPassword: String? = null): Result<String> {
         val target = personRepository.get(targetPersonId) ?: return Result.failure(IllegalStateException("Account not found."))
-        val password = CredentialGenerator.temporaryPassword()
+        // The admin may type the temporary password (at least 6 characters); left empty, a random one is made.
+        val typed = chosenPassword?.takeIf { it.isNotBlank() }
+        if (typed != null && typed.length !in 6..200) return Result.failure(IllegalArgumentException("The password must have 6 to 200 characters."))
+        val password = typed ?: CredentialGenerator.temporaryPassword()
         return try {
             auth.adminResetPassword(targetPersonId, password)
             val updated = target.copy(isTemporaryCredential = true, temporaryPassword = if (keepReadable) password else null)
