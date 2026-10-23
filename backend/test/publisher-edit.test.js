@@ -213,3 +213,12 @@ test('saving with the username left as it is is not a duplicate and changes noth
   // only a real change is checked for a clash
   assert.equal((await edit('adm', 'pub1', { username: (await get('people', 'pub2')).username })).status, 409, 'another publisher already has it');
 });
+
+test('an existing username the rules would not allow today (a space) is kept when it is sent back unchanged', async () => {
+  await put('people', 'pubSp', person(null, 'congA', { username: 'aurora canales' }));
+  await assign('ra_sp', 'pubSp', 'PUBLISHER:REGULAR_PUBLISHER', 'congA', 'g1');
+  const same = await edit('adm', 'pubSp', { person: details({ remarks: 'edited' }), username: 'aurora canales' });
+  assert.equal(same.status, 200, JSON.stringify(same.body));
+  assert.equal((await get('people', 'pubSp')).username, 'aurora canales');
+  assert.equal((await edit('adm', 'pubSp', { username: 'new name' })).status, 422, 'a real change is still checked');
+});
