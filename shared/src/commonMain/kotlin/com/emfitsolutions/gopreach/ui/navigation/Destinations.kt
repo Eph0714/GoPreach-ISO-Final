@@ -118,6 +118,8 @@ object Destinations {
     // The Circuit Overseer's Previous Manual Record (old Excel visit records imported into a searchable table) and private File Manager.
     const val CO_MANUAL_RECORD = "co_manual_record"
     const val CO_FILE_MANAGER = "co_file_manager"
+    /** Super Admin: pick any Circuit Overseer and browse their files, read-only. */
+    const val ADMIN_CO_FILES = "admin_co_files"
     // Weekly meeting attendance, and the congregation's two-period comparison (reports, headcounts, attendance) built from monthly snapshots.
     const val MEETING_ATTENDANCE = "meeting_attendance"
     // The user's workspace of every report they have to prepare / follow for a saved month range.

@@ -33,6 +33,10 @@ enum class AccountType(val label: String) {
     COORDINATOR_ELDER("Coordinator Elders"),
     SERVICE_OVERSEER("Service Overseers"),
     ADMIN("Admins"),
+    /** Super Admin only: the Circuit Overseer accounts (no congregation of their own). */
+    CIRCUIT_OVERSEER("Circuit Overseers"),
+    /** Super Admin only: every account there is, with all its roles. */
+    ALL("All accounts"),
 }
 
 data class AccountRow(
@@ -45,6 +49,9 @@ data class AccountRow(
     val targetAdminRole: AdminRole?,
     val congregationId: String?,
     val congregationName: String,
+    /** All the active roles of the person (the "All accounts" view), and the circuit code of a Circuit Overseer. */
+    val roles: String = "",
+    val circuitCode: String? = null,
 )
 
 /**
@@ -65,6 +72,7 @@ class AccountManagementViewModel(
     private val congregationRepository: CongregationRepository,
     private val authRepository: AuthRepository,
     private val auditLogRepository: AuditLogRepository,
+    private val userAccessGrantRepository: com.emfitsolutions.gopreach.data.repository.UserAccessGrantRepository,
 ) : ViewModel() {
 
     /** Super-Admin's own Congregation Selector (spec §1) — the dropdown's
@@ -98,7 +106,8 @@ class AccountManagementViewModel(
         personRepository.observeAll(),
         roleAssignmentRepository.observeAll(),
         congregations,
-    ) { people, assignments, congregationList ->
+        userAccessGrantRepository.observeAll(),
+    ) { people, assignments, congregationList, grants ->
         if (actingRole == null) return@combine emptyList()
         val activeAssignments = assignments.filter { it.status == RoleAssignmentStatus.ACTIVE }
         fun congregationNameFor(congregationId: String?) =
@@ -121,6 +130,27 @@ class AccountManagementViewModel(
                 rowsForAdminRole(AdminRole.SERVICE_OVERSEER, AccountType.SERVICE_OVERSEER, activeAssignments, people, ::congregationNameFor) +
                     rowsForAdminRole(AdminRole.SECRETARY, AccountType.SERVICE_OVERSEER, activeAssignments, people, ::congregationNameFor)
             AccountType.ADMIN -> rowsForAdminRole(AdminRole.ADMIN_PER_CONGREGATION, AccountType.ADMIN, activeAssignments, people, ::congregationNameFor)
+            // The Super Admin's own views: Circuit Overseers (no congregation) and everybody, even someone with no active role.
+            AccountType.CIRCUIT_OVERSEER ->
+                rowsForAdminRole(AdminRole.CIRCUIT_OVERSEER, AccountType.CIRCUIT_OVERSEER, activeAssignments, people, ::congregationNameFor)
+                    .map { it.copy(congregationName = "All its circuit", circuitCode = grants.firstOrNull { g -> g.personId == it.person.id }?.circuitCode) }
+            AccountType.ALL -> people.map { person ->
+                val mine = activeAssignments.filter { it.personId == person.id }
+                val labels = mine.mapNotNull { a ->
+                    when (val t = a.resolvedRoleTypeOrNull()) {
+                        is RoleType.Admin -> t.role.name.lowercase().split('_').joinToString(" ") { w -> w.replaceFirstChar { c -> c.uppercase() } }
+                        is RoleType.Publisher -> "Publisher"
+                        null -> null
+                    }
+                }.toMutableList()
+                if (person.isSuperAdmin) labels.add(0, "Super Admin")
+                val cong = mine.firstOrNull { it.congregationId != null }?.congregationId ?: person.activeCongregationId
+                AccountRow(
+                    person = person, accountType = AccountType.ALL, targetAdminRole = null, congregationId = cong,
+                    congregationName = cong?.let { congregationNameFor(it) } ?: "-", roles = labels.distinct().joinToString(", ").ifBlank { "No active role" },
+                    circuitCode = grants.firstOrNull { it.personId == person.id }?.circuitCode,
+                )
+            }
         }
 
         val query = searchQuery.trim().lowercase()
@@ -134,13 +164,15 @@ class AccountManagementViewModel(
                     targetCongregationId = row.congregationId,
                 )
             }
-            .filter { congregationFilter == null || it.congregationId == congregationFilter }
+            .filter { congregationFilter == null || accountType == AccountType.CIRCUIT_OVERSEER || accountType == AccountType.ALL || it.congregationId == congregationFilter }
             .filter { row ->
                 query.isBlank() ||
                     row.person.fullName.lowercase().contains(query) ||
                     row.person.username.lowercase().contains(query) ||
                     row.accountType.label.lowercase().contains(query) ||
-                    row.congregationName.lowercase().contains(query)
+                    row.congregationName.lowercase().contains(query) ||
+                    row.roles.lowercase().contains(query) ||
+                    (row.circuitCode?.lowercase()?.contains(query) == true)
             }
             .sortedBy { it.person.fullName }
     }
@@ -184,8 +216,8 @@ class AccountManagementViewModel(
     }
 
     /** Sets a temporary password for [row]'s person; [onResult] gets it (to show once) or the reason it could not be set. */
-    fun resetPassword(row: AccountRow, actingPersonId: String, onResult: (Result<String>) -> Unit) {
-        viewModelScope.launch { onResult(authRepository.adminResetPassword(row.person.id, actingPersonId)) }
+    fun resetPassword(row: AccountRow, actingPersonId: String, keepReadable: Boolean = true, reason: String? = null, onResult: (Result<String>) -> Unit) {
+        viewModelScope.launch { onResult(authRepository.adminResetPassword(row.person.id, actingPersonId, keepReadable, reason)) }
     }
 
     /** Same shape as [com.emfitsolutions.gopreach.ui.screens.users.ManageUsersViewModel.setAccountStatus]

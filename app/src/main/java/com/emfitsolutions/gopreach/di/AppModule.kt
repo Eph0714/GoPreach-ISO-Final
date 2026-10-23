@@ -4,6 +4,7 @@ import com.emfitsolutions.gopreach.data.location.AndroidLocationTracker
 import com.emfitsolutions.gopreach.data.location.LocationTracker
 import com.emfitsolutions.gopreach.data.repository.AnnouncementRepository
 import com.emfitsolutions.gopreach.data.repository.CoDocumentsRepository
+import com.emfitsolutions.gopreach.ui.screens.circuit.AdminCoFilesViewModel
 import com.emfitsolutions.gopreach.ui.screens.circuit.FileManagerViewModel
 import com.emfitsolutions.gopreach.ui.screens.circuit.PreviousManualRecordViewModel
 import com.emfitsolutions.gopreach.data.repository.AnnouncementSeenStore
@@ -427,6 +428,7 @@ val appModule = module {
     viewModelOf(::ManageAnnouncementsViewModel)
     viewModelOf(::CoAnnouncementsViewModel)
     viewModelOf(::FileManagerViewModel)
+    viewModelOf(::AdminCoFilesViewModel)
     viewModelOf(::PreviousManualRecordViewModel)
     viewModelOf(::ForcedPasswordChangeViewModel)
     viewModelOf(::ForgotPasswordViewModel)

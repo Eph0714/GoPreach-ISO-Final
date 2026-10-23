@@ -383,7 +383,7 @@ fun TerritoryMapScreen(
     // "View only": another FS Group's territory (or every group, when this person may draw in only their own) can be looked at for reference, but seeing a
     // territory never gives the right to draw or edit it - that is decided per group by DrawingAccess, here and again by the server.
     val viewOnlyNote: String? = when {
-        selectedGroup != null -> if (drawingAccess.canDrawIn(selectedGroup.id)) null else "View only"
+        selectedGroup != null -> if (drawingAccess.canDrawIn(selectedGroup.id)) null else "View only - You are not assigned to this FS Group and cannot draw or modify this territory."
         showingAll -> if (drawingAccess.scope is com.emfitsolutions.gopreach.domain.GroupAccessScope.OwnGroup || drawingAccess.scope == com.emfitsolutions.gopreach.domain.GroupAccessScope.None) "View only, except your own group" else null
         else -> null
     }

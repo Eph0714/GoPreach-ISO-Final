@@ -64,6 +64,15 @@ data class CoSearchItem(
 @Serializable
 data class CoTrashItem(val kind: String, val id: String, val name: String, val deletedAt: Long = 0, val size: Long? = null, val ext: String = "", val contains: Int = 0) { val isFolder get() = kind == "folder" }
 
+/** A Circuit Overseer account as the Super Admin's picker lists it (immutable [id], circuit code, status and how many files they keep). */
+@Serializable
+data class CoAccount(
+    val id: String, val name: String = "", val username: String = "", val circuitCode: String = "", val status: String = "ACTIVE",
+    val fileCount: Int = 0, val folderCount: Int = 0, val bytes: Long = 0,
+)
+
+@Serializable data class CoAccountList(val accounts: List<CoAccount> = emptyList())
+
 // ---- Previous Manual Record ----------------------------------------------------------------------------------------------------------------------
 
 @Serializable data class ManualCongregation(val id: String, val name: String)
@@ -122,6 +131,17 @@ sealed interface ManualSource {
  * `backend/src/coFiles.js` and `coManual.js`); this class only speaks that REST contract and turns refusals into [CoApiException] with the server's reason.
  */
 class CoDocumentsRepository(private val api: SyncApi) {
+
+    // ---- The Super Admin's read-only view of any Circuit Overseer's files (the owner is always the Circuit Overseer's account id) ----
+
+    suspend fun coAccounts(): List<CoAccount> = decode(CoAccountList.serializer(), get("/v1/admin/co-accounts")).accounts
+
+    suspend fun adminList(coId: String, folderId: String?): CoListing =
+        decode(CoListing.serializer(), get("/v1/admin/co-files/$coId/list", buildMap { folderId?.let { put("folderId", it) } }))
+
+    suspend fun adminSearch(coId: String, query: String): CoSearchResult = decode(CoSearchResult.serializer(), get("/v1/admin/co-files/$coId/search", mapOf("q" to query)))
+
+    suspend fun adminDownload(coId: String, id: String): ByteArray = require(api.callServer("GET", "/v1/admin/co-files/$coId/$id/download")).bytes
 
     // ---- File Manager ----
 

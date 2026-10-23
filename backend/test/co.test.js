@@ -390,3 +390,56 @@ test('important actions are written to the audit log', async () => {
   const actions = new Set(logs.map((l) => l.data.action));
   for (const a of ['CO_FOLDER_CREATE', 'CO_FILE_UPLOAD', 'CO_FILE_DELETE', 'CO_FILE_PURGE', 'CO_MANUAL_IMPORT', 'CO_MANUAL_DELETE']) assert.ok(actions.has(a), a);
 });
+
+// ---- the Super-Admin's read-only view of any Circuit Overseer's files --------------------------------------------------
+
+const adm = (who, method, path, opts = {}) => fetch(`${base}/v1/admin${path}`, { method, headers: { 'x-dev-person': who, ...(opts.json ? { 'content-type': 'application/json' } : {}) }, body: opts.json ? JSON.stringify(opts.json) : opts.body });
+
+test('Super-Admin: lists every Circuit Overseer account and browses one CO\'s files read-only, never mixing COs', async () => {
+  const mine = await (await upload('co1', 'co1-report.pdf', PDF, '', 'application/pdf')).json();
+  await upload('co2', 'co2-secret.pdf', PDF, '', 'application/pdf');
+  const folder = await mkfolder('co1', 'Reports 2026');
+
+  // the CO list: Super-Admin only
+  const list = await adm('sa', 'GET', '/co-accounts');
+  assert.equal(list.status, 200);
+  const accounts = (await list.json()).accounts;
+  assert.deepEqual(accounts.map((a) => [a.id, a.circuitCode]), [['co1', 'NT01'], ['co2', 'NT02']], 'only Circuit Overseer accounts, in circuit order');
+  assert.ok(accounts.find((a) => a.id === 'co1').fileCount >= 1);
+  for (const who of ['co1', 'elder', 'nobody']) assert.equal((await adm(who, 'GET', '/co-accounts')).status, 403, `${who} may not list the accounts`);
+  assert.equal((await fetch(`${base}/v1/admin/co-accounts`)).status, 401);
+
+  // browsing: only that CO's files, each CO separately
+  const one = await (await adm('sa', 'GET', '/co-files/co1/list')).json();
+  assert.ok(one.files.some((f) => f.name === 'co1-report.pdf') && !one.files.some((f) => f.name === 'co2-secret.pdf'), 'co1 sees co1 files only');
+  assert.ok(one.folders.some((f) => f.name === 'Reports 2026'));
+  const two = await (await adm('sa', 'GET', '/co-files/co2/list')).json();
+  assert.ok(two.files.some((f) => f.name === 'co2-secret.pdf') && !two.files.some((f) => f.name === 'co1-report.pdf'), 'co2 sees co2 files only');
+  assert.equal((await (await adm('sa', 'GET', '/co-files/co1/search?q=secret')).json()).total, 0, 'search stays inside the chosen CO');
+  assert.equal((await (await adm('sa', 'GET', '/co-files/co2/search?q=secret')).json()).total, 1);
+  assert.equal((await (await adm('sa', 'GET', '/co-files/co1/tree')).json()).folders.length >= 1, true);
+  assert.equal((await adm('sa', 'GET', `/co-files/co2/${mine.id}`)).status, 404, 'a file of co1 is not reachable through co2');
+  const dl = await adm('sa', 'GET', `/co-files/co1/${mine.id}/download`);
+  assert.equal(dl.status, 200);
+  assert.deepEqual(Buffer.from(await dl.arrayBuffer()), PDF, 'the bytes come back unchanged');
+  assert.equal((await adm('sa', 'GET', `/co-files/co1/${mine.id}/download?inline=1`)).headers.get('content-type'), 'application/pdf');
+
+  // read-only, and only for the Super-Admin
+  for (const [m, p, json] of [['POST', '/co-files/co1/folders', { name: 'x' }], ['PATCH', `/co-files/co1/${mine.id}`, { name: 'x.pdf' }], ['DELETE', `/co-files/co1/${mine.id}`], ['DELETE', `/co-files/co1/folders/${folder.id}`]]) {
+    assert.equal((await adm('sa', m, p, { json })).status, 403, `${m} ${p}`);
+  }
+  assert.equal((await adm('co2', 'GET', '/co-files/co1/list')).status, 403, 'a CO never reaches another CO\'s files this way');
+  assert.equal((await adm('co1', 'GET', '/co-files/co1/list')).status, 403, 'not even their own through the admin door');
+  assert.equal((await adm('elder', 'GET', '/co-files/co1/list')).status, 403);
+  assert.equal((await adm('sa', 'GET', '/co-files/elder/list')).status, 404, 'a person who is not a Circuit Overseer');
+  assert.equal((await adm('sa', 'GET', '/co-files/nobodyxx/list')).status, 404);
+  assert.equal((await call('co1', 'GET', '/files/list').then(j)).files.length >= 1, true, 'the CO still sees their own files');
+  const after = await (await adm('sa', 'GET', '/co-files/co1/list')).json();
+  assert.deepEqual(after.files.map((f) => f.name), one.files.map((f) => f.name), 'nothing was changed');
+
+  // opening / downloading a file is audited with the Super-Admin as the actor
+  const logs = (await store.list('auditLog')).map((l) => l.data).filter((l) => l.action === 'SUPER_CO_FILE_VIEW');
+  assert.ok(logs.length >= 2 && logs.every((l) => l.actorPersonId === 'sa'));
+  assert.ok(logs.some((l) => /download/.test(l.details)));
+  assert.equal((await store.list('auditLog')).map((l) => l.data).filter((l) => l.action === 'SUPER_CO_FILE_VIEW' && /list|tree|search/.test(l.targetId ?? '')).length, 0, 'listing is not logged as a file view');
+});

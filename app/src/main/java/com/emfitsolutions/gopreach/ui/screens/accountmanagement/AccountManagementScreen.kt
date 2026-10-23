@@ -98,7 +98,8 @@ fun AccountManagementScreen(
     var selectedType by remember(availableTypes) { mutableStateOf(availableTypes.firstOrNull()) }
     val isSuperAdmin = actingRole == AdminRole.SUPER_ADMIN
     var congregationFilter by rememberCongregationContext("account_management")
-    val needsCongregation = isSuperAdmin && congregationFilter == null
+    // Circuit Overseers and "All accounts" do not belong to one congregation, so the Super Admin needs no congregation for them.
+    val needsCongregation = isSuperAdmin && congregationFilter == null && selectedType != AccountType.CIRCUIT_OVERSEER && selectedType != AccountType.ALL
     var searchQuery by remember { mutableStateOf("") }
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
 
@@ -152,7 +153,7 @@ fun AccountManagementScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search name or username", maxLines = 1) },
+                placeholder = { Text("Search name, username, role or circuit code", maxLines = 1) },
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                 trailingIcon = { if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
                 singleLine = true,
@@ -194,7 +195,7 @@ fun AccountManagementScreen(
                         listOf(
                                 UniversalColumn("Name", 200.dp) { it.person.fullName },
                                 UniversalColumn("Username", 150.dp) { it.person.username },
-                                UniversalColumn("Account Type", 150.dp) { it.accountType.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+                                UniversalColumn("Role / circuit", 200.dp) { (it.roles.ifBlank { it.accountType.label }) + (it.circuitCode?.let { c -> " · $c" } ?: "") },
                                 UniversalColumn("Congregation", 180.dp) { it.congregationName },
                                 UniversalColumn("Status", 110.dp) { it.person.accountStatus.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
                         ),
@@ -215,7 +216,7 @@ fun AccountManagementScreen(
         ChangeUsernameFlow(row, viewModel, currentPersonId, showToast, onDismiss = { pendingUsernameChange = null })
     }
     pendingResetPasswordInfo?.let { row ->
-        TemporaryPasswordFlow(row, viewModel, currentPersonId, showToast, onDismiss = { pendingResetPasswordInfo = null })
+        TemporaryPasswordFlow(row, viewModel, currentPersonId, showToast, keepReadable = !isSuperAdmin, onDismiss = { pendingResetPasswordInfo = null })
     }
 }
 
@@ -249,7 +250,7 @@ private fun AccountRowCard(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(row.person.fullName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text("@${row.person.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("${row.accountType.label} · ${row.congregationName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text((row.roles.ifBlank { row.accountType.label }) + (row.circuitCode?.let { " · Circuit $it" } ?: "") + " · ${row.congregationName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text(
                     status.name.lowercase().replaceFirstChar { it.uppercase() },
                     style = MaterialTheme.typography.labelSmall,

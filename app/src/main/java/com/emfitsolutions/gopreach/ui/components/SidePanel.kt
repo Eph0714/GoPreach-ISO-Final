@@ -363,6 +363,7 @@ fun GoPreachSidePanelContent(
             if (canManageSessionTimeout) add(SideItem("Session Timeout Setting", Icons.Rounded.Timer, Destinations.SESSION_TIMEOUT_SETTING))
             if (canManageUsers) add(SideItem(stringResource(Res.string.side_user_management), Icons.Rounded.ManageAccounts, Destinations.MANAGE_USERS))
             if (canManageAccountCredentials) add(SideItem(stringResource(Res.string.side_account_management), Icons.Rounded.ManageAccounts, Destinations.ACCOUNT_MANAGEMENT))
+            if (isSuperAdmin) add(SideItem("CO File Management", Icons.Rounded.Folder, Destinations.ADMIN_CO_FILES))
             if (canAccessControlPanel) add(SideItem(stringResource(Res.string.side_credit_hour_categories), Icons.Rounded.Timer, Destinations.CREDIT_HOUR_CATEGORIES))
         }
         if (controlPanelItems.isNotEmpty()) add(SideSection(stringResource(Res.string.side_section_control_panel), controlPanelItems))
@@ -432,7 +433,7 @@ private fun navGroupOf(route: String): NavGroup = when (route) {
 
     Destinations.MANAGE_CONGREGATIONS, Destinations.MANAGE_ADMINS, Destinations.MANAGE_ELDERS, Destinations.MANAGE_MINISTERIAL_SERVANTS,
     Destinations.MANAGE_GROUPS, Destinations.MANAGE_PUBLISHERS, Destinations.MANAGE_TERRITORY_ASSIGNMENTS, Destinations.ACCOUNT_MANAGEMENT,
-    Destinations.MANAGE_USERS, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_CIRCUIT_CODES, Destinations.MANAGE_CIRCUIT_OVERSEERS,
+    Destinations.MANAGE_USERS, Destinations.ADMIN_CO_FILES, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_CIRCUIT_CODES, Destinations.MANAGE_CIRCUIT_OVERSEERS,
     Destinations.CIRCUIT_ASSIGNMENT -> NavGroup.MANAGEMENT
 
     Destinations.CONTROL_PANEL, Destinations.THEME_COLOR_SETTINGS, Destinations.SESSION_TIMEOUT_SETTING, Destinations.CREDIT_HOUR_CATEGORIES -> NavGroup.SETTINGS

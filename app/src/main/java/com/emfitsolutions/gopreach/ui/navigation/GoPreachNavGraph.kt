@@ -1280,6 +1280,12 @@ fun GoPreachNavGraph(
                 com.emfitsolutions.gopreach.ui.screens.circuit.FileManagerScreen(onBack = { navController.popBackStack() })
             } else NoAccessScreen(onBack = { navController.popBackStack() })
         }
+        composable(Destinations.ADMIN_CO_FILES) {
+            // Super Admin only (read-only view of any Circuit Overseer's files); the server refuses everyone else too.
+            if (currentRole == AdminRole.SUPER_ADMIN) {
+                com.emfitsolutions.gopreach.ui.screens.circuit.AdminCoFilesScreen(onBack = { navController.popBackStack() })
+            } else NoAccessScreen(onBack = { navController.popBackStack() })
+        }
         composable(Destinations.RECEIVED_SNAPSHOTS) {
             if (isCircuitViewer) {
                 com.emfitsolutions.gopreach.ui.screens.circuit.ReceivedReportsScreen(

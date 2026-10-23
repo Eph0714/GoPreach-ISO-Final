@@ -6,6 +6,7 @@ import { hashPassword, verifyPassword } from './passwords.js';
 import { signAccessToken, ACCESS_TOKEN_SECONDS, personIdFromEmail } from './auth.js';
 import { config } from './config.js';
 import { mountPasskeys } from './passkeys.js';
+import { audit } from './coAccess.js';
 
 /**
  * GoPreach's own sign-in (replaces Firebase Auth). The app still signs in with "<personId>@<domain>" and a password.
@@ -148,6 +149,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       if (!(await store.getAccount(personId))) return res.status(404).json({ error: 'invalid-user' });
       await store.setPassword(personId, await hashPassword(password));
       await store.deleteRefreshTokens(personId); // sessions made with the old password end
+      await audit(store, req.personId, 'ACCOUNT_PASSWORD_RESET', 'Person', personId, 'temporary password set (the password itself is never recorded)');
       res.json({ ok: true });
     } catch (e) {
       console.error('password reset failed', e);

@@ -555,12 +555,13 @@ class AuthRepository(
      * is kept on the person's record (as at enrollment) until they choose their own at the next sign-in, and is returned so the admin can hand it over.
      * A password the person chose themselves is never readable.
      */
-    suspend fun adminResetPassword(targetPersonId: String, actingPersonId: String): Result<String> {
+    /** [keepReadable] false (a Super Admin's reset): the temporary password is shown once and never kept on the person's record. [reason] goes into the audit entry (never the password). */
+    suspend fun adminResetPassword(targetPersonId: String, actingPersonId: String, keepReadable: Boolean = true, reason: String? = null): Result<String> {
         val target = personRepository.get(targetPersonId) ?: return Result.failure(IllegalStateException("Account not found."))
         val password = CredentialGenerator.temporaryPassword()
         return try {
             auth.adminResetPassword(targetPersonId, password)
-            val updated = target.copy(isTemporaryCredential = true, temporaryPassword = password)
+            val updated = target.copy(isTemporaryCredential = true, temporaryPassword = if (keepReadable) password else null)
             personRepository.save(updated)
             remote.pushNow("people", targetPersonId, updated)
             auditLogRepository.log(
@@ -569,7 +570,7 @@ class AuthRepository(
                 targetType = "Person",
                 targetId = targetPersonId,
                 congregationId = target.activeCongregationId,
-                details = "temporary password set",
+                details = "temporary password set (the password itself is never recorded)" + (reason?.trim()?.takeIf { it.isNotEmpty() }?.let { " (reason: $it)" } ?: ""),
             )
             Result.success(password)
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {

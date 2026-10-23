@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.accountmanagement
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
@@ -58,8 +60,11 @@ fun TemporaryPasswordFlow(
     actingPersonId: String,
     showToast: (String) -> Unit,
     onDismiss: () -> Unit,
+    /** False for a Super Admin's reset: shown once, never kept readable on the person's record. */
+    keepReadable: Boolean = true,
 ) {
     var working by remember { mutableStateOf(false) }
+    var reason by remember { mutableStateOf("") }
     var password by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
     val shown = password
@@ -72,13 +77,14 @@ fun TemporaryPasswordFlow(
                     "A new temporary password will be set for ${row.person.fullName} (@${row.person.username}). Their current password stops working. " +
                         "Give them the temporary password; they choose their own when they sign in.",
                 )
+                androidx.compose.material3.OutlinedTextField(value = reason, onValueChange = { reason = it }, label = { Text("Reason (optional)") }, singleLine = true, modifier = Modifier.padding(top = 8.dp))
             },
             confirmButton = {
                 TextButton(
                     enabled = !working,
                     onClick = {
                         working = true
-                        viewModel.resetPassword(row, actingPersonId) { result ->
+                        viewModel.resetPassword(row, actingPersonId, keepReadable, reason) { result ->
                             working = false
                             result.onSuccess { password = it }.onFailure { showToast(it.message ?: "Could not set the password."); onDismiss() }
                         }

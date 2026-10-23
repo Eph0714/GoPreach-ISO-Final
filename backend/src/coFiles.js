@@ -2,6 +2,7 @@ import express from 'express';
 import { randomBytes } from 'node:crypto';
 import { TYPES } from './announcementFiles.js';
 import { coAccess, newId, ID_RE, audit, jsonErrors } from './coAccess.js';
+import { loadGrant } from './policy/index.js';
 
 /**
  * The Circuit Overseer's File Manager: private folders and files, kept in the database (folder / file rows in co_folders / co_files, the bytes
@@ -16,6 +17,12 @@ import { coAccess, newId, ID_RE, audit, jsonErrors } from './coAccess.js';
  *   GET    /v1/co/files/:id/download[?inline=1]         the bytes (a preview only for PDF, images and text)
  *   POST   /v1/co/files/bulk { action: move|delete, fileIds, folderIds, targetFolderId }
  *   GET    /v1/co/files/trash   POST /trash/restore { kind, id }   DELETE /trash/:kind/:id (forever)   DELETE /trash (empty it)
+ *
+ * The Super-Admin can also BROWSE any Circuit Overseer's files, read-only (list, tree, search, details, download), under
+ *   GET    /v1/admin/co-accounts                        every Circuit Overseer account, with its circuit code, status and file count
+ *   GET    /v1/admin/co-files/<coPersonId>/...          the same read routes as above, for that Circuit Overseer's own files
+ * The owner is always the Circuit Overseer's immutable person id (never a username), anything but GET answers 403, a person who is not a Circuit
+ * Overseer answers 404, and every file opened or downloaded this way is written to the audit log with the Super-Admin as the actor.
  *
  * Deleting only moves to the recycle bin; "forever" removes the row and the bytes together. The type, the declared MIME type and the first bytes
  * of every upload must agree and be on the allowed list; executables and scripts are never accepted.
@@ -69,6 +76,15 @@ const SORTS = {
   modified: (a, b) => a.updatedAt - b.updatedAt || SORTS.name(a, b),
 };
 
+/** A person who really is a Circuit Overseer: an access grant with a Circuit Code on a live person record. */
+async function isCircuitOverseerAccount(store, personId) {
+  const get = (c, i) => store.get(c, i);
+  const person = await get('people', personId);
+  if (!person || person.deleted) return false;
+  const grant = await loadGrant(personId, get);
+  return grant.has && grant.circuitCode != null;
+}
+
 export function mountCoFiles(app, store, auth) {
   const router = express.Router();
   const raw = express.raw({ type: () => true, limit: MAX_FILE_MB * MB + 1024 });
@@ -79,7 +95,14 @@ export function mountCoFiles(app, store, auth) {
     try {
       const access = await coAccess(store, req.personId);
       if (!access.allowed) return res.status(403).json({ error: 'The File Manager is for the Circuit Overseer' });
-      const owner = req.personId;
+      let owner = req.personId;
+      if (req.coOwner) {
+        // The Super-Admin looking at one Circuit Overseer's files: read-only, and only a real Circuit Overseer account.
+        if (!access.isSuper) return res.status(403).json({ error: 'Only the Super-Admin browses the files of a Circuit Overseer' });
+        if (req.method !== 'GET') return res.status(403).json({ error: 'The Super-Admin views these files; changes are made by the Circuit Overseer' });
+        if (!/^[A-Za-z0-9_-]{2,60}$/.test(String(req.coOwner)) || !(await isCircuitOverseerAccount(store, req.coOwner))) return res.status(404).json({ error: 'Circuit Overseer not found' });
+        owner = req.coOwner;
+      }
       const [folders, files] = await Promise.all([store.co_listFolders(owner), store.co_listFiles(owner)]);
       const ctx = { owner, folders, files, folderMap: new Map(folders.map((f) => [f.id, f])), live: (r) => r.deletedAt == null };
       ctx.pathOf = (folderId) => {
@@ -98,6 +121,9 @@ export function mountCoFiles(app, store, auth) {
         return out;
       };
       ctx.usedBytes = () => files.reduce((n, f) => n + f.size, 0);
+      if (req.coOwner && /^\/[A-Za-z0-9_-]{8,40}(\/download)?$/.test(req.path)) {   // a file opened or downloaded by the Super-Admin
+        await audit(store, req.personId, 'SUPER_CO_FILE_VIEW', 'CoFile', req.path.split('/')[1], `files of Circuit Overseer ${owner}${req.path.endsWith('/download') ? ' (download)' : ''}`);
+      }
       return await handler(req, res, ctx);
     } catch (e) {
       console.error('co files failed', req.method, req.path, e);
@@ -406,4 +432,34 @@ export function mountCoFiles(app, store, auth) {
 
   router.use(jsonErrors);
   app.use('/v1/co/files', router);
+  // The Super-Admin's read-only view of one Circuit Overseer's files: the same routes, with that CO as the owner.
+  app.use('/v1/admin/co-files/:coId', (req, res, next) => { req.coOwner = req.params.coId; next(); }, router);
+
+  /** Every Circuit Overseer account, for the Super-Admin's picker: who, which circuit, whether the account is on, and how many files they keep. */
+  app.get('/v1/admin/co-accounts', auth, async (req, res) => {
+    try {
+      const access = await coAccess(store, req.personId);
+      if (!access.allowed || !access.isSuper) return res.status(403).json({ error: 'Only the Super-Admin sees the Circuit Overseer accounts' });
+      const grants = await store.list('userAccessGrants');
+      const out = [];
+      for (const g of grants) {
+        if (g.data?.circuitCode == null || g.deleted) continue;
+        const person = await store.get('people', g.id);
+        if (!person || person.deleted) continue;
+        const files = (await store.co_listFiles(g.id)).filter((f) => f.deletedAt == null);
+        const folders = (await store.co_listFolders(g.id)).filter((f) => f.deletedAt == null);
+        const p = person.data;
+        out.push({
+          id: g.id, name: [p.firstName, p.lastName].filter(Boolean).join(' ') || p.username || g.id, username: p.username ?? '', circuitCode: String(g.data.circuitCode),
+          status: p.accountStatus ?? 'ACTIVE', fileCount: files.length, folderCount: folders.length, bytes: files.reduce((n, f) => n + (f.size ?? 0), 0),
+          congregations: Array.isArray(g.data.scopeCongregationIds) ? g.data.scopeCongregationIds.length : null, allCongregations: g.data.scopeType === 'ALL_CONGREGATIONS',
+        });
+      }
+      out.sort((a, b) => a.circuitCode.localeCompare(b.circuitCode, undefined, { numeric: true }) || a.name.localeCompare(b.name));
+      res.json({ accounts: out });
+    } catch (e) {
+      console.error('co accounts failed', e);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
 }
