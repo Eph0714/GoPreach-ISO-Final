@@ -156,9 +156,6 @@ fun ManagePublishersScreen(
     val groupedByFsGroup = filterMode == PublisherFilterMode.GROUP && groupFilterId == null
     val filtering = filter.query.isNotBlank() || (filterMode == PublisherFilterMode.GROUP && groupFilterId != null) || (filterMode == PublisherFilterMode.STATUS && statusFilter != null)
     var lookupTarget by remember { mutableStateOf<Person?>(null) }
-    // Change username / Set temporary password, done right here in the publisher's own menu (no other screen).
-    var usernameTarget by remember { mutableStateOf<Person?>(null) }
-    var passwordTarget by remember { mutableStateOf<Person?>(null) }
     val accountViewModel: com.emfitsolutions.gopreach.ui.screens.accountmanagement.AccountManagementViewModel = koinViewModel()
     var detailsOf by remember { mutableStateOf<PublisherRow?>(null) }
     var pendingEdit by remember { mutableStateOf<PublisherRow?>(null) }
@@ -435,16 +432,6 @@ fun ManagePublishersScreen(
         )
     }
 
-    usernameTarget?.let { person ->
-        com.emfitsolutions.gopreach.ui.screens.accountmanagement.ChangeUsernameFlow(
-            com.emfitsolutions.gopreach.ui.screens.accountmanagement.publisherAccountRow(person), accountViewModel, currentPersonId, showToast, onDismiss = { usernameTarget = null },
-        )
-    }
-    passwordTarget?.let { person ->
-        com.emfitsolutions.gopreach.ui.screens.accountmanagement.TemporaryPasswordFlow(
-            com.emfitsolutions.gopreach.ui.screens.accountmanagement.publisherAccountRow(person), accountViewModel, currentPersonId, showToast, onDismiss = { passwordTarget = null },
-        )
-    }
     lookupTarget?.let { person ->
         TempCredentialLookupDialog(person = person, onDismiss = { lookupTarget = null })
     }
@@ -522,12 +509,6 @@ private fun EditPublisherDialog(
     val groups by groupsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    var signInOpen by remember { mutableStateOf(false) }
-    // The sign-in parts of the record, saved by the same Save as everything else: the username as typed (nothing is capitalised or corrected),
-    // and an optional new temporary password (blank keeps the current one).
-    var username by remember(row.person.id) { mutableStateOf(row.person.username) }
-    var password by remember(row.person.id) { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
 
     fun captureLocation() {
@@ -569,27 +550,14 @@ private fun EditPublisherDialog(
             return
         }
         if (saving) return
-        val usernameChanged = canManageCredentials && username.trim() != livePerson.username
-        val statusChanged = canManageCredentials && form.accountStatus != livePerson.accountStatus
-        val passwordGiven = canManageCredentials && password.isNotBlank()
-        if (usernameChanged && !Regex("^[A-Za-z0-9._-]{3,40}$").matches(username.trim())) {
-            errorMessage = "A username has 3 to 40 letters, numbers, dots, dashes or underscores."
-            return
-        }
-        if (passwordGiven && password.length !in 6..200) {
-            errorMessage = "The password must have 6 to 200 characters."
-            return
-        }
-        val accountTouched = usernameChanged || statusChanged || passwordGiven
+        // The username, temporary password and account status are managed in Account Management, so this save never touches them.
+        val accountTouched = false
         val edit = com.emfitsolutions.gopreach.data.repository.PublisherEdit(
             person = form.applyTo(row.person),
             category = (form.category ?: row.category).name,
             sendGroup = true,
             groupId = form.groupId,
             congregationId = if (canChangeCongregation && movingCongregation) newCongregationId else null,
-            username = username.trim().takeIf { usernameChanged },
-            accountStatus = form.accountStatus.name.takeIf { statusChanged },
-            password = password.takeIf { passwordGiven },
         )
         saving = true
         errorMessage = null
@@ -636,7 +604,7 @@ private fun EditPublisherDialog(
         confirmEnabled = !saving,
         errorMessage = errorMessage,
         maxContentHeight = 560.dp,
-        hasUnsavedChanges = form != initialForm || username != row.person.username || password.isNotBlank(),
+        hasUnsavedChanges = form != initialForm,
     ) {
                 EditSectionHeader("Publisher Information")
                 PublisherFormFields(
@@ -653,62 +621,18 @@ private fun EditPublisherDialog(
                         if (viewModel.hasLocationPermission()) captureLocation()
                         else locationPermissionLauncher.launch(AppPermission.LOCATION)
                     },
-                    statusEnabled = canManageCredentials,
+                    statusEnabled = false,
                 )
 
                 EditSectionHeader("System Information")
                 ReadOnlyField("Date Added", formatRecordTimestamp(row.person.createdAt))
 
-                // Account and sign-in: part of the same record and the same Save. The classification (Publisher, pioneers ...) is the Publisher classification above;
-                // the account status above is a different thing: whether the person can sign in.
-                if (canManageCredentials) {
-                    EditSectionHeader("Account and sign-in")
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = { username = it },
-                        label = { Text("Username") },
-                        supportingText = { Text("Letters, numbers, dots, dashes and underscores; nothing is changed or removed. It must be unique.") },
-                        singleLine = true,
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Ascii,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it.take(200) },
-                        label = { Text("New temporary password (optional)") },
-                        supportingText = { Text("Leave it empty to keep the current password. The person must choose their own at the next sign-in and their other sessions end.") },
-                        singleLine = true,
-                        visualTransformation = if (showPassword) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                            capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
-                        ),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        androidx.compose.material3.OutlinedButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "Hide" else "Show") }
-                        androidx.compose.material3.OutlinedButton(onClick = {
-                            val chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
-                            val random = java.security.SecureRandom()
-                            password = (1..10).map { chars[random.nextInt(chars.length)] }.joinToString("")
-                            showPassword = true
-                        }) { Text("Generate") }
-                    }
-                    Text("Temporary sign-in", style = MaterialTheme.typography.labelLarge)
-                    if (livePerson.isTemporaryCredential) {
-                        androidx.compose.material3.OutlinedButton(onClick = { signInOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("View temporary sign-in") }
-                    } else {
-                        Text("The publisher chose their own password, so nobody else can read it. Set a new temporary one above if it was forgotten.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                } else {
-                    EditSectionHeader("Account and sign-in")
-                    ReadOnlyField("Username", livePerson.username)
-                    Text("The sign-in is changed by the Admin, Coordinator Elder, Service Overseer or Secretary.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                // The sign-in (username, temporary password, account status) is managed in Account Management.
+                EditSectionHeader("Account and sign-in")
+                ReadOnlyField("Username", livePerson.username)
+                Text("Change the username, set a temporary password or change the account status in Account Management.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
-    if (signInOpen) TempCredentialLookupDialog(person = livePerson, onDismiss = { signInOpen = false })
 }
 
 /** Confirms a deliberate change of a publisher's congregation (shown from [EditPublisherDialog]). */

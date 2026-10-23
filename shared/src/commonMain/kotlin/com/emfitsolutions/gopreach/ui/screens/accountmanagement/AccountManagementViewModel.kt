@@ -52,7 +52,12 @@ data class AccountRow(
     /** All the active roles of the person (the "All accounts" view), and the circuit code of a Circuit Overseer. */
     val roles: String = "",
     val circuitCode: String? = null,
+    /** The FS Group of the person's active role, when it has one. */
+    val group: String? = null,
 )
+
+/** One account-management entry of the audit log, with the people named. */
+data class AccountAuditRow(val timestamp: Long, val actor: String, val account: String, val action: String, val details: String)
 
 /**
  * Account / Credential Management (spec's own numbered spec) — congregation-
@@ -73,6 +78,7 @@ class AccountManagementViewModel(
     private val authRepository: AuthRepository,
     private val auditLogRepository: AuditLogRepository,
     private val userAccessGrantRepository: com.emfitsolutions.gopreach.data.repository.UserAccessGrantRepository,
+    private val groupRepository: com.emfitsolutions.gopreach.data.repository.GroupRepository,
 ) : ViewModel() {
 
     /** Super-Admin's own Congregation Selector (spec §1) — the dropdown's
@@ -85,9 +91,9 @@ class AccountManagementViewModel(
      * since Super-Admin's tree doesn't change per congregation, it only adds
      * the selector above it. */
     fun availableAccountTypes(actingRole: AdminRole?): List<AccountType> = when (actingRole) {
-        // Publishers' accounts are managed in the Publisher module itself (username, temporary password and account status), so they are not repeated here.
-        AdminRole.SUPER_ADMIN -> AccountType.entries.filter { it != AccountType.PUBLISHER }
-        AdminRole.ADMIN_PER_CONGREGATION -> listOf(AccountType.ELDER, AccountType.MINISTERIAL_SERVANT)
+        AdminRole.SUPER_ADMIN -> AccountType.entries.toList()
+        AdminRole.ADMIN_PER_CONGREGATION -> listOf(AccountType.PUBLISHER, AccountType.ELDER, AccountType.MINISTERIAL_SERVANT)
+        AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY -> listOf(AccountType.PUBLISHER)
         else -> emptyList()
     }
 
@@ -102,12 +108,14 @@ class AccountManagementViewModel(
         accountType: AccountType,
         congregationFilter: String?,
         searchQuery: String,
+        statusFilter: AccountStatus? = null,
     ): Flow<List<AccountRow>> = combine(
         personRepository.observeAll(),
         roleAssignmentRepository.observeAll(),
         congregations,
         userAccessGrantRepository.observeAll(),
-    ) { people, assignments, congregationList, grants ->
+        groupRepository.observeAll(),
+    ) { people, assignments, congregationList, grants, groups ->
         if (actingRole == null) return@combine emptyList()
         val activeAssignments = assignments.filter { it.status == RoleAssignmentStatus.ACTIVE }
         fun congregationNameFor(congregationId: String?) =
@@ -149,12 +157,15 @@ class AccountManagementViewModel(
                     person = person, accountType = AccountType.ALL, targetAdminRole = null, congregationId = cong,
                     congregationName = cong?.let { congregationNameFor(it) } ?: "-", roles = labels.distinct().joinToString(", ").ifBlank { "No active role" },
                     circuitCode = grants.firstOrNull { it.personId == person.id }?.circuitCode,
+                    group = mine.firstNotNullOfOrNull { a -> groups.firstOrNull { g -> g.id == a.groupId }?.name },
                 )
             }
         }
 
         val query = searchQuery.trim().lowercase()
         candidateRows
+            .map { row -> if (row.group != null) row else row.copy(group = activeAssignments.firstOrNull { a -> a.personId == row.person.id && a.groupId != null }?.let { a -> groups.firstOrNull { g -> g.id == a.groupId }?.name }) }
+            .filter { statusFilter == null || it.person.accountStatus == statusFilter }
             .filter { row ->
                 PermissionChecker.canManageCredentialsFor(
                     actingRole = actingRole,
@@ -172,9 +183,31 @@ class AccountManagementViewModel(
                     row.accountType.label.lowercase().contains(query) ||
                     row.congregationName.lowercase().contains(query) ||
                     row.roles.lowercase().contains(query) ||
+                    (row.group?.lowercase()?.contains(query) == true) ||
                     (row.circuitCode?.lowercase()?.contains(query) == true)
             }
             .sortedBy { it.person.fullName }
+    }
+
+    /** Username changes, password resets and status changes recorded in the audit log, newest first: all of them for the Super Admin, otherwise those of the acting congregation. */
+    fun auditHistory(actingRole: AdminRole?, actingCongregationId: String?): Flow<List<AccountAuditRow>> = combine(
+        auditLogRepository.observeAll(),
+        personRepository.observeAll(),
+    ) { entries, people ->
+        if (actingRole == null) return@combine emptyList()
+        fun nameOf(id: String?) = people.firstOrNull { it.id == id }?.fullName ?: id.orEmpty().ifBlank { "-" }
+        entries
+            .filter { it.action.startsWith("ACCOUNT_") }
+            .filter { actingRole == AdminRole.SUPER_ADMIN || (actingCongregationId != null && it.congregationId == actingCongregationId) }
+            .sortedByDescending { it.timestamp }
+            .take(300)
+            .map { e ->
+                AccountAuditRow(
+                    e.timestamp, nameOf(e.actorPersonId), nameOf(e.targetId),
+                    e.action.removePrefix("ACCOUNT_MGMT_").removePrefix("ACCOUNT_").lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() },
+                    e.details.orEmpty(),
+                )
+            }
     }
 
     private fun rowsForAdminRole(
@@ -218,6 +251,16 @@ class AccountManagementViewModel(
     /** Sets a temporary password for [row]'s person; [onResult] gets it (to show once) or the reason it could not be set. */
     fun resetPassword(row: AccountRow, actingPersonId: String, keepReadable: Boolean = true, reason: String? = null, onResult: (Result<String>) -> Unit) {
         viewModelScope.launch { onResult(authRepository.adminResetPassword(row.person.id, actingPersonId, keepReadable, reason)) }
+    }
+
+    /** Records in the audit log that a still-temporary sign-in was looked at (the password itself is never recorded). */
+    fun logTemporarySignInViewed(row: AccountRow, actingPersonId: String) {
+        viewModelScope.launch {
+            auditLogRepository.log(
+                actorPersonId = actingPersonId, action = "ACCOUNT_MGMT_TEMP_SIGNIN_VIEWED", targetType = "Person", targetId = row.person.id,
+                congregationId = row.congregationId, details = "temporary sign-in viewed (the password itself is never recorded)",
+            )
+        }
     }
 
     /** Same shape as [com.emfitsolutions.gopreach.ui.screens.users.ManageUsersViewModel.setAccountStatus]

@@ -255,7 +255,7 @@ fun GoPreachSidePanelContent(
             if (canManageCircuits) {
                 add(SideItem("Circuit Overseer Management", Icons.Rounded.Groups, Destinations.CIRCUIT_MANAGEMENT))
                 add(SideItem("Circuit Codes", Icons.Rounded.Tune, Destinations.MANAGE_CIRCUIT_CODES))
-                add(SideItem("Circuit Overseer Accounts", Icons.Rounded.ManageAccounts, Destinations.MANAGE_CIRCUIT_OVERSEERS))
+                // Circuit Overseer Accounts is reached from Account Management.
                 add(SideItem("Circuit Assignment", Icons.Rounded.Assignment, Destinations.CIRCUIT_ASSIGNMENT))
             }
             if (canManageTerritoryAssignments) add(SideItem(stringResource(Res.string.side_territory_assignments), Icons.Rounded.Assignment, Destinations.MANAGE_TERRITORY_ASSIGNMENTS))
@@ -361,7 +361,7 @@ fun GoPreachSidePanelContent(
             // reach it (spec §34).
             add(SideItem(stringResource(Res.string.side_theme_color_settings), Icons.Rounded.Palette, Destinations.THEME_COLOR_SETTINGS))
             if (canManageSessionTimeout) add(SideItem("Session Timeout Setting", Icons.Rounded.Timer, Destinations.SESSION_TIMEOUT_SETTING))
-            if (canManageUsers) add(SideItem(stringResource(Res.string.side_user_management), Icons.Rounded.ManageAccounts, Destinations.MANAGE_USERS))
+            // User Management (restricted users) is reached from Account Management.
             if (canManageAccountCredentials) add(SideItem(stringResource(Res.string.side_account_management), Icons.Rounded.ManageAccounts, Destinations.ACCOUNT_MANAGEMENT))
             if (isSuperAdmin) add(SideItem("CO File Management", Icons.Rounded.Folder, Destinations.ADMIN_CO_FILES))
             if (canAccessControlPanel) add(SideItem(stringResource(Res.string.side_credit_hour_categories), Icons.Rounded.Timer, Destinations.CREDIT_HOUR_CATEGORIES))

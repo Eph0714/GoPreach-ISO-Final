@@ -319,8 +319,7 @@ fun GoPreachNavGraph(
                 // sign-out + sign-in + re-selecting, per spec §11.
                 onSwitchToPublisher = null,
                 canManageUsers = canManageUsers,
-                // The drawer's Account Management now covers the non-publisher accounts only (Admin and Super-Admin); publishers' accounts live in the Publisher module.
-                canManageAccountCredentials = canManageAccountCredentials && (currentRole == AdminRole.SUPER_ADMIN || currentRole == AdminRole.ADMIN_PER_CONGREGATION),
+                canManageAccountCredentials = canManageAccountCredentials,
                 // Side panel/dashboard-tile navigation always sits directly on
                 // top of the Main Form, never chained onto whichever menu
                 // screen happened to be open before it — tapping Groups then
@@ -455,6 +454,9 @@ fun GoPreachNavGraph(
                 actingCongregationId = ownCongregationId,
                 currentPersonId = currentPersonId,
                 onBack = { navController.popBackStack() },
+                onCreateAccount = { navController.navigate(it) },
+                onOpenCircuitAccounts = if (currentRole == AdminRole.SUPER_ADMIN) ({ navController.navigate(Destinations.MANAGE_CIRCUIT_OVERSEERS) }) else null,
+                onOpenRestrictedUsers = if (canManageUsers) ({ navController.navigate(Destinations.MANAGE_USERS) }) else null,
             )
         }
         composable(Destinations.CREDIT_HOUR_CATEGORIES) {

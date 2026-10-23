@@ -64,6 +64,7 @@ import kotlinx.coroutines.flow.flowOf
 import com.emfitsolutions.gopreach.data.model.AccountStatus
 import com.emfitsolutions.gopreach.data.model.AdminRole
 import com.emfitsolutions.gopreach.data.repository.AuthResult
+import com.emfitsolutions.gopreach.ui.navigation.Destinations
 import com.emfitsolutions.gopreach.ui.components.CongregationFilterDropdown
 import com.emfitsolutions.gopreach.ui.components.SelectCongregationPrompt
 import com.emfitsolutions.gopreach.ui.components.rememberCongregationContext
@@ -92,6 +93,10 @@ fun AccountManagementScreen(
     actingCongregationId: String?,
     currentPersonId: String,
     onBack: () -> Unit,
+    onCreateAccount: (String) -> Unit = {},
+    /** Shortcuts to the account screens that live inside this module: Circuit Overseer Accounts (Super Admin) and User Management (restricted users). */
+    onOpenCircuitAccounts: (() -> Unit)? = null,
+    onOpenRestrictedUsers: (() -> Unit)? = null,
     viewModel: AccountManagementViewModel = koinViewModel(),
 ) {
     val availableTypes = remember(actingRole) { viewModel.availableAccountTypes(actingRole) }
@@ -101,17 +106,28 @@ fun AccountManagementScreen(
     // Circuit Overseers and "All accounts" do not belong to one congregation, so the Super Admin needs no congregation for them.
     val needsCongregation = isSuperAdmin && congregationFilter == null && selectedType != AccountType.CIRCUIT_OVERSEER && selectedType != AccountType.ALL
     var searchQuery by remember { mutableStateOf("") }
+    var statusFilter by remember { mutableStateOf<AccountStatus?>(null) }
+    var showAudit by remember { mutableStateOf(false) }
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
 
     val type = selectedType
-    val rowsFlow = remember(actingRole, actingCongregationId, type, congregationFilter, searchQuery, needsCongregation) {
+    val rowsFlow = remember(actingRole, actingCongregationId, type, congregationFilter, searchQuery, needsCongregation, statusFilter) {
         if (type == null || needsCongregation) flowOf(emptyList()) else
-            viewModel.rowsFor(actingRole, actingCongregationId, type, congregationFilter, searchQuery)
+            viewModel.rowsFor(actingRole, actingCongregationId, type, congregationFilter, searchQuery, statusFilter)
+    }
+    val auditRows by remember(actingRole, actingCongregationId) { viewModel.auditHistory(actingRole, actingCongregationId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val enrollRoute = when (type) {
+        AccountType.PUBLISHER -> Destinations.ENROLL_PUBLISHER
+        AccountType.ELDER -> Destinations.ENROLL_ELDER
+        AccountType.MINISTERIAL_SERVANT -> Destinations.ENROLL_MINISTERIAL_SERVANT
+        AccountType.ADMIN -> Destinations.ENROLL_ADMIN
+        else -> null
     }
     val rows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
 
     var pendingUsernameChange by remember { mutableStateOf<AccountRow?>(null) }
     var pendingResetPasswordInfo by remember { mutableStateOf<AccountRow?>(null) }
+    var lookupTarget by remember { mutableStateOf<com.emfitsolutions.gopreach.data.model.Person?>(null) }
     val showToast = rememberActionToast()
 
     Scaffold(
@@ -121,10 +137,39 @@ fun AccountManagementScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
                 },
+                actions = {
+                    if (!showAudit && enrollRoute != null) TextButton(onClick = { onCreateAccount(enrollRoute) }) { Text("+ Create Account") }
+                },
             )
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(selected = !showAudit, onClick = { showAudit = false }, label = { Text("All User Accounts") })
+                FilterChip(selected = showAudit, onClick = { showAudit = true }, label = { Text("Audit History") })
+                onOpenCircuitAccounts?.let { FilterChip(selected = false, onClick = it, label = { Text("Circuit Overseers", maxLines = 1, softWrap = false) }) }
+                onOpenRestrictedUsers?.let { FilterChip(selected = false, onClick = it, label = { Text("Restricted Users", maxLines = 1, softWrap = false) }) }
+            }
+            if (showAudit) {
+                if (auditRows.isEmpty()) {
+                    Text("No account changes recorded yet.", modifier = Modifier.padding(24.dp), style = MaterialTheme.typography.bodyMedium)
+                } else LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(auditRows) { a ->
+                        androidx.compose.material3.OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("${a.action} · ${a.account}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                Text("By ${a.actor}", style = MaterialTheme.typography.bodySmall)
+                                if (a.details.isNotBlank()) Text(a.details, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(java.util.Date(a.timestamp)), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+                return@Column
+            }
             HideInFullScreen(true) {
             if (isSuperAdmin) {
                 CongregationFilterDropdown(
@@ -147,13 +192,22 @@ fun AccountManagementScreen(
                     )
                 }
             }
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(selected = statusFilter == null, onClick = { statusFilter = null }, label = { Text("Any status") })
+                AccountStatus.entries.forEach { st ->
+                    FilterChip(selected = statusFilter == st, onClick = { statusFilter = st }, label = { Text(st.name.lowercase().replaceFirstChar { it.uppercase() }) })
+                }
+            }
 
             }
             HideInFullScreen(false) {
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Search name, username, role or circuit code", maxLines = 1) },
+                placeholder = { Text("Search name, username, role, congregation or FS Group", maxLines = 1) },
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                 trailingIcon = { if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
                 singleLine = true,
@@ -205,6 +259,7 @@ fun AccountManagementScreen(
                             onChangeUsername = { pendingUsernameChange = row },
                             onResetPassword = { pendingResetPasswordInfo = row },
                             onSetStatus = { status -> viewModel.setAccountStatus(row, status, currentPersonId) },
+                            onViewTemporarySignIn = { viewModel.logTemporarySignInViewed(row, currentPersonId); lookupTarget = row.person },
                         )
                     }
                 }
@@ -215,6 +270,7 @@ fun AccountManagementScreen(
     pendingUsernameChange?.let { row ->
         ChangeUsernameFlow(row, viewModel, currentPersonId, showToast, onDismiss = { pendingUsernameChange = null })
     }
+    lookupTarget?.let { com.emfitsolutions.gopreach.ui.components.TempCredentialLookupDialog(person = it, onDismiss = { lookupTarget = null }) }
     pendingResetPasswordInfo?.let { row ->
         TemporaryPasswordFlow(row, viewModel, currentPersonId, showToast, keepReadable = !isSuperAdmin, onDismiss = { pendingResetPasswordInfo = null })
     }
@@ -226,6 +282,7 @@ private fun AccountRowCard(
     onChangeUsername: () -> Unit,
     onResetPassword: () -> Unit,
     onSetStatus: (AccountStatus) -> Unit,
+    onViewTemporarySignIn: () -> Unit = {},
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val status = row.person.accountStatus
@@ -250,7 +307,8 @@ private fun AccountRowCard(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(row.person.fullName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text("@${row.person.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text((row.roles.ifBlank { row.accountType.label }) + (row.circuitCode?.let { " · Circuit $it" } ?: "") + " · ${row.congregationName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text((row.roles.ifBlank { row.accountType.label }) + (row.circuitCode?.let { " · Circuit $it" } ?: "") + " · ${row.congregationName}" + (row.group?.let { " · $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text("Password: ••••••••", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
                     status.name.lowercase().replaceFirstChar { it.uppercase() },
                     style = MaterialTheme.typography.labelSmall,
@@ -270,6 +328,11 @@ private fun AccountRowCard(
                         text = { Text("Set temporary password") },
                         leadingIcon = { Icon(Icons.Rounded.VpnKey, contentDescription = null) },
                         onClick = { menuOpen = false; onResetPassword() },
+                    )
+                    if (row.person.isTemporaryCredential) DropdownMenuItem(
+                        text = { Text("View temporary sign-in") },
+                        leadingIcon = { Icon(Icons.Rounded.VpnKey, contentDescription = null) },
+                        onClick = { menuOpen = false; onViewTemporarySignIn() },
                     )
                     HorizontalDivider()
                     AccountStatus.entries.filter { it != status }.forEach { target ->
