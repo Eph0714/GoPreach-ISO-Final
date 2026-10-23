@@ -133,7 +133,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   mountAnnouncementFiles(app, store, auth);
   mountPresence(app, store, auth);
   mountCoFiles(app, store, auth);
-  mountCoManual(app, store, auth);
+  mountCoManual(app, store, auth, { ai: authOptions.ai });
   mountAccounts(app, store, auth, authOptions);
   mountPublisherEdit(app, store, auth);
 

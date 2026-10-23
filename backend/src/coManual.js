@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto';
 import { MAX_EXCEL_BYTES } from './excel.js';
 import { readSnapshots, searchTextOf, applyEdits, summarySnapshot, LIMITS } from './sheetSnapshot.js';
 import { comparisonFor, reportFor, reportForFiles } from './sheetCompare.js';
+import { analyze } from './manualAnalysis.js';
+import { explain, withAi } from './aiSummary.js';
+import { rateLimit } from './rateLimit.js';
+import { config } from './config.js';
 import { coAccess, allowedCongregations, newId, ID_RE, audit, jsonErrors } from './coAccess.js';
 
 /**
@@ -15,6 +19,8 @@ import { coAccess, allowedCongregations, newId, ID_RE, audit, jsonErrors } from 
  *   GET    /v1/co/manual/imports?q=&congregationId=       saved files by congregation A-Z, newest first; with q, each worksheet says whether it contains the text
  *   GET    /v1/co/manual/imports/:id/sheets/:index        one saved worksheet as { snapshot, summary }
  *   PATCH  /v1/co/manual/imports/:id/sheets/:index { edits: [{ r, c, v }] }   change cells and save
+ *   GET    /v1/co/manual/imports/:id/sheets/:index/analysis?group=&a=&b=[&ai=1]   the verified comparative analysis of one saved worksheet (cards, bar-chart data, findings,
+ *          data-quality notes); with ai=1 the free self-hosted AI adds plain-language wording, checked against the calculated figures (see aiSummary.js)
  *   PATCH  /v1/co/manual/imports/:id { remarks }          DELETE /v1/co/manual/imports/:id
  *
  * The workbook is sent as the raw request body, or - to reuse a file kept in the File Manager - named by `fileId` (it must be the caller's own).
@@ -29,7 +35,9 @@ export const cleanRemarks = (v) => String(v ?? '').replace(/[\u0000-\u001f]+/g, 
 /** The words of a search box, lower-cased (at most 6). */
 export const searchWords = (q) => String(q ?? '').toLowerCase().split(/\s+/).filter(Boolean).slice(0, 6).map((w) => w.slice(0, 60));
 
-export function mountCoManual(app, store, auth) {
+export function mountCoManual(app, store, auth, { ai = config.ai } = {}) {
+  // one AI summary at a time per person, and not more than a handful in a few minutes: a model on the organisation's own server is a shared resource
+  const analysisLimit = rateLimit({ windowMs: 5 * 60_000, max: ai.rateMax ?? 12, key: (req) => req.personId ?? req.ip });
   const router = express.Router();
   const raw = express.raw({ type: () => true, limit: MAX_EXCEL_BYTES + 1024 });
   const json = express.json({ limit: '2mb' });
@@ -150,6 +158,24 @@ export function mountCoManual(app, store, auth) {
     const report = reportFor(sheet.data, String(group ?? ''), String(a ?? ''), String(b ?? ''), compareCtx(ctx, imp, sheet.name));
     if (!report) return res.status(400).json({ error: 'Choose two different columns of the same group to compare' });
     res.json({ report });
+  }));
+
+  /**
+   * The analysis the Summary screen shows. The figures always come from the calculation engine; the AI (when asked for, configured and reachable) only words them.
+   * Whatever happens to the AI, the answer is the deterministic analysis plus an honest `ai` status, and nothing is stored.
+   */
+  router.get('/imports/:id/sheets/:index/analysis', auth, analysisLimit, guard(async (req, res, ctx) => {
+    const imp = await ownImport(req, ctx);
+    const sheet = imp && /^\d{1,3}$/.test(req.params.index) ? await store.co_getSheet(ctx.owner, imp.id, req.params.index) : null;
+    if (!sheet) return res.status(404).json({ error: 'Worksheet not found' });
+    const { group, a, b } = req.query;
+    const analysis = analyze(sheet.data, { ...compareCtx(ctx, imp, sheet.name), savedAt: imp.createdAt }, { group: String(group ?? ''), a: String(a ?? ''), b: String(b ?? '') });
+    if (!analysis.available) return res.json({ analysis: { ...analysis, ai: { status: 'SKIPPED', message: '' } } });
+    if (req.query.ai !== '1') return res.json({ analysis: { ...analysis, ai: { status: 'NOT_REQUESTED', provider: ai.provider || null, model: ai.model || null, message: '', usedFor: [] } } });
+    const t0 = Date.now();
+    const result = await explain(analysis, ai);
+    console.log('co manual ai', result.status, result.provider ?? '-', `${Date.now() - t0}ms`);   // the status only, never the report text
+    res.json({ analysis: withAi(analysis, result) });
   }));
 
   /** Two saved worksheets of the caller compared by indicator name (for example the records of two visits). */

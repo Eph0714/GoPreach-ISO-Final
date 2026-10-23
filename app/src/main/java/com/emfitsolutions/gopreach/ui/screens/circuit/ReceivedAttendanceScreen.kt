@@ -270,25 +270,28 @@ private val midweekFill = Color(0xFFFCE4D6)
 private val weekendFill = Color(0xFFC6EFCE)
 private val averageFill = Color(0xFFFFFF00)
 
-/** The frozen attendance as the congregation sent it: a Midweek block and a Weekend block, each with its parts, average and official figure, then the monthly averages. */
-@Composable
-internal fun AttendanceSnapshotSheet(report: CoAttendanceSnapshot, modifier: Modifier = Modifier, showVersion: Boolean = false) {
-    val context = LocalContext.current
-    val dateFmt = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
+/**
+ * What Excel / Print produce for a received attendance report: every meeting, then the monthly average rows exactly as the sheet ends (Midweek, Weekend), then the summary.
+ * Nothing the screen shows down to its last average is left out.
+ */
+internal fun attendanceExportData(report: CoAttendanceSnapshot, showVersion: Boolean = false): TableReportData {
     fun official(r: CoAttendanceRow) = AttendanceCalculator.display(r.officialAttendance, r.roundingMode)
-    fun exportData() = TableReportData(
+    val rows = report.rows.sortedBy { it.meetingDate }.map { r ->
+        val p = r.parts.map { it.toString() }
+        listOf(
+            SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(r.meetingDate)), r.meetingType.label,
+            p.getOrNull(0).takeIf { r.meetingType == MeetingType.MIDWEEK } ?: "—", p.getOrNull(1).takeIf { r.meetingType == MeetingType.MIDWEEK } ?: "—", p.getOrNull(2).takeIf { r.meetingType == MeetingType.MIDWEEK } ?: "—",
+            p.getOrNull(0).takeIf { r.meetingType == MeetingType.WEEKEND } ?: "—", p.getOrNull(1).takeIf { r.meetingType == MeetingType.WEEKEND } ?: "—", official(r),
+        )
+    }
+    val averages = listOf(MeetingType.MIDWEEK to report.midweek, MeetingType.WEEKEND to report.weekend)
+        .filter { (_, list) -> list.isNotEmpty() }
+        .map { (type, _) -> listOf("Monthly average", type.label, "", "", "", "", "", figure(report.average(type))) }
+    return TableReportData(
         title = "Meeting Attendance Report",
         details = listOf("Congregation" to report.congregationName, "Month" to monthName(report.periodMonth), "Submitted" to ((if (showVersion) "Send ${report.version} · " else "") + stamp(report.submittedAt))),
         recordsFound = report.rows.size.toString(),
-        table = listOf(listOf("Date", "Meeting", "Treasures", "Apply Yourself", "Living as Christians", "Public Meeting", "Watchtower Study", "Official Attendance")) +
-            report.rows.sortedBy { it.meetingDate }.map { r ->
-                val p = r.parts.map { it.toString() }
-                listOf(
-                    SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(r.meetingDate)), r.meetingType.label,
-                    p.getOrNull(0).takeIf { r.meetingType == MeetingType.MIDWEEK } ?: "—", p.getOrNull(1).takeIf { r.meetingType == MeetingType.MIDWEEK } ?: "—", p.getOrNull(2).takeIf { r.meetingType == MeetingType.MIDWEEK } ?: "—",
-                    p.getOrNull(0).takeIf { r.meetingType == MeetingType.WEEKEND } ?: "—", p.getOrNull(1).takeIf { r.meetingType == MeetingType.WEEKEND } ?: "—", official(r),
-                )
-            },
+        table = listOf(listOf("Date", "Meeting", "Treasures", "Apply Yourself", "Living as Christians", "Public Meeting", "Watchtower Study", "Official Attendance")) + rows + averages,
         summary = listOf(
             listOf("Midweek meetings recorded", report.midweek.size.toString()), listOf("Midweek average", figure(report.average(MeetingType.MIDWEEK))),
             listOf("Weekend meetings recorded", report.weekend.size.toString()), listOf("Weekend average", figure(report.average(MeetingType.WEEKEND))),
@@ -296,6 +299,15 @@ internal fun AttendanceSnapshotSheet(report: CoAttendanceSnapshot, modifier: Mod
         generatedBy = "Circuit Overseer",
         generatedAt = SimpleDateFormat("MMMM d, yyyy h:mm a", Locale.getDefault()).format(Date()),
     )
+}
+
+/** The frozen attendance as the congregation sent it: a Midweek block and a Weekend block, each with its parts, average and official figure, then the monthly averages. */
+@Composable
+internal fun AttendanceSnapshotSheet(report: CoAttendanceSnapshot, modifier: Modifier = Modifier, showVersion: Boolean = false) {
+    val context = LocalContext.current
+    val dateFmt = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
+    fun official(r: CoAttendanceRow) = AttendanceCalculator.display(r.officialAttendance, r.roundingMode)
+    fun exportData() = attendanceExportData(report, showVersion)
 
     Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(report.congregationName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

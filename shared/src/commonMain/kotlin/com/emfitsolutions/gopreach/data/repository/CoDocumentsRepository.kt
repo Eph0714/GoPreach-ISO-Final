@@ -248,6 +248,16 @@ class CoDocumentsRepository(private val api: SyncApi) {
     suspend fun compare(importId: String, index: Int, group: String, previous: String, current: String): ComparisonReport =
         decode(ComparisonReport.serializer(), get("/v1/co/manual/imports/$importId/sheets/$index/compare", mapOf("group" to group, "a" to previous, "b" to current)).jsonObject["report"]?.jsonObject ?: throw CoApiException("The server sent no report.", 500))
 
+    /**
+     * The verified analysis of a saved worksheet (cards, bar-chart data, findings, data-quality notes). With [withAi] the server's free self-hosted AI also words it;
+     * whatever happens to the AI, the answer is the calculated analysis plus an honest [AnalysisAi] status.
+     */
+    suspend fun analysis(importId: String, index: Int, group: String = "", previous: String = "", current: String = "", withAi: Boolean = false): ManualAnalysis {
+        val query = buildMap { if (group.isNotBlank()) put("group", group); if (previous.isNotBlank()) put("a", previous); if (current.isNotBlank()) put("b", current); if (withAi) put("ai", "1") }
+        val body = get("/v1/co/manual/imports/$importId/sheets/$index/analysis", query).jsonObject["analysis"]?.jsonObject ?: throw CoApiException("The server sent no analysis.", 500)
+        return decode(ManualAnalysis.serializer(), body)
+    }
+
     /** Two saved worksheets compared by indicator name; [earlier] and [later] are (import id, worksheet index). */
     suspend fun compareFiles(earlier: Pair<String, Int>, later: Pair<String, Int>): FileComparison {
         val o = get("/v1/co/manual/compare-imports", mapOf("a" to earlier.first, "sheetA" to earlier.second.toString(), "b" to later.first, "sheetB" to later.second.toString()))

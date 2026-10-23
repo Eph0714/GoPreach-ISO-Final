@@ -12,6 +12,7 @@ import com.emfitsolutions.gopreach.data.repository.CoListing
 import com.emfitsolutions.gopreach.data.repository.CompareGroup
 import com.emfitsolutions.gopreach.data.repository.Comparison
 import com.emfitsolutions.gopreach.data.repository.ComparisonReport
+import com.emfitsolutions.gopreach.data.repository.ManualAnalysis
 import com.emfitsolutions.gopreach.data.repository.ManualImportInfo
 import com.emfitsolutions.gopreach.data.repository.ManualSheetInfo
 import com.emfitsolutions.gopreach.data.repository.ManualSheetView
@@ -66,6 +67,15 @@ data class CompareUi(
     val groups: List<CompareGroup> = emptyList(), val group: CompareGroup? = null, val previous: String = "", val current: String = "",
     val report: ComparisonReport? = null, val others: List<CompareOther> = emptyList(), val other: CompareOther? = null,
     val note: String = "", val loading: Boolean = false, val error: String? = null,
+)
+
+/**
+ * The analysis on screen for ONE worksheet ([forImport], [forIndex]): the calculated figures arrive first, then (while [aiBusy]) the free AI's wording.
+ * It is cleared whenever another record or worksheet is opened or the cells change, so a stale analysis is never shown.
+ */
+data class AnalysisUi(
+    val analysis: ManualAnalysis? = null, val group: String = "", val previous: String = "", val current: String = "",
+    val loading: Boolean = false, val aiBusy: Boolean = false, val error: String? = null, val forImport: String = "", val forIndex: Int = -1,
 )
 
 /** The "Save this record" form of a draft: the congregation (required) and the remarks (optional) are asked only now. */
@@ -158,6 +168,53 @@ class PreviousManualRecordViewModel(
                 throw e
             } catch (e: Exception) {
                 _compare.update { it.copy(loading = false, error = reason(e)) }
+            }
+        }
+    }
+
+    private val _analysis = MutableStateFlow(AnalysisUi())
+    val analysis: StateFlow<AnalysisUi> = _analysis.asStateFlow()
+    private var analysisJob: Job? = null
+
+    /** Opens the analysis of the shown (saved) worksheet; the one already on screen for it is kept unless [refresh]. A draft has no saved cells on the server to analyse. */
+    fun startAnalysis(refresh: Boolean = false) {
+        val v = _viewer.value ?: return
+        val info = v.info ?: return
+        val now = _analysis.value
+        if (!refresh && now.forImport == info.id && now.forIndex == v.index && (now.analysis != null || now.loading)) return
+        analysisJob?.cancel()
+        _analysis.value = AnalysisUi(forImport = info.id, forIndex = v.index)
+        runAnalysis(info.id, v.index, "", "", "")
+    }
+
+    fun pickAnalysis(group: String, previous: String, current: String) {
+        val s = _analysis.value
+        if (previous == current) { _analysis.update { it.copy(error = "Choose two different periods.") }; return }
+        _analysis.update { it.copy(group = group, previous = previous, current = current, error = null) }
+        runAnalysis(s.forImport, s.forIndex, group, previous, current)
+    }
+
+    /** "Refresh Analysis": reanalyses the same worksheet and the same pair of periods, including the AI wording. */
+    fun refreshAnalysis() { val s = _analysis.value; if (s.forImport.isNotEmpty()) runAnalysis(s.forImport, s.forIndex, s.group, s.previous, s.current) }
+
+    private fun clearAnalysis() { analysisJob?.cancel(); _analysis.value = AnalysisUi() }
+
+    private fun runAnalysis(importId: String, index: Int, group: String, previous: String, current: String) {
+        analysisJob?.cancel()
+        analysisJob = viewModelScope.launch {
+            _analysis.update { it.copy(loading = it.analysis == null, aiBusy = false, error = null) }
+            try {
+                val calculated = repository.analysis(importId, index, group, previous, current, withAi = false)
+                if (_analysis.value.forImport != importId || _analysis.value.forIndex != index) return@launch
+                _analysis.update { it.copy(analysis = calculated, group = calculated.group.id, previous = calculated.selection.previous, current = calculated.selection.current, loading = false, aiBusy = calculated.available) }
+                if (!calculated.available) return@launch
+                val worded = repository.analysis(importId, index, calculated.group.id, calculated.selection.previous, calculated.selection.current, withAi = true)
+                if (_analysis.value.forImport != importId || _analysis.value.forIndex != index) return@launch
+                _analysis.update { it.copy(analysis = worded, aiBusy = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _analysis.update { it.copy(loading = false, aiBusy = false, error = reason(e)) }
             }
         }
     }
@@ -280,7 +337,7 @@ class PreviousManualRecordViewModel(
 
     fun setFind(text: String) = _viewer.update { it?.copy(find = text) }
     fun setEditing(on: Boolean) = _viewer.update { it?.copy(editing = on) }
-    fun closeViewer() { _viewer.value = null; reload() }
+    fun closeViewer() { clearAnalysis(); _viewer.value = null; reload() }
 
     /** A cell typed on the phone; it is only kept (on the server) when Save changes is pressed. */
     fun editCell(r: Int, c: Int, text: String) {
@@ -303,6 +360,7 @@ class PreviousManualRecordViewModel(
             try {
                 val edits = v.edits.map { (k, text) -> CellEdit((k shr 32).toInt(), (k and 0xffffffffL).toInt(), text) }
                 val done = repository.editCells(info.id, v.index, edits)
+                clearAnalysis()   // the cells changed: the earlier analysis no longer matches them
                 _viewer.update { it?.copy(snapshot = done.sheet.snapshot, summary = done.summary, comparison = done.comparison, edits = emptyMap(), busy = false) }
                 _messages.tryEmit("Saved ${done.changed} change${if (done.changed == 1) "" else "s"}.")
             } catch (e: CancellationException) {

@@ -41,6 +41,20 @@ export const config = {
     /** Origins of the GoPreach website that may use passkeys (comma-separated, e.g. https://app.gopreach.sinaglahinv.com). The site's host must end with PASSKEY_RP_ID. */
     webOrigins: (process.env.PASSKEY_WEB_ORIGINS ?? '').split(',').map((x) => x.trim().replace(/\/+$/, '')).filter(Boolean),
   },
+  /**
+   * The free, self-hosted AI that writes the plain-language part of the Previous Manual Record summary (see docs/AI_SETUP.md). Off unless AI_PROVIDER is
+   * set: 'ollama' (Ollama's /api/chat) or 'openai-compatible' (any self-hosted server that speaks /v1/chat/completions, e.g. llama.cpp or vLLM).
+   * The endpoint and model live only here, on the server; the apps never see them. Nothing paid is ever substituted when it is off or unreachable.
+   */
+  ai: {
+    provider: (process.env.AI_PROVIDER ?? '').trim().toLowerCase(),
+    url: (process.env.AI_URL ?? 'http://127.0.0.1:11434').replace(/\/+$/, ''),
+    model: process.env.AI_MODEL ?? 'qwen2.5:7b-instruct',
+    timeoutMs: Number(process.env.AI_TIMEOUT_MS ?? 90_000),
+    contextTokens: Number(process.env.AI_CONTEXT_TOKENS ?? 8192),
+    /** Only if the AI server sits behind a reverse proxy that asks for a bearer key. Never sent to the apps, never logged. */
+    apiKey: process.env.AI_API_KEY ?? '',
+  },
   db: {
     host: process.env.DB_HOST ?? 'localhost',
     port: Number(process.env.DB_PORT ?? 3306),

@@ -155,7 +155,7 @@ const DECLINE = /inactive|irregular|absent|dropped|removed|late|unreported|disfe
 /** +1 when more of it is good news, -1 when more of it needs attention, 0 when the name does not say. */
 export function polarity(label) { const t = String(label); if (DECLINE.test(t)) return -1; if (GROWTH.test(t)) return 1; return 0; }
 
-const isTotal = (label) => /^(grand\s+)?(total|sum|overall)\b/i.test(label.trim());
+export const isTotal = (label) => /^(grand\s+)?(total|sum|overall)\b/i.test(label.trim());
 
 /** Previous and current value of one indicator, and what changed. */
 export function change(prev, curr) {
@@ -227,7 +227,7 @@ export function reportFor(snapshot, groupId, a, b, ctx = {}) {
   return buildReport(g, String(a), String(b), ctx);
 }
 
-function buildReport(group, aKey, bKey, ctx) {
+export function buildReport(group, aKey, bKey, ctx) {
   const colA = group.columns.find((c) => c.key === aKey), colB = group.columns.find((c) => c.key === bKey);
   const rows = group._ind.rows.map((row) => {
     const prev = row.values[aKey] ?? null, curr = row.values[bKey] ?? null;

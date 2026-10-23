@@ -27,7 +27,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -291,7 +294,10 @@ private fun effectiveTexts(snap: SheetSnapshot, edits: Map<Long, String>): Map<L
 @Composable
 private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onBack: () -> Unit, onEditRemarks: (ManualImportInfo) -> Unit, onRemove: (ManualImportInfo) -> Unit) {
     var summaryOpen by remember { mutableStateOf(false) }
+    var fullScreen by remember { mutableStateOf(false) }
     var editCell by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    // Back leaves full screen first; the screen's own Back handler (leave the record) runs only afterwards.
+    BackHandler(enabled = fullScreen) { fullScreen = false }
     val texts = remember(v.snapshot, v.edits) { effectiveTexts(v.snapshot, v.edits) }
     val words = remember(v.find) { v.find.lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() } }
     val hits = remember(texts, words) { if (words.isEmpty()) emptyList() else texts.filter { (_, t) -> val l = t.lowercase(); words.any { l.contains(it) } }.keys.sorted() }
@@ -310,7 +316,12 @@ private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onB
             )
         },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().padding(padding)) {
+        val viewerHeight = maxHeight
+        val page = rememberScrollState()
+        // In full screen the controls stay exactly as they are, above the viewer; the viewer alone grows to the height of the screen.
+        androidx.compose.runtime.LaunchedEffect(fullScreen, page.maxValue) { if (fullScreen && page.maxValue > 0) page.scrollTo(page.maxValue) else if (!fullScreen) page.scrollTo(0) }
+        Column(if (fullScreen) Modifier.fillMaxSize().verticalScroll(page) else Modifier.fillMaxSize()) {
             if (v.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
                 if (v.draft) {
@@ -343,6 +354,7 @@ private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onB
                         if (words.isEmpty()) (if (v.editing) "Tap a cell to change it." else "") else if (hits.isEmpty()) "No match in this sheet" else "${pos + 1} of ${hits.size}",
                         style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f),
                     )
+                    TextButton(onClick = { fullScreen = !fullScreen }) { Icon(if (fullScreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text(if (fullScreen) "Exit full screen" else "Full screen") }
                     if (v.draft) Button(onClick = { viewModel.askSave() }) { Icon(Icons.Rounded.Save, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Save to my records") }
                     else if (v.dirty) {
                         TextButton(onClick = { viewModel.discardEdits() }) { Text("Discard") }
@@ -350,10 +362,14 @@ private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onB
                     }
                 }
             }
-            SheetCanvas(
-                v.snapshot, texts, v.edits.keys, hits.toSet(), hits.getOrNull(pos), v.editing && !v.draft,
-                onTapCell = { r, c -> editCell = r to c }, modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
+            Box(if (fullScreen) Modifier.fillMaxWidth().height(viewerHeight) else Modifier.weight(1f).fillMaxWidth()) {
+                SheetCanvas(
+                    v.snapshot, texts, v.edits.keys, hits.toSet(), hits.getOrNull(pos), v.editing && !v.draft,
+                    onTapCell = { r, c -> editCell = r to c }, modifier = Modifier.fillMaxSize(),
+                )
+                if (fullScreen) Button(onClick = { fullScreen = false }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) { Icon(Icons.Rounded.FullscreenExit, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Exit Full Screen") }
+            }
+        }
         }
     }
 
@@ -602,10 +618,17 @@ private fun wrapLines(value: String, paint: android.graphics.Paint, width: Float
 private fun SummaryDialog(s: ManualSummary, v: Viewer, viewModel: PreviousManualRecordViewModel, onDismiss: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     androidx.compose.runtime.LaunchedEffect(v.index, v.comparison) { viewModel.startCompare() }
+    androidx.compose.runtime.LaunchedEffect(v.index, v.info?.id) { if (!v.draft) viewModel.startAnalysis() }
     val compare by viewModel.compare.collectAsStateWithLifecycle()
-    // The words read aloud are the server's report; a worksheet with nothing to compare reads its own summary instead.
+    val analysisUi by viewModel.analysis.collectAsStateWithLifecycle()
+    val analysis = analysisUi.analysis?.takeIf { analysisUi.forImport == v.info?.id && analysisUi.forIndex == v.index }
+    val showAnalysis = !v.draft && compare.other == null
+    // The words read aloud: the analysis' narration (the AI's wording only once it was checked, otherwise GoPreach's own sentences), the other-file report's, or the worksheet's own summary.
     val sheetScript = remember(s) { com.emfitsolutions.gopreach.domain.ManualSummaryNarration.script(s) }
-    val script = compare.report?.voice?.takeIf { it.isNotEmpty() } ?: sheetScript
+    val script = (if (showAnalysis) analysis?.narration else compare.report?.voice)?.takeIf { it.isNotEmpty() } ?: sheetScript
+    val shareText: (String) -> Unit = { text ->
+        context.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).apply { type = "text/plain"; putExtra(android.content.Intent.EXTRA_SUBJECT, "Previous Manual Record - Summary and Comparative Analysis"); putExtra(android.content.Intent.EXTRA_TEXT, text) }, "Export Summary"))
+    }
     val narrator = remember { ReportNarrator(context, emptyList()) }
     androidx.compose.runtime.LaunchedEffect(script) { narrator.load(script) }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { narrator.shutdown() } }
@@ -618,8 +641,10 @@ private fun SummaryDialog(s: ManualSummary, v: Viewer, viewModel: PreviousManual
                 }
                 HorizontalDivider()
                 Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ReadReportPanel(narrator, script, label = "Listen to the summary and comparison")
-                    ComparativeReport(compare, v.comparison.message.ifBlank { "No comparable records were found in this Excel file. Upload a file containing matching indicators across different periods, visits, or congregations to generate a comparative report." }, canChoose = !v.draft, viewModel = viewModel)
+                    if (showAnalysis && analysisUi.aiBusy) Text("Preparing the narration...", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    else ReadReportPanel(narrator, script, label = "Listen to Summary")
+                    if (showAnalysis) AnalysisView(analysisUi.takeIf { analysisUi.forImport == v.info?.id && analysisUi.forIndex == v.index } ?: AnalysisUi(loading = true), compare, viewModel, shareText)
+                    else ComparativeReport(compare, v.comparison.message.ifBlank { "No comparable records were found in this Excel file. Upload a file containing matching indicators across different periods, visits, or congregations to generate a comparative report." }, canChoose = !v.draft, viewModel = viewModel)
                     HorizontalDivider()
                     Text("Worksheet details", fontWeight = FontWeight.SemiBold)
                     Text("${s.rows} rows × ${s.cols} columns · ${s.filled} filled cells · ${s.numeric} numbers · ${s.merged} merged areas · ${s.formulaCount} formulas", style = MaterialTheme.typography.bodyMedium)

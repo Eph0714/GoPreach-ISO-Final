@@ -85,7 +85,7 @@ fun ComparativeReport(state: CompareUi, noComparisonMessage: String, canChoose: 
 }
 
 @Composable
-private fun Picker(label: String, current: String, options: List<String>, onPick: (Int) -> Unit) {
+internal fun Picker(label: String, current: String, options: List<String>, onPick: (Int) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         OutlinedButton(onClick = { open = true }) {
