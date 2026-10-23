@@ -16,6 +16,25 @@ import com.emfitsolutions.gopreach.shared.resources.login_tagline
 import com.emfitsolutions.gopreach.shared.resources.login_username
 import com.emfitsolutions.gopreach.shared.resources.login_welcome_back
 import androidx.compose.foundation.layout.Arrangement
+import com.emfitsolutions.gopreach.R
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.material3.Surface
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -70,10 +89,9 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.BuildConfig
 import com.emfitsolutions.gopreach.data.repository.QuickLoginMethod
-import com.emfitsolutions.gopreach.ui.components.GradientHero
 import com.emfitsolutions.gopreach.ui.components.update.UpdateViewModel
 
-private val FieldShape = RoundedCornerShape(16.dp)
+private val FieldShape = RoundedCornerShape(14.dp)
 
 /**
  * Login entry screen. Establishes the visual pattern used everywhere: plain-text
@@ -104,213 +122,157 @@ fun LoginScreen(
         }
     }
 
-    // A single scrollable Column, footer included as its last item — not a
-    // Box-aligned overlay pinned to the bottom of the screen. A pinned overlay
-    // looked right with no keyboard up, but once the IME shrinks the visible
-    // height (see MainActivity's imePadding()), a fixed-position footer ends up
-    // sitting on top of whatever content the shrunk viewport happens to place
-    // there — in practice, directly on top of the Log In button. Keeping the
-    // footer in-flow means it simply scrolls along like everything else instead.
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-    ) {
-        GradientHero(height = 220.dp) {
-                // Bottom-aligned rather than pinned under the status bar — sitting
-                // right at the top of the hero read as too high/cramped; anchoring
-                // to the bottom instead gives the title/subtitle block room to
-                // breathe and keeps it comfortably in view regardless of status bar
-                // height across devices.
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(stringResource(Res.string.app_name), style = MaterialTheme.typography.headlineLarge, color = Color.White)
-                    Text(
-                        stringResource(Res.string.login_tagline),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color.White,
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .padding(PaddingValues(horizontal = 24.dp))
-                    .padding(top = 32.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
+    // The website's sign-in look (LoginDesign.kt): lavender sky, drifting light and layered mountains behind one rounded card. Everything the old screen did is kept: the
+    // password form, Remember me, Forgot password, Biometrics, Passkey, PIN and Pattern, the busy lock on every control, and the one-session prompt below.
+    // One scrollable column with the footer last (not pinned) so the keyboard can never cover the Sign In button.
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val pal = remember(dark) { LoginPalette(dark) }
+    val fieldColors = loginFieldColors(pal)
+    val busy = uiState.isLoading
+    val outlineColors = ButtonDefaults.outlinedButtonColors(contentColor = pal.primary, disabledContentColor = pal.muted)
+    val outlineBorder = BorderStroke(1.dp, pal.primary.copy(alpha = 0.55f))
+    Box(Modifier.fillMaxSize()) {
+        LoginBackdrop(pal)
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(horizontal = 20.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Surface(
+                shape = RoundedCornerShape(24.dp), color = pal.card, border = BorderStroke(1.dp, pal.line), shadowElevation = 14.dp,
+                modifier = Modifier.fillMaxWidth().widthIn(max = 520.dp),
             ) {
-                Text(
-                    stringResource(Res.string.login_welcome_back),
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                Column(Modifier.padding(horizontal = 24.dp, vertical = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Image(painter = painterResource(R.drawable.app_logo), contentDescription = "GoPreach", modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)))
+                        Text(
+                            buildAnnotatedString { withStyle(SpanStyle(color = pal.text)) { append("Go") }; withStyle(SpanStyle(color = pal.primary)) { append("Preach") } },
+                            style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold,
+                        )
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(stringResource(Res.string.login_welcome_back), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, color = pal.text)
+                    Text("Sign in to your GoPreach App account", style = MaterialTheme.typography.bodyLarge, color = pal.muted)
+                    Spacer(Modifier.height(4.dp))
 
-                OutlinedTextField(
-                    value = uiState.username,
-                    onValueChange = viewModel::onUsernameChange,
-                    label = { Text(stringResource(Res.string.login_username)) },
-                    singleLine = true,
-                    shape = FieldShape,
-                    // "Disable: Login Button, Username Field, Password Field"
-                    // while authentication is running — this used to only
-                    // disable the button below, leaving both fields editable
-                    // (and, worse, submittable via the keyboard's own Done/
-                    // Enter action) for the whole duration of a request.
-                    enabled = !uiState.isLoading,
-                    leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
-                    // Plain text, never masked — per spec, only password fields mask input.
-                    visualTransformation = VisualTransformation.None,
-                    // KeyboardType.Password (not .Text) despite showing plain
-                    // text — this recurred even with autoCorrectEnabled =
-                    // false, because that flag alone doesn't reliably stop
-                    // every IME's "auto-space after a period" behavior; it's
-                    // a separate suggestion-engine flag several keyboards
-                    // (Samsung's default included) don't honor just from
-                    // autoCorrect being off. KeyboardType.Password is
-                    // Android's "visible password" field type — it genuinely
-                    // disables the whole prose/suggestion engine (autocorrect,
-                    // auto-caps, auto-space-after-punctuation) at the platform
-                    // level, the same way the Password field below already
-                    // relies on for its own input, so "user.test" can never
-                    // silently become "user. test" again regardless of IME.
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                OutlinedTextField(
-                    value = uiState.password,
-                    onValueChange = viewModel::onPasswordChange,
-                    label = { Text(stringResource(Res.string.login_password)) },
-                    singleLine = true,
-                    shape = FieldShape,
-                    enabled = !uiState.isLoading,
-                    leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
-                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    trailingIcon = {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !uiState.isLoading) {
-                            Icon(
-                                imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
-                                contentDescription = if (passwordVisible) stringResource(Res.string.login_hide_password) else stringResource(Res.string.login_show_password),
-                            )
+                    uiState.errorMessage?.let { message ->
+                        Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f), border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))) {
+                            Text(message, Modifier.fillMaxWidth().padding(12.dp), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = uiState.rememberMe, onCheckedChange = viewModel::onRememberMeChange)
-                        Text(stringResource(Res.string.login_remember_me), style = MaterialTheme.typography.bodyMedium)
                     }
-                    TextButton(onClick = onForgotPasswordClick) {
-                        Text(stringResource(Res.string.login_forgot_password))
-                    }
-                }
 
-                if (uiState.errorMessage != null) {
-                    Text(text = uiState.errorMessage!!, color = MaterialTheme.colorScheme.error)
-                }
+                    OutlinedTextField(
+                        value = uiState.username,
+                        onValueChange = viewModel::onUsernameChange,
+                        placeholder = { Text(stringResource(Res.string.login_username)) },
+                        singleLine = true,
+                        shape = FieldShape,
+                        colors = fieldColors,
+                        // Every control is disabled while a sign-in runs (fields included, so the keyboard's Done cannot submit a second request).
+                        enabled = !busy,
+                        leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
+                        // Plain text, never masked; KeyboardType.Password only so no keyboard auto-spaces after a period ("user.test" must stay "user.test").
+                        visualTransformation = VisualTransformation.None,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
 
-                Button(
-                    onClick = viewModel::signIn,
-                    enabled = !uiState.isLoading,
-                    shape = FieldShape,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .shadow(elevation = 6.dp, shape = FieldShape),
-                ) {
-                    if (uiState.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
-                    }
-                    Text(stringResource(Res.string.login_log_in), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
+                    OutlinedTextField(
+                        value = uiState.password,
+                        onValueChange = viewModel::onPasswordChange,
+                        placeholder = { Text(stringResource(Res.string.login_password)) },
+                        singleLine = true,
+                        shape = FieldShape,
+                        colors = fieldColors,
+                        enabled = !busy,
+                        leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
+                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        trailingIcon = {
+                            IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !busy) {
+                                Icon(
+                                    imageVector = if (passwordVisible) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                    contentDescription = if (passwordVisible) stringResource(Res.string.login_hide_password) else stringResource(Res.string.login_show_password),
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
 
-                // Always shown — even right after a logout or an expired session. Whether it signs
-                // anyone in depends on biometric login having been explicitly set up for GoPreach
-                // on this device (see LoginViewModel.onBiometricButtonClick), not on the button's visibility.
-                val biometricTitle = stringResource(Res.string.login_biometric_prompt_title)
-                val biometricSubtitle = stringResource(Res.string.login_biometric_prompt_subtitle)
-                val biometricUsePassword = stringResource(Res.string.login_biometric_prompt_use_password)
-                OutlinedButton(
-                    onClick = {
-                        if (viewModel.onBiometricButtonClick(deviceHasBiometrics(activity))) {
-                            launchBiometricPrompt(
-                                activity = activity,
-                                title = biometricTitle,
-                                subtitle = biometricSubtitle,
-                                negativeButtonText = biometricUsePassword,
-                                onSuccess = viewModel::onBiometricAuthSucceeded,
-                                onError = viewModel::onBiometricError,
-                            )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = uiState.rememberMe, onCheckedChange = viewModel::onRememberMeChange, colors = CheckboxDefaults.colors(checkedColor = pal.primary), enabled = !busy)
+                            Text(stringResource(Res.string.login_remember_me), style = MaterialTheme.typography.bodyMedium, color = pal.text, fontWeight = FontWeight.Medium)
                         }
-                    },
-                    enabled = !uiState.isLoading,
-                    shape = FieldShape,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Rounded.Fingerprint, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text("Login with Biometrics")
-                }
+                        TextButton(onClick = onForgotPasswordClick, enabled = !busy) { Text(stringResource(Res.string.login_forgot_password), color = pal.primary) }
+                    }
 
-                // Every method is always listed; one that was never set up (or isn't available) explains
-                // itself when tapped instead of signing anyone in. Each one that is set up ends in the
-                // same server-verified sign-in as the password form above.
-                if (com.emfitsolutions.gopreach.data.passkey.PASSKEY_LOGIN_ENABLED) OutlinedButton(
-                    onClick = { viewModel.onPasskeyClick(activity) },
-                    enabled = !uiState.isLoading,
-                    shape = FieldShape,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Rounded.Key, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text("Login with Passkey")
-                }
-                OutlinedButton(
-                    onClick = { viewModel.onQuickLoginClick(QuickLoginMethod.PIN) },
-                    enabled = !uiState.isLoading,
-                    shape = FieldShape,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Rounded.Pin, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text("Login with PIN")
-                }
-                OutlinedButton(
-                    onClick = { viewModel.onQuickLoginClick(QuickLoginMethod.PATTERN) },
-                    enabled = !uiState.isLoading,
-                    shape = FieldShape,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Rounded.Apps, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text("Login with Pattern")
-                }
+                    Button(
+                        onClick = viewModel::signIn,
+                        enabled = !busy,
+                        shape = FieldShape,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = pal.yellow, contentColor = pal.onYellow,
+                            disabledContainerColor = pal.yellow.copy(alpha = 0.55f), disabledContentColor = pal.onYellow.copy(alpha = 0.7f),
+                        ),
+                        contentPadding = PaddingValues(vertical = 16.dp),
+                        modifier = Modifier.fillMaxWidth().shadow(elevation = 6.dp, shape = FieldShape),
+                    ) {
+                        if (busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = pal.onYellow)
+                        Text(if (busy) "Signing in..." else stringResource(Res.string.login_log_in), Modifier.padding(horizontal = 8.dp), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        if (!busy) Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
+                    }
 
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        stringResource(Res.string.login_powered_by),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        "v${BuildConfig.VERSION_NAME}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    // Every other way in is listed here too; one that was never set up (or is not available) explains itself when tapped instead of signing anyone in.
+                    val biometricTitle = stringResource(Res.string.login_biometric_prompt_title)
+                    val biometricSubtitle = stringResource(Res.string.login_biometric_prompt_subtitle)
+                    val biometricUsePassword = stringResource(Res.string.login_biometric_prompt_use_password)
+                    OutlinedButton(
+                        onClick = {
+                            if (viewModel.onBiometricButtonClick(deviceHasBiometrics(activity))) {
+                                launchBiometricPrompt(
+                                    activity = activity, title = biometricTitle, subtitle = biometricSubtitle, negativeButtonText = biometricUsePassword,
+                                    onSuccess = viewModel::onBiometricAuthSucceeded, onError = viewModel::onBiometricError,
+                                )
+                            }
+                        },
+                        enabled = !busy, shape = FieldShape, colors = outlineColors, border = outlineBorder, modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Rounded.Fingerprint, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                        Text("Login with Biometrics")
+                    }
+                    if (com.emfitsolutions.gopreach.data.passkey.PASSKEY_LOGIN_ENABLED) OutlinedButton(
+                        onClick = { viewModel.onPasskeyClick(activity) },
+                        enabled = !busy, shape = FieldShape, colors = outlineColors, border = outlineBorder, modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Rounded.Key, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                        Text("Login with Passkey")
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.onQuickLoginClick(QuickLoginMethod.PIN) },
+                        enabled = !busy, shape = FieldShape, colors = outlineColors, border = outlineBorder, modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Rounded.Pin, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                        Text("Login with PIN")
+                    }
+                    OutlinedButton(
+                        onClick = { viewModel.onQuickLoginClick(QuickLoginMethod.PATTERN) },
+                        enabled = !busy, shape = FieldShape, colors = outlineColors, border = outlineBorder, modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Icon(Icons.Rounded.Apps, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+                        Text("Login with Pattern")
+                    }
+
+                    Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.VerifiedUser, contentDescription = null, tint = pal.primary, modifier = Modifier.size(20.dp))
+                        Text("  Your data is secure and encrypted", style = MaterialTheme.typography.bodySmall, color = pal.muted)
+                    }
+                    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(stringResource(Res.string.login_powered_by), style = MaterialTheme.typography.labelSmall, color = pal.muted)
+                        Text("v${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelSmall, color = pal.muted)
+                    }
                 }
             }
+        }
     }
     uiState.quickLoginMethod?.let { method ->
         QuickLoginDialog(
