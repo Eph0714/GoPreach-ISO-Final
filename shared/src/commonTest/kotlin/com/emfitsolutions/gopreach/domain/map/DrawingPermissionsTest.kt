@@ -195,4 +195,26 @@ class DrawingPermissionsTest {
         assertTrue(polygon(admin, inT2) is DrawingValidation.Valid)
         assertEquals(DrawingValidation.OtherCongregation, polygon(admin, inT9, "c2"))
     }
+
+    @Test fun aCongregationWideRoleHoldsWhateverThePublisherCategory() {
+        // a Ministerial Servant / Regular Elder / Publisher of Group 1 who was also assigned a congregation-wide role
+        val msCoordinator = access("m", admin("m", AdminRole.MINISTERIAL_SERVANT, "c1", "g1"), admin("m", AdminRole.COORDINATOR_ELDER, "c1"))
+        val elderSecretary = access("e", admin("e", AdminRole.REGULAR_ELDER, "c1", "g1"), admin("e", AdminRole.SECRETARY, "c1"))
+        val publisherSo = access("pu", groupMember("pu", "g1"), admin("pu", AdminRole.SERVICE_OVERSEER, "c1"))
+        for (a in listOf(msCoordinator, elderSecretary, publisherSo)) {
+            assertTrue(polygon(a, inT1) is DrawingValidation.Valid)
+            assertTrue(polygon(a, inT2) is DrawingValidation.Valid, "another FS Group of the same congregation")
+            assertTrue(a.canManage(TerritoryDrawing(congregationId = "c1", groupId = "g2")))
+            assertEquals(DrawingValidation.OtherCongregation, polygon(a, inT9, "c2"))
+        }
+    }
+
+    @Test fun aSwitchedOffOrForeignWideRoleGivesNothingBeyondTheGroup() {
+        val off = RoleAssignment(id = "off", personId = "overseer", roleType = RoleType.serialize(RoleType.Admin(AdminRole.SECRETARY)), congregationId = "c1", status = com.emfitsolutions.gopreach.data.model.RoleAssignmentStatus.INACTIVE)
+        val offSecretary = access("overseer", admin("overseer", AdminRole.REGULAR_ELDER, "c1", "g1"), off)
+        assertTrue(polygon(offSecretary, inT1) is DrawingValidation.Valid)
+        assertTrue(polygon(offSecretary, inT2) is DrawingValidation.OutsideAssigned)
+        val foreign = access("y", admin("y", AdminRole.REGULAR_ELDER, "c1", "g1"), admin("y", AdminRole.COORDINATOR_ELDER, "c2"))
+        assertEquals(DrawingValidation.OtherCongregation, polygon(foreign, inT1, "c1"))
+    }
 }

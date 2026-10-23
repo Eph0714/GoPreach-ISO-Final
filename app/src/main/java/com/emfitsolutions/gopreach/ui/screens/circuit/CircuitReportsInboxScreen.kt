@@ -119,6 +119,7 @@ fun CircuitReportsInboxScreen(
             TopAppBar(
                 title = { Text("Field Service Report") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
+                actions = { com.emfitsolutions.gopreach.ui.components.CircuitHomeButton() },
             )
         },
     ) { padding ->

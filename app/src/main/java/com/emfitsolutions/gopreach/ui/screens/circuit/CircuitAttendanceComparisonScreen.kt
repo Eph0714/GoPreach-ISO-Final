@@ -138,6 +138,7 @@ fun CircuitAttendanceComparisonScreen(
             TopAppBar(
                 title = { Text("Circuit Attendance Comparison") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
+                actions = { com.emfitsolutions.gopreach.ui.components.CircuitHomeButton() },
             )
         },
     ) { padding ->

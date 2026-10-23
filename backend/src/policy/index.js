@@ -7,12 +7,28 @@ export const CONGREGATION_WIDE_ROLES = ['ADMIN_PER_CONGREGATION', 'COORDINATOR_E
 
 /**
  * Who is calling, resolved from the people/{personId} document (the same denormalized fields the Firestore rules use:
- * isSuperAdmin, activeCongregationId, activeAdminRole).
+ * isSuperAdmin, activeCongregationId, activeAdminRole) and, when [list] is given, from the person's own role assignments.
+ *
+ * Three things are kept apart: the publisher category (Ministerial Servant, Regular Elder, Publisher ...), the assigned system role
+ * (Coordinator Elder, Secretary, Service Overseer, Admin ...) and the scope (the congregation / FS Group of the territory). A person whose
+ * active role is a publisher category still holds a congregation-wide role they were assigned, so `wideCongregations` lists the
+ * congregations where they have an ACTIVE assignment of one of the congregation-wide roles. The category never grants it and never removes it.
  */
-export async function loadActor(personId, get) {
+export async function loadActor(personId, get, list) {
   const doc = await get('people', personId);
   const p = doc && !doc.deleted ? doc.data : null;
+  const wideCongregations = new Set();
+  const home = p?.activeCongregationId ?? null;
+  if (p && list && home != null) {
+    for (const row of await list('roleAssignments', home)) {
+      const a = row.data ?? {};
+      if (a.personId !== personId || a.status !== 'ACTIVE' || a.congregationId !== home) continue;
+      const type = String(a.roleType ?? '');
+      if (type.startsWith('ADMIN:') && CONGREGATION_WIDE_ROLES.includes(type.slice(6))) wideCongregations.add(home);
+    }
+  }
   return {
+    wideCongregations,
     personId,
     known: !!p,
     isSuperAdmin: p?.isSuperAdmin === true,
@@ -24,7 +40,9 @@ export async function loadActor(personId, get) {
 }
 
 export const isWide = (actor, congregationId) =>
-  actor.isSuperAdmin || (actor.congregationId != null && actor.congregationId === congregationId && CONGREGATION_WIDE_ROLES.includes(actor.adminRole));
+  actor.isSuperAdmin ||
+  (actor.congregationId != null && actor.congregationId === congregationId &&
+    (CONGREGATION_WIDE_ROLES.includes(actor.adminRole) || (actor.wideCongregations?.has(congregationId) ?? false)));
 
 /** True when [actor] holds the Overseer / Servant / Assistant slot of [groupId] (group record is the source of truth). */
 export async function isSlotHolder(actor, groupId, congregationId, get) {

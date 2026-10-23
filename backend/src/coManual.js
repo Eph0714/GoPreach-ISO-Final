@@ -2,6 +2,7 @@ import express from 'express';
 import { createHash } from 'node:crypto';
 import { MAX_EXCEL_BYTES } from './excel.js';
 import { readSnapshots, searchTextOf, applyEdits, summarySnapshot, LIMITS } from './sheetSnapshot.js';
+import { comparisonFor, reportFor, reportForFiles } from './sheetCompare.js';
 import { coAccess, allowedCongregations, newId, ID_RE, audit, jsonErrors } from './coAccess.js';
 
 /**
@@ -68,6 +69,8 @@ export function mountCoManual(app, store, auth) {
   }
 
   const publicImport = ({ contentHash, ...i }) => i;
+  /** What the comparison needs to name its source: the file, its congregation and worksheet, and the congregations this caller may see. */
+  const compareCtx = (ctx, imp, sheetName) => ({ fileName: imp?.fileName ?? '', congregationName: imp?.congregationName ?? '', sheetName: sheetName ?? '', congregations: ctx.congregations.map((c) => c.name) });
 
   router.get('/congregations', auth, guard(async (req, res, ctx) => res.json({ congregations: ctx.congregations })));
 
@@ -83,6 +86,7 @@ export function mountCoManual(app, store, auth) {
       fileName: src.name, truncated: book.truncated,
       sheets: book.sheets.map((b, i) => ({ index: i, name: b.name, rows: b.snapshot.rows, cols: b.snapshot.cols })),
       sheet: { index, name: s.name, snapshot: s.snapshot }, summary: summarySnapshot(s.snapshot),
+      comparison: comparisonFor(s.snapshot, compareCtx(ctx, { fileName: src.name }, s.name)),
     });
   }));
 
@@ -134,7 +138,35 @@ export function mountCoManual(app, store, auth) {
     const imp = await ownImport(req, ctx);
     const sheet = imp && /^\d{1,3}$/.test(req.params.index) ? await store.co_getSheet(ctx.owner, imp.id, req.params.index) : null;
     if (!sheet) return res.status(404).json({ error: 'Worksheet not found' });
-    res.json({ import: publicImport(imp), sheet: { index: sheet.index, name: sheet.name, snapshot: sheet.data }, summary: summarySnapshot(sheet.data) });
+    res.json({ import: publicImport(imp), sheet: { index: sheet.index, name: sheet.name, snapshot: sheet.data }, summary: summarySnapshot(sheet.data), comparison: comparisonFor(sheet.data, compareCtx(ctx, imp, sheet.name)) });
+  }));
+
+  /** The comparative report of a chosen group of columns and pair of them (the caller's own saved worksheet only). */
+  router.get('/imports/:id/sheets/:index/compare', auth, guard(async (req, res, ctx) => {
+    const imp = await ownImport(req, ctx);
+    const sheet = imp && /^\d{1,3}$/.test(req.params.index) ? await store.co_getSheet(ctx.owner, imp.id, req.params.index) : null;
+    if (!sheet) return res.status(404).json({ error: 'Worksheet not found' });
+    const { group, a, b } = req.query;
+    const report = reportFor(sheet.data, String(group ?? ''), String(a ?? ''), String(b ?? ''), compareCtx(ctx, imp, sheet.name));
+    if (!report) return res.status(400).json({ error: 'Choose two different columns of the same group to compare' });
+    res.json({ report });
+  }));
+
+  /** Two saved worksheets of the caller compared by indicator name (for example the records of two visits). */
+  router.get('/compare-imports', auth, guard(async (req, res, ctx) => {
+    const pick = async (id, index) => {
+      const imp = ID_RE.test(String(id)) ? await store.co_getImport(ctx.owner, String(id)) : null;
+      if (!imp || !ctx.ids.includes(imp.congregationId) || !/^\d{1,3}$/.test(String(index ?? '0'))) return null;
+      const sheet = await store.co_getSheet(ctx.owner, imp.id, String(index ?? '0'));
+      return sheet ? { imp, sheet } : null;
+    };
+    const [x, y] = await Promise.all([pick(req.query.a, req.query.sheetA), pick(req.query.b, req.query.sheetB)]);
+    if (!x || !y || x.imp.id === y.imp.id && String(req.query.sheetA ?? '0') === String(req.query.sheetB ?? '0')) return res.status(404).json({ error: 'Choose two different saved worksheets' });
+    const when = (i) => new Date(i.createdAt).toISOString().slice(0, 10);
+    const side = ({ imp, sheet }) => ({ snapshot: sheet.data, label: `${imp.fileName} (saved ${when(imp)})`, fileName: imp.fileName, sheetName: sheet.name });
+    const report = reportForFiles(side(x), side(y), { congregationName: x.imp.congregationId === y.imp.congregationId ? x.imp.congregationName : `${x.imp.congregationName} and ${y.imp.congregationName}`, sameCongregation: x.imp.congregationId === y.imp.congregationId });
+    if (!report) return res.status(200).json({ report: null, message: 'No matching indicators were found in these two worksheets. Choose two files that report the same indicators.' });
+    res.json({ report });
   }));
 
   /** Edit cells of a saved worksheet: every value is plain text (a typed value replaces a formula, nothing is ever calculated). */
@@ -155,7 +187,7 @@ export function mountCoManual(app, store, auth) {
     while (snap.colWidths.length < snap.cols) snap.colWidths.push(64);
     await store.co_saveSheet(ctx.owner, imp.id, sheet.index, snap, searchTextOf(snap));
     await audit(store, ctx.owner, 'CO_MANUAL_EDIT', 'CoManualImport', imp.id, `${imp.fileName} / ${sheet.name}: ${changed} cell(s)`);
-    res.json({ changed, sheet: { index: sheet.index, name: sheet.name, snapshot: snap }, summary: summarySnapshot(snap) });
+    res.json({ changed, sheet: { index: sheet.index, name: sheet.name, snapshot: snap }, summary: summarySnapshot(snap), comparison: comparisonFor(snap, compareCtx(ctx, imp, sheet.name)) });
   }));
 
   router.patch('/imports/:id', auth, json, guard(async (req, res, ctx) => {

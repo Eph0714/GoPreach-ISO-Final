@@ -128,7 +128,7 @@ fun CircuitPublishersScreen(
             TopAppBar(
                 title = { Text(cat?.displayName?.let { "$it (${all.size})" } ?: "Publishers") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
-                actions = { if (selected != null) CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
+                actions = { com.emfitsolutions.gopreach.ui.components.CircuitHomeButton(); if (selected != null) CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
             )
         },
     ) { padding ->
@@ -250,7 +250,7 @@ fun CircuitLeadersScreen(
             TopAppBar(
                 title = { Text(listTitle) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
-                actions = { if (selected != null) CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
+                actions = { com.emfitsolutions.gopreach.ui.components.CircuitHomeButton(); if (selected != null) CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
             )
         },
     ) { padding ->
@@ -317,6 +317,7 @@ fun CircuitCongregationsScreen(
             TopAppBar(
                 title = { Text("Congregations") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
+                actions = { com.emfitsolutions.gopreach.ui.components.CircuitHomeButton() },
             )
         },
     ) { padding ->
@@ -389,6 +390,7 @@ fun CircuitCongregationOverviewScreen(
             TopAppBar(
                 title = { Text(s?.congregation?.name ?: "Congregation") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
+                actions = { com.emfitsolutions.gopreach.ui.components.CircuitHomeButton() },
             )
         },
     ) { padding ->

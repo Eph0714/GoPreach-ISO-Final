@@ -114,7 +114,7 @@ fun ReceivedAttendanceScreen(
             TopAppBar(
                 title = { Text(if (openId != null) "Attendance Snapshot" else "Circuit Attendance Report") },
                 navigationIcon = { IconButton(onClick = { if (openId != null) openId = null else onBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
-                actions = { if (openId == null) TextButton(onClick = onOpenCircuitSummary) { Text("Circuit summary") } },
+                actions = { com.emfitsolutions.gopreach.ui.components.CircuitHomeButton(); if (openId == null) TextButton(onClick = onOpenCircuitSummary) { Text("Circuit summary") } },
             )
         },
     ) { padding ->

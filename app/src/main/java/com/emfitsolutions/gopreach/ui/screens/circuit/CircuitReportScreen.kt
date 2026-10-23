@@ -98,6 +98,7 @@ fun CircuitReportScreen(
         topBar = {
             TopAppBar(
                 actions = {
+                    com.emfitsolutions.gopreach.ui.components.CircuitHomeButton()
                     onOpenComparison?.let { open -> TextButton(onClick = open) { Text("Compare periods") } }
                     com.emfitsolutions.gopreach.ui.components.co.CoFullScreenButton(fullScreen) { fullScreen = !fullScreen }
                 },

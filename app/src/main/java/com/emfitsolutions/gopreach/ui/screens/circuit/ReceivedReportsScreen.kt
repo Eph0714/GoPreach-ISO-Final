@@ -101,7 +101,7 @@ fun ReceivedReportsScreen(
             TopAppBar(
                 title = { Text(if (openId != null) "Submitted CO Snapshot" else "Received Reports") },
                 navigationIcon = { IconButton(onClick = { if (openId != null) openId = null else onBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
-                actions = { if (selected != null) CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
+                actions = { com.emfitsolutions.gopreach.ui.components.CircuitHomeButton(); if (selected != null) CoFullScreenButton(fullScreen) { fullScreen = !fullScreen } },
             )
         },
     ) { padding ->

@@ -9,6 +9,9 @@ import com.emfitsolutions.gopreach.data.repository.CellEdit
 import com.emfitsolutions.gopreach.data.repository.CoApiException
 import com.emfitsolutions.gopreach.data.repository.CoDocumentsRepository
 import com.emfitsolutions.gopreach.data.repository.CoListing
+import com.emfitsolutions.gopreach.data.repository.CompareGroup
+import com.emfitsolutions.gopreach.data.repository.Comparison
+import com.emfitsolutions.gopreach.data.repository.ComparisonReport
 import com.emfitsolutions.gopreach.data.repository.ManualImportInfo
 import com.emfitsolutions.gopreach.data.repository.ManualSheetInfo
 import com.emfitsolutions.gopreach.data.repository.ManualSheetView
@@ -47,11 +50,23 @@ data class Viewer(
     val index: Int,
     val snapshot: SheetSnapshot,
     val summary: ManualSummary,
+    /** What the server found to compare in this worksheet, with its recommended report. */
+    val comparison: Comparison = Comparison(),
     val find: String = "",
     val edits: Map<Long, String> = emptyMap(),
     val editing: Boolean = false,
     val busy: Boolean = false,
 ) { val dirty get() = edits.isNotEmpty() }
+
+/** Another saved worksheet the open one can be compared with. */
+data class CompareOther(val importId: String, val index: Int, val name: String, val createdAt: Long)
+
+/** The comparative report on screen: which group and pair of columns (or which other file) is compared, and the server's report for it. */
+data class CompareUi(
+    val groups: List<CompareGroup> = emptyList(), val group: CompareGroup? = null, val previous: String = "", val current: String = "",
+    val report: ComparisonReport? = null, val others: List<CompareOther> = emptyList(), val other: CompareOther? = null,
+    val note: String = "", val loading: Boolean = false, val error: String? = null,
+)
 
 /** The "Save this record" form of a draft: the congregation (required) and the remarks (optional) are asked only now. */
 data class SaveForm(val congregationId: String? = null, val remarks: String = "", val saving: Boolean = false, val error: String? = null, val duplicate: Boolean = false)
@@ -79,6 +94,74 @@ class PreviousManualRecordViewModel(
     val loading: StateFlow<Boolean> = _loading.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+    private val _compare = MutableStateFlow(CompareUi())
+    val compare: StateFlow<CompareUi> = _compare.asStateFlow()
+
+    /** Sets the report of the open worksheet (the one the server recommended) and lists the other saved files it can be compared with. */
+    fun startCompare() {
+        val v = _viewer.value ?: return
+        val c = v.comparison
+        val g = c.groups.firstOrNull()
+        _compare.value = CompareUi(groups = c.groups, group = g, previous = g?.recommended?.previous.orEmpty(), current = g?.recommended?.current.orEmpty(), report = c.report)
+        val info = v.info ?: return
+        viewModelScope.launch {
+            val others = runCatching { repository.imports(congregationId = info.congregationId) }.getOrDefault(emptyList())
+                .flatMap { i -> i.sheets.map { s -> CompareOther(i.id, s.index, i.fileName + (if (i.sheets.size > 1) " - ${s.name}" else "") , i.createdAt) } }
+                .filter { !(it.importId == info.id && it.index == v.index) }.take(80)
+            _compare.update { it.copy(others = others) }
+        }
+    }
+
+    fun pickGroup(g: CompareGroup) { _compare.update { it.copy(group = g, previous = g.recommended.previous, current = g.recommended.current, other = null, note = "") }; refreshReport() }
+    fun pickPair(previous: String, current: String) {
+        if (previous == current) { _compare.update { it.copy(error = "Choose two different columns.") }; return }
+        _compare.update { it.copy(previous = previous, current = current, other = null, note = "", error = null) }; refreshReport()
+    }
+
+    private fun refreshReport() {
+        val v = _viewer.value ?: return
+        val info = v.info ?: return
+        val s = _compare.value
+        val g = s.group ?: return
+        _compare.update { it.copy(loading = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val r = repository.compare(info.id, v.index, g.id, s.previous, s.current)
+                _compare.update { it.copy(report = r, loading = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _compare.update { it.copy(loading = false, error = reason(e)) }
+            }
+        }
+    }
+
+    /** Compares the open worksheet with another saved one (the older of the two is the earlier); null goes back to the worksheet's own comparison. */
+    fun compareWith(other: CompareOther?) {
+        val v = _viewer.value ?: return
+        val info = v.info ?: return
+        if (other == null) {
+            val c = v.comparison
+            val g = c.groups.firstOrNull()
+            _compare.update { it.copy(group = g, previous = g?.recommended?.previous.orEmpty(), current = g?.recommended?.current.orEmpty(), report = c.report, other = null, note = "", error = null) }
+            return
+        }
+        _compare.update { it.copy(loading = true, error = null, other = other) }
+        viewModelScope.launch {
+            try {
+                val older = other.createdAt < info.createdAt
+                val here = info.id to v.index
+                val there = other.importId to other.index
+                val r = repository.compareFiles(if (older) there else here, if (older) here else there)
+                _compare.update { it.copy(report = r.report, note = if (r.report == null) r.message else "", loading = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _compare.update { it.copy(loading = false, error = reason(e)) }
+            }
+        }
+    }
+
     private val _viewer = MutableStateFlow<Viewer?>(null)
     val viewer: StateFlow<Viewer?> = _viewer.asStateFlow()
     private val _importDialog = MutableStateFlow(false)
@@ -169,7 +252,7 @@ class PreviousManualRecordViewModel(
         viewModelScope.launch {
             try {
                 val v = repository.openSheet(info.id, index)
-                _viewer.value = Viewer(false, null, info.fileName, v.info ?: info, info.sheets, v.sheet.index, v.sheet.snapshot, v.summary, find)
+                _viewer.value = Viewer(false, null, info.fileName, v.info ?: info, info.sheets, v.sheet.index, v.sheet.snapshot, v.summary, v.comparison, find)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -185,7 +268,7 @@ class PreviousManualRecordViewModel(
         viewModelScope.launch {
             try {
                 val v: ManualSheetView = if (cur.draft) repository.preview(cur.source!!, index).view else repository.openSheet(cur.info!!.id, index)
-                _viewer.update { it?.copy(index = v.sheet.index, snapshot = v.sheet.snapshot, summary = v.summary, edits = emptyMap(), editing = false, busy = false) }
+                _viewer.update { it?.copy(index = v.sheet.index, snapshot = v.sheet.snapshot, summary = v.summary, comparison = v.comparison, edits = emptyMap(), editing = false, busy = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -220,7 +303,7 @@ class PreviousManualRecordViewModel(
             try {
                 val edits = v.edits.map { (k, text) -> CellEdit((k shr 32).toInt(), (k and 0xffffffffL).toInt(), text) }
                 val done = repository.editCells(info.id, v.index, edits)
-                _viewer.update { it?.copy(snapshot = done.sheet.snapshot, summary = done.summary, edits = emptyMap(), busy = false) }
+                _viewer.update { it?.copy(snapshot = done.sheet.snapshot, summary = done.summary, comparison = done.comparison, edits = emptyMap(), busy = false) }
                 _messages.tryEmit("Saved ${done.changed} change${if (done.changed == 1) "" else "s"}.")
             } catch (e: CancellationException) {
                 throw e
@@ -269,7 +352,7 @@ class PreviousManualRecordViewModel(
         _importError.value = null
         try {
             val p = repository.preview(source, null)
-            _viewer.value = Viewer(true, source, name, null, p.sheets, p.view.sheet.index, p.view.sheet.snapshot, p.view.summary)
+            _viewer.value = Viewer(true, source, name, null, p.sheets, p.view.sheet.index, p.view.sheet.snapshot, p.view.summary, p.view.comparison)
             _importDialog.value = false
             if (p.truncated) _messages.tryEmit("A very large sheet was cut at 3000 rows and 120 columns.")
         } catch (e: CancellationException) {

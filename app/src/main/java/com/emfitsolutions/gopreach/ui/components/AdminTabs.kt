@@ -115,6 +115,15 @@ object CircuitTabsStore {
     var goHome: (() -> Unit)? = null
 }
 
+/**
+ * The Circuit Overseer's Home button for the app bar of a module that has no tab strip: it goes back to the main form (the same as the strip's Home icon),
+ * closes everything opened from it and never stacks a second main form.
+ */
+@Composable
+fun CircuitHomeButton() {
+    androidx.compose.material3.IconButton(onClick = { CircuitTabsStore.goHome?.invoke() }) { androidx.compose.material3.Icon(Icons.Rounded.Home, contentDescription = "Home - back to the main form") }
+}
+
 /** The Circuit Overseer's tab strip, drawn exactly like the Admin / Publisher one. [selected] is null on the Main Form (no tab open). */
 @Composable
 fun CircuitMainTabs(selected: CircuitTab?) {

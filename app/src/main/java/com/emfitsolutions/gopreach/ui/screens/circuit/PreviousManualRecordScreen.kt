@@ -357,7 +357,7 @@ private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onB
         }
     }
 
-    if (summaryOpen) SummaryDialog(v.summary, onDismiss = { summaryOpen = false })
+    if (summaryOpen) SummaryDialog(v.summary, v, viewModel, onDismiss = { summaryOpen = false })
     editCell?.let { (r, c) ->
         var text by remember(r, c) { mutableStateOf(texts[cellKey(r, c)].orEmpty()) }
         AlertDialog(
@@ -599,7 +599,16 @@ private fun wrapLines(value: String, paint: android.graphics.Paint, width: Float
 // ------------------------------------------------------------------------------------------------------------------------------------------------ summary
 
 @Composable
-private fun SummaryDialog(s: ManualSummary, onDismiss: () -> Unit) {
+private fun SummaryDialog(s: ManualSummary, v: Viewer, viewModel: PreviousManualRecordViewModel, onDismiss: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(v.index, v.comparison) { viewModel.startCompare() }
+    val compare by viewModel.compare.collectAsStateWithLifecycle()
+    // The words read aloud are the server's report; a worksheet with nothing to compare reads its own summary instead.
+    val sheetScript = remember(s) { com.emfitsolutions.gopreach.domain.ManualSummaryNarration.script(s) }
+    val script = compare.report?.voice?.takeIf { it.isNotEmpty() } ?: sheetScript
+    val narrator = remember { ReportNarrator(context, emptyList()) }
+    androidx.compose.runtime.LaunchedEffect(script) { narrator.load(script) }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { narrator.shutdown() } }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
             Column(Modifier.fillMaxSize()) {
@@ -608,11 +617,19 @@ private fun SummaryDialog(s: ManualSummary, onDismiss: () -> Unit) {
                     IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Close") }
                 }
                 HorizontalDivider()
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ReadReportPanel(narrator, script, label = "Listen to the summary and comparison")
+                    ComparativeReport(compare, v.comparison.message.ifBlank { "No comparable records were found in this Excel file. Upload a file containing matching indicators across different periods, visits, or congregations to generate a comparative report." }, canChoose = !v.draft, viewModel = viewModel)
+                    HorizontalDivider()
+                    Text("Worksheet details", fontWeight = FontWeight.SemiBold)
                     Text("${s.rows} rows × ${s.cols} columns · ${s.filled} filled cells · ${s.numeric} numbers · ${s.merged} merged areas · ${s.formulaCount} formulas", style = MaterialTheme.typography.bodyMedium)
                     if (s.notes.isNotEmpty()) {
                         Text("Worth checking", fontWeight = FontWeight.SemiBold)
                         s.notes.forEach { n -> Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.tertiaryContainer) { Text(n, Modifier.fillMaxWidth().padding(8.dp), style = MaterialTheme.typography.bodySmall) } }
+                    }
+                    if (s.columns.size >= 2) {
+                        Text("Comparison between the columns", fontWeight = FontWeight.SemiBold)
+                        com.emfitsolutions.gopreach.domain.ManualSummaryNarration.comparison(s.columns).forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                     }
                     if (s.columns.isNotEmpty()) {
                         Text("Numbers by column", fontWeight = FontWeight.SemiBold)

@@ -114,7 +114,41 @@ data class ManualSummary(
     val formulaCount: Int = 0, val functions: Map<String, Int> = emptyMap(), val notes: List<String> = emptyList(), val formulas: List<ManualFormula> = emptyList(),
 )
 
-class ManualSheetView(val sheet: ManualSheet, val summary: ManualSummary, val info: ManualImportInfo? = null, val changed: Int = 0)
+// ---- The comparative report: built by the server (backend/src/sheetCompare.js) from the saved cells; the app only shows it and reads it aloud ----
+
+@Serializable data class CompareColumn(val key: String = "", val label: String = "")
+@Serializable data class CompareRecommended(val previous: String = "", val current: String = "")
+@Serializable
+data class CompareGroup(
+    val id: String = "", val kind: String = "", val title: String = "", val columns: List<CompareColumn> = emptyList(), val indicators: Int = 0,
+    val recommended: CompareRecommended = CompareRecommended(),
+)
+@Serializable
+data class CompareRow(
+    val label: String = "", val total: Boolean = false, val unit: String = "", val polarity: Int = 0, val previous: Double? = null, val current: Double? = null,
+    val previousCell: String? = null, val currentCell: String? = null, val difference: Double? = null, val percent: Double? = null,
+    val direction: String = "unavailable", val note: String = "",
+)
+@Serializable data class CompareScope(val congregation: String = "", val fileName: String = "", val sheet: String = "", val previous: String = "", val current: String = "")
+@Serializable data class CompareCounts(val indicators: Int = 0, val compared: Int = 0, val increased: Int = 0, val decreased: Int = 0, val unchanged: Int = 0, val unavailable: Int = 0)
+@Serializable data class CompareChartPoint(val label: String = "", val previous: Double = 0.0, val current: Double = 0.0)
+@Serializable data class CompareChart(val type: String = "bar", val previousLabel: String = "", val currentLabel: String = "", val series: List<CompareChartPoint> = emptyList())
+@Serializable
+data class ComparisonReport(
+    val title: String = "", val kind: String = "", val scope: CompareScope = CompareScope(), val counts: CompareCounts = CompareCounts(), val executive: List<String> = emptyList(),
+    val table: List<CompareRow> = emptyList(), val improvements: List<String> = emptyList(), val attention: List<String> = emptyList(), val otherChanges: List<String> = emptyList(),
+    val unchanged: List<String> = emptyList(), val limitations: List<String> = emptyList(), val method: List<String> = emptyList(), val chart: CompareChart? = null,
+    /** What is read aloud, sentence by sentence, in reading order. */
+    val voice: List<String> = emptyList(),
+)
+/** What a worksheet offers to compare, with the recommended report; [message] says why there is nothing to compare. */
+@Serializable
+data class Comparison(val available: Boolean = false, val message: String = "", val groups: List<CompareGroup> = emptyList(), val report: ComparisonReport? = null)
+
+/** The report of two saved files; [report] is null with a [message] when they share no indicators. */
+class FileComparison(val report: ComparisonReport?, val message: String)
+
+class ManualSheetView(val sheet: ManualSheet, val summary: ManualSummary, val info: ManualImportInfo? = null, val changed: Int = 0, val comparison: Comparison = Comparison())
 class ManualPreview(val fileName: String, val truncated: Boolean, val sheets: List<ManualSheetInfo>, val view: ManualSheetView)
 
 /** One changed cell of a saved worksheet. */
@@ -210,6 +244,17 @@ class CoDocumentsRepository(private val api: SyncApi) {
 
     suspend fun openSheet(importId: String, index: Int): ManualSheetView = sheetView(get("/v1/co/manual/imports/$importId/sheets/$index"))
 
+    /** The report for a chosen group of columns and pair of them in a saved worksheet. */
+    suspend fun compare(importId: String, index: Int, group: String, previous: String, current: String): ComparisonReport =
+        decode(ComparisonReport.serializer(), get("/v1/co/manual/imports/$importId/sheets/$index/compare", mapOf("group" to group, "a" to previous, "b" to current)).jsonObject["report"]?.jsonObject ?: throw CoApiException("The server sent no report.", 500))
+
+    /** Two saved worksheets compared by indicator name; [earlier] and [later] are (import id, worksheet index). */
+    suspend fun compareFiles(earlier: Pair<String, Int>, later: Pair<String, Int>): FileComparison {
+        val o = get("/v1/co/manual/compare-imports", mapOf("a" to earlier.first, "sheetA" to earlier.second.toString(), "b" to later.first, "sheetB" to later.second.toString()))
+        val report = o["report"]?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.let { coJson.decodeFromJsonElement(ComparisonReport.serializer(), it) }
+        return FileComparison(report, o["message"]?.jsonPrimitive?.contentOrNull.orEmpty())
+    }
+
     /** Changes cells of a saved worksheet and saves them; the answer is the worksheet as it is now. */
     suspend fun editCells(importId: String, index: Int, edits: List<CellEdit>): ManualSheetView =
         sheetView(send("PATCH", "/v1/co/manual/imports/$importId/sheets/$index", json = buildJsonObject {
@@ -228,6 +273,7 @@ class CoDocumentsRepository(private val api: SyncApi) {
             ManualSheet(sheet["index"]?.jsonPrimitive?.intOrNull ?: 0, sheet["name"]?.jsonPrimitive?.contentOrNull.orEmpty(), parseSnapshot(sheet["snapshot"]?.jsonObject ?: JsonObject(emptyMap()))),
             o["summary"]?.let { coJson.decodeFromJsonElement(ManualSummary.serializer(), it) } ?: ManualSummary(),
             o["import"]?.let { coJson.decodeFromJsonElement(ManualImportInfo.serializer(), it) }, o["changed"]?.jsonPrimitive?.intOrNull ?: 0,
+            o["comparison"]?.let { runCatching { coJson.decodeFromJsonElement(Comparison.serializer(), it) }.getOrNull() } ?: Comparison(),
         )
     }
 

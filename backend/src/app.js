@@ -112,7 +112,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
     if (bad) return res.status(400).json({ status: 'error', message: bad });
     try {
       const result = await store.transaction(async (tx) => {
-        const actor = await loadActor(req.personId, tx.get);
+        const actor = await loadActor(req.personId, tx.get, tx.list);
         if (!actor.known) return { status: 'denied', message: 'Unknown user' };
         return fn(tx, actor, req.body);
       });
@@ -154,7 +154,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
       }
       try {
         const result = await store.transaction(async (tx) => {
-          const actor = await loadActor(req.personId, tx.get);
+          const actor = await loadActor(req.personId, tx.get, tx.list);
           const existing = await tx.get(collection, id);
           const verdict = await authorizeWrite(actor, op.op, collection, id, op.data, existing, tx.get);
           if (!verdict.ok) return { status: 'denied', reason: verdict.reason };
@@ -192,7 +192,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
         if (!cache.has(key)) cache.set(key, store.get(c, i));
         return cache.get(key);
       };
-      const actor = await loadActor(req.personId, get);
+      const actor = await loadActor(req.personId, get, (c, cong) => store.list(c, cong));
       if (!actor.known) return res.status(403).json({ error: 'Unknown user' });
       const grant = await loadGrant(req.personId, get);
       // Over-fetch a little so filtering rarely returns a short page; the cursor always advances past what was examined.
@@ -227,7 +227,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
         if (!cache.has(key)) cache.set(key, store.get(c, i));
         return cache.get(key);
       };
-      const actor = await loadActor(req.personId, get);
+      const actor = await loadActor(req.personId, get, (c, cong) => store.list(c, cong));
       if (!actor.known) return res.status(403).json({ error: 'Unknown user' });
       const deadline = Date.now() + seconds * 1000;
       let closed = false;

@@ -375,7 +375,7 @@ fun ManagePublishersScreen(
                         onViewDetails = { detailsOf = row },
                         active = row.category != PublisherCategory.REMOVED_PUBLISHER,
                         readOnly = readOnly,
-                        hasTemporarySignIn = row.person.isTemporaryCredential && !readOnly,
+                        hasTemporarySignIn = false,
                         chips = listOf(row.category.displayName),
                         // A heads-up only; nothing merges or deletes automatically - the admin reviews both records.
                         note = row.possibleDuplicateOf?.let { "Possible duplicate of \"$it\" - review both records." },
@@ -385,36 +385,7 @@ fun ManagePublishersScreen(
                             viewModel.changeCategory(row, PublisherCategory.REGULAR_PUBLISHER, currentPersonId)
                             showToast("\"${row.person.fullName}\" reactivated.")
                         },
-                        onShowSignIn = { lookupTarget = row.person },
-                        menuExtras = { dismiss ->
-                            if (!readOnly && canManageCredentials) {
-                                androidx.compose.material3.DropdownMenuItem(text = { Text("Change username") }, onClick = { dismiss(); usernameTarget = row.person })
-                                androidx.compose.material3.DropdownMenuItem(text = { Text("Set temporary password") }, onClick = { dismiss(); passwordTarget = row.person })
-                                // The sign-in account's status: Active, Inactive or Suspended (what Account Management used to offer for publishers).
-                                com.emfitsolutions.gopreach.data.model.AccountStatus.entries.filter { it != row.person.accountStatus }.forEach { target ->
-                                    androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text("Set account " + target.name.lowercase()) },
-                                        onClick = {
-                                            dismiss()
-                                            accountViewModel.setAccountStatus(com.emfitsolutions.gopreach.ui.screens.accountmanagement.publisherAccountRow(row.person), target, currentPersonId)
-                                            showToast("Account of \"" + row.person.fullName + "\" set " + target.name.lowercase() + ".")
-                                        },
-                                    )
-                                }
-                            }
-                            if (!readOnly) {
-                                PublisherCategory.entries.filter { it != row.category && it != PublisherCategory.REMOVED_PUBLISHER }.forEach { target ->
-                                    androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text("Set " + target.displayName) },
-                                        onClick = {
-                                            dismiss()
-                                            viewModel.changeCategory(row, target, currentPersonId)
-                                            showToast("Publisher Status Category updated successfully.")
-                                        },
-                                    )
-                                }
-                            }
-                        },
+                        onShowSignIn = {},
                     )
                 }
                 if (groupedByFsGroup) {
@@ -482,6 +453,10 @@ fun ManagePublishersScreen(
     if (toEdit != null) {
         EditPublisherDialog(
             row = toEdit,
+            // the person as it is now (a username or status saved from inside Edit shows at once), without resetting what is being typed
+            livePerson = allRows.firstOrNull { it.person.id == toEdit.person.id }?.person ?: toEdit.person,
+            canManageCredentials = canManageCredentials && !readOnly,
+            accountViewModel = accountViewModel,
             currentPersonId = currentPersonId,
             viewModel = viewModel,
             // Only a Super-Admin (not tied to one congregation) may move a publisher to another congregation.
@@ -524,6 +499,9 @@ fun ManagePublishersScreen(
 @Composable
 private fun EditPublisherDialog(
     row: PublisherRow,
+    livePerson: Person,
+    canManageCredentials: Boolean,
+    accountViewModel: com.emfitsolutions.gopreach.ui.screens.accountmanagement.AccountManagementViewModel,
     currentPersonId: String,
     viewModel: ManagePublishersViewModel,
     canChangeCongregation: Boolean,
@@ -544,6 +522,10 @@ private fun EditPublisherDialog(
     val groups by groupsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
 
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var usernameOpen by remember { mutableStateOf(false) }
+    var passwordOpen by remember { mutableStateOf(false) }
+    var signInOpen by remember { mutableStateOf(false) }
+    var pickedStatus by remember(row) { mutableStateOf<AccountStatus?>(null) }
 
     fun captureLocation() {
         capturingLocation = true
@@ -627,9 +609,42 @@ private fun EditPublisherDialog(
                 )
 
                 EditSectionHeader("System Information")
-                ReadOnlyField("Username", row.person.username)
+                ReadOnlyField("Username", livePerson.username)
                 ReadOnlyField("Date Added", formatRecordTimestamp(row.person.createdAt))
+
+                // Account: sign-in name, account status and temporary sign-in, each with its own labelled button (nothing hides behind an icon).
+                // The classification (Publisher, pioneers ...) is the Category above and is saved with Save Changes; the account status is a different thing.
+                if (canManageCredentials) {
+                    EditSectionHeader("Account")
+                    val accountRow = com.emfitsolutions.gopreach.ui.screens.accountmanagement.publisherAccountRow(livePerson)
+                    androidx.compose.material3.OutlinedButton(onClick = { usernameOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("Change username  (@${livePerson.username})") }
+                    AccountStatusDropdown(selected = pickedStatus ?: livePerson.accountStatus, onSelected = { pickedStatus = it })
+                    val statusChanged = pickedStatus != null && pickedStatus != livePerson.accountStatus
+                    androidx.compose.material3.OutlinedButton(
+                        enabled = statusChanged,
+                        onClick = {
+                            val target = pickedStatus ?: return@OutlinedButton
+                            accountViewModel.setAccountStatus(accountRow, target, currentPersonId)
+                            showToast("Account of \"${livePerson.fullName}\" set ${target.name.lowercase()}.")
+                            pickedStatus = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("Save account status") }
+                    Text("Temporary sign-in", style = MaterialTheme.typography.labelLarge)
+                    androidx.compose.material3.OutlinedButton(onClick = { passwordOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("Set temporary password") }
+                    if (livePerson.isTemporaryCredential) {
+                        androidx.compose.material3.OutlinedButton(onClick = { signInOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("View temporary sign-in") }
+                    }
+                }
     }
+
+    if (usernameOpen) com.emfitsolutions.gopreach.ui.screens.accountmanagement.ChangeUsernameFlow(
+        com.emfitsolutions.gopreach.ui.screens.accountmanagement.publisherAccountRow(livePerson), accountViewModel, currentPersonId, showToast, onDismiss = { usernameOpen = false },
+    )
+    if (passwordOpen) com.emfitsolutions.gopreach.ui.screens.accountmanagement.TemporaryPasswordFlow(
+        com.emfitsolutions.gopreach.ui.screens.accountmanagement.publisherAccountRow(livePerson), accountViewModel, currentPersonId, showToast, onDismiss = { passwordOpen = false },
+    )
+    if (signInOpen) TempCredentialLookupDialog(person = livePerson, onDismiss = { signInOpen = false })
 }
 
 /** Confirms a deliberate change of a publisher's congregation (shown from [EditPublisherDialog]). */

@@ -443,3 +443,49 @@ test('Super-Admin: lists every Circuit Overseer account and browses one CO\'s fi
   assert.ok(logs.some((l) => /download/.test(l.details)));
   assert.equal((await store.list('auditLog')).map((l) => l.data).filter((l) => l.action === 'SUPER_CO_FILE_VIEW' && /list|tree|search/.test(l.targetId ?? '')).length, 0, 'listing is not logged as a file view');
 });
+
+test('Comparative report: built from the saved worksheet, only for its owner, never changing the file', async () => {
+  const rows = [['Indicator', 'Jan-Jun 2026', 'Jul-Oct 2026'], ['Publishers', 80, 84], ['Regular pioneers', 12, 15], ['Bible studies', 40, 31]];
+  const book = workbook({ Visit: rows, Names: [['Name', 'Hours'], ['Ana', 3], ['Ben', 4], ['Cora', 5]] });
+  const pv = await j(await call('co1', 'POST', '/manual/preview?name=compare.xlsx', { body: book }));
+  assert.equal(pv.comparison.available, true, 'a draft preview already carries its recommended report');
+  assert.equal(pv.comparison.report.scope.fileName, 'compare.xlsx');
+  const cong = (await j(await call('co1', 'GET', '/manual/congregations'))).congregations[0];
+  const saved = await call('co1', 'POST', `/manual/import?name=compare.xlsx&congregationId=${cong.id}&remarks=visit`, { body: book });
+  assert.equal(saved.status, 201, JSON.stringify(await saved.clone().json().catch(() => ({}))));
+  const imp = (await j(saved)).import ?? (await j(await call('co1', 'GET', '/manual/imports'))).imports.find((i) => i.fileName === 'compare.xlsx');
+  const one = await j(await call('co1', 'GET', `/manual/imports/${imp.id}/sheets/0`));
+  const g = one.comparison.groups[0];
+  assert.equal(one.comparison.report.scope.congregation, cong.name);
+  assert.equal(one.comparison.report.table.find((r) => r.label === 'Regular pioneers').percent, 25);
+  const swapped = await j(await call('co1', 'GET', `/manual/imports/${imp.id}/sheets/0/compare?group=${g.id}&a=${g.columns[1].key}&b=${g.columns[0].key}`));
+  assert.equal(swapped.report.table.find((r) => r.label === 'Publishers').difference, -4);
+  assert.equal((await call('co1', 'GET', `/manual/imports/${imp.id}/sheets/0/compare?group=${g.id}&a=1&b=1`)).status, 400);
+  assert.equal((await call('co1', 'GET', `/manual/imports/${imp.id}/sheets/0/compare?group=nope&a=1&b=2`)).status, 400);
+  const names = await j(await call('co1', 'GET', `/manual/imports/${imp.id}/sheets/1`));
+  assert.equal(names.comparison.available, false);
+  assert.match(names.comparison.message, /No comparable records were found/);
+  // another Circuit Overseer, an elder and a guessed id get nothing
+  assert.equal((await call('co2', 'GET', `/manual/imports/${imp.id}/sheets/0/compare?group=${g.id}&a=1&b=2`)).status, 404);
+  assert.equal((await call('elder', 'GET', `/manual/imports/${imp.id}/sheets/0/compare?group=${g.id}&a=1&b=2`)).status, 403);
+  assert.equal((await call('co1', 'GET', '/manual/imports/zzzzzzzzzzzz/sheets/0/compare?group=g1&a=1&b=2')).status, 404);
+  // the saved cells are exactly as imported
+  assert.equal(cellText(one.sheet.snapshot, 1, 1), '80');
+  assert.equal(cellText((await j(await call('co1', 'GET', `/manual/imports/${imp.id}/sheets/0`))).sheet.snapshot, 1, 1), '80');
+});
+
+test('Comparative report across two saved files: both must be the caller\'s own', async () => {
+  const mk = (n) => workbook({ S: [['Indicator', 'Count'], ['Publishers', n], ['Regular pioneers', 10]] });
+  const cong = (await j(await call('co1', 'GET', '/manual/congregations'))).congregations[0];
+  await call('co1', 'POST', `/manual/import?name=march.xlsx&congregationId=${cong.id}&remarks=a`, { body: mk(50) });
+  await call('co1', 'POST', `/manual/import?name=sept.xlsx&congregationId=${cong.id}&remarks=b`, { body: mk(56) });
+  const list = (await j(await call('co1', 'GET', '/manual/imports'))).imports;
+  const a = list.find((i) => i.fileName === 'march.xlsx'), b = list.find((i) => i.fileName === 'sept.xlsx');
+  const r = await j(await call('co1', 'GET', `/manual/compare-imports?a=${a.id}&b=${b.id}`));
+  assert.equal(r.report.table.find((x) => x.label === 'Publishers').percent, 12);
+  assert.equal(r.report.scope.congregation, cong.name);
+  assert.equal((await call('co2', 'GET', `/manual/compare-imports?a=${a.id}&b=${b.id}`)).status, 404);
+  assert.equal((await call('co1', 'GET', `/manual/compare-imports?a=${a.id}&b=${a.id}`)).status, 404);
+  assert.equal((await call('co1', 'GET', `/manual/compare-imports?a=${a.id}&b=nope`)).status, 404);
+  assert.equal((await call('elder', 'GET', `/manual/compare-imports?a=${a.id}&b=${b.id}`)).status, 403);
+});
