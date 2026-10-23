@@ -320,6 +320,46 @@ test('groupChats: only chat managers create; participants never rewrite members;
   assert.equal(await reads('pubB', 'groupChats/chat1/messages', 'm1'), false);
 });
 
+test('FS Group chat: the Overseer / Servant / Assistant of a group manage that group\'s chat only', async () => {
+  await put('people', 'msSlot', person('MINISTERIAL_SERVANT', 'congA', { activeGroupId: 'gM' }));   // a Ministerial Servant filling the servant slot of gM
+  await put('people', 'grpElderN', person('REGULAR_ELDER', 'congA', { activeGroupId: 'gN' }));
+  await put('groups', 'gM', { congregationId: 'congA', servantPersonId: 'msSlot', status: 'ACTIVE' });
+  await put('groups', 'gN', { congregationId: 'congA', overseerPersonId: 'grpElderN', status: 'ACTIVE' });
+  const mine = { congregationId: 'congA', fsGroupId: 'gM', groupName: 'FS Group M', participantIds: ['pubA'] };
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', mine), true, 'creates the chat of its own group under the group\'s fixed id');
+  assert.equal(await set('msSlot', 'groupChats', 'chatX', { ...mine }), false, 'any other id would be a second room for the group');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gN', { ...mine, fsGroupId: 'gN' }), false, 'the chat of a group it does not serve');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM2', { ...mine, congregationId: 'congB', fsGroupId: 'gM' }), false, 'a chat of another congregation');
+  await put('groupChats', 'fsg_gM', mine);   // (the checks above only ask the rules; this stores it)
+  assert.equal(await reads('msSlot', 'groupChats', 'fsg_gM'), true, 'reads it without being a participant');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubA2'] }), true, 'adds a member of the congregation');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubA2', 'newbie'] }), true, 'a person who has no congregation yet may be added');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubB'] }), false, 'a person of another congregation');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA'], groupName: 'Renamed' }), true, 'removes a member and renames');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, fsGroupId: 'gN' }), false, 'cannot hand the chat to another group');
+  assert.equal(await del('msSlot', 'groupChats', 'fsg_gM'), false, 'deleting a chat stays with the chat managers');
+  // another group's people never reach it
+  await put('groupChats', 'fsg_gN', { congregationId: 'congA', fsGroupId: 'gN', groupName: 'FS Group N', participantIds: ['pubA2'] });
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gN', { congregationId: 'congA', fsGroupId: 'gN', groupName: 'x', participantIds: ['pubA2', 'pubA'] }), false, 'another group\'s chat');
+  assert.equal(await reads('msSlot', 'groupChats', 'fsg_gN'), false);
+  await put('groupChats/fsg_gN/messages', 'n1', { senderId: 'pubA2', text: 'x', createdAt: 1 });
+  assert.equal(await reads('msSlot', 'groupChats/fsg_gN/messages', 'n1'), false);
+  assert.equal(await set('grpElderN', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubA2'] }), false, 'a slot holder of group N cannot manage group M');
+  assert.equal(await set('elderA', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubA2'] }), false, 'a Regular Elder without a slot');
+  assert.equal(await set('adminA', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubA2'] }), true, 'the congregation\'s chat manager keeps full control');
+  // a stale screen: once the slot is gone the same request is refused
+  await put('groups', 'gM', { congregationId: 'congA', servantPersonId: 'someoneElse', status: 'ACTIVE' });
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA'] }), false, 'no longer holds a slot');
+  assert.equal(await reads('msSlot', 'groupChats', 'fsg_gM'), false);
+  await put('groups', 'gM', { congregationId: 'congA', servantPersonId: 'msSlot', status: 'ACTIVE' });
+  // the same slot lets a Ministerial Servant write the Field Service records of ITS group's publishers, like a Regular Elder does
+  await put('roleAssignments', 'raM', { personId: 'pubA', congregationId: 'congA', groupId: 'gM', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
+  const rec = (who, ra) => ({ congregationId: 'congA', publisherPersonId: who, periodMonth: 1710000000000, status: 'SUBMITTED', source: 'MANUAL', groupRoleAssignmentId: ra });
+  assert.equal(await set('msSlot', 'monthlyReports', 'ms1', rec('pubA', 'raM')), true, 'a publisher of its own group');
+  assert.equal(await set('msSlot', 'monthlyReports', 'ms2', rec('pubA2', 'raH')), false, 'a publisher of another group');
+  assert.equal(await set('grpElderN', 'monthlyReports', 'ms3', rec('pubA', 'raM')), false, 'a slot holder of another group');
+});
+
 // ---- interested people and visits --------------------------------------------------------------------------------
 
 test('interestedPeople: same-congregation members only; the receiving congregation\'s admins may take a forward', async () => {

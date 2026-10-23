@@ -205,7 +205,7 @@ fun AdminHomeScreen(
     // Admin, Coordinator/Elder, Regular Elder, Service Overseer"): Super-
     // Admin (every congregation), Admin/Coordinator Elder/Service Overseer/
     // Regular Elder (own congregation only).
-    val canViewFieldServiceGroupReport = canViewConsolidatedReport || role == AdminRole.REGULAR_ELDER
+    val canViewFieldServiceGroupReport = canViewConsolidatedReport || role == AdminRole.REGULAR_ELDER || (role == AdminRole.MINISTERIAL_SERVANT && session.isGroupRole)
     // "Forward to Other Congregation" incoming review queue — Super-Admin/
     // Admin/Coordinator Elder/Service Overseer keep full Accept/Decline/
     // Assign access (same viewer set as the Consolidated Report); Regular
@@ -744,7 +744,9 @@ fun AdminHomeScreen(
                                 // A Ministerial Servant keeps a short list: the modules the role already uses or only views (no management module).
                                 val allowedQuickAccess = if (isMinisterialServant) buildSet {
                                     add(QuickAccessItem.TERRITORY_MAP); add(QuickAccessItem.WEATHER)
-                                    if (hasCongregation) { add(QuickAccessItem.MY_ASSIGNMENTS); add(QuickAccessItem.MEETING_CART_ASSIGNMENT); add(QuickAccessItem.PUBLISHER_SCHEDULE); add(QuickAccessItem.ANNOUNCEMENT) }
+                                    if (hasCongregation) { add(QuickAccessItem.MY_ASSIGNMENTS); add(QuickAccessItem.MEETING_CART_ASSIGNMENT); add(QuickAccessItem.PUBLISHER_SCHEDULE); add(QuickAccessItem.ANNOUNCEMENT)
+                                        if (session.isGroupRole) add(QuickAccessItem.FIELD_SERVICE_REPORT)   // a group-level Ministerial Servant: their own FS Group report
+                                    }
                                     add(QuickAccessItem.SETTINGS)
                                 } else buildSet {
                                     if (canManageTerritoryAssignments) add(QuickAccessItem.TERRITORY_ASSIGNMENT)

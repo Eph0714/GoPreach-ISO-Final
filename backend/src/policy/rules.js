@@ -133,6 +133,32 @@ const chatParticipant = (h, chat) => (chat?.participantIds ?? []).includes(h.me)
 const chatAllowsRead = (h, chat) => h.sa || chatParticipant(h, chat) || h.canManageGroupChatsFor(nul(chat?.congregationId));
 
 /**
+ * An FS Group chat (a chat that carries an fsGroupId) belongs to that group's Overseer / Servant / Assistant: they manage ITS participants and nothing else.
+ * Never another group's chat, never a chat of another congregation, never from a grant (restricted) account, and only while they still hold a slot of the group.
+ */
+async function slotManagesChat(h, chat) {
+  const gid = nul(chat?.fsGroupId);
+  if (!gid || !h.actor.known || h.grant.has || !h.inMyActiveCongregation(nul(chat.congregationId))) return false;
+  const g = live(await h.get('groups', gid));
+  return !!g && nul(g.congregationId) === nul(chat.congregationId) && (await h.isSlotHolderOfGroup(gid));
+}
+const chatReadAsync = async (h, chat) => chatAllowsRead(h, chat) || (await slotManagesChat(h, chat));
+
+/** People a slot holder adds to the chat must belong to the chat's congregation (or have none yet): never someone of another congregation. */
+async function chatMembersInCongregation(h, cong, ids) {
+  for (const pid of ids) {
+    const person = live(await h.get('people', pid));
+    if (!person || ![null, nul(cong)].includes(nul(person.activeCongregationId))) return false;
+  }
+  return true;
+}
+/** A slot holder may create the chat of their OWN group under its fixed id (one chat per group, never a duplicate room). */
+async function slotMayCreateChat(h, id, next) {
+  if (!nul(next?.fsGroupId) || id !== 'fsg_' + next.fsGroupId || !(await slotManagesChat(h, next))) return false;
+  return chatMembersInCongregation(h, next.congregationId, next.participantIds ?? []);
+}
+
+/**
  * Sensitive collections whose records carry a congregationId. firestore.rules lets any signed-in user read many of these
  * (the rules language cannot filter a query, so it could not scope them); this server filters every pull row by row, so it
  * additionally keeps a congregation's records inside that congregation. To loosen one, remove it from this set.
@@ -180,7 +206,7 @@ async function baseRead(h, actor, grant, collection, id, data, get) { // match /
   if (sub) {
     if (sub.parent === 'groupChats' && sub.name === 'messages') {
       const chat = live(await get('groupChats', sub.parentId));
-      return chatAllowsRead(h, chat);
+      return chatReadAsync(h, chat);
     }
     return true; // visits and every other subcollection: signed-in
   }
@@ -229,7 +255,7 @@ async function baseRead(h, actor, grant, collection, id, data, get) { // match /
       const a = live(await get('announcements', data.announcementId));
       return !!a && a.recipientScope != null && (nul(a.createdByPersonId) === h.me || h.isCircuitOverseerFor(nul(a.congregationId)));
     }
-    case 'groupChats': return chatAllowsRead(h, data);
+    case 'groupChats': return chatReadAsync(h, data);
     case 'presence': return h.inMyActiveCongregation(nul(data.congregationId));
     case 'dashboardModuleLayouts': return id === h.me;
     // Voice notes are private: only the person who recorded them reads them, whatever their role.
@@ -377,10 +403,14 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       return ok();
 
     case 'groupChats':
-      if (isCreate) return verdict(h.canManageGroupChatsFor(next.congregationId));
+      if (isCreate) return verdict(h.canManageGroupChatsFor(next.congregationId) || (await slotMayCreateChat(h, id, next)), 'Not allowed to create this chat');
       if (isUpdate) {
         const participantEdit = chatParticipant(h, old) && next.congregationId === old.congregationId && same(next.participantIds, old.participantIds);
-        return verdict(h.canManageGroupChatsFor(old.congregationId) || participantEdit);
+        // The Overseer / Servant / Assistant of an FS Group manage that group's chat: its members and name, never which group or congregation it belongs to.
+        const added = (next.participantIds ?? []).filter((x) => !(old.participantIds ?? []).includes(x));
+        const slotEdit = (await slotManagesChat(h, old)) && nul(next.fsGroupId) === nul(old.fsGroupId) && nul(next.congregationId) === nul(old.congregationId) &&
+          (await chatMembersInCongregation(h, old.congregationId, added));
+        return verdict(h.canManageGroupChatsFor(old.congregationId) || participantEdit || slotEdit, 'Not allowed to change this chat');
       }
       return verdict(h.canManageGroupChatsFor(old?.congregationId));
 
@@ -801,7 +831,7 @@ async function writeMonthlyReports(h, { op, next, old, verdict }) {
  */
 async function groupRoleMayWriteReport(h, rec) {
   const { actor, get } = h;
-  if (!rec || actor.adminRole !== 'REGULAR_ELDER' || !actor.groupId || !rec.groupRoleAssignmentId) return false;
+  if (!rec || !['REGULAR_ELDER', 'MINISTERIAL_SERVANT'].includes(actor.adminRole) || !actor.groupId || !rec.groupRoleAssignmentId) return false;
   if (!(await isSlotHolder(actor, actor.groupId, undefined, get))) return false;
   const ra = live(await get('roleAssignments', rec.groupRoleAssignmentId));
   return !!ra && ra.personId === rec.publisherPersonId && ra.groupId === actor.groupId && ra.congregationId === rec.congregationId && ra.status === 'ACTIVE';
@@ -812,7 +842,7 @@ async function writeSubcollection(h, sub, { op, id, next, old, isCreate, isUpdat
 
   if (sub.parent === 'groupChats' && sub.name === 'messages') {
     const chat = live(await get('groupChats', sub.parentId));
-    const allowsRead = !!chat && chatAllowsRead(h, chat);
+    const allowsRead = !!chat && (await chatReadAsync(h, chat));
     if (isDelete) return deny('Messages are never hard-deleted');
     if (isCreate) return verdict(next.senderId === h.me && allowsRead, 'Not your message or not your chat');
     // update

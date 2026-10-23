@@ -92,6 +92,8 @@ fun GroupChatListScreen(
     }
     val chats by chatsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var showCreateDialog by remember { mutableStateOf(false) }
+    // The Overseer, Servant and Assistant of an FS Group: its own chat, opened (made the first time) from here.
+    val mySlotGroup by remember(currentPersonId) { viewModel.fsGroupOf(currentPersonId) }.collectAsStateWithLifecycle(initialValue = null)
     // A group chat can be deleted right from this list by whoever manages group chats (the same people who could already
     // delete it from the chat's Settings; the server still limits them to their own congregation, Super-Admin to all).
     var pendingDelete by remember { mutableStateOf<GroupChat?>(null) }
@@ -121,6 +123,16 @@ fun GroupChatListScreen(
                 onSelected = { congregationFilter = it },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             )
+        }
+        mySlotGroup?.takeIf { !canManage }?.let { g ->
+            androidx.compose.material3.Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("FS Group chat", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(g.name, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                    Text("You are the Overseer, Servant or Assistant of this group, so you manage its chat and who is in it.", style = MaterialTheme.typography.bodySmall)
+                    androidx.compose.material3.Button(onClick = { viewModel.openFsGroupChat(g, currentPersonId, onOpenGroupChat) }, modifier = Modifier.fillMaxWidth()) { Text("Open the chat and manage participants") }
+                }
+            }
         }
         if (needsCongregation) {
             SelectCongregationPrompt()

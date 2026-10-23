@@ -1273,6 +1273,7 @@ fun TerritoryMapScreen(
                             state = guidance,
                             onStart = { beginGuidance() },
                             onCancel = { guidance.stop() },
+                            onMode = { w -> guidance.destination?.let { startNavigation(it.name, it.lat, it.lng, walking = w) } },
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
                         )
                     } else if (guidance.active) {

@@ -71,6 +71,18 @@ class GroupChatRepository(
         return chat
     }
 
+    /** The chat of an FS Group, under its fixed id "fsg_<groupId>" - made the first time, never duplicated. */
+    suspend fun ensureFsGroupChat(groupId: String, congregationId: String, groupName: String, memberIds: List<String>, createdByPersonId: String): GroupChat {
+        val id = "fsg_$groupId"
+        offline.get<GroupChat>(COLLECTION, id)?.takeIf { it.status == com.emfitsolutions.gopreach.data.model.RecordStatus.ACTIVE }?.let { return it }
+        val chat = GroupChat(
+            id = id, congregationId = congregationId, groupName = groupName, fsGroupId = groupId,
+            participantIds = (memberIds + createdByPersonId).distinct(), createdByPersonId = createdByPersonId, createdAt = System.currentTimeMillis(),
+        )
+        saveChat(chat)
+        return chat
+    }
+
     suspend fun updateGroupChat(groupChatId: String, groupName: String, description: String) {
         offline.get<GroupChat>(COLLECTION, groupChatId)?.let { saveChat(it.copy(groupName = groupName, description = description)) }
     }

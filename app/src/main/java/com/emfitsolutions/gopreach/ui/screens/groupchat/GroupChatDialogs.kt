@@ -263,6 +263,8 @@ fun ManageParticipantsDialog(
     viewModel: GroupChatViewModel,
     onDismiss: () -> Unit,
     onDeleted: () -> Unit = {},
+    /** Set when the person manages ONE FS Group's chat: only that group's people can be added, and the chat cannot be deleted. */
+    fsGroup: com.emfitsolutions.gopreach.data.model.Group? = null,
 ) {
     var groupName by remember(chat.id) { mutableStateOf(chat.groupName) }
     var description by remember(chat.id) { mutableStateOf(chat.description) }
@@ -270,7 +272,7 @@ fun ManageParticipantsDialog(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
-    val candidatesFlow = remember(chat.congregationId) { viewModel.candidatesFor(chat.congregationId) }
+    val candidatesFlow = remember(chat.congregationId, fsGroup) { if (fsGroup != null) viewModel.fsGroupCandidates(fsGroup) else viewModel.candidatesFor(chat.congregationId) }
     val candidates by candidatesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
 
     fun submit() {
@@ -315,7 +317,8 @@ fun ManageParticipantsDialog(
             selectedIds = selectedIds,
             onToggle = { id -> selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id },
         )
-        Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        if (fsGroup != null) Text("Only people assigned to ${fsGroup.name} can be in this chat. This changes the chat only - never a publisher's FS Group.", style = MaterialTheme.typography.bodySmall)
+        if (fsGroup == null) Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
             TextButton(
                 onClick = { showDeleteConfirm = true },
                 colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),

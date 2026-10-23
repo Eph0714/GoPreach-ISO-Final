@@ -30,6 +30,8 @@ data class GroupChat(
     val groupName: String = "",
     val description: String = "",
     val participantIds: List<String> = emptyList(),
+    /** Set on the chat of an FS Group (its id is always "fsg_<groupId>", one room per group): that group's Overseer, Servant and Assistant manage it, nobody else of the group's people. */
+    val fsGroupId: String? = null,
     val createdByPersonId: String = "",
     val createdAt: Long = 0L,
     val status: RecordStatus = RecordStatus.ACTIVE,

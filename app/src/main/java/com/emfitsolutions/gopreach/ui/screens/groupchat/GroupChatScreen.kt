@@ -142,7 +142,11 @@ fun GroupChatScreen(
     // were never sent. [showNotAvailable] only flips after a short grace
     // window so the very first (still-loading) frame doesn't flash it.
     val isParticipant = chat?.participantIds?.contains(currentPersonId) == true
-    val isAuthorized = chat != null && (isParticipant || canManageSettings)
+    // The Overseer, Servant and Assistant of an FS Group manage that group's chat (checked against the live group, so a removed slot stops at once).
+    val mySlotGroup by remember(currentPersonId) { viewModel.fsGroupOf(currentPersonId) }.collectAsStateWithLifecycle(initialValue = null)
+    val slotManages = chat?.fsGroupId != null && mySlotGroup?.id == chat?.fsGroupId
+    val canManageParticipants = canManageSettings || slotManages
+    val isAuthorized = chat != null && (isParticipant || canManageParticipants)
     var showNotAvailable by remember(groupChatId) { mutableStateOf(false) }
     LaunchedEffect(groupChatId, chat) {
         if (chat == null) {
@@ -254,7 +258,7 @@ fun GroupChatScreen(
                     IconButton(onClick = { showDocuments = true }) {
                         Icon(Icons.Rounded.Folder, contentDescription = stringResource(Res.string.chat_shared_documents_cd))
                     }
-                    if (canManageSettings) {
+                    if (canManageParticipants) {
                         IconButton(onClick = { showSettings = true }) {
                             Icon(Icons.Rounded.Settings, contentDescription = stringResource(Res.string.chat_group_settings_cd))
                         }
@@ -330,6 +334,7 @@ fun GroupChatScreen(
             viewModel = viewModel,
             onDismiss = { showSettings = false },
             onDeleted = { showSettings = false; onBack() },
+            fsGroup = if (slotManages && !canManageSettings) mySlotGroup else null,
         )
     }
     if (showDocuments && currentChat != null) {

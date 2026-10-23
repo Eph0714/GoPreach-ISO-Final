@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.Congregation
+import com.emfitsolutions.gopreach.data.model.Group
 import com.emfitsolutions.gopreach.data.model.GroupChat
 import com.emfitsolutions.gopreach.data.model.GroupChatAttachmentType
 import com.emfitsolutions.gopreach.data.model.GroupChatMessage
@@ -14,12 +15,14 @@ import com.emfitsolutions.gopreach.data.model.displayLabel
 import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.GroupChatRepository
+import com.emfitsolutions.gopreach.data.repository.GroupRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -50,6 +53,7 @@ class GroupChatViewModel(
     private val roleAssignmentRepository: RoleAssignmentRepository,
     private val auditLogRepository: AuditLogRepository,
     congregationRepository: CongregationRepository,
+    private val groupRepository: GroupRepository,
 ) : ViewModel() {
 
     /** Super-Admin's own congregation dropdown when creating a group chat —
@@ -117,6 +121,35 @@ class GroupChatViewModel(
             }
             .distinctBy { it.personId }
             .sortedBy { it.name }
+    }
+
+    /** The FS Group [personId] is the Overseer, Servant or Assistant of (null when none): the group whose chat they manage. */
+    fun fsGroupOf(personId: String): Flow<Group?> = groupRepository.observeAll().map { groups ->
+        groups.firstOrNull { g -> personId in listOfNotNull(g.overseerPersonId, g.servantPersonId, g.assistantPersonId) }
+    }
+
+    /** Who may be in an FS Group chat: the publishers assigned to that group and its three slot holders - nobody else. */
+    fun fsGroupCandidates(group: Group?): Flow<List<ParticipantCandidate>> = combine(personRepository.observeAll(), roleAssignmentRepository.observeAll()) { people, assignments ->
+        if (group == null) return@combine emptyList()
+        val byId = people.associateBy { it.id }
+        val slots = mapOf(group.overseerPersonId to "Group Overseer", group.servantPersonId to "Group Servant", group.assistantPersonId to "Group Assistant")
+        val fromAssignments = assignments.filter { it.status == RoleAssignmentStatus.ACTIVE && it.groupId == group.id && it.congregationId == group.congregationId && it.personId in byId }
+            .mapNotNull { a ->
+                val label = (a.resolvedRoleTypeOrNull() as? RoleType.Publisher)?.category?.displayLabel() ?: return@mapNotNull null
+                ParticipantCandidate(a.personId, byId.getValue(a.personId).fullName, label, byId.getValue(a.personId).username)
+            }
+        val fromSlots = slots.mapNotNull { (id, label) -> id?.let { byId[it] }?.let { ParticipantCandidate(it.id, it.fullName, label, it.username) } }
+        (fromSlots + fromAssignments).distinctBy { it.personId }.sortedBy { it.name }
+    }
+
+    /** Opens (making it the first time) the one chat of [group]; its members are the group's own people. */
+    fun openFsGroupChat(group: Group, personId: String, onReady: (String) -> Unit) {
+        viewModelScope.launch {
+            runCatching {
+                val members = fsGroupCandidates(group).first().map { it.personId }
+                groupChatRepository.ensureFsGroupChat(group.id, group.congregationId, group.name, members, personId)
+            }.onSuccess { onReady(it.id) }.onFailure { Log.e(TAG, "openFsGroupChat failed", it) }
+        }
     }
 
     fun createGroupChat(

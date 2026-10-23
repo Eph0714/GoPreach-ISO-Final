@@ -141,7 +141,7 @@ class TurnByTurnState(
                 throw e
             } catch (e: RoutingException) {
                 phase = GuidancePhase.IDLE; destination = null; route = null; choices = emptyList()
-                message = e.message
+                message = (if (walking) "Walking ETA unavailable. " else "Driving ETA unavailable. ") + (e.message ?: "")
             }
         }
     }
@@ -293,7 +293,8 @@ fun GuidanceBanner(state: TurnByTurnState, modifier: Modifier = Modifier) {
  * driving, not live traffic.
  */
 @Composable
-fun RoutePreviewPanel(state: TurnByTurnState, onStart: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+/** [onMode] asks for the routes again in the other travel mode (true = walking): the panel is rebuilt from the routing service, never from the other mode's figures. */
+fun RoutePreviewPanel(state: TurnByTurnState, onStart: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier, onMode: ((walking: Boolean) -> Unit)? = null) {
     val now = nowMillis()
     Surface(modifier = modifier, shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 10.dp) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -303,6 +304,18 @@ fun RoutePreviewPanel(state: TurnByTurnState, onStart: () -> Unit, onCancel: () 
                     state.destination?.name?.let { Text("To $it", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
                 IconButton(onClick = onCancel) { Icon(Icons.Rounded.Close, contentDescription = "Cancel") }
+            }
+            if (onMode != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.FilterChip(selected = state.walking, onClick = { if (!state.walking) onMode(true) }, label = { Text("Walking") })
+                    androidx.compose.material3.FilterChip(selected = !state.walking, onClick = { if (state.walking) onMode(false) }, label = { Text("Driving") })
+                }
+            }
+            state.choices.getOrNull(state.selectedIndex)?.route?.let { sel ->
+                Text(
+                    (if (state.walking) "Walking" else "Driving") + " · " + RouteFormat.duration(sel.durationSeconds) + " · ETA " + formatDate(now + (sel.durationSeconds * 1000).toLong(), "h:mm a"),
+                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
+                )
             }
             state.choices.forEachIndexed { index, choice ->
                 val selected = index == state.selectedIndex
@@ -322,12 +335,12 @@ fun RoutePreviewPanel(state: TurnByTurnState, onStart: () -> Unit, onCancel: () 
                                 style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                             )
                         }
-                        Text("Arrive ${formatDate(now + (r.durationSeconds * 1000).toLong(), "h:mm a")}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("ETA ${formatDate(now + (r.durationSeconds * 1000).toLong(), "h:mm a")}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
             Text(
-                "Estimated for normal driving, not live traffic. Follow road signs and traffic rules.",
+                if (state.walking) "Estimated for a normal walking pace on pedestrian routes. Watch the road and follow traffic rules." else "Estimated for normal driving, not live traffic. Follow road signs and traffic rules.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             androidx.compose.material3.Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Start navigation") }
