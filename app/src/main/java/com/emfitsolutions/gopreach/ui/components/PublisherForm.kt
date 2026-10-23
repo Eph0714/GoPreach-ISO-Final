@@ -172,6 +172,8 @@ fun PublisherFormFields(
     profileOnly: Boolean = false,
     /** Slot between the coordinates/email block and the category: the Add form puts the Super-Admin's congregation picker here. */
     beforeAssignment: @Composable () -> Unit = {},
+    /** False shows the account status as read-only: changing a sign-in is the Admin's, Coordinator Elder's, Service Overseer's and Secretary's (the server checks it again). */
+    statusEnabled: Boolean = true,
 ) {
     NameFieldsInOrder(
         first = {
@@ -331,7 +333,7 @@ fun PublisherFormFields(
             onSelected = { id -> if (id != form.congregationId) onChange(form.copy(congregationId = id, groupId = null)) },
         )
         SimpleChoiceDropdown(
-            label = "Category",
+            label = "Publisher classification",
             selectedText = form.category?.displayName.orEmpty(),
             options = PublisherCategory.entries.map { it.displayName to it },
             onSelected = { onChange(form.copy(category = it)) },
@@ -346,8 +348,9 @@ fun PublisherFormFields(
             searchable = true,
         )
         SimpleChoiceDropdown(
-            label = "Status",
+            label = "Account status (sign-in)",
             selectedText = form.accountStatus.name.lowercase().replaceFirstChar { it.uppercase() },
+            enabled = statusEnabled,
             options = AccountStatus.entries.map { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } to it },
             onSelected = { onChange(form.copy(accountStatus = it)) },
         )

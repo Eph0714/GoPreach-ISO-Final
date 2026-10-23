@@ -37,7 +37,8 @@ private fun friendlyAuthErrorMessage(e: Throwable): String = when (e) {
 
 sealed class AuthResult {
     data class Success(val person: Person, val requiresPasswordChange: Boolean) : AuthResult()
-    data class Error(val message: String) : AuthResult()
+    /** [activeSession] is set only when the server confirmed that the account is signed in on another device: the screen then asks before ending it. */
+    data class Error(val message: String, val activeSession: ActiveSessionInfo? = null) : AuthResult()
 }
 
 data class TempCredentials(
@@ -79,10 +80,15 @@ class AuthRepository(
     suspend fun findPersonByUsername(username: String): Person? =
         remote.findFirst("people", "username", username, Person::class)
 
-    suspend fun signIn(username: String, password: String): AuthResult {
+    /** True once if this device was just signed out because the account signed in somewhere else. */
+    fun takeSessionEndedNotice(): Boolean = auth.takeSessionEndedNotice()
+
+    suspend fun signIn(username: String, password: String, endOtherSession: Boolean = false): AuthResult {
         Log.d(TAG, "Login request started")
         return try {
-            withTimeout(SIGN_IN_TIMEOUT_MS) { signInInternal(username, password) }
+            withTimeout(SIGN_IN_TIMEOUT_MS) { signInInternal(username, password, endOtherSession) }
+        } catch (e: AuthFailure.SessionActive) {
+            AuthResult.Error("This account is already signed in on another device.", e.session)
         } catch (e: Exception) {
             // Bug fix — "the application must never remain stuck": this used to
             // only wrap the Firebase Auth call itself in try/catch. A timeout,
@@ -106,13 +112,13 @@ class AuthRepository(
      * answer (JSON), or throws [PasskeyCancelled] if the person backs out / has no passkey. After the server accepts it the account is signed in
      * exactly like a password sign-in (same deactivated-account check, caches and audit entry); no password verifier is saved, as none was typed.
      */
-    suspend fun signInWithPasskey(getAssertion: suspend (optionsJson: String) -> String): AuthResult {
+    suspend fun signInWithPasskey(endOtherSession: Boolean = false, getAssertion: suspend (optionsJson: String) -> String): AuthResult {
         return try {
             withTimeout(PASSKEY_TIMEOUT_MS) {
                 val challenge = auth.passkeyLoginOptions()
                 val answer = getAssertion(challenge.optionsJson)
                 val sessionId = challenge.sessionId ?: return@withTimeout AuthResult.Error("The server sent no passkey session.")
-                val username = auth.passkeyLogin(sessionId, answer)
+                val username = auth.passkeyLogin(sessionId, answer, endOtherSession)
                 val person = username?.let { findPersonByUsername(it) }
                     ?: run { auth.signOut(); return@withTimeout AuthResult.Error("This passkey's account could not be found.") }
                 val roleAssignments = roleAssignmentRepository.observeForPerson(person.id).first()
@@ -126,6 +132,8 @@ class AuthRepository(
                 auditLogRepository.log(actorPersonId = person.id, action = "SIGN_IN")
                 AuthResult.Success(person, requiresPasswordChange = person.isTemporaryCredential)
             }
+        } catch (e: AuthFailure.SessionActive) {
+            AuthResult.Error("This account is already signed in on another device.", e.session)
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
             AuthResult.Error("Passkey sign-in took too long. Please try again.")
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -156,7 +164,7 @@ class AuthRepository(
 
     suspend fun removePasskey(id: String): Boolean = runCatching { auth.passkeyDelete(id) }.getOrDefault(false)
 
-    private suspend fun signInInternal(username: String, password: String): AuthResult {
+    private suspend fun signInInternal(username: String, password: String, endOtherSession: Boolean): AuthResult {
         val person = findPersonByUsername(username)
         Log.d(TAG, "User found: ${person != null}")
         if (person == null) return AuthResult.Error("Invalid username or password.")
@@ -172,7 +180,7 @@ class AuthRepository(
             Log.d(TAG, "Account usable: FALSE")
             return AuthResult.Error("This account has been deactivated. Contact your administrator.")
         }
-        auth.signIn(authEmailFor(person.id), password)
+        auth.signIn(authEmailFor(person.id), password, endOtherSession)
         Log.d(TAG, "Password verified: TRUE")
         // Cache-only: a stale pre-sign-in snapshot must never get queued as a
         // pending upload here (see PersonRepository.cacheFromServer's doc

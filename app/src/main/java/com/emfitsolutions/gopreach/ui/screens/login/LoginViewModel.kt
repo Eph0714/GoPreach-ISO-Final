@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.R
 import com.emfitsolutions.gopreach.data.passkey.PasskeyClient
+import com.emfitsolutions.gopreach.data.repository.ActiveSessionInfo
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
 import com.emfitsolutions.gopreach.data.repository.AuthResult
 import com.emfitsolutions.gopreach.data.repository.CredentialStore
@@ -45,7 +46,15 @@ data class LoginUiState(
     val quickLoginMethod: QuickLoginMethod? = null,
     val quickLoginError: String? = null,
     val quickLoginLockedMs: Long = 0L,
+    /** The server confirmed this account is signed in on another device: the "Account Already Active" dialog asks before ending that session. */
+    val activeSession: ActiveSessionInfo? = null,
 )
+
+/** What to repeat if the person agrees to end the other session. */
+private sealed interface PendingSignIn {
+    data class Password(val username: String, val password: String, val viaBiometric: Boolean) : PendingSignIn
+    data object Passkey : PendingSignIn
+}
 
 class LoginViewModel(
     private val authRepository: AuthRepository,
@@ -69,6 +78,8 @@ class LoginViewModel(
      * so it can be taken back out if the username is edited to something else. */
     private var passwordAutoFilled = false
 
+    private var pendingSignIn: PendingSignIn? = null
+
 
     init {
         // CredentialStore is backed by EncryptedSharedPreferences, which can throw on a
@@ -87,7 +98,10 @@ class LoginViewModel(
                 rememberMe = rememberedUsername != null,
                 biometricEnrolled = enrolled,
                 // e.g. "Account Setup Complete" right after the first-time setup signed the user out.
-                notice = pendingLoginNotice.take(),
+                notice = pendingLoginNotice.take()
+                    ?: if (runCatching { authRepository.takeSessionEndedNotice() }.getOrDefault(false)) {
+                        "Session Ended" to "Your session has ended because this account was signed in on another device."
+                    } else null,
             )
         }
     }
@@ -185,7 +199,7 @@ class LoginViewModel(
      * server, which signs the person in to their own account. [activityContext] must be the Activity (the sheet is shown over it); it is only
      * used for this one call and not kept.
      */
-    fun onPasskeyClick(activityContext: Context) {
+    fun onPasskeyClick(activityContext: Context, endOtherSession: Boolean = false) {
         if (_uiState.value.isLoading) return
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
@@ -194,12 +208,15 @@ class LoginViewModel(
                     _uiState.update { it.copy(isLoading = false, errorMessage = "Passkey sign-in needs an internet connection. Use your username and password to sign in offline.") }
                     return@launch
                 }
-                when (val result = authRepository.signInWithPasskey { options -> PasskeyClient.get(activityContext, options) }) {
+                when (val result = authRepository.signInWithPasskey(endOtherSession) { options -> PasskeyClient.get(activityContext, options) }) {
                     is AuthResult.Success -> {
                         syncScheduler.triggerSyncIfOnline()
                         _uiState.update { it.copy(isLoading = false, signedIn = true, requiresPasswordChange = result.requiresPasswordChange) }
                     }
-                    is AuthResult.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = result.message) }
+                    is AuthResult.Error -> {
+                        if (result.activeSession != null) pendingSignIn = PendingSignIn.Passkey
+                        _uiState.update { it.copy(isLoading = false, errorMessage = if (result.activeSession != null) null else result.message, activeSession = result.activeSession) }
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected passkey error: ${e::class.simpleName}")
@@ -259,7 +276,25 @@ class LoginViewModel(
      * last successful *online* sign-in instead — see
      * [AuthRepository.offlineSignIn]. "Remember me"'s saved pair is unrelated
      * (that's for the optional biometric shortcut) and isn't touched here. */
-    private fun performSignIn(username: String, password: String, viaBiometric: Boolean) {
+    /** "Cancel" on the Account Already Active dialog: nothing was changed on the server, the other session stays. */
+    fun cancelEndOtherSession() {
+        pendingSignIn = null
+        _uiState.update { it.copy(activeSession = null, password = if (passwordAutoFilled) it.password else "") }
+    }
+
+    /** "End Other Session and Continue": repeats the sign-in that was just checked, this time telling the server to end the other session first. */
+    fun confirmEndOtherSession(activityContext: Context) {
+        val pending = pendingSignIn ?: return
+        if (_uiState.value.isLoading) return
+        pendingSignIn = null
+        _uiState.update { it.copy(activeSession = null) }
+        when (pending) {
+            is PendingSignIn.Password -> performSignIn(pending.username, pending.password, pending.viaBiometric, endOtherSession = true)
+            PendingSignIn.Passkey -> onPasskeyClick(activityContext, endOtherSession = true)
+        }
+    }
+
+    private fun performSignIn(username: String, password: String, viaBiometric: Boolean, endOtherSession: Boolean = false) {
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
             // Bug fix ("Never allow: Infinite Loading, Frozen Login Button") —
@@ -274,7 +309,7 @@ class LoginViewModel(
             try {
                 val online = connectivityObserver.isOnline()
                 Log.d(TAG, "Database/API connection result: ${if (online) "ONLINE" else "OFFLINE"}")
-                val result = if (online) authRepository.signIn(username, password) else authRepository.offlineSignIn(username, password)
+                val result = if (online) authRepository.signIn(username, password, endOtherSession) else authRepository.offlineSignIn(username, password)
                 when (result) {
                     is AuthResult.Success -> {
                         Log.d(TAG, "Authentication result: SUCCESS")
@@ -321,6 +356,12 @@ class LoginViewModel(
                     }
                     is AuthResult.Error -> {
                         Log.d(TAG, "Authentication result: FAILED")
+                        if (result.activeSession != null) {
+                            // Only a server-confirmed live session on another device asks first; the password is kept in memory just to repeat this sign-in.
+                            pendingSignIn = PendingSignIn.Password(username, password, viaBiometric)
+                            _uiState.update { it.copy(isLoading = false, activeSession = result.activeSession) }
+                            return@launch
+                        }
                         if (viaBiometric && result.message.contains("Invalid username or password", ignoreCase = true)) {
                             // The saved password no longer works (it was changed elsewhere): drop every saved
                             // unlock so nothing keeps trying a stale password, and ask for a fresh set-up.

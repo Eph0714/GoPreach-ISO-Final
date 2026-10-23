@@ -35,7 +35,7 @@ export function androidOrigin(fingerprint) {
   return bytes ? `android:apk-key-hash:${b64url(bytes)}` : null;
 }
 
-export function mountPasskeys(app, { store, auth, enabled, loginLimit, issue, passkeyConfig = config.passkey }) {
+export function mountPasskeys(app, { store, auth, enabled, loginLimit, startSession, refuseActive, passkeyConfig = config.passkey }) {
   const { rpId, rpName, androidPackage, androidCertSha256, webOrigins = [] } = passkeyConfig;
   const origins = [...androidCertSha256.map(androidOrigin).filter(Boolean), ...webOrigins];
   const ready = (req, res, next) => (rpId && origins.length ? next() : res.status(503).json({ error: 'passkeys-not-configured' }));
@@ -128,7 +128,7 @@ export function mountPasskeys(app, { store, auth, enabled, loginLimit, issue, pa
   });
 
   app.post('/v1/auth/passkey/login/verify', enabled, ready, loginLimit, async (req, res) => {
-    const { sessionId, response } = req.body ?? {};
+    const { sessionId, response, device, endOtherSession } = req.body ?? {};
     if (typeof sessionId !== 'string' || sessionId.length > 100 || !response || typeof response.id !== 'string') return res.status(401).json({ error: 'invalid-credentials' });
     try {
       const saved = take(`login:${sessionId}`);
@@ -152,7 +152,9 @@ export function mountPasskeys(app, { store, auth, enabled, loginLimit, issue, pa
       await store.updatePasskeyCounter(passkey.credentialId, verification.authenticationInfo.newCounter);
       await store.touchLogin(passkey.personId);
       const username = (await store.get('people', passkey.personId))?.data?.username ?? null;
-      res.json({ ...(await issue(passkey.personId, Date.now())), username });
+      const started = await startSession(passkey.personId, Date.now(), { device, endOtherSession });
+      if (started.conflict) return refuseActive(res, started.conflict);
+      res.json({ ...started, username });
     } catch (e) {
       console.error('passkey login failed', e?.message);
       res.status(401).json({ error: 'invalid-credentials' });

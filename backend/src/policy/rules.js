@@ -55,7 +55,11 @@ function helpers(actor, grant, get) {
   const restrictedAllows = (permission, cong) => !grant.has || (grant.permissions.includes(permission) && grantScopeIncludes(cong));
   const restrictedAllowsPermission = (permission) => !grant.has || grant.permissions.includes(permission);
 
-  const roleIn = (roles, cong) => actor.known && (sa || (inCong(cong) && roles.includes(actor.adminRole)));
+  // A role list that holds all four congregation-wide roles also opens to someone who was ASSIGNED one of them while their active role is a publisher
+  // category (loadActor reads the assignments): the assigned role counts, not the category they are shown under.
+  const hasAdminRole = (r) => actor.adminRole === r || (actor.assignedWideRoles?.includes(r) ?? false);
+  const allWide = (roles) => ROLES_WIDE.every((r) => roles.includes(r));
+  const roleIn = (roles, cong) => actor.known && (sa || (inCong(cong) && (roles.includes(actor.adminRole) || (allWide(roles) && (actor.wideCongregations?.has(cong) ?? false)))));
 
   return {
     me, sa, grant, actor, get,
@@ -85,9 +89,26 @@ function helpers(actor, grant, get) {
     async canEditPersonProfile(targetId) {
       if (!actor.known) return false;
       if (sa) return true;
-      if (!ROLES_WIDE.includes(actor.adminRole) || actor.congregationId == null) return false;
+      if (!ROLES_WIDE.some(hasAdminRole) || actor.congregationId == null) return false;
       const t = live(await get('people', targetId));
       return !!t && [null, actor.congregationId].includes(nul(t.activeCongregationId));
+    },
+    /**
+     * An Overseer, Servant or Assistant of an FS Group may edit the personal details of the publishers of THAT group (never their sign-in, their
+     * classification, their congregation or their Super Admin flag: see GROUP_PROFILE_FIELDS). The group is read from the publisher's role assignment.
+     */
+    async canEditGroupMemberProfile(targetId) {
+      if (!actor.known || grant.has || typeof actor.list !== 'function') return false;
+      const t = live(await get('people', targetId));
+      const cong = nul(t?.activeCongregationId);
+      if (!t || cong == null || cong !== nul(actor.congregationId)) return false;
+      for (const row of await actor.list('roleAssignments', cong)) {
+        const a = row.data ?? {};
+        if (a.personId !== targetId || !String(a.roleType ?? '').startsWith('PUBLISHER:') || a.groupId == null) continue;
+        const g = live(await get('groups', a.groupId));
+        if (g && nul(g.congregationId) === cong && [g.overseerPersonId ?? '', g.servantPersonId ?? '', g.assistantPersonId ?? ''].includes(me)) return true;
+      }
+      return false;
     },
     async canManageCredentialsFor(targetId) {
       if (!actor.known) return false;
@@ -95,8 +116,8 @@ function helpers(actor, grant, get) {
       const t = live(await get('people', targetId));
       if (!t || actor.congregationId == null || actor.congregationId !== nul(t.activeCongregationId)) return false;
       const targetRole = nul(t.activeAdminRole);
-      return (actor.adminRole === 'ADMIN_PER_CONGREGATION' && [null, 'REGULAR_ELDER', 'MINISTERIAL_SERVANT'].includes(targetRole)) ||
-        (['COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY'].includes(actor.adminRole) && targetRole === null);
+      return (hasAdminRole('ADMIN_PER_CONGREGATION') && [null, 'REGULAR_ELDER', 'MINISTERIAL_SERVANT'].includes(targetRole)) ||
+        (['COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY'].some(hasAdminRole) && targetRole === null);
     },
     /** Same congregation by id, or by the congregation's display name (guards against duplicated congregation documents). */
     async inMyActiveCongregationByNameOrId(cong) {
@@ -113,6 +134,12 @@ function helpers(actor, grant, get) {
 export async function canManageCredentials(actor, grant, targetId, get) {
   return helpers(actor, grant, get).canManageCredentialsFor(targetId);
 }
+
+/** The personal details of a publisher record (the fields of its edit forms): the only ones an FS Group's own roles may change. */
+export const GROUP_PROFILE_FIELDS = [
+  'firstName', 'lastName', 'middleInitial', 'extensionName', 'address', 'contact', 'province', 'cityMunicipality', 'barangay', 'contactPerson', 'contactPersonNumber',
+  'remarks', 'email', 'gender', 'birthdate', 'baptismalDate', 'gpsLat', 'gpsLng',
+];
 
 const isPrivilegedRoleType = (roleType) => roleType === 'ADMIN:SUPER_ADMIN' || roleType === 'ADMIN:CIRCUIT_OVERSEER';
 
@@ -302,6 +329,9 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       if ((next.isSuperAdmin ?? false) !== (old.isSuperAdmin ?? false)) return deny('Cannot change Super Admin');
       if (id === h.me) return ok();
       if (await h.canEditPersonProfile(id)) return ok();
+      if (await h.canEditGroupMemberProfile(id)) {
+        return verdict(affectedKeys(next, old).every((k) => GROUP_PROFILE_FIELDS.includes(k)), 'A group role edits personal details only');
+      }
       const onlyAccount = affectedKeys(next, old).every((k) => ['username', 'accountStatus'].includes(k));
       return verdict(onlyAccount && (await h.canManageCredentialsFor(id)), 'Not allowed to edit this person');
     }

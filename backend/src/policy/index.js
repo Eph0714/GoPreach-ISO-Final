@@ -18,17 +18,22 @@ export async function loadActor(personId, get, list) {
   const doc = await get('people', personId);
   const p = doc && !doc.deleted ? doc.data : null;
   const wideCongregations = new Set();
+  const assignedWideRoles = [];
   const home = p?.activeCongregationId ?? null;
   if (p && list && home != null) {
     for (const row of await list('roleAssignments', home)) {
       const a = row.data ?? {};
       if (a.personId !== personId || a.status !== 'ACTIVE' || a.congregationId !== home) continue;
       const type = String(a.roleType ?? '');
-      if (type.startsWith('ADMIN:') && CONGREGATION_WIDE_ROLES.includes(type.slice(6))) wideCongregations.add(home);
+      if (type.startsWith('ADMIN:') && CONGREGATION_WIDE_ROLES.includes(type.slice(6))) { wideCongregations.add(home); assignedWideRoles.push(type.slice(6)); }
     }
   }
   return {
     wideCongregations,
+    /** The congregation-wide roles assigned (and active) in the person's own congregation, whatever role they are working in right now. */
+    assignedWideRoles,
+    /** Reads rows by congregation inside the same transaction (set when the caller passed one); the rules use it to find a person's group. */
+    list: list ?? null,
     personId,
     known: !!p,
     isSuperAdmin: p?.isSuperAdmin === true,

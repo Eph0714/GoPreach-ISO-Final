@@ -134,13 +134,34 @@ export class MemoryStore {
     return m.delete(credentialId);
   }
 
-  async addRefreshToken({ tokenHash, personId, authTime, expiresAt }) { (this.refresh ??= new Map()).set(tokenHash, { personId, authTime, expiresAt }); }
+  async addRefreshToken({ tokenHash, personId, authTime, expiresAt, sessionId = null }) { (this.refresh ??= new Map()).set(tokenHash, { personId, authTime, expiresAt, sessionId }); }
 
   async takeRefreshToken(tokenHash) {
     const m = (this.refresh ??= new Map());
     const r = m.get(tokenHash);
     m.delete(tokenHash);
-    return r && r.expiresAt >= Date.now() ? { personId: r.personId, authTime: r.authTime } : null;
+    return r && r.expiresAt >= Date.now() ? { personId: r.personId, authTime: r.authTime, sessionId: r.sessionId ?? null } : null;
+  }
+
+  // ---- the one active sign-in session of an account (see accounts.js) ----
+  async getSession(personId) { const s = (this.sessions ??= new Map()).get(personId); return s ? { ...s } : null; }
+
+  /** Starts the account's session unless a live one exists (then { ok: false, active }); [replace] takes it over. No await inside, so two callers cannot both win. */
+  async claimSession(personId, { sessionId, device, now, idleMs, replace }) {
+    const m = (this.sessions ??= new Map());
+    const cur = m.get(personId);
+    const live = cur && now - cur.lastActiveAt < idleMs;
+    if (live && !replace) return { ok: false, active: { device: cur.device, lastActiveAt: cur.lastActiveAt } };
+    m.set(personId, { sessionId, device: device ?? null, createdAt: now, lastActiveAt: now });
+    return { ok: true, replaced: !!cur };
+  }
+
+  async touchSession(personId, sessionId, now) { const s = (this.sessions ??= new Map()).get(personId); if (s && s.sessionId === sessionId) s.lastActiveAt = now; }
+
+  /** Ends the session ([sessionId] given: only if it is still that one). */
+  async endSession(personId, sessionId) {
+    const m = (this.sessions ??= new Map());
+    if (sessionId === undefined || m.get(personId)?.sessionId === sessionId) m.delete(personId);
   }
 
   async deleteRefreshTokens(personId) { for (const [k, v] of (this.refresh ??= new Map())) if (v.personId === personId) this.refresh.delete(k); }

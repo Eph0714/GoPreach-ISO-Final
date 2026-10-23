@@ -323,6 +323,24 @@ fun LoginScreen(
             onDismiss = viewModel::dismissQuickLogin,
         )
     }
+    uiState.activeSession?.let { other ->
+        AlertDialog(
+            onDismissRequest = viewModel::cancelEndOtherSession,
+            title = { Text("Account Already Active") },
+            text = {
+                Column {
+                    Text("This account is already signed in on another device.")
+                    other.device?.let { Text("Device: $it", modifier = Modifier.padding(top = 8.dp)) }
+                    other.lastActiveAtMillis?.let {
+                        Text("Last active: ${java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT).format(java.util.Date(it))}")
+                    }
+                    Text("Do you want to end the other session and continue here? The other device will be signed out.", modifier = Modifier.padding(top = 8.dp))
+                }
+            },
+            confirmButton = { TextButton(onClick = { viewModel.confirmEndOtherSession(activity) }) { Text("End Other Session and Continue") } },
+            dismissButton = { TextButton(onClick = viewModel::cancelEndOtherSession) { Text("Cancel") } },
+        )
+    }
     uiState.notice?.let { (title, message) ->
         AlertDialog(
             onDismissRequest = viewModel::dismissNotice,

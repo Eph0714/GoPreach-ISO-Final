@@ -61,6 +61,7 @@ class ManagePublishersViewModel(
     private val publisherCongregationContext: com.emfitsolutions.gopreach.data.repository.PublisherCongregationContext,
     private val locationTracker: com.emfitsolutions.gopreach.data.location.LocationTracker,
     private val philippineLocationRepository: com.emfitsolutions.gopreach.data.repository.PhilippineLocationRepository,
+    private val publisherEditRepository: com.emfitsolutions.gopreach.data.repository.PublisherEditRepository,
     groupRepository: GroupRepository,
     congregationRepository: CongregationRepository,
 ) : ViewModel() {
@@ -146,6 +147,9 @@ class ManagePublishersViewModel(
             )
         }
     }
+
+    /** The whole Edit of a publisher record in one request: the server checks the roles and the scope and writes all of it or none of it (see [com.emfitsolutions.gopreach.data.repository.PublisherEditRepository]). */
+    suspend fun saveRecord(edit: com.emfitsolutions.gopreach.data.repository.PublisherEdit): com.emfitsolutions.gopreach.data.repository.PublisherEditResult = publisherEditRepository.edit(edit)
 
     fun hasLocationPermission(): Boolean = locationTracker.hasLocationPermission()
 

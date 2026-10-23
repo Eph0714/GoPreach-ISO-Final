@@ -11,6 +11,7 @@ import { mountAnnouncementFiles } from './announcementFiles.js';
 import { mountPresence } from './presence.js';
 import { mountCoFiles } from './coFiles.js';
 import { mountCoManual } from './coManual.js';
+import { mountPublisherEdit } from './publisherEdit.js';
 import { mountAccounts } from './accounts.js';
 import { saveGroupTerritory, removeGroupTerritory, removeAssignment, validateSave } from './territory.js';
 
@@ -60,7 +61,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
     return result;
   };
 
-  const auth = authenticate({ devMode: devAuth, secret: authOptions.secret });
+  const auth = authenticate({ devMode: devAuth, secret: authOptions.secret, store });
   // The authoritative date and time (never the caller's device clock): used to decide which service months may be reported.
   app.post('/v1/time', auth, (req, res) => res.json({ now: Date.now() }));
 
@@ -134,6 +135,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   mountCoFiles(app, store, auth);
   mountCoManual(app, store, auth);
   mountAccounts(app, store, auth, authOptions);
+  mountPublisherEdit(app, store, auth);
 
   app.post('/v1/sync/push', auth, async (req, res) => {
     const ops = req.body?.ops;

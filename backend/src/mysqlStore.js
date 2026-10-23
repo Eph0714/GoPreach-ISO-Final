@@ -37,6 +37,11 @@ export class MysqlStore {
       token_hash CHAR(64) NOT NULL PRIMARY KEY, person_id VARCHAR(190) NOT NULL, auth_time BIGINT NOT NULL, expires_at BIGINT NOT NULL,
       KEY idx_person (person_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    try { await pool.query('ALTER TABLE refresh_tokens ADD COLUMN session_id VARCHAR(64) NULL'); } catch (e) { if (e?.code !== 'ER_DUP_FIELDNAME') throw e; }
+    // The one active sign-in session of an account: its id rides inside the access token and every request is checked against it.
+    await pool.query(`CREATE TABLE IF NOT EXISTS sessions (
+      person_id VARCHAR(190) NOT NULL PRIMARY KEY, session_id VARCHAR(64) NOT NULL, device VARCHAR(120) NULL, created_at BIGINT NOT NULL, last_active_at BIGINT NOT NULL
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
     await MysqlCoData.migrate(pool);
     return new MysqlStore(pool);
   }
@@ -212,21 +217,53 @@ export class MysqlStore {
 
   async touchLogin(personId) { await this.pool.query('UPDATE accounts SET last_login = ? WHERE person_id = ?', [Date.now(), personId]); }
 
-  async addRefreshToken({ tokenHash, personId, authTime, expiresAt }) {
-    await this.pool.query('INSERT INTO refresh_tokens (token_hash, person_id, auth_time, expires_at) VALUES (?, ?, ?, ?)', [tokenHash, personId, authTime, expiresAt]);
+  async addRefreshToken({ tokenHash, personId, authTime, expiresAt, sessionId = null }) {
+    await this.pool.query('INSERT INTO refresh_tokens (token_hash, person_id, auth_time, expires_at, session_id) VALUES (?, ?, ?, ?, ?)', [tokenHash, personId, authTime, expiresAt, sessionId]);
     await this.pool.query('DELETE FROM refresh_tokens WHERE expires_at < ?', [Date.now()]);
   }
 
   /** Returns and removes the refresh token (each one is used once), or null when unknown / expired. */
   async takeRefreshToken(tokenHash) {
-    const [rows] = await this.pool.query('SELECT person_id, auth_time, expires_at FROM refresh_tokens WHERE token_hash = ?', [tokenHash]);
+    const [rows] = await this.pool.query('SELECT person_id, auth_time, expires_at, session_id FROM refresh_tokens WHERE token_hash = ?', [tokenHash]);
     if (!rows.length) return null;
     const [res] = await this.pool.query('DELETE FROM refresh_tokens WHERE token_hash = ?', [tokenHash]);
     if (res.affectedRows !== 1 || Number(rows[0].expires_at) < Date.now()) return null;
-    return { personId: rows[0].person_id, authTime: Number(rows[0].auth_time) };
+    return { personId: rows[0].person_id, authTime: Number(rows[0].auth_time), sessionId: rows[0].session_id ?? null };
   }
 
   async deleteRefreshTokens(personId) { await this.pool.query('DELETE FROM refresh_tokens WHERE person_id = ?', [personId]); }
+
+  // ---- the one active sign-in session of an account (see accounts.js) ----
+  async getSession(personId) {
+    const [rows] = await this.pool.query('SELECT session_id, device, last_active_at FROM sessions WHERE person_id = ?', [personId]);
+    return rows.length ? { sessionId: rows[0].session_id, device: rows[0].device, lastActiveAt: Number(rows[0].last_active_at) } : null;
+  }
+
+  /** Atomic: the row of the account is locked while it is decided, so two sign-ins at once cannot both get a session. */
+  async claimSession(personId, { sessionId, device, now, idleMs, replace }) {
+    const conn = await this.pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      const [made] = await conn.query('INSERT IGNORE INTO sessions (person_id, session_id, device, created_at, last_active_at) VALUES (?, ?, ?, ?, ?)', [personId, sessionId, device ?? null, now, now]);
+      if (made.affectedRows === 1) { await conn.commit(); return { ok: true, replaced: false }; }
+      const [rows] = await conn.query('SELECT device, last_active_at FROM sessions WHERE person_id = ? FOR UPDATE', [personId]);
+      const cur = rows[0];
+      if (cur && now - Number(cur.last_active_at) < idleMs && !replace) { await conn.rollback(); return { ok: false, active: { device: cur.device, lastActiveAt: Number(cur.last_active_at) } }; }
+      await conn.query('REPLACE INTO sessions (person_id, session_id, device, created_at, last_active_at) VALUES (?, ?, ?, ?, ?)', [personId, sessionId, device ?? null, now, now]);
+      await conn.commit();
+      return { ok: true, replaced: true };
+    } catch (e) {
+      await conn.rollback().catch(() => {});
+      throw e;
+    } finally { conn.release(); }
+  }
+
+  async touchSession(personId, sessionId, now) { await this.pool.query('UPDATE sessions SET last_active_at = ? WHERE person_id = ? AND session_id = ?', [now, personId, sessionId]); }
+
+  async endSession(personId, sessionId) {
+    if (sessionId === undefined) await this.pool.query('DELETE FROM sessions WHERE person_id = ?', [personId]);
+    else await this.pool.query('DELETE FROM sessions WHERE person_id = ? AND session_id = ?', [personId, sessionId]);
+  }
 
   async close() { await this.pool.end(); }
 }

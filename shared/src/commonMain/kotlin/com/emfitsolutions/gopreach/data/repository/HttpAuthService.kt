@@ -33,6 +33,7 @@ private const val K_REFRESH = "refresh"
 private const val K_EXPIRES = "expiresAt"
 private const val K_PERSON = "personId"
 private const val K_LAST_SIGN_IN = "lastSignInAt"
+private const val K_ENDED = "sessionEndedElsewhere"
 private const val EARLY_REFRESH_MS = 60_000L
 
 /**
@@ -45,6 +46,8 @@ class HttpAuthService(
     private val baseUrl: String,
     stores: KeyValueStores,
     private val scope: CoroutineScope,
+    /** What this phone calls itself to the server (shown on the other device); only what the system reports. */
+    private val deviceLabel: String? = null,
 ) : AuthService {
     private val prefs by lazy { stores.openSecure(PREFS) }
     private val lock = Mutex()
@@ -83,10 +86,20 @@ class HttpAuthService(
         state.value = null
     }
 
-    override suspend fun signIn(email: String, password: String) {
+    override suspend fun signIn(email: String, password: String, endOtherSession: Boolean) {
         ensureLoaded()
-        val reply = post("/v1/auth/login", buildJsonObject { put("email", JsonPrimitive(email)); put("password", JsonPrimitive(password)) }, token = null)
-        lock.withLock { save(reply, signedInNow = true) }
+        val reply = post("/v1/auth/login", buildJsonObject {
+            put("email", JsonPrimitive(email)); put("password", JsonPrimitive(password)); put("endOtherSession", JsonPrimitive(endOtherSession))
+            deviceLabel?.let { put("device", JsonPrimitive(it)) }
+        }, token = null)
+        lock.withLock { prefs.edit { remove(K_ENDED) }; save(reply, signedInNow = true) }
+    }
+
+    override fun takeSessionEndedNotice(): Boolean {
+        ensureLoaded()
+        val ended = runCatching { prefs.getString(K_ENDED, null) != null }.getOrDefault(false)
+        if (ended) prefs.edit { remove(K_ENDED) }
+        return ended
     }
 
     override fun signOut() {
@@ -105,6 +118,10 @@ class HttpAuthService(
             val reply = post("/v1/auth/refresh", buildJsonObject { put("refreshToken", JsonPrimitive(refresh)) }, token = null)
             save(reply, signedInNow = false)
             reply.string("accessToken")
+        } catch (e: AuthFailure.SessionEnded) {
+            clear()
+            prefs.edit { putString(K_ENDED, "1") } // the sign-in screen explains why
+            null
         } catch (e: AuthFailure.InvalidCredentials) {
             clear() // the server no longer knows this session (signed out elsewhere, password changed, account removed)
             null
@@ -140,10 +157,13 @@ class HttpAuthService(
         return PasskeyChallenge(reply.string("sessionId"), options.toString())
     }
 
-    override suspend fun passkeyLogin(sessionId: String, responseJson: String): String? {
+    override suspend fun passkeyLogin(sessionId: String, responseJson: String, endOtherSession: Boolean): String? {
         ensureLoaded()
         val response = DocJson.parseToJsonElement(responseJson)
-        val reply = post("/v1/auth/passkey/login/verify", buildJsonObject { put("sessionId", JsonPrimitive(sessionId)); put("response", response) }, token = null)
+        val reply = post("/v1/auth/passkey/login/verify", buildJsonObject {
+            put("sessionId", JsonPrimitive(sessionId)); put("response", response); put("endOtherSession", JsonPrimitive(endOtherSession))
+            deviceLabel?.let { put("device", JsonPrimitive(it)) }
+        }, token = null)
         lock.withLock { save(reply, signedInNow = true) }
         return reply.string("username")
     }
@@ -201,7 +221,9 @@ class HttpAuthService(
         if (code in 200..299) return json ?: JsonObject(emptyMap())
         val error = json?.string("error")
         throw when {
+            code == 401 && error == "session-ended" -> AuthFailure.SessionEnded()
             code == 401 -> AuthFailure.InvalidCredentials()
+            code == 409 && error == "session-active" -> AuthFailure.SessionActive(ActiveSessionInfo(json?.string("device"), (json?.get("lastActiveAt") as? JsonPrimitive)?.content?.toLongOrNull()))
             code == 429 -> AuthFailure.TooManyRequests()
             code == 404 && error == "invalid-user" -> AuthFailure.InvalidUser()
             code == 403 && error == "requires-recent-login" -> AuthFailure.Other("For security, please sign in again before changing your password.")

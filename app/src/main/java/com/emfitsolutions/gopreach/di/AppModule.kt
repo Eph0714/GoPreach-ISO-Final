@@ -79,6 +79,7 @@ import com.emfitsolutions.gopreach.data.repository.PublicTalkScheduleRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherCongregationContext
 import com.emfitsolutions.gopreach.data.repository.PublisherDashboardVisibilityRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherForwardRequestRepository
+import com.emfitsolutions.gopreach.data.repository.PublisherEditRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherTerritoryAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherVisibilitySettingsRepository
 import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
@@ -270,7 +271,7 @@ val infraModule = module {
     single<NetworkStatus> { DefaultNetworkStatus(get(), get()) }
     single<RemoteFiles> { com.emfitsolutions.gopreach.data.sync.BackendRemoteFiles(get(), get()) }
     single<KeyValueStores> { AndroidKeyValueStores(get()) }
-    single<AuthService> { com.emfitsolutions.gopreach.data.repository.HttpAuthService(get(), BackendConfig.baseUrl, get(), get()) }
+    single<AuthService> { com.emfitsolutions.gopreach.data.repository.HttpAuthService(get(), BackendConfig.baseUrl, get(), get(), deviceLabel = "GoPreach Android (${android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${android.os.Build.MODEL})") }
     single<LocationTracker> { AndroidLocationTracker(get()) }
     single<WriteQueuedListener> { AndroidWriteQueuedListener(get(), get(), get()) }
 
@@ -361,6 +362,7 @@ val appModule = module {
     singleOf(::ScheduleRepository)
     singleOf(::SharedLocationRepository)
     singleOf(::TerritoryAssignmentRepository)
+    singleOf(::PublisherEditRepository)
     singleOf(::TerritoryBoundaryRepository)
     singleOf(::TerritoryDrawingRepository)
     singleOf(::TerritoryRepository)

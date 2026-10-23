@@ -11,8 +11,15 @@ sealed class AuthFailure(message: String?, cause: Throwable? = null) : Exception
     class InvalidUser(cause: Throwable? = null) : AuthFailure("Unknown or disabled account", cause)
     class TooManyRequests(cause: Throwable? = null) : AuthFailure("Too many attempts", cause)
     class Network(cause: Throwable? = null) : AuthFailure("No network", cause)
+    /** The password was right but the server says this account already has a live session on another device. */
+    class SessionActive(val session: ActiveSessionInfo, cause: Throwable? = null) : AuthFailure("Account already active", cause)
+    /** The server revoked this device's session because the account signed in somewhere else. */
+    class SessionEnded(cause: Throwable? = null) : AuthFailure("Session ended", cause)
     class Other(message: String?, cause: Throwable? = null) : AuthFailure(message, cause)
 }
+
+/** The other session of an account, as the server reported it: [device] and [lastActiveAtMillis] are null unless the server knows them. */
+data class ActiveSessionInfo(val device: String?, val lastActiveAtMillis: Long?)
 
 /** The server's one-time passkey challenge: [optionsJson] goes to the phone's passkey manager as-is; [sessionId] comes back with the answer. */
 data class PasskeyChallenge(val sessionId: String?, val optionsJson: String)
@@ -31,8 +38,12 @@ interface AuthService {
     /** Emits the signed-in account (or null) now and on every change. */
     fun authState(): Flow<AuthUser?>
 
-    suspend fun signIn(email: String, password: String)
+    /** [endOtherSession] true takes over an account that is signed in elsewhere (the server revokes the other session first); otherwise [AuthFailure.SessionActive] is thrown. */
+    suspend fun signIn(email: String, password: String, endOtherSession: Boolean = false)
     fun signOut()
+
+    /** True once if this device was signed out because the account signed in on another device (the sign-in screen tells the person). */
+    fun takeSessionEndedNotice(): Boolean = false
 
     /** A fresh ID token for the backend (forces a refresh when [force]); null when nobody is signed in. */
     suspend fun idToken(force: Boolean): String?
@@ -53,7 +64,7 @@ interface AuthService {
     suspend fun passkeyLoginOptions(): PasskeyChallenge = throw AuthFailure.Other("Passkeys aren't available on this device.")
 
     /** Sends the phone's signed answer. On success the person is signed in (tokens stored); returns their username. */
-    suspend fun passkeyLogin(sessionId: String, responseJson: String): String? = throw AuthFailure.Other("Passkeys aren't available on this device.")
+    suspend fun passkeyLogin(sessionId: String, responseJson: String, endOtherSession: Boolean = false): String? = throw AuthFailure.Other("Passkeys aren't available on this device.")
 
     /** The options for creating a passkey for the signed-in account. */
     suspend fun passkeyRegisterOptions(): String = throw AuthFailure.Other("Passkeys aren't available on this device.")

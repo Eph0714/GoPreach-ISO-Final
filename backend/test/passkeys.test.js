@@ -75,7 +75,7 @@ after(() => server.close());
 
 const post = (path, body, token) =>
   fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body ?? {}) });
-const login = async (id, password) => (await (await post('/v1/auth/login', { email: `${id}@gopreach.internal`, password })).json()).accessToken;
+const login = async (id, password) => (await (await post('/v1/auth/login', { email: `${id}@gopreach.internal`, password, endOtherSession: true })).json()).accessToken;
 
 async function registerPasskey(token, authenticator, name) {
   const { options } = await (await post('/v1/auth/passkey/register/options', {}, token)).json();
@@ -83,7 +83,7 @@ async function registerPasskey(token, authenticator, name) {
 }
 async function passkeyLogin(authenticator, personId, overrides) {
   const { sessionId, options } = await (await post('/v1/auth/passkey/login/options', {})).json();
-  return post('/v1/auth/passkey/login/verify', { sessionId, response: authenticator.assert(options, personId, overrides) });
+  return post('/v1/auth/passkey/login/verify', { sessionId, response: authenticator.assert(options, personId, overrides), endOtherSession: true });
 }
 
 test('the asset links file ties the Android app to this domain', async () => {
@@ -152,7 +152,7 @@ test('a wrong challenge, an unknown passkey, a replay and another account are al
 
   const ok = await (await post('/v1/auth/passkey/login/options', {})).json();
   const response = phone.assert(ok.options, 'pub002');
-  assert.equal((await post('/v1/auth/passkey/login/verify', { sessionId: ok.sessionId, response })).status, 200);
+  assert.equal((await post('/v1/auth/passkey/login/verify', { sessionId: ok.sessionId, response, endOtherSession: true })).status, 200);
   assert.equal((await post('/v1/auth/passkey/login/verify', { sessionId: ok.sessionId, response })).status, 401, 'a session works once');
   assert.ok(good, 'unused assertion only exercised the signing helper');
 });
