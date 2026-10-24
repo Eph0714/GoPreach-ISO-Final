@@ -34,7 +34,7 @@ async function connect() {
 connect();
 
 // Mail for the sign-in e-mail code: only when SMTP is configured (and nodemailer installed); otherwise that method is simply not offered.
-const mailer = await smtpMailer().catch((e) => { console.error('Mail is not available:', e.message); return null; });
+const mailer = smtpMailer();
 
 const app = createApp(lazyStore, { devAuth: process.env.AUTH_MODE === 'dev', health: () => ({ db: dbStatus }), authOptions: { mailer } });
 

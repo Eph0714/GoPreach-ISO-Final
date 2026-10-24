@@ -43,12 +43,22 @@ const maskIp = (ip) => {
   return v4 ? `${v4[1]}.${v4[2]}.*.*` : null;
 };
 
-/** Sends mail through the SMTP account in the server settings; null when none is set up (the e-mail method is then simply not offered). */
-export async function smtpMailer(mail = config.mail) {
+/**
+ * Sends mail through the SMTP account in the server settings; null when none is set up (the e-mail method is then simply not offered). Synchronous on purpose
+ * (no top-level await anywhere in the server: some hosts load the entry file with require(), which refuses it): the mail library is loaded on the first send.
+ */
+export function smtpMailer(mail = config.mail) {
   if (!mail?.host || !mail.from) return null;
-  const { default: nodemailer } = await import('nodemailer');
-  const transport = nodemailer.createTransport({ host: mail.host, port: mail.port, secure: mail.secure, auth: mail.user ? { user: mail.user, pass: mail.pass } : undefined });
-  return { send: (to, subject, text) => transport.sendMail({ from: mail.from, to, subject, text }) };
+  let transport = null;
+  return {
+    async send(to, subject, text) {
+      if (!transport) {
+        const { default: nodemailer } = await import('nodemailer');
+        transport = nodemailer.createTransport({ host: mail.host, port: mail.port, secure: mail.secure, auth: mail.user ? { user: mail.user, pass: mail.pass } : undefined });
+      }
+      return transport.sendMail({ from: mail.from, to, subject, text });
+    },
+  };
 }
 
 export function mountLoginApproval(app, { store, auth, enabled, mailer = null, limits = {}, requestMs = LOGIN_REQUEST_MS }) {
