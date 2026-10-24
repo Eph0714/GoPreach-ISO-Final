@@ -90,9 +90,9 @@ test('uploads: type, content and size are checked; names never collide; the byte
   assert.equal((await upload('co1', 'setup.exe', Buffer.from('MZ....'))).status, 400, 'executables are refused');
   assert.equal((await upload('co1', 'run.sh', Buffer.from('echo hi'))).status, 400);
   assert.equal((await upload('co1', 'fake.pdf', Buffer.from('this is not a pdf'))).status, 400, 'content must match the type');
-  assert.equal((await upload('co1', 'photo.png', PDF, '', 'image/png')).status, 400, 'a PDF renamed .png is refused');
-  assert.equal((await upload('co1', 'photo.jpg', PNG, '', 'image/png')).status, 400, 'a PNG named .jpg is refused');
-  assert.equal((await upload('co1', 'photo.png', PNG, '', 'image/png')).status, 201);
+  for (const name of ['photo.png', 'photo.jpg', 'notes.txt', 'data.csv', 'pack.zip', 'anim.gif', 'slides.pptx']) assert.equal((await upload('co1', name, PNG, '', 'image/png')).status, 400, `${name}: only PDF, Excel and Word are allowed`);
+  assert.equal((await upload('co1', 'sheet.xlsx', PDF, '', '')).status, 400, 'a PDF renamed .xlsx is refused');
+  assert.equal((await upload('co1', 'sheet.xls', Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0, 0, 0, 0, 0]))).status, 201, 'old Excel');
   assert.equal((await upload('co1', '..\\evil.pdf', PDF)).status, 400, 'no paths in names');
   assert.equal((await upload('co1', 'empty.pdf', Buffer.alloc(0))).status, 400);
   assert.ok([400, 413].includes((await upload('co1', 'big.pdf', Buffer.concat([PDF, Buffer.alloc(2 * 1024 * 1024)]))).status), 'over the configured limit');
@@ -112,11 +112,11 @@ test('uploads: type, content and size are checked; names never collide; the byte
 
 test('rename keeps the type, move works, details show the folder, and a file cannot be taken by someone else', async () => {
   const folder = await mkfolder('co1', 'Letters');
-  const f = await j(await upload('co1', 'greeting.txt', Buffer.from('hello'), '', 'text/plain'));
+  const f = await j(await upload('co1', 'greeting.pdf', PDF, '', 'application/pdf'));
   const renamed = await j(await call('co1', 'PATCH', `/files/${f.id}`, { json: { name: 'welcome' } }));
-  assert.equal(renamed.name, 'welcome.txt');
+  assert.equal(renamed.name, 'welcome.pdf');
   assert.equal((await call('co1', 'PATCH', `/files/${f.id}`, { json: { name: 'welcome.exe' } })).status, 400);
-  assert.equal((await call('co1', 'PATCH', `/files/${f.id}`, { json: { name: 'welcome.pdf' } })).status, 400, 'a file keeps its type');
+  assert.equal((await call('co1', 'PATCH', `/files/${f.id}`, { json: { name: 'welcome.docx' } })).status, 400, 'a file keeps its type');
   const moved = await j(await call('co1', 'PATCH', `/files/${f.id}`, { json: { folderId: folder.id } }));
   assert.equal(moved.folderPath, 'File Manager / Letters');
   const details = await j(await call('co1', 'GET', `/files/${f.id}`));
@@ -149,11 +149,11 @@ test('search looks in every folder, partial and case-insensitive, and says where
 test('sorting and the list view', async () => {
   const z = await mkfolder('co1', 'Sorting');
   await upload('co1', 'b.pdf', PDF, z.id, 'application/pdf');
-  await upload('co1', 'a.png', PNG, z.id, 'image/png');
+  await upload('co1', 'a.docx', Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(3000)]), z.id);
   const asc = await j(await call('co1', 'GET', `/files/list?folderId=${z.id}&sort=name`));
-  assert.deepEqual(asc.files.map((f) => f.name), ['a.png', 'b.pdf']);
+  assert.deepEqual(asc.files.map((f) => f.name), ['a.docx', 'b.pdf']);
   const desc = await j(await call('co1', 'GET', `/files/list?folderId=${z.id}&sort=name&dir=desc`));
-  assert.deepEqual(desc.files.map((f) => f.name), ['b.pdf', 'a.png']);
+  assert.deepEqual(desc.files.map((f) => f.name), ['b.pdf', 'a.docx']);
   const bySize = await j(await call('co1', 'GET', `/files/list?folderId=${z.id}&sort=size`));
   assert.equal(bySize.files[0].name, 'b.pdf');
   assert.deepEqual(asc.path.map((p) => p.name), ['Sorting']);
@@ -364,6 +364,20 @@ test('a congregation taken off the grant is no longer shown, and an import can r
   assert.deepEqual((await j(await call('co1', 'GET', '/manual/congregations'))).congregations.map((c) => c.id), ['cB']);
   const rows = (await j(await call('co1', 'GET', '/manual/imports'))).imports;
   assert.ok(rows.every((r) => r.congregationId === 'cB'), 'files of a congregation no longer on the grant are hidden');
+});
+
+test('a saved Excel record can be downloaded again, byte for byte, under the uploaded file name', async () => {
+  const book = workbook({ S: visits });
+  const saved = await j(await call('co1', 'POST', '/manual/import?name=NT01%20Visit%20Records%20(final).xlsx&congregationId=cB&allowDuplicate=1', { body: book }));
+  const dl = await call('co1', 'GET', `/manual/imports/${saved.importId}/download`);
+  assert.equal(dl.status, 200);
+  assert.deepEqual(Buffer.from(await dl.arrayBuffer()), book);
+  assert.equal(dl.headers.get('content-disposition'), `attachment; filename="NT01 Visit Records (final).xlsx"; filename*=UTF-8''NT01%20Visit%20Records%20(final).xlsx`);
+  assert.equal((await call('co2', 'GET', `/manual/imports/${saved.importId}/download`)).status, 404, 'only the owner');
+  const sneaky = await fetch(`${base}/v1/files?path=${encodeURIComponent(`co-manual/co1/${saved.importId}`)}`, { headers: { 'x-dev-person': 'co2' } });
+  assert.notEqual(sneaky.status, 200);
+  assert.equal((await call('co1', 'DELETE', `/manual/imports/${saved.importId}`)).status, 200);
+  assert.equal((await call('co1', 'GET', `/manual/imports/${saved.importId}/download`)).status, 404);
 });
 
 test('a failed import leaves nothing behind', async () => {

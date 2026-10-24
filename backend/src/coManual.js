@@ -1,5 +1,5 @@
 import express from 'express';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { MAX_EXCEL_BYTES } from './excel.js';
 import { readSnapshots, searchTextOf, applyEdits, summarySnapshot, LIMITS } from './sheetSnapshot.js';
 import { comparisonFor, reportFor, reportForFiles } from './sheetCompare.js';
@@ -21,6 +21,7 @@ import { coAccess, allowedCongregations, newId, ID_RE, audit, jsonErrors } from 
  *   PATCH  /v1/co/manual/imports/:id/sheets/:index { edits: [{ r, c, v }] }   change cells and save
  *   GET    /v1/co/manual/imports/:id/sheets/:index/analysis?group=&a=&b=[&ai=1]   the verified comparative analysis of one saved worksheet (cards, bar-chart data, findings,
  *          data-quality notes); with ai=1 the free self-hosted AI adds plain-language wording, checked against the calculated figures (see aiSummary.js)
+ *   GET    /v1/co/manual/imports/:id/download             the uploaded file again, byte for byte, under its original name
  *   PATCH  /v1/co/manual/imports/:id { remarks }          DELETE /v1/co/manual/imports/:id
  *
  * The workbook is sent as the raw request body, or - to reuse a file kept in the File Manager - named by `fileId` (it must be the caller's own).
@@ -28,6 +29,8 @@ import { coAccess, allowedCongregations, newId, ID_RE, audit, jsonErrors } from 
  * Every route only sees the caller's own imports, and only for congregations that are still on their grant. Formulas are never calculated.
  */
 const MAX_EDITS = 500;
+const originalPath = (owner, importId) => `co-manual/${owner}/${importId}`;
+const ORIGINAL_MIMES = { xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel', csv: 'text/csv' };
 
 /** The free-text remarks the Circuit Overseer types for an import (optional, at most 500 characters). */
 export const cleanRemarks = (v) => String(v ?? '').replace(/[\u0000-\u001f]+/g, ' ').trim().slice(0, 500);
@@ -120,6 +123,9 @@ export function mountCoManual(app, store, auth, { ai = config.ai } = {}) {
     const sheets = chosen.map((s, i) => ({ index: i, name: s.name.slice(0, 255), rows: s.snapshot.rows, cols: s.snapshot.cols, data: s.snapshot, search: searchTextOf(s.snapshot) }));
     const imp = { id: newId(), congregationId: congregation.id, congregationName: congregation.name, remarks, fileName: src.name.slice(0, 255), contentHash, createdAt: Date.now() };
     await store.co_addImport(ctx.owner, imp, sheets);
+    // the uploaded file itself, byte for byte, so it can be downloaded again under the same name
+    const ext = imp.fileName.includes('.') ? imp.fileName.split('.').pop().toLowerCase() : '';
+    await store.putFile({ path: originalPath(ctx.owner, imp.id), token: randomBytes(24).toString('base64url'), owner: ctx.owner, mime: ORIGINAL_MIMES[ext] ?? 'application/octet-stream', data: src.data });
     await audit(store, ctx.owner, 'CO_MANUAL_IMPORT', 'CoManualImport', imp.id, `${imp.fileName}: ${sheets.length} worksheet(s) for ${imp.congregationName}`);
     res.status(201).json({ importId: imp.id, sheets: sheets.map(({ index, name, rows, cols }) => ({ index, name, rows, cols })), truncated: book.truncated, congregationName: imp.congregationName, remarks });
   }));
@@ -140,6 +146,18 @@ export function mountCoManual(app, store, auth, { ai = config.ai } = {}) {
       if (sheets.some((s) => s.hit)) found.push({ ...i, sheets });
     }
     res.json({ imports: found.map(publicImport) });
+  }));
+
+  /** The file as it was uploaded, with its original name (imports saved before this existed have no stored original). */
+  router.get('/imports/:id/download', auth, guard(async (req, res, ctx) => {
+    const imp = await ownImport(req, ctx);
+    const blob = imp ? await store.getFileByPath(originalPath(ctx.owner, imp.id)) : null;
+    if (!blob) return res.status(404).json({ error: 'The original file was not kept for this record' });
+    res.set('Content-Type', blob.mime);
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('Cache-Control', 'private, no-store');
+    res.set('Content-Disposition', `attachment; filename="${imp.fileName.replace(/[^\w.\- ()]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(imp.fileName)}`);
+    res.send(blob.data);
   }));
 
   router.get('/imports/:id/sheets/:index', auth, guard(async (req, res, ctx) => {
@@ -229,6 +247,7 @@ export function mountCoManual(app, store, auth, { ai = config.ai } = {}) {
     const imp = await ownImport(req, ctx);
     if (!imp) return res.status(404).json({ error: 'Import not found' });
     await store.co_deleteImport(ctx.owner, imp.id);
+    await store.deleteFile(originalPath(ctx.owner, imp.id));
     await audit(store, ctx.owner, 'CO_MANUAL_DELETE', 'CoManualImport', imp.id, `${imp.fileName} (${imp.sheets.length} worksheets)`);
     res.json({ ok: true });
   }));

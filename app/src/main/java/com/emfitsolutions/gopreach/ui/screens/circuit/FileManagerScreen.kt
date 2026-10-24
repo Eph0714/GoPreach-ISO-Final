@@ -82,6 +82,12 @@ import org.koin.compose.viewmodel.koinViewModel
 import java.text.DateFormat
 import java.util.Date
 
+/** The File Manager takes PDF, Excel and Word files only. */
+private val DOCUMENT_MIME_TYPES = arrayOf(
+    "application/pdf", "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+)
+
 /** The Circuit Overseer's File Manager: folders and subfolders, uploads, downloads, preview, search, list / grid view and a recycle bin. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -183,7 +189,7 @@ fun FileManagerScreen(onBack: () -> Unit, viewModel: FileManagerViewModel = koin
                 )
             } else {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FilledTonalButton(onClick = { picker.launch(arrayOf("*/*")) }) { Icon(Icons.Rounded.Upload, null, Modifier.size(18.dp)); Spacer(Modifier.size(6.dp)); Text("Upload File") }
+                    FilledTonalButton(onClick = { picker.launch(DOCUMENT_MIME_TYPES) }) { Icon(Icons.Rounded.Upload, null, Modifier.size(18.dp)); Spacer(Modifier.size(6.dp)); Text("Upload File") }
                     FilledTonalButton(onClick = { creating = true }) { Icon(Icons.Rounded.CreateNewFolder, null, Modifier.size(18.dp)); Spacer(Modifier.size(6.dp)); Text("New Folder") }
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = { viewModel.setGrid(!grid) }) { Icon(if (grid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView, if (grid) "List view" else "Grid view") }

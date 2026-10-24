@@ -271,6 +271,9 @@ class CoDocumentsRepository(private val api: SyncApi) {
             putJsonArray("edits") { edits.forEach { e -> add(buildJsonObject { put("r", e.r); put("c", e.c); put("v", e.v) }) } }
         }))
 
+    /** The Excel file exactly as it was uploaded (404 for records saved before the original was kept). */
+    suspend fun downloadImport(id: String): ByteArray = require(api.callServer("GET", "/v1/co/manual/imports/$id/download")).bytes
+
     suspend fun deleteImport(id: String) { send("DELETE", "/v1/co/manual/imports/$id") }
 
     /** Changes the remarks of a saved file; returns the remarks as the server kept them. */

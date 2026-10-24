@@ -46,6 +46,9 @@ data class FolderDeleteWarning(val folder: CoFolder, val folders: Int, val files
 private fun fileKey(id: String) = "file:$id"
 private fun folderKey(id: String) = "folder:$id"
 
+/** The only kinds of file the File Manager takes. */
+private val ALLOWED_EXTENSIONS = setOf("pdf", "xls", "xlsx", "doc", "docx")
+
 /**
  * The Circuit Overseer's File Manager. All data lives on the server (private to this person); this class holds what is on screen: the open folder, the sort and
  * the list/grid choice (remembered), the search, a multi-selection, the uploads in progress and the recycle bin. Every action reports back through [messages].
@@ -237,6 +240,7 @@ class FileManagerViewModel(
                 val key = uri.toString()
                 setUpload(UploadItem(key, name, UploadState.UPLOADING))
                 try {
+                    if (name.substringAfterLast('.', "").lowercase() !in ALLOWED_EXTENSIONS) throw IllegalArgumentException("\"$name\" was not uploaded: only PDF, Excel (.xls, .xlsx) and Word (.doc, .docx) files are allowed.")
                     if (size > maxMb * 1024L * 1024L) throw IllegalArgumentException("\"$name\" is larger than $maxMb MB.")
                     val bytes = withContext(Dispatchers.IO) { resolver.openInputStream(uri)?.use { it.readBytes() } } ?: throw IllegalStateException("Couldn't read \"$name\".")
                     val mime = resolver.getType(uri) ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase()) ?: "application/octet-stream"

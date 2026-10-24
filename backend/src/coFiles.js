@@ -31,12 +31,8 @@ export const MAX_FILE_MB = Number(process.env.CO_FILE_MAX_MB ?? 25);
 export const STORAGE_QUOTA_MB = Number(process.env.CO_STORAGE_MB ?? 500);
 const MB = 1024 * 1024;
 
-const ZIP = (b) => b.length > 3 && b[0] === 0x50 && b[1] === 0x4b && (b[2] === 0x03 || b[2] === 0x05);
-const EXTRA_TYPES = {
-  gif: { mimes: ['image/gif'], sniff: (b) => b.length > 5 && ['GIF87a', 'GIF89a'].includes(b.subarray(0, 6).toString('latin1')) },
-  zip: { mimes: ['application/zip', 'application/x-zip-compressed'], sniff: ZIP },
-};
-const ALLOWED = { ...TYPES, ...EXTRA_TYPES };
+/** The File Manager takes documents only: PDF, Excel and Word. */
+const ALLOWED = Object.fromEntries(['pdf', 'xls', 'xlsx', 'doc', 'docx'].map((ext) => [ext, TYPES[ext]]));
 const GENERIC = new Set(['application/octet-stream', 'binary/octet-stream', '']);
 /** What the browser may show inside the page (always with a sandboxing CSP and "nosniff"). */
 const PREVIEW = { 'application/pdf': 'application/pdf', 'image/jpeg': 'image/jpeg', 'image/png': 'image/png', 'image/webp': 'image/webp', 'image/gif': 'image/gif', 'text/plain': 'text/plain; charset=utf-8' };
@@ -57,7 +53,7 @@ export function checkUpload(name, declaredMime, data) {
   if (!clean) return { ok: false, reason: 'The file name is empty, too long or has characters that are not allowed' };
   const ext = clean.includes('.') ? clean.split('.').pop().toLowerCase() : '';
   const type = ALLOWED[ext];
-  if (!type) return { ok: false, reason: `Files of type ".${ext || '?'}" are not allowed` };
+  if (!type) return { ok: false, reason: 'Only PDF, Excel (.xls, .xlsx) and Word (.doc, .docx) files can be uploaded' };
   if (!Buffer.isBuffer(data) || data.length === 0) return { ok: false, reason: 'The file is empty' };
   if (data.length > MAX_FILE_MB * MB) return { ok: false, reason: `The file is larger than ${MAX_FILE_MB} MB` };
   const declared = String(declaredMime ?? '').split(';')[0].trim().toLowerCase();

@@ -286,6 +286,41 @@ class PreviousManualRecordViewModel(
         }
     }
 
+    /** Saves the file as it was uploaded to Downloads/GoPreach, under the same file name. */
+    fun downloadOriginal(info: ManualImportInfo) {
+        viewModelScope.launch {
+            try {
+                val bytes = repository.downloadImport(info.id)
+                val mime = when (info.fileName.substringAfterLast('.', "").lowercase()) {
+                    "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    "xls" -> "application/vnd.ms-excel"
+                    "csv" -> "text/csv"
+                    else -> "application/octet-stream"
+                }
+                val where = withContext(Dispatchers.IO) {
+                    if (android.os.Build.VERSION.SDK_INT >= 29) {
+                        val values = android.content.ContentValues().apply {
+                            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, info.fileName)
+                            put(android.provider.MediaStore.Downloads.MIME_TYPE, mime)
+                            put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/GoPreach")
+                        }
+                        val uri = context.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: throw IllegalStateException("Couldn't create the file in Downloads.")
+                        context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } ?: throw IllegalStateException("Couldn't write the file.")
+                        "Downloads/GoPreach"
+                    } else {
+                        val dir = context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOWNLOADS) ?: context.cacheDir
+                        java.io.File(dir, info.fileName).also { it.writeBytes(bytes) }.parent.orEmpty()
+                    }
+                }
+                _messages.tryEmit("Saved to $where: ${info.fileName}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _messages.tryEmit(if (e is CoApiException && e.status == 404) "The original file was not kept for this record." else reason(e, "The download failed."))
+            }
+        }
+    }
+
     /** Removes a saved file (all its worksheets). The original Excel file is not touched. */
     fun removeFile(info: ManualImportInfo) {
         viewModelScope.launch {

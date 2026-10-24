@@ -234,7 +234,7 @@ private fun Library(viewModel: PreviousManualRecordViewModel, congregations: Lis
                                 Text("  ${files.size} saved file${if (files.size == 1) "" else "s"}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
-                        items(files, key = { "f" + it.id }) { info -> FileCard(info, searched.isNotBlank(), onOpen = { index -> viewModel.open(info, index, searched) }, onEditRemarks = { onEditRemarks(info) }, onRemove = { onRemove(info) }) }
+                        items(files, key = { "f" + it.id }) { info -> FileCard(info, searched.isNotBlank(), onOpen = { index -> viewModel.open(info, index, searched) }, onEditRemarks = { onEditRemarks(info) }, onDownload = { viewModel.downloadOriginal(info) }, onRemove = { onRemove(info) }) }
                     }
                 }
             }
@@ -244,7 +244,7 @@ private fun Library(viewModel: PreviousManualRecordViewModel, congregations: Lis
 
 /** One saved file: what it is, its remarks, its worksheets (the ones holding the searched text are marked) and the actions. */
 @Composable
-private fun FileCard(info: ManualImportInfo, searching: Boolean, onOpen: (Int) -> Unit, onEditRemarks: () -> Unit, onRemove: () -> Unit) {
+private fun FileCard(info: ManualImportInfo, searching: Boolean, onOpen: (Int) -> Unit, onEditRemarks: () -> Unit, onDownload: () -> Unit, onRemove: () -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -273,6 +273,8 @@ private fun FileCard(info: ManualImportInfo, searching: Boolean, onOpen: (Int) -
             }
             Row {
                 Button(onClick = { onOpen(info.sheets.firstOrNull { it.hit }?.index ?: 0) }) { Text("Open") }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = onDownload) { Text("Download") }
                 Spacer(Modifier.width(8.dp))
                 TextButton(onClick = onRemove) { Text("Remove", color = MaterialTheme.colorScheme.error) }
             }
@@ -333,6 +335,7 @@ private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onB
                         Text(info.congregationName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("  Remarks: ${info.remarks.ifBlank { "none" }}", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         TextButton(onClick = { onEditRemarks(info) }) { Text("Edit") }
+                        TextButton(onClick = { viewModel.downloadOriginal(info) }) { Text("Download") }
                         TextButton(onClick = { onRemove(info) }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
                     }
                 }

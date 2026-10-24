@@ -26,7 +26,7 @@ export async function mayWriteFile(actor, path, get) {
   if (path.startsWith('app-settings/')) return actor.isSuperAdmin;
   // A recording is private to the person who made it: voice-notes/<their own personId>/...
   if (path.startsWith('voice-notes/')) return path.startsWith(`voice-notes/${actor.personId}/`);
-  if (path.startsWith('announcement-files/') || path.startsWith('co-files/')) return false; // served only through the permission-checked /v1/announcements/:id/files routes
+  if (path.startsWith('announcement-files/') || path.startsWith('co-files/') || path.startsWith('co-manual/')) return false; // served only through the permission-checked /v1/announcements/:id/files routes
   const chat = /^groupChats\/([^/]+)\//.exec(path);
   if (chat) {
     const doc = await get('groupChats', chat[1]);
