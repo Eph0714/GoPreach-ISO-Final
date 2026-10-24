@@ -5,6 +5,7 @@ import { MemoryStore } from '../src/memoryStore.js';
 import { createApp } from '../src/app.js';
 import { hashPassword } from '../src/passwords.js';
 import { androidOrigin, fingerprintBytes } from '../src/passkeys.js';
+import { loginTakingOver } from './helpers/takeover.js';
 
 /** A software authenticator: enough of WebAuthn (none attestation, ES256) to run the whole ceremony against the real routes. */
 const RP_ID = 'api.example.test';
@@ -75,7 +76,7 @@ after(() => server.close());
 
 const post = (path, body, token) =>
   fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body ?? {}) });
-const login = async (id, password) => (await (await post('/v1/auth/login', { email: `${id}@gopreach.internal`, password, endOtherSession: true })).json()).accessToken;
+const login = async (id, password) => (await (await loginTakingOver(store, post, { email: `${id}@gopreach.internal`, password })).json()).accessToken;
 
 async function registerPasskey(token, authenticator, name) {
   const { options } = await (await post('/v1/auth/passkey/register/options', {}, token)).json();

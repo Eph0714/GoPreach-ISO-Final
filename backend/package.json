@@ -21,6 +21,7 @@
     "helmet": "^8.0.0",
     "jose": "^5.9.6",
     "mysql2": "^3.11.5",
+    "nodemailer": "^6.10.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   }
 }

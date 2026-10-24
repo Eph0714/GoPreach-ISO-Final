@@ -43,6 +43,9 @@ import androidx.compose.material.icons.rounded.Streetview
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.RestoreFromTrash
+import kotlinx.coroutines.flow.catch
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.SwapHoriz
 import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.Button
@@ -255,6 +258,36 @@ fun PipelineScreen(
     }
 }
 
+/** The Favorites filter: on = only the records this person starred. */
+@Composable
+internal fun FavoritesToggle(on: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val accent = androidx.compose.ui.graphics.Color(0xFFE6B800)
+    IconButton(
+        onClick = { onChange(!on) },
+        modifier = modifier.size(40.dp).then(if (on) Modifier.background(accent.copy(alpha = 0.18f), androidx.compose.foundation.shape.CircleShape) else Modifier),
+    ) {
+        Icon(
+            if (on) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+            contentDescription = if (on) "Favorites only: show all records" else "Show Favorites only",
+            modifier = Modifier.size(22.dp),
+            tint = if (on) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** The star on one record: filled = a Favorite. It changes only the bookmark, never the record. */
+@Composable
+internal fun FavoriteStar(isFavorite: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    IconButton(onClick = { onChange(!isFavorite) }, modifier = modifier.size(40.dp)) {
+        Icon(
+            if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+            contentDescription = if (isFavorite) "Remove from Favorites" else "Add to Favorites",
+            modifier = Modifier.size(22.dp),
+            tint = if (isFavorite) androidx.compose.ui.graphics.Color(0xFFE6B800) else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 /** A small recycle-bin icon: on = the list also shows the records that were moved to Inactive (each with a restore button); off = active records only. */
 @Composable
 internal fun RecycleBinToggle(on: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
@@ -303,6 +336,10 @@ private fun PipelineListScreen(
     var areaMunicipality by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     var areaBarangay by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
     var searchText by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    // Favorites: the star on each record and the Favorites filter. They narrow the list; they never widen what the person may see.
+    var favoritesOnly by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val favoriteIds by remember(currentPersonId) { viewModel.favoriteIds(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptySet())
+    LaunchedEffect(Unit) { viewModel.startFavoritesSync().catch { }.collect { } }
     val publisherNames by viewModel.personNames.collectAsStateWithLifecycle(initialValue = emptyMap())
     val territoryAreas by remember(currentPersonId, congregationId) { viewModel.authorizedAreasFor(currentPersonId, congregationId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     // With no territory assignment at all, the places of the records the person can already see stand in (never anyone else's).
@@ -316,6 +353,7 @@ private fun PipelineListScreen(
     val people = allPeople.filter { (showInactive || it.status == RecordStatus.ACTIVE) && inScope(it) }
         .filterByArea(areaMode, areaMunicipality, areaBarangay)
         .filter { it.matchesSearch(searchText, publisherNames[it.publisherPersonId]) }
+        .filter { !favoritesOnly || it.id in favoriteIds }
     // Searching and Return Visit show which publisher the record is enrolled to (Bible Study stays as it was).
     val showPublisher = householderHistory || stage != PipelineStage.BIBLE_STUDY
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -382,7 +420,10 @@ private fun PipelineListScreen(
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     // Upper left: add a new Searching / Return Visit / Bible Study record (it takes the stage of the open list).
                     androidx.compose.material3.FilledIconButton(onClick = { showCreateDialog = true }, modifier = Modifier.size(44.dp)) { Icon(Icons.Rounded.Add, contentDescription = "New ${stage.label()} Record") }
-                    if (!householderHistory) RecycleBinToggle(showInactive, onChange = { if (hostControlsInactive) onHostShowInactiveChange?.invoke(it) else localShowInactive = it })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        FavoritesToggle(favoritesOnly, onChange = { favoritesOnly = it })
+                        if (!householderHistory) RecycleBinToggle(showInactive, onChange = { if (hostControlsInactive) onHostShowInactiveChange?.invoke(it) else localShowInactive = it })
+                    }
                 }
             }
             HideInFullScreen(true) {
@@ -400,7 +441,7 @@ private fun PipelineListScreen(
             if (people.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     RecordFound(0)
-                    Text(if (areaMode != AreaFilterMode.ALL || searchText.isNotBlank()) "No records match. Clear the search or the filter to see all your authorized records." else "No records yet.", style = MaterialTheme.typography.bodyMedium)
+                    Text(if (favoritesOnly && favoriteIds.isEmpty()) "No Favorites yet. Tap the star on a record to add it." else if (areaMode != AreaFilterMode.ALL || searchText.isNotBlank() || favoritesOnly) "No records match. Clear the search or the filter to see all your authorized records." else "No records yet.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
                 val viewMode = rememberRecordViewMode("pipeline_people")
@@ -451,6 +492,7 @@ private fun PipelineListScreen(
                                         PublisherForwardStatusBadge(person = person, viewModel = viewModel)
                                     }
                                 }
+                                FavoriteStar(person.id in favoriteIds, onChange = { viewModel.setFavorite(currentPersonId, person, it) })
                                 // Three clear actions beside the name. Edit and Delete live inside the details, never here.
                                 RecordQuickActions(
                                     onDetails = { onOpenPerson(person) },

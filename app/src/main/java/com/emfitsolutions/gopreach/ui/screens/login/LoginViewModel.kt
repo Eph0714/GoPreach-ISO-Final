@@ -11,6 +11,8 @@ import com.emfitsolutions.gopreach.data.repository.ActiveSessionInfo
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
 import com.emfitsolutions.gopreach.data.repository.AuthResult
 import com.emfitsolutions.gopreach.data.repository.CredentialStore
+import com.emfitsolutions.gopreach.data.repository.LoginRequestStatus
+import com.emfitsolutions.gopreach.data.repository.LoginRequestTicket
 import com.emfitsolutions.gopreach.data.repository.QuickLoginCheck
 import com.emfitsolutions.gopreach.data.repository.QuickLoginMethod
 import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
@@ -48,6 +50,18 @@ data class LoginUiState(
     val quickLoginLockedMs: Long = 0L,
     /** The server confirmed this account is signed in on another device: the "Account Already Active" dialog asks before ending that session. */
     val activeSession: ActiveSessionInfo? = null,
+    /** The account is signed in elsewhere and this device is waiting for that device (or an e-mail code) to approve it. */
+    val approval: ApprovalUi? = null,
+)
+
+/** What the "Waiting for approval" dialog shows. [message] is the current state in plain words; [emailMasked] is null when no code can be e-mailed. */
+data class ApprovalUi(
+    val device: String?,
+    val emailMasked: String?,
+    val message: String,
+    val codeSent: Boolean = false,
+    val busy: Boolean = false,
+    val error: String? = null,
 )
 
 /** What to repeat if the person agrees to end the other session. */
@@ -79,6 +93,75 @@ class LoginViewModel(
     private var passwordAutoFilled = false
 
     private var pendingSignIn: PendingSignIn? = null
+    private var approvalTicket: LoginRequestTicket? = null
+    private var approvalJob: kotlinx.coroutines.Job? = null
+
+    /**
+     * The password was right but another device holds the account: this device never takes the session over by itself. It waits (asking the signed-in
+     * device "Is this you?" through the server), and only an APPROVED request lets the same password sign-in go through. Nothing is approved by silence:
+     * when the request runs out, the sign-in is simply refused.
+     */
+    private fun beginApproval(ticket: LoginRequestTicket, other: ActiveSessionInfo, username: String, password: String, viaBiometric: Boolean) {
+        approvalTicket = ticket
+        _uiState.update { it.copy(isLoading = false, activeSession = null, approval = ApprovalUi(other.device, ticket.emailMasked, "Waiting for your other device to approve this sign-in\u2026")) }
+        approvalJob?.cancel()
+        approvalJob = viewModelScope.launch {
+            while (true) {
+                if (System.currentTimeMillis() > ticket.expiresAtMillis) { endApproval("The request expired. Nobody approved it, so you were not signed in.") ; return@launch }
+                when (authRepository.loginRequestStatus(ticket)) {
+                    LoginRequestStatus.APPROVED -> { onApproved(username, password, viaBiometric); return@launch }
+                    LoginRequestStatus.DENIED -> { endApproval("The sign-in was denied on your other device."); return@launch }
+                    LoginRequestStatus.EXPIRED -> { endApproval("The request expired. Nobody approved it, so you were not signed in."); return@launch }
+                    LoginRequestStatus.PENDING -> kotlinx.coroutines.delay(3000)
+                }
+            }
+        }
+    }
+
+    private fun onApproved(username: String, password: String, viaBiometric: Boolean) {
+        val ticket = approvalTicket
+        approvalTicket = null
+        pendingSignIn = null
+        _uiState.update { it.copy(approval = null) }
+        performSignIn(username, password, viaBiometric, approval = ticket)
+    }
+
+    private fun endApproval(message: String) {
+        approvalTicket = null
+        pendingSignIn = null
+        _uiState.update { it.copy(approval = null, isLoading = false, errorMessage = message, password = if (passwordAutoFilled) it.password else "") }
+    }
+
+    /** "Cancel" while waiting: the request is simply abandoned (it expires on the server). */
+    fun cancelApproval() {
+        approvalJob?.cancel()
+        endApproval("Sign-in cancelled.")
+        _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    fun sendApprovalEmailCode() {
+        val ticket = approvalTicket ?: return
+        _uiState.update { s -> s.copy(approval = s.approval?.copy(busy = true, error = null)) }
+        viewModelScope.launch {
+            authRepository.sendLoginEmailCode(ticket)
+                .onSuccess { masked -> _uiState.update { s -> s.copy(approval = s.approval?.copy(busy = false, codeSent = true, message = "A code was sent to $masked. Enter it below.")) } }
+                .onFailure { _uiState.update { s -> s.copy(approval = s.approval?.copy(busy = false, error = "The code could not be sent right now. Wait a minute and try again, or approve on your other device.")) } }
+        }
+    }
+
+    fun verifyApprovalEmailCode(code: String) {
+        val ticket = approvalTicket ?: return
+        val pending = pendingSignIn as? PendingSignIn.Password ?: return
+        _uiState.update { s -> s.copy(approval = s.approval?.copy(busy = true, error = null)) }
+        viewModelScope.launch {
+            authRepository.verifyLoginEmailCode(ticket, code.trim())
+                .onSuccess { status ->
+                    if (status == LoginRequestStatus.APPROVED) { approvalJob?.cancel(); onApproved(pending.username, pending.password, pending.viaBiometric) }
+                    else _uiState.update { s -> s.copy(approval = s.approval?.copy(busy = false, error = "That code was not accepted.")) }
+                }
+                .onFailure { _uiState.update { s -> s.copy(approval = s.approval?.copy(busy = false, error = "That code is wrong or has expired.")) } }
+        }
+    }
 
 
     init {
@@ -294,7 +377,7 @@ class LoginViewModel(
         }
     }
 
-    private fun performSignIn(username: String, password: String, viaBiometric: Boolean, endOtherSession: Boolean = false) {
+    private fun performSignIn(username: String, password: String, viaBiometric: Boolean, endOtherSession: Boolean = false, approval: LoginRequestTicket? = null) {
         _uiState.update { it.copy(isLoading = true, errorMessage = null) }
         viewModelScope.launch {
             // Bug fix ("Never allow: Infinite Loading, Frozen Login Button") —
@@ -309,7 +392,7 @@ class LoginViewModel(
             try {
                 val online = connectivityObserver.isOnline()
                 Log.d(TAG, "Database/API connection result: ${if (online) "ONLINE" else "OFFLINE"}")
-                val result = if (online) authRepository.signIn(username, password, endOtherSession) else authRepository.offlineSignIn(username, password)
+                val result = if (online) authRepository.signIn(username, password, endOtherSession, approval) else authRepository.offlineSignIn(username, password)
                 when (result) {
                     is AuthResult.Success -> {
                         Log.d(TAG, "Authentication result: SUCCESS")
@@ -359,7 +442,10 @@ class LoginViewModel(
                         if (result.activeSession != null) {
                             // Only a server-confirmed live session on another device asks first; the password is kept in memory just to repeat this sign-in.
                             pendingSignIn = PendingSignIn.Password(username, password, viaBiometric)
-                            _uiState.update { it.copy(isLoading = false, activeSession = result.activeSession) }
+                            val activeInfo = result.activeSession!!
+                            val ticket = activeInfo.request
+                            if (ticket != null) beginApproval(ticket, activeInfo, username, password, viaBiometric)
+                            else _uiState.update { it.copy(isLoading = false, activeSession = result.activeSession) }
                             return@launch
                         }
                         if (viaBiometric && result.message.contains("Invalid username or password", ignoreCase = true)) {

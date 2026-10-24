@@ -227,6 +227,13 @@ fun FindLocationScreen(
             if (errorText != null) {
                 Text(errorText.orEmpty(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
+            // A picture of the place: coordinates printed in it (or its GPS tags) fill the box above, which then shows the spot on the map.
+            // Nothing is saved until the person chooses to; recognition never invents a coordinate.
+            CoordinateImageCapture(onPicked = { c ->
+                coordinatesText = "%.6f, %.6f".format(c.lat, c.lng)
+                errorText = null
+                destination = c.lat to c.lng
+            })
             Button(onClick = ::submit, enabled = !isSearching, modifier = Modifier.fillMaxWidth()) {
                 if (isSearching) {
                     CircularProgressIndicator(

@@ -121,14 +121,14 @@ object CircuitTabsStore {
  */
 @Composable
 fun CircuitHomeButton() {
-    androidx.compose.material3.IconButton(onClick = { CircuitTabsStore.goHome?.invoke() }) { androidx.compose.material3.Icon(Icons.Rounded.Home, contentDescription = "Home - back to the main form") }
+    // Nothing is drawn here any more: every main form has the one "Back to Homepage" bar (MotherFormHome.kt), so a second Home control would duplicate it.
 }
 
 /** The Circuit Overseer's tab strip, drawn exactly like the Admin / Publisher one. [selected] is null on the Main Form (no tab open). */
 @Composable
 fun CircuitMainTabs(selected: CircuitTab?) {
     // Inside a module the strip starts with a Home icon that goes back to the main form (on the main form itself there is nothing to go back to).
-    TabStrip(CircuitTab.entries.map { StripTab(it.label, it.icon, it.color) }, selected?.ordinal ?: -1, maxLabelLines = 2, onHome = if (selected != null) ({ CircuitTabsStore.goHome?.invoke() }) else null) { i -> CircuitTabsStore.navigate?.invoke(CircuitTab.entries[i]) }
+    TabStrip(CircuitTab.entries.map { StripTab(it.label, it.icon, it.color) }, selected?.ordinal ?: -1, maxLabelLines = 2, onHome = null) { i -> CircuitTabsStore.navigate?.invoke(CircuitTab.entries[i]) }
 }
 
 private class StripTab(val label: String, val icon: ImageVector, val color: Color)

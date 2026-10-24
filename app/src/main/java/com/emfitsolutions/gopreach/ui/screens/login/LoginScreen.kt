@@ -285,6 +285,42 @@ fun LoginScreen(
             onDismiss = viewModel::dismissQuickLogin,
         )
     }
+    uiState.approval?.let { ap ->
+        var code by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Waiting for approval") },
+            text = {
+                Column {
+                    Text("This account is already signed in on another device, so GoPreach asked that device to confirm it is you.")
+                    ap.device?.let { Text("Signed in on: $it", modifier = Modifier.padding(top = 8.dp)) }
+                    Text(ap.message, modifier = Modifier.padding(top = 8.dp), style = MaterialTheme.typography.bodyMedium)
+                    if (ap.emailMasked != null) {
+                        if (ap.codeSent) {
+                            OutlinedTextField(
+                                value = code, onValueChange = { code = it.filter(Char::isDigit).take(6) }, singleLine = true,
+                                label = { Text("6-digit code") }, enabled = !ap.busy,
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                            )
+                        }
+                        Text(
+                            "Can't reach that device? Get a code by e-mail at ${ap.emailMasked}.",
+                            style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                    ap.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
+                    if (ap.busy) androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
+            },
+            confirmButton = {
+                if (ap.emailMasked != null) {
+                    if (ap.codeSent) TextButton(enabled = !ap.busy && code.length == 6, onClick = { viewModel.verifyApprovalEmailCode(code) }) { Text("Verify Code") }
+                    else TextButton(enabled = !ap.busy, onClick = viewModel::sendApprovalEmailCode) { Text("E-mail Me a Code") }
+                }
+            },
+            dismissButton = { TextButton(onClick = viewModel::cancelApproval) { Text("Cancel") } },
+        )
+    }
     uiState.activeSession?.let { other ->
         AlertDialog(
             onDismissRequest = viewModel::cancelEndOtherSession,

@@ -55,6 +55,18 @@ export const config = {
     /** Only if the AI server sits behind a reverse proxy that asks for a bearer key. Never sent to the apps, never logged. */
     apiKey: process.env.AI_API_KEY ?? '',
   },
+  /**
+   * Outgoing mail (the e-mail verification code of a sign-in on a second device). Off until SMTP_HOST and MAIL_FROM are set, e.g. the Hostinger mailbox:
+   * smtp.hostinger.com, port 465, SMTP_SECURE=true. Needs the 'nodemailer' package (npm install). Without it the e-mail method is not offered.
+   */
+  mail: {
+    host: process.env.SMTP_HOST ?? '',
+    port: Number(process.env.SMTP_PORT ?? 465),
+    secure: (process.env.SMTP_SECURE ?? 'true') !== 'false',
+    user: process.env.SMTP_USER ?? '',
+    pass: process.env.SMTP_PASSWORD ?? '',
+    from: process.env.MAIL_FROM ?? '',
+  },
   db: {
     host: process.env.DB_HOST ?? 'localhost',
     port: Number(process.env.DB_PORT ?? 3306),

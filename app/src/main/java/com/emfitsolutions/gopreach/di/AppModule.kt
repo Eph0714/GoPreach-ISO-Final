@@ -88,6 +88,7 @@ import com.emfitsolutions.gopreach.data.repository.RemoteBarangayBoundaryReposit
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherCategoryHistoryRepository
 import com.emfitsolutions.gopreach.data.repository.SavedLocationRepository
+import com.emfitsolutions.gopreach.data.repository.FavoriteRepository
 import com.emfitsolutions.gopreach.data.repository.ScheduleRepository
 import com.emfitsolutions.gopreach.data.repository.SharedLocationRepository
 import com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentRepository
@@ -212,6 +213,7 @@ import com.emfitsolutions.gopreach.ui.screens.reports.ConsolidatedReportViewMode
 import com.emfitsolutions.gopreach.ui.screens.reports.FieldServiceGroupReportViewModel
 import com.emfitsolutions.gopreach.ui.screens.reports.ReportsViewModel
 import com.emfitsolutions.gopreach.ui.screens.settings.InactivityTracker
+import com.emfitsolutions.gopreach.ui.screens.settings.LoginRequestViewModel
 import com.emfitsolutions.gopreach.ui.screens.settings.SessionTimeoutViewModel
 import com.emfitsolutions.gopreach.ui.screens.settings.SettingsViewModel
 import com.emfitsolutions.gopreach.ui.screens.sharelocation.ShareLocationViewModel
@@ -359,6 +361,7 @@ val appModule = module {
     single { com.emfitsolutions.gopreach.data.remote.ServerClock(get()) }
     singleOf(::RoleAssignmentRepository)
     singleOf(::SavedLocationRepository)
+    singleOf(::FavoriteRepository)
     singleOf(::ScheduleRepository)
     singleOf(::SharedLocationRepository)
     singleOf(::TerritoryAssignmentRepository)
@@ -495,6 +498,7 @@ val appModule = module {
     viewModelOf(::FieldServiceGroupReportViewModel)
     viewModelOf(::ReportsViewModel)
     viewModelOf(::SessionTimeoutViewModel)
+    viewModelOf(::LoginRequestViewModel)
     viewModelOf(::SettingsViewModel)
     viewModelOf(::ShareLocationViewModel)
     viewModelOf(::TerritoryMapViewModel)

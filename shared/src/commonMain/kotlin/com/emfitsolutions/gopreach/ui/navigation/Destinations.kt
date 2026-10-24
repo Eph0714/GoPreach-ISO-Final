@@ -6,6 +6,17 @@ package com.emfitsolutions.gopreach.ui.navigation
  * the Admin-context or Publisher-context graphs a session lands on after login.
  */
 object Destinations {
+    /**
+     * The main ("mother") forms: the module screens a person opens from the side panel, a dashboard tile or the header. Each gets the one "Back to Homepage"
+     * button (ui/components/MotherFormHome.kt). Whatever is opened FROM a mother form (add / edit / detail screens, wizards, dialogs) is a child: it goes back to
+     * its mother form and shows no Home button of its own. The two homepages and the sign-in / role-selection screens are not mother forms. A new route must be
+     * classified in MotherFormsTest (shared) so none is forgotten.
+     */
+    val MOTHER_FORMS: Set<String> get() = motherForms
+
+    /** Whether [route] (a route pattern as declared in the navigation graph) is a main form. */
+    fun isMotherForm(route: String?): Boolean = route != null && route in motherForms
+
     // Phase 0
     const val LOGIN = "login"
     const val ABOUT = "about"
@@ -319,3 +330,22 @@ private fun percentEncode(s: String): String {
     }
     return out.toString()
 }
+
+private val motherForms: Set<String> = setOf(
+    Destinations.ENROLL_CONGREGATION, Destinations.ENROLL_ADMIN, Destinations.ENROLL_ELDER, Destinations.ENROLL_MINISTERIAL_SERVANT, Destinations.ENROLL_PUBLISHER,
+    Destinations.MANAGE_CONGREGATIONS, Destinations.MANAGE_ADMINS, Destinations.MANAGE_ELDERS, Destinations.MANAGE_MINISTERIAL_SERVANTS, Destinations.BACKUP_RESTORE,
+    Destinations.USER_LOGS, Destinations.ACCOUNT_MANAGEMENT, Destinations.CREDIT_HOUR_CATEGORIES, Destinations.CONTACT_RECORD, Destinations.SCOPED_INTERESTED_RECORDS,
+    Destinations.HOUSEHOLDER_VISIT_HISTORY, Destinations.MANAGE_PUBLISHERS, Destinations.MANAGE_GROUPS, Destinations.MANAGE_TERRITORY_ASSIGNMENTS,
+    Destinations.MANAGE_TERRITORIES, Destinations.DELETED_RECORDS, Destinations.FIELD_SERVICE_REPORT, Destinations.DASHBOARD_REPORTS, Destinations.MANAGE_ANNOUNCEMENTS,
+    Destinations.PUBLISHER_ANNOUNCEMENTS, Destinations.MEETING_ASSIGNMENTS, Destinations.MY_ASSIGNMENTS, Destinations.PUBLISHER_MEETING_ASSIGNMENTS,
+    Destinations.SEARCHING_ROUTE, Destinations.RETURN_VISIT_ROUTE, Destinations.BIBLE_STUDY_ROUTE, Destinations.MONTHLY_REPORT_ROUTE, Destinations.FORWARD_REQUESTS,
+    Destinations.PUBLISHER_FORWARD_REQUESTS, Destinations.COMPARATIVE_REPORT, Destinations.PUBLISHER_ASSIGNMENT, Destinations.INCOMING_HOUSEHOLDER_ASSIGNMENTS,
+    Destinations.PREACHING_TIME_RECORD, Destinations.MY_BIBLE_TEXT_RECORD, Destinations.SHARE_LOCATION, Destinations.FIND_LOCATION, Destinations.VOICE_NOTES,
+    Destinations.OFFLINE_MAPS, Destinations.WEATHER, Destinations.CALENDAR, Destinations.SETTINGS, Destinations.CONTROL_PANEL, Destinations.ACCOUNT_SETTINGS,
+    Destinations.PUBLISHER_SCHEDULES, Destinations.MANAGE_CIRCUIT_CODES, Destinations.MANAGE_CIRCUIT_OVERSEERS, Destinations.CIRCUIT_ASSIGNMENT,
+    Destinations.CIRCUIT_DASHBOARD, Destinations.CIRCUIT_REPORTS_INBOX, Destinations.RECEIVED_REPORTS, Destinations.RECEIVED_ATTENDANCE, Destinations.ADMIN_COMPARATIVE,
+    Destinations.SENT_REPORTS, Destinations.CO_ANNOUNCEMENTS, Destinations.CO_MANUAL_RECORD, Destinations.CO_FILE_MANAGER, Destinations.ADMIN_CO_FILES,
+    Destinations.RECEIVED_SNAPSHOTS, Destinations.CIRCUIT_PUBLISHERS, Destinations.CIRCUIT_LEADERS, Destinations.CIRCUIT_ATTENDANCE_COMPARISON,
+    Destinations.CIRCUIT_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.MEETING_ATTENDANCE, Destinations.REPORT_SUBMISSION, Destinations.CONGREGATION_COMPARATIVE,
+    Destinations.CONGREGATION_COMPARATIVE_SUBMITTED, Destinations.CIRCUIT_CONGREGATIONS, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_USERS,
+)

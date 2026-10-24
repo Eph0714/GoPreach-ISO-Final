@@ -5,6 +5,7 @@ import com.emfitsolutions.gopreach.platform.KeyValueStores
 import com.emfitsolutions.gopreach.platform.edit
 import com.emfitsolutions.gopreach.platform.nowMillis
 import io.ktor.client.HttpClient
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -86,13 +87,61 @@ class HttpAuthService(
         state.value = null
     }
 
-    override suspend fun signIn(email: String, password: String, endOtherSession: Boolean) {
+    override suspend fun signIn(email: String, password: String, endOtherSession: Boolean, approval: LoginRequestTicket?) {
         ensureLoaded()
         val reply = post("/v1/auth/login", buildJsonObject {
-            put("email", JsonPrimitive(email)); put("password", JsonPrimitive(password)); put("endOtherSession", JsonPrimitive(endOtherSession))
+            put("email", JsonPrimitive(email)); put("password", JsonPrimitive(password))
+            // Only an older server (one that cannot ask the other device) reads this; the current server ignores it for a password sign-in.
+            if (endOtherSession) put("endOtherSession", JsonPrimitive(true))
+            approval?.let { put("approval", buildJsonObject { put("requestId", JsonPrimitive(it.requestId)); put("pollToken", JsonPrimitive(it.pollToken)) }) }
             deviceLabel?.let { put("device", JsonPrimitive(it)) }
         }, token = null)
         lock.withLock { prefs.edit { remove(K_ENDED) }; save(reply, signedInNow = true) }
+    }
+
+    private fun ticketBody(t: LoginRequestTicket) = buildJsonObject { put("requestId", JsonPrimitive(t.requestId)); put("pollToken", JsonPrimitive(t.pollToken)) }
+
+    private fun statusOf(reply: JsonObject) = when (reply.string("status")) {
+        "pending" -> LoginRequestStatus.PENDING
+        "approved" -> LoginRequestStatus.APPROVED
+        "denied" -> LoginRequestStatus.DENIED
+        else -> LoginRequestStatus.EXPIRED
+    }
+
+    override suspend fun loginRequestStatus(ticket: LoginRequestTicket): LoginRequestStatus =
+        statusOf(post("/v1/auth/login-requests/status", ticketBody(ticket), token = null))
+
+    override suspend fun sendLoginEmailCode(ticket: LoginRequestTicket): String =
+        post("/v1/auth/login-requests/email-code", ticketBody(ticket), token = null).string("masked") ?: ticket.emailMasked.orEmpty()
+
+    override suspend fun verifyLoginEmailCode(ticket: LoginRequestTicket, code: String): LoginRequestStatus =
+        statusOf(post("/v1/auth/login-requests/email-verify", buildJsonObject {
+            put("requestId", JsonPrimitive(ticket.requestId)); put("pollToken", JsonPrimitive(ticket.pollToken)); put("code", JsonPrimitive(code))
+        }, token = null))
+
+    override suspend fun pendingLoginRequests(): List<PendingLoginRequest> {
+        val token = idToken(false) ?: return emptyList()
+        val reply = try {
+            get("/v1/auth/login-requests", token)
+        } catch (e: AuthFailure.SessionEnded) {
+            // Another device took the account over (the owner approved it): renewing makes the server say so and signs this phone out with the usual explanation.
+            idToken(true)
+            return emptyList()
+        }
+        return (reply["requests"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { element ->
+            val o = element as? JsonObject ?: return@mapNotNull null
+            PendingLoginRequest(
+                id = o.string("id") ?: return@mapNotNull null,
+                device = o.string("device"), ip = o.string("ip"),
+                createdAtMillis = (o["createdAt"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L,
+                expiresAtMillis = (o["expiresAt"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L,
+            )
+        }
+    }
+
+    override suspend fun decideLoginRequest(id: String, approve: Boolean): Boolean {
+        val token = idToken(false) ?: return false
+        return runCatching { post("/v1/auth/login-requests/$id/" + if (approve) "approve" else "deny", JsonObject(emptyMap()), token); true }.getOrDefault(false)
     }
 
     override fun takeSessionEndedNotice(): Boolean {
@@ -200,6 +249,15 @@ class HttpAuthService(
         return (reply["ok"] as? JsonPrimitive)?.content == "true"
     }
 
+    private suspend fun get(path: String, token: String): JsonObject {
+        val response: HttpResponse = try {
+            client.get("$baseUrl$path") { header(HttpHeaders.Authorization, "Bearer $token") }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { throw AuthFailure.Network(e) }
+        val json = runCatching { DocJson.parseToJsonElement(response.bodyAsText()) as? JsonObject }.getOrNull()
+        if (response.status.value in 200..299) return json ?: JsonObject(emptyMap())
+        throw if (response.status.value == 401) AuthFailure.SessionEnded() else AuthFailure.Other("Request failed (${response.status.value}).")
+    }
+
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 
     /** One POST; maps every failure to an [AuthFailure]. Returns the reply's JSON object. */
@@ -223,7 +281,15 @@ class HttpAuthService(
         throw when {
             code == 401 && error == "session-ended" -> AuthFailure.SessionEnded()
             code == 401 -> AuthFailure.InvalidCredentials()
-            code == 409 && error == "session-active" -> AuthFailure.SessionActive(ActiveSessionInfo(json?.string("device"), (json?.get("lastActiveAt") as? JsonPrimitive)?.content?.toLongOrNull()))
+            code == 409 && error == "session-active" -> AuthFailure.SessionActive(ActiveSessionInfo(
+                json?.string("device"), (json?.get("lastActiveAt") as? JsonPrimitive)?.content?.toLongOrNull(),
+                request = json?.string("requestId")?.let { id ->
+                    LoginRequestTicket(
+                        id, json.string("pollToken").orEmpty(), (json["expiresAt"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L,
+                        ((json["methods"] as? JsonObject)?.get("email") as? JsonObject)?.string("masked"),
+                    )
+                },
+            ))
             code == 429 -> AuthFailure.TooManyRequests()
             code == 404 && error == "invalid-user" -> AuthFailure.InvalidUser()
             code == 403 && error == "requires-recent-login" -> AuthFailure.Other("For security, please sign in again before changing your password.")

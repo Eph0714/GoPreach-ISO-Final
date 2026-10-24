@@ -1,6 +1,7 @@
 import { config } from './config.js';
 import { createStore } from './store.js';
 import { createApp } from './app.js';
+import { smtpMailer } from './loginApproval.js';
 
 /**
  * The server starts listening FIRST and connects to the database in the background, so a wrong database setting shows up
@@ -32,7 +33,10 @@ async function connect() {
 }
 connect();
 
-const app = createApp(lazyStore, { devAuth: process.env.AUTH_MODE === 'dev', health: () => ({ db: dbStatus }) });
+// Mail for the sign-in e-mail code: only when SMTP is configured (and nodemailer installed); otherwise that method is simply not offered.
+const mailer = await smtpMailer().catch((e) => { console.error('Mail is not available:', e.message); return null; });
+
+const app = createApp(lazyStore, { devAuth: process.env.AUTH_MODE === 'dev', health: () => ({ db: dbStatus }), authOptions: { mailer } });
 
 // Hostinger's Node.js hosting passes the port in PORT and fronts the app with its own HTTPS proxy.
 const server = app.listen(config.port, () => console.log(`GoPreach API listening on ${config.port} (${config.nodeEnv}, store=${config.store})`));

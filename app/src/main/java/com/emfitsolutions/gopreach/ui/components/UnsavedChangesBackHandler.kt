@@ -9,6 +9,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,6 +44,9 @@ fun rememberUnsavedChangesBackHandler(
     onSave: (() -> Unit)? = null,
 ): GuardedBack {
     var showDialog by remember { mutableStateOf(false) }
+    // The Back to Homepage button of a main form asks before leaving when this form holds unsaved changes.
+    SideEffect { UnsavedFormState.dirty = hasUnsavedChanges }
+    DisposableEffect(Unit) { onDispose { UnsavedFormState.dirty = false } }
 
     val onBackPressed: () -> Unit = {
         if (hasUnsavedChanges) showDialog = true else onDiscard()

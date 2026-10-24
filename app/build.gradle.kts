@@ -46,8 +46,8 @@ android {
         applicationId = "com.emfitsolutions.gopreach"
         minSdk = 24
         targetSdk = 36
-        versionCode = 225
-        versionName = "1.163.0"
+        versionCode = 226
+        versionName = "1.164.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -209,6 +209,10 @@ dependencies {
 
     // Coil (logo / image loading)
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // Find Location: reads coordinates printed in a photo on the phone itself (no image leaves the device) and the photo's GPS tags
+    implementation("com.google.mlkit:text-recognition:16.0.1")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     // JSON for the offline cache/outbox payloads (see data/local)
     implementation("com.google.code.gson:gson:2.11.0")

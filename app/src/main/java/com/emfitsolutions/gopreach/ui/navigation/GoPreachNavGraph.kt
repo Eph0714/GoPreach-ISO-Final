@@ -282,6 +282,9 @@ fun GoPreachNavGraph(
         }
     }
 
+    // Each person's own homepage: the Publisher main form or the Admin one. Every main form's "Back to Homepage" goes there.
+    val homeRoute = if (session.isActivePublisherRole) Destinations.PUBLISHER_HOME else Destinations.ADMIN_HOME
+    com.emfitsolutions.gopreach.ui.components.MotherFormHomeHost(navController, homeRoute) {
     NavHost(navController = navController, startDestination = Destinations.LOGIN) {
         composable(Destinations.LOGIN) {
             LoginScreen(
@@ -1517,6 +1520,7 @@ fun GoPreachNavGraph(
                 onDone = { navController.popBackStack() },
             )
         }
+    }
     }
 }
 

@@ -19,7 +19,18 @@ sealed class AuthFailure(message: String?, cause: Throwable? = null) : Exception
 }
 
 /** The other session of an account, as the server reported it: [device] and [lastActiveAtMillis] are null unless the server knows them. */
-data class ActiveSessionInfo(val device: String?, val lastActiveAtMillis: Long?)
+data class ActiveSessionInfo(val device: String?, val lastActiveAtMillis: Long?, val request: LoginRequestTicket? = null)
+
+/**
+ * What the server hands the NEW device when the account is signed in elsewhere: the login request it must get approved. [pollToken] is a secret only this
+ * device holds. [emailMasked] is set only when a verification code can be e-mailed (the address is never shown in full).
+ */
+data class LoginRequestTicket(val requestId: String, val pollToken: String, val expiresAtMillis: Long, val emailMasked: String?)
+
+enum class LoginRequestStatus { PENDING, APPROVED, DENIED, EXPIRED }
+
+/** A sign-in attempt from another device, as the signed-in device is shown it. The IP is already shortened by the server. */
+data class PendingLoginRequest(val id: String, val device: String?, val ip: String?, val createdAtMillis: Long, val expiresAtMillis: Long)
 
 /** The server's one-time passkey challenge: [optionsJson] goes to the phone's passkey manager as-is; [sessionId] comes back with the answer. */
 data class PasskeyChallenge(val sessionId: String?, val optionsJson: String)
@@ -39,8 +50,16 @@ interface AuthService {
     fun authState(): Flow<AuthUser?>
 
     /** [endOtherSession] true takes over an account that is signed in elsewhere (the server revokes the other session first); otherwise [AuthFailure.SessionActive] is thrown. */
-    suspend fun signIn(email: String, password: String, endOtherSession: Boolean = false)
+    suspend fun signIn(email: String, password: String, endOtherSession: Boolean = false, approval: LoginRequestTicket? = null)
     fun signOut()
+
+    // ---- Protecting the signed-in device: the new device waits for approval, the signed-in one answers "Is this you?" ----
+    suspend fun loginRequestStatus(ticket: LoginRequestTicket): LoginRequestStatus = throw AuthFailure.Other("Not available on this device.")
+    /** E-mails a verification code to the registered address; returns the masked address. */
+    suspend fun sendLoginEmailCode(ticket: LoginRequestTicket): String = throw AuthFailure.Other("Not available on this device.")
+    suspend fun verifyLoginEmailCode(ticket: LoginRequestTicket, code: String): LoginRequestStatus = throw AuthFailure.Other("Not available on this device.")
+    suspend fun pendingLoginRequests(): List<PendingLoginRequest> = emptyList()
+    suspend fun decideLoginRequest(id: String, approve: Boolean): Boolean = false
 
     /** True once if this device was signed out because the account signed in on another device (the sign-in screen tells the person). */
     fun takeSessionEndedNotice(): Boolean = false

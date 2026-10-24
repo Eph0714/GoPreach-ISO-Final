@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { MemoryStore } from '../src/memoryStore.js';
 import { createApp } from '../src/app.js';
 import { hashPassword } from '../src/passwords.js';
+import { loginTakingOver } from './helpers/takeover.js';
 
 let store, server, base;
 const SECRET = 'test-secret-test-secret-test-secret';
@@ -24,7 +25,7 @@ after(() => server.close());
 
 const post = (path, body, token) =>
   fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) });
-const login = async (id, password, endOtherSession = true) => post('/v1/auth/login', { email: `${id}@gopreach.app`, password, endOtherSession });
+const login = async (id, password) => loginTakingOver(store, post, { email: `${id}@gopreach.app`, password });
 
 test('a correct password signs in; a wrong password and an unknown account look the same', async () => {
   const ok = await login('pub001', 'Secret123');
@@ -63,7 +64,7 @@ test('changing a password needs a recently typed one, and the new one works', as
   const changed = await post('/v1/auth/password', { newPassword: 'NewSecret456' }, accessToken);
   assert.equal(changed.status, 200);
   assert.equal((await login('pub001', 'Secret123')).status, 401);
-  assert.equal((await login('pub001', 'NewSecret456', false)).status, 409, 'the session that changed the password is still the active one');
+  assert.equal((await post('/v1/auth/login', { email: 'pub001@gopreach.app', password: 'NewSecret456' })).status, 409, 'the session that changed the password is still the active one');
   assert.equal((await post('/v1/auth/password', { newPassword: 'abc' }, accessToken)).status, 400, 'too short');
   const reauth = await post('/v1/auth/reauth', { password: 'wrong' }, accessToken);
   assert.equal(reauth.status, 401);
@@ -127,7 +128,7 @@ test('sign-in limits follow the account, and renewing a session never uses the s
   const srv = createApp(st, { authOptions: { secret: SECRET, limits: { login: { max: 3 }, refresh: { max: 50 } } } }).listen(0);
   const url = `http://127.0.0.1:${srv.address().port}`;
   const call = (path, body) => fetch(url + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  const signIn = (id) => call('/v1/auth/login', { email: `${id}@gopreach.app`, password: 'Secret123', endOtherSession: true });
+  const signIn = async (id) => { await st.endSession(id); return call('/v1/auth/login', { email: `${id}@gopreach.app`, password: 'Secret123' }); };
   try {
     let tokens = await (await signIn('u1aaaa')).json();
     for (let i = 0; i < 10; i++) { // ten renewals from the same address
@@ -171,10 +172,10 @@ test('no active session: sign-in succeeds; a second device is told the account i
 });
 
 test('ending the other session revokes it on the server: its tokens stop working, online or not', async () => {
-  const { srv, call, signIn } = await sessionApp();
+  const { st, srv, call, signIn } = await sessionApp();
   try {
     const old = await (await signIn({ device: 'Old phone' })).json();
-    const fresh = await (await signIn({ device: 'Web', endOtherSession: true })).json();
+    const fresh = await (await loginTakingOver(st, call, { email: 'solo01@gopreach.app', password: 'Secret123', device: 'Web' })).json();
     const refused = await call('/v1/presence', {}, old.accessToken);
     assert.equal(refused.status, 401);
     assert.equal((await refused.json()).error, 'session-ended');

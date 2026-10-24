@@ -63,7 +63,25 @@ class PipelineViewModel(
     private val publisherVisibilitySettingsRepository: com.emfitsolutions.gopreach.data.repository.PublisherVisibilitySettingsRepository,
     private val recycleBinRepository: com.emfitsolutions.gopreach.data.repository.RecycleBinRepository,
     private val territoryAssignmentRepository: com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentRepository,
+    private val favoriteRepository: com.emfitsolutions.gopreach.data.repository.FavoriteRepository,
 ) : ViewModel() {
+
+    /** The ids of the records this person starred (kept in step with the server, so they follow the person to every device). */
+    fun favoriteIds(personId: String): Flow<Set<String>> = favoriteRepository.observeRecordIds(personId)
+
+    fun startFavoritesSync(): Flow<Unit> = favoriteRepository.startRemoteSync()
+
+    /** Stars or un-stars a record. Only the bookmark changes: the record itself is never touched. */
+    fun setFavorite(personId: String, record: InterestedPerson, favorite: Boolean) {
+        viewModelScope.launch {
+            try {
+                favoriteRepository.setFavorite(personId, record.id, record.pipelineStage.name, favorite, com.emfitsolutions.gopreach.platform.nowMillis())
+            } catch (e: Exception) {
+                _errorEvents.emit("Could not change the Favorite: ${e.message ?: "unknown error"}")
+            }
+        }
+    }
+
 
     /** Bug fix: [save] used to let any exception from the repository/Room/
      * Gson layer propagate out of its `viewModelScope.launch` uncaught —

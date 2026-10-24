@@ -164,6 +164,12 @@ export class MemoryStore {
     if (sessionId === undefined || m.get(personId)?.sessionId === sessionId) m.delete(personId);
   }
 
+  // ---- short-lived sign-in challenges: a pending login request, an e-mail code (see loginApproval.js) ----
+  async putChallenge(id, { personId, kind, data, expiresAt }) { (this.challenges ??= new Map()).set(id, { id, personId, kind, data: structuredClone(data), expiresAt }); }
+  async getChallenge(id) { const c = (this.challenges ??= new Map()).get(id); return c && c.expiresAt > Date.now() ? structuredClone(c) : null; }
+  async listChallenges(personId, kind) { return [...(this.challenges ??= new Map()).values()].filter((c) => c.personId === personId && c.kind === kind && c.expiresAt > Date.now()).map((c) => structuredClone(c)); }
+  async deleteChallenge(id) { (this.challenges ??= new Map()).delete(id); }
+
   async deleteRefreshTokens(personId) { for (const [k, v] of (this.refresh ??= new Map())) if (v.personId === personId) this.refresh.delete(k); }
 
   async close() {}

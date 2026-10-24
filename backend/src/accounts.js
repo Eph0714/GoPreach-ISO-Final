@@ -7,6 +7,7 @@ import { signAccessToken, ACCESS_TOKEN_SECONDS, personIdFromEmail } from './auth
 import { config } from './config.js';
 import { mountPasskeys } from './passkeys.js';
 import { audit } from './coAccess.js';
+import { mountLoginApproval } from './loginApproval.js';
 
 /**
  * GoPreach's own sign-in (replaces Firebase Auth). The app still signs in with "<personId>@<domain>" and a password.
@@ -21,8 +22,9 @@ import { audit } from './coAccess.js';
  *
  * Failed sign-ins are limited per address and per account, and a wrong password and an unknown account look identical.
  *
- * One account, one session. A sign-in (password or passkey) that is not the only one answers 409 { error: 'session-active', device, lastActiveAt } once the PASSWORD
- * is right (nothing is revealed before that); repeating it with endOtherSession: true takes the session over, which revokes the other one on the server: its
+ * One account, one session. A password sign-in that is not the only one answers 409 { error: 'session-active', device, lastActiveAt, requestId, pollToken, methods } once the
+ * PASSWORD is right (nothing is revealed before that) and starts a login request the signed-in device must approve (see loginApproval.js); a passkey sign-in repeated with
+ * endOtherSession: true takes the session over (a verified passkey is its own proof). Taking over revokes the other session on the server: its
  * refresh tokens are deleted and its access tokens (they carry the session id) are refused with 401 { error: 'session-ended' }. A session nobody has used for
  * SESSION_IDLE_MS no longer blocks anyone. The device label is only what the app said about itself when it signed in.
  */
@@ -33,7 +35,7 @@ const cleanDevice = (d) => (typeof d === 'string' ? d.replace(/[\u0000-\u001f]/g
 const PERSON_ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 
-export function mountAccounts(app, store, auth, { secret = config.authSecret, firebaseHash = config.firebaseHash, limits = {} } = {}) {
+export function mountAccounts(app, store, auth, { secret = config.authSecret, firebaseHash = config.firebaseHash, limits = {}, mailer = null, loginRequestMs } = {}) {
   const enabled = (req, res, next) => (secret ? next() : res.status(503).json({ error: 'Sign-in is not configured on the server (AUTH_SECRET).' }));
   // The website signs everybody in from one server address, so the limit follows the address AND the account tried, and a session renewal has a limit of its own:
   // renewals used to share the sign-in allowance and quietly used it up. Wrong passwords are still capped per account below (10 in 15 minutes).
@@ -67,6 +69,8 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
   }
   const refuseActive = (res, active) => res.status(409).json({ error: 'session-active', device: active.device ?? null, lastActiveAt: active.lastActiveAt });
 
+  const approvals = mountLoginApproval(app, { store, auth, enabled, mailer, limits: limits.approval, requestMs: loginRequestMs });
+
   mountPasskeys(app, { store, auth, enabled, loginLimit, issue, startSession, refuseActive, passkeyConfig: limits.passkey ?? config.passkey });
 
   async function checkPassword(personId, password) {
@@ -78,7 +82,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
   }
 
   app.post('/v1/auth/login', enabled, sprayLimit, loginLimit, async (req, res) => {
-    const { email, password, device, endOtherSession } = req.body ?? {};
+    const { email, password, device, approval } = req.body ?? {};
     const personId = personIdFromEmail(email);
     if (!personId || typeof password !== 'string' || password.length === 0 || password.length > 200) return res.status(401).json({ error: 'invalid-credentials' });
     try {
@@ -87,8 +91,15 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       if (!ok) { noteFail(personId); return res.status(401).json({ error: 'invalid-credentials' }); }
       accountFails.delete(personId);
       await store.touchLogin(personId);
-      const started = await startSession(personId, Date.now(), { device, endOtherSession });
-      if (started.conflict) return refuseActive(res, started.conflict);
+      // The password alone never takes over a live session (a client's endOtherSession is ignored): the other device must approve, or an e-mail code / passkey must prove it.
+      // An approved login request (the password is right, and the request was approved by the signed-in device or by an e-mail code) is spent here, once.
+      const approved = approval && typeof approval === 'object' ? await approvals.redeem(personId, approval) : false;
+      const started = await startSession(personId, Date.now(), { device, endOtherSession: approved });
+      if (started.conflict) {
+        const request = await approvals.createRequest(personId, started.conflict, { device: cleanDevice(device), ip: req.ip });
+        if (request.tooMany) return res.status(429).json({ error: 'too-many-requests' });
+        return res.status(409).json({ error: 'session-active', ...request });
+      }
       res.json(started);
     } catch (e) {
       console.error('login failed', e);

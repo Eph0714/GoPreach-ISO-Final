@@ -146,7 +146,7 @@ const isPrivilegedRoleType = (roleType) => roleType === 'ADMIN:SUPER_ADMIN' || r
 /** Owner-only collections: the document's own publisherPersonId must be the caller. */
 const OWNER_ONLY = new Set([
   'bibleTextCategories', 'bibleTextRecords', 'plannerDays', 'monthlyPlannerGoals', 'weeklyPlannerGoals', 'yearlyPlannerGoals',
-  'creditHourRecords', 'ministryTimerSessions',
+  'creditHourRecords', 'ministryTimerSessions', 'favorites',
 ]);
 
 /** Collections firestore.rules gives plain `allow read, write: if isSignedIn()` (explicitly or via the catch-all). */
@@ -485,6 +485,8 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
             if (rec && (await fsDayLocked(get, actor.congregationId, rec.dayStart))) return deny(MONTH_LOCKED);
           }
         }
+        // A Favorite is a private bookmark: one per person and record (the id says which), and it carries no access of its own.
+        if (collection === 'favorites' && !isDelete && id !== `${h.me}_${next.recordId}`) return deny('A Favorite is one per person and record');
         if (isCreate) return verdict(next.publisherPersonId === h.me, 'Records are created as yourself');
         return verdict(old?.publisherPersonId === h.me, 'Not your record');
       }

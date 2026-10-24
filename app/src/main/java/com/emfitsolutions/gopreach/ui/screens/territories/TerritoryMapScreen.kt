@@ -42,6 +42,7 @@ import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.contentDescription
@@ -86,6 +87,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -557,6 +559,11 @@ fun TerritoryMapScreen(
     var showFilterPanel by rememberSaveable { mutableStateOf(false) }
     val fullScreenActive = fullScreen && viewMode == ViewMode.MAP
     BackHandler(enabled = fullScreenActive) { fullScreen = false }
+    // The full-screen map covers the whole window, so the app's Back to Homepage bar steps aside and the map draws its own Home control (below).
+    DisposableEffect(fullScreenActive && !embedded) {
+        com.emfitsolutions.gopreach.ui.components.HomeBarState.suppressed = fullScreenActive && !embedded
+        onDispose { com.emfitsolutions.gopreach.ui.components.HomeBarState.suppressed = false }
+    }
     DisposableEffect(fullScreenActive) {
         val window = (context as? Activity)?.window
         val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
@@ -1289,6 +1296,25 @@ fun TerritoryMapScreen(
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
                         )
                     }
+                    // Territory Map is a main form: in full screen its Back to Homepage floats on the map (the filter panel has its own Exit in the same corner).
+                    if (fullScreenActive && !embedded && !showFilterPanel && !guidance.active && !driving.active) {
+                        val goHome = com.emfitsolutions.gopreach.ui.components.LocalGoHome.current
+                        if (goHome != null) Surface(
+                            onClick = goHome,
+                            shape = RoundedCornerShape(24.dp),
+                            color = androidx.compose.ui.graphics.Color(0xFFE9B83B),
+                            contentColor = androidx.compose.ui.graphics.Color(0xFF231B05),
+                            shadowElevation = 3.dp,
+                            modifier = Modifier.align(Alignment.TopStart)
+                                .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top))
+                                .padding(10.dp),
+                        ) {
+                            Row(modifier = Modifier.height(40.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Home, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Text("Back to Homepage", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                     // Full screen: the controls above the map are hidden, so keep the
                     // essentials floating on it — exit, which group this is, and the
                     // record-type filter.
@@ -1434,10 +1460,15 @@ fun TerritoryMapScreen(
 
     // Long-press: what to do with this spot.
     longPressPoint?.let { (lat, lng) ->
+        // The finger that made the long press is usually still down (or just lifting) over the new menu: the menu ignores touches for a moment,
+        // so that release cannot press a button, and only a deliberate tap afterwards does anything.
+        var armed by remember(lat, lng) { mutableStateOf(false) }
+        LaunchedEffect(lat, lng) { kotlinx.coroutines.delay(600); armed = true }
         AlertDialog(
-            onDismissRequest = { longPressPoint = null },
+            onDismissRequest = { if (armed) longPressPoint = null },
             title = { Text("What would you like to do?") },
             text = {
+              Box {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     com.emfitsolutions.gopreach.ui.components.RecordLocationActions(lat = lat, lng = lng, name = null)
                     val here = com.emfitsolutions.gopreach.domain.map.GeoPoint(lat, lng)
@@ -1478,6 +1509,12 @@ fun TerritoryMapScreen(
                     ) { Text("Walk there") }
                     TextButton(onClick = { longPressPoint = null }, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
                 }
+                if (!armed) Box(
+                    Modifier.matchParentSize().pointerInput(Unit) {
+                        awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } }
+                    },
+                )
+              }
             },
             confirmButton = {},
         )

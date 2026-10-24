@@ -42,6 +42,10 @@ export class MysqlStore {
     await pool.query(`CREATE TABLE IF NOT EXISTS sessions (
       person_id VARCHAR(190) NOT NULL PRIMARY KEY, session_id VARCHAR(64) NOT NULL, device VARCHAR(120) NULL, created_at BIGINT NOT NULL, last_active_at BIGINT NOT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS auth_challenges (
+      id VARCHAR(64) NOT NULL PRIMARY KEY, person_id VARCHAR(190) NOT NULL, kind VARCHAR(30) NOT NULL, data TEXT NOT NULL, expires_at BIGINT NOT NULL,
+      KEY idx_person_kind (person_id, kind)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
     await MysqlCoData.migrate(pool);
     return new MysqlStore(pool);
   }
@@ -232,6 +236,22 @@ export class MysqlStore {
   }
 
   async deleteRefreshTokens(personId) { await this.pool.query('DELETE FROM refresh_tokens WHERE person_id = ?', [personId]); }
+
+  // ---- short-lived sign-in challenges: a pending login request, an e-mail code (see loginApproval.js) ----
+  async putChallenge(id, { personId, kind, data, expiresAt }) {
+    await this.pool.query('REPLACE INTO auth_challenges (id, person_id, kind, data, expires_at) VALUES (?, ?, ?, ?, ?)', [id, personId, kind, JSON.stringify(data), expiresAt]);
+    await this.pool.query('DELETE FROM auth_challenges WHERE expires_at < ?', [Date.now() - 3_600_000]);
+  }
+  _challenge(r) { return { id: r.id, personId: r.person_id, kind: r.kind, data: JSON.parse(r.data), expiresAt: Number(r.expires_at) }; }
+  async getChallenge(id) {
+    const [rows] = await this.pool.query('SELECT * FROM auth_challenges WHERE id = ? AND expires_at > ?', [id, Date.now()]);
+    return rows.length ? this._challenge(rows[0]) : null;
+  }
+  async listChallenges(personId, kind) {
+    const [rows] = await this.pool.query('SELECT * FROM auth_challenges WHERE person_id = ? AND kind = ? AND expires_at > ?', [personId, kind, Date.now()]);
+    return rows.map((r) => this._challenge(r));
+  }
+  async deleteChallenge(id) { await this.pool.query('DELETE FROM auth_challenges WHERE id = ?', [id]); }
 
   // ---- the one active sign-in session of an account (see accounts.js) ----
   async getSession(personId) {

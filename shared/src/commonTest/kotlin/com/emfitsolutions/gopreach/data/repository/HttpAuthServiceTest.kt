@@ -64,12 +64,13 @@ class HttpAuthServiceTest {
         assertFailsWith<AuthFailure.TooManyRequests> { service(MemoryStores(), engine).signIn("p1@gopreach.internal", "pw") }
     }
 
-    @Test fun signInSendsTheDeviceAndTheChoiceToEndTheOtherSession() = runTest {
+    @Test fun signInSendsTheDeviceAndTheApprovedLoginRequestNeverAnEndOtherSessionFlag() = runTest {
         var body = ""
         val engine = MockEngine { req -> body = req.body.toByteArray().decodeToString(); respond(tokens, HttpStatusCode.OK, json) }
         val auth = service(MemoryStores(), engine)
-        auth.signIn("p1@gopreach.internal", "pw", endOtherSession = true)
-        assertTrue(body.contains("\"endOtherSession\":true"), body)
+        auth.signIn("p1@gopreach.internal", "pw", approval = LoginRequestTicket("req1", "poll1", 0L, null))
+        assertFalse(body.contains("endOtherSession"), body)
+        assertTrue(body.contains("\"requestId\":\"req1\"") && body.contains("\"pollToken\":\"poll1\""), body)
         assertTrue(body.contains("GoPreach Android (Test Phone)"), body)
         assertNotNull(auth.currentUser)
     }

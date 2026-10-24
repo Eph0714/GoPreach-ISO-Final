@@ -83,10 +83,16 @@ class AuthRepository(
     /** True once if this device was just signed out because the account signed in somewhere else. */
     fun takeSessionEndedNotice(): Boolean = auth.takeSessionEndedNotice()
 
-    suspend fun signIn(username: String, password: String, endOtherSession: Boolean = false): AuthResult {
+    suspend fun loginRequestStatus(ticket: LoginRequestTicket): LoginRequestStatus = runCatching { auth.loginRequestStatus(ticket) }.getOrDefault(LoginRequestStatus.PENDING)
+    suspend fun sendLoginEmailCode(ticket: LoginRequestTicket): Result<String> = runCatching { auth.sendLoginEmailCode(ticket) }
+    suspend fun verifyLoginEmailCode(ticket: LoginRequestTicket, code: String): Result<LoginRequestStatus> = runCatching { auth.verifyLoginEmailCode(ticket, code) }
+    suspend fun pendingLoginRequests(): List<PendingLoginRequest> = runCatching { auth.pendingLoginRequests() }.getOrDefault(emptyList())
+    suspend fun decideLoginRequest(id: String, approve: Boolean): Boolean = auth.decideLoginRequest(id, approve)
+
+    suspend fun signIn(username: String, password: String, endOtherSession: Boolean = false, approval: LoginRequestTicket? = null): AuthResult {
         Log.d(TAG, "Login request started")
         return try {
-            withTimeout(SIGN_IN_TIMEOUT_MS) { signInInternal(username, password, endOtherSession) }
+            withTimeout(SIGN_IN_TIMEOUT_MS) { signInInternal(username, password, endOtherSession, approval) }
         } catch (e: AuthFailure.SessionActive) {
             AuthResult.Error("This account is already signed in on another device.", e.session)
         } catch (e: Exception) {
@@ -164,7 +170,7 @@ class AuthRepository(
 
     suspend fun removePasskey(id: String): Boolean = runCatching { auth.passkeyDelete(id) }.getOrDefault(false)
 
-    private suspend fun signInInternal(username: String, password: String, endOtherSession: Boolean): AuthResult {
+    private suspend fun signInInternal(username: String, password: String, endOtherSession: Boolean, approval: LoginRequestTicket? = null): AuthResult {
         val person = findPersonByUsername(username)
         Log.d(TAG, "User found: ${person != null}")
         if (person == null) return AuthResult.Error("Invalid username or password.")
@@ -180,7 +186,7 @@ class AuthRepository(
             Log.d(TAG, "Account usable: FALSE")
             return AuthResult.Error("This account has been deactivated. Contact your administrator.")
         }
-        auth.signIn(authEmailFor(person.id), password, endOtherSession)
+        auth.signIn(authEmailFor(person.id), password, endOtherSession, approval)
         Log.d(TAG, "Password verified: TRUE")
         // Cache-only: a stale pre-sign-in snapshot must never get queued as a
         // pending upload here (see PersonRepository.cacheFromServer's doc
