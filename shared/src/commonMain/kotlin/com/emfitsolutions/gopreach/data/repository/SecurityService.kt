@@ -74,7 +74,15 @@ fun groupDevices(sessions: List<DeviceSession>, trusted: List<TrustedDevice>): L
 data class SecurityEvent(val id: String, val at: Long, val type: String, val result: String, val device: String?, val by: String?, val username: String? = null, val personId: String? = null, val seen: Boolean = true)
 
 /** New-device request limits (Super Admin): requests one account may raise within [windowMinutes], and how long a request waits ([expiryMinutes]). */
-data class ApprovalLimits(val maxRequests: Int = 5, val windowMinutes: Int = 15, val expiryMinutes: Int = 5)
+data class ApprovalLimits(
+    val maxRequests: Int = 5, val windowMinutes: Int = 15, val expiryMinutes: Int = 5,
+    /** Wrong passwords on one account before it is paused, and the minutes they are counted in. */
+    val passwordMaxFails: Int = 10, val passwordWindowMinutes: Int = 15,
+    /** Wrong second-step codes before the sign-in must start again, and how long the second step stays open. */
+    val twoFactorMaxTries: Int = 5, val twoFactorMinutes: Int = 10,
+    /** The website's sign-in attempts per minutes from one internet address. */
+    val webLoginMax: Int = 10, val webLoginMinutes: Int = 1,
+)
 
 /** The login-history filters (all optional): result = success/failure/rejected, [types] = event codes, [device] = text in the device name, [fromMs]/[toMs] = time range. */
 data class HistoryFilter(val result: String? = null, val types: List<String> = emptyList(), val device: String = "", val fromMs: Long? = null, val toMs: Long? = null) {
@@ -282,11 +290,18 @@ class HttpSecurityService(
     override suspend fun adminRevokeAll(personId: String) = call(HttpMethod.Post, "/v1/admin/security/users/${personId.encodeURLParameter()}/revoke-all", JsonObject(emptyMap())).long("revoked").toInt()
     override suspend fun adminApprovalLimits(): ApprovalLimits {
         val s = call(HttpMethod.Get, "/v1/admin/security/approval-limits").obj("settings")
-        return ApprovalLimits(s?.long("maxRequests")?.toInt() ?: 5, s?.long("windowMinutes")?.toInt() ?: 15, s?.long("expiryMinutes")?.toInt() ?: 5)
+        fun n(key: String, standard: Int) = s?.long(key)?.toInt()?.takeIf { it > 0 } ?: standard
+        return ApprovalLimits(
+            n("maxRequests", 5), n("windowMinutes", 15), n("expiryMinutes", 5), n("passwordMaxFails", 10), n("passwordWindowMinutes", 15),
+            n("twoFactorMaxTries", 5), n("twoFactorMinutes", 10), n("webLoginMax", 10), n("webLoginMinutes", 1),
+        )
     }
     override suspend fun saveApprovalLimits(limits: ApprovalLimits) {
         call(HttpMethod.Post, "/v1/admin/security/approval-limits", buildJsonObject {
             put("maxRequests", JsonPrimitive(limits.maxRequests)); put("windowMinutes", JsonPrimitive(limits.windowMinutes)); put("expiryMinutes", JsonPrimitive(limits.expiryMinutes))
+            put("passwordMaxFails", JsonPrimitive(limits.passwordMaxFails)); put("passwordWindowMinutes", JsonPrimitive(limits.passwordWindowMinutes))
+            put("twoFactorMaxTries", JsonPrimitive(limits.twoFactorMaxTries)); put("twoFactorMinutes", JsonPrimitive(limits.twoFactorMinutes))
+            put("webLoginMax", JsonPrimitive(limits.webLoginMax)); put("webLoginMinutes", JsonPrimitive(limits.webLoginMinutes))
         })
     }
     override suspend fun adminHistory(personId: String) = call(HttpMethod.Get, "/v1/admin/security/users/${personId.encodeURLParameter()}/history").list("events").map(::event)

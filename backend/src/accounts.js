@@ -45,9 +45,13 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
   const sprayLimit = rateLimit({ windowMs: 10 * 60_000, max: 400, key: (req) => req.ip, ...limits.spray }); // one address trying many accounts
   const refreshLimit = rateLimit({ windowMs: 10 * 60_000, max: 600, key: (req) => req.ip, ...limits.refresh });
   const accountFails = new Map(); // personId -> recent failure times
-  const recentFails = (personId) => (accountFails.get(personId) ?? []).filter((t) => Date.now() - t < 15 * 60_000);
-  const tooMany = (personId) => recentFails(personId).length >= 10;
-  const noteFail = (personId) => accountFails.set(personId, [...recentFails(personId), Date.now()]);
+  // Wrong passwords on one account: the Super Admin sets how many (default 10) within how many minutes (default 15) before the account is paused.
+  const recentFails = (personId, windowMs = 15 * 60_000) => (accountFails.get(personId) ?? []).filter((t) => Date.now() - t < windowMs);
+  const tooMany = async (personId) => {
+    const c = await sec.approvalSettings();
+    return recentFails(personId, c.passwordWindowMinutes * 60_000).length >= c.passwordMaxFails;
+  };
+  const noteFail = (personId) => accountFails.set(personId, [...recentFails(personId, 120 * 60_000), Date.now()]);
 
   async function issue(personId, authTime, sessionId = null) {
     const refreshToken = randomBytes(32).toString('base64url');
@@ -89,7 +93,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
     const personId = personIdFromEmail(email);
     if (!personId || typeof password !== 'string' || password.length === 0 || password.length > 200) return res.status(401).json({ error: 'invalid-credentials' });
     try {
-      if (tooMany(personId)) return res.status(429).json({ error: 'too-many-requests' });
+      if (await tooMany(personId)) return res.status(429).json({ error: 'too-many-requests' });
       const { ok, account } = await checkPassword(personId, password);
       if (!ok) {
         noteFail(personId);
@@ -170,7 +174,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
     const password = req.body?.password;
     if (typeof password !== 'string' || !password) return res.status(401).json({ error: 'invalid-credentials' });
     try {
-      if (tooMany(req.personId)) return res.status(429).json({ error: 'too-many-requests' });
+      if (await tooMany(req.personId)) return res.status(429).json({ error: 'too-many-requests' });
       const { ok } = await checkPassword(req.personId, password);
       if (!ok) { noteFail(req.personId); return res.status(401).json({ error: 'invalid-credentials' }); }
       res.json(await issue(req.personId, Date.now(), req.sessionId));

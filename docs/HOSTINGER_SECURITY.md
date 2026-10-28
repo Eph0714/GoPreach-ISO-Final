@@ -94,3 +94,16 @@ For an account with a **confirmed recovery e-mail**. Website page `/recover` (li
 4. `POST /v1/public/recovery/complete {requestId, pollToken, newPassword}` after the wait: sets the password, ends every session, ends trusted devices, and turns two-factor and device approval off (set up again). The request is then spent.
 
 `requestId` + `pollToken` (a secret only the requesting browser holds; the server keeps a hash) are required for status, verify, complete and cancel. No administrator can shorten the wait or skip the code. Events: `RECOVERY_CODE_SENT`, `RECOVERY_STARTED`, `RECOVERY_CANCELLED`, `RECOVERY_COMPLETED`. Accounts without a confirmed recovery e-mail still use "Forgot password?" (an Admin issues a temporary password; two-factor stays on).
+
+## 10. Super Admin: sign-in limits module
+
+`GET/POST /v1/admin/security/approval-limits` (Super Admin; saving needs a password typed in the last 10 minutes) now holds every sign-in limit. A field that is not sent keeps its value; a field outside its range is refused (400), so a protection can be tuned but never switched off.
+
+| Field | Range | Standard | What it limits |
+|---|---|---|---|
+| `passwordMaxFails` / `passwordWindowMinutes` | 3-20 / 1-120 | 10 / 15 | wrong passwords on one account before it is paused |
+| `twoFactorMaxTries` / `twoFactorMinutes` | 3-10 / 2-30 | 5 / 10 | wrong second-step codes, and how long the second step stays open |
+| `webLoginMax` / `webLoginMinutes` | 3-60 / 1-60 | 10 / 1 | the website's sign-in attempts from one internet address |
+| `maxRequests` / `windowMinutes` / `expiryMinutes` | 1-20 / 1-120 / 1-30 | 5 / 15 / 5 | new-device requests per device, their window, how long a request waits |
+
+The website reads its two numbers from `GET /v1/public/signin-limits` (no sign-in, rate limited), keeps them for 60 seconds, and uses the standard 10 per minute whenever the server cannot be asked. Screen: Security Audit Logs > Sign-in limits (website and Android). Every change is in the audit log (`APPROVAL_LIMITS_CHANGED`, old and new values).

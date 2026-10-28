@@ -578,14 +578,15 @@ test('approval limits: only the Super Admin manages them, within safe bounds; th
     assert.equal((await w.post('/v1/admin/security/approval-limits', { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3 }, adm.accessToken)).status, 403);
 
     const first = await (await w.get('/v1/admin/security/approval-limits', sup.accessToken)).json();
-    assert.deepEqual({ ...first.settings }, { maxRequests: 5, windowMinutes: 15, expiryMinutes: 5, custom: false });
+    assert.deepEqual({ ...first.settings }, { maxRequests: 5, windowMinutes: 15, expiryMinutes: 5, passwordMaxFails: 10, passwordWindowMinutes: 15, twoFactorMaxTries: 5, twoFactorMinutes: 10, webLoginMax: 10, webLoginMinutes: 1, custom: false });
 
     // bounds: the protection can be tuned, never switched off
     for (const bad of [{ maxRequests: 0 }, { maxRequests: 21 }, { windowMinutes: 0 }, { windowMinutes: 121 }, { expiryMinutes: 0 }, { expiryMinutes: 31 }, { maxRequests: 'x' }]) {
       assert.equal((await w.post('/v1/admin/security/approval-limits', { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3, ...bad }, sup.accessToken)).status, 400, JSON.stringify(bad));
     }
     const saved = await (await w.post('/v1/admin/security/approval-limits', { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3 }, sup.accessToken)).json();
-    assert.deepEqual(saved.settings, { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3, custom: true });
+    assert.deepEqual({ maxRequests: saved.settings.maxRequests, windowMinutes: saved.settings.windowMinutes, expiryMinutes: saved.settings.expiryMinutes, custom: saved.settings.custom }, { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3, custom: true });
+    assert.equal(saved.settings.passwordMaxFails, 10, 'a field that was not sent stays as it was');
 
     // in force straight away: the account turns approval on; the third request in the window is refused; a request lives 3 minutes
     await w.post('/v1/security/device-approval', { enabled: true }, ana.accessToken);
@@ -602,7 +603,9 @@ test('approval limits: only the Super Admin manages them, within safe bounds; th
     const log = (await (await w.get('/v1/admin/security/events?personId=sup001&limit=50', sup.accessToken)).json()).events;
     const change = log.find((e) => e.type === 'APPROVAL_LIMITS_CHANGED');
     assert.ok(change, 'the change is in the audit log');
-    assert.deepEqual(change.meta.after, { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3 });
+    assert.equal(change.meta.after.maxRequests, 2);
+    assert.equal(change.meta.after.windowMinutes, 10);
+    assert.equal(change.meta.after.expiryMinutes, 3);
     assert.equal(change.meta.before.maxRequests, 5);
   } finally { w.close(); }
 });
@@ -837,5 +840,43 @@ test('notices: marking them seen clears every notice that was listed (not only t
     const after = await (await w.get('/v1/security/notices', s.accessToken)).json();
     assert.equal(after.notices.length, 0, 'none comes back');
     assert.equal(after.unseen, 0);
+  } finally { w.close(); }
+});
+
+test('sign-in limits: the Super Admin sets the wrong-password attempts and minutes, the two-factor tries and minutes, and the website sign-in rate; safe bounds hold and the change is logged', async () => {
+  const w = await world();
+  try {
+    const sup = await w.signIn('sup001');
+    // the website reads its two numbers without signing in
+    const pub0 = await (await w.get('/v1/public/signin-limits')).json();
+    assert.deepEqual(pub0, { webLoginMax: 10, webLoginMinutes: 1 });
+
+    for (const bad of [{ passwordMaxFails: 2 }, { passwordMaxFails: 21 }, { passwordWindowMinutes: 0 }, { twoFactorMaxTries: 2 }, { twoFactorMaxTries: 11 }, { twoFactorMinutes: 1 }, { webLoginMax: 2 }, { webLoginMax: 61 }, { webLoginMinutes: 0 }, { webLoginMinutes: 61 }]) {
+      assert.equal((await w.post('/v1/admin/security/approval-limits', bad, sup.accessToken)).status, 400, JSON.stringify(bad));
+    }
+    const saved = await (await w.post('/v1/admin/security/approval-limits', { passwordMaxFails: 3, passwordWindowMinutes: 30, twoFactorMaxTries: 3, twoFactorMinutes: 5, webLoginMax: 20, webLoginMinutes: 2 }, sup.accessToken)).json();
+    assert.equal(saved.settings.passwordMaxFails, 3);
+    assert.equal(saved.settings.maxRequests, 5, 'the approval numbers are untouched');
+    assert.deepEqual(await (await w.get('/v1/public/signin-limits')).json(), { webLoginMax: 20, webLoginMinutes: 2 });
+
+    // the wrong-password limit follows the setting: 3 wrong passwords pause the account, even for the right one
+    for (let i = 0; i < 3; i += 1) assert.equal((await w.login('ben001', {}, 'wrong-password')).status, 401);
+    assert.equal((await w.login('ben001', {}, 'wrong-password')).status, 429);
+    assert.equal((await w.login('ben001')).status, 429, 'the right password waits too');
+
+    // the second step: 3 tries, and the sign-in stays open for the configured minutes
+    const ana = await w.signIn('ana001', dev('dev-1', 'Ana phone'));
+    await w.enable2fa('ana001', ana);
+    const stage = await (await w.login('ana001', { device: dev('dev-2', 'Tablet') })).json();
+    assert.equal(stage.twoFactorRequired, true);
+    assert.ok(Math.abs(stage.expiresAt - Date.now() - 5 * 60_000) < 10_000, 'the second step stays open for the configured minutes');
+    const at = { challengeId: stage.challengeId, challengeToken: stage.challengeToken };
+    for (let i = 0; i < 3; i += 1) assert.equal((await w.post('/v1/auth/2fa/verify', { ...at, code: '000000' })).status, 401);
+    assert.equal((await w.post('/v1/auth/2fa/verify', { ...at, code: '000000' })).status, 429, 'the fourth is refused');
+
+    const log = (await (await w.get('/v1/admin/security/events?personId=sup001&limit=50', sup.accessToken)).json()).events;
+    const change = log.find((e) => e.type === 'APPROVAL_LIMITS_CHANGED');
+    assert.equal(change.meta.after.passwordMaxFails, 3);
+    assert.equal(change.meta.before.passwordMaxFails, 10);
   } finally { w.close(); }
 });

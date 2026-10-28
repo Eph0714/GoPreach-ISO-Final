@@ -212,13 +212,14 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
     const challengeId = newId();
     const challengeToken = randomBytes(24).toString('base64url');
     const email = s.recoveryEmail?.verified && mailer ? s.recoveryEmail.address : null;
+    const challengeMs = (await approvalSettings()).twoFactorMinutes * 60_000;
     await store.putChallenge(challengeId, {
-      personId, kind: 'mfa', expiresAt: Date.now() + CHALLENGE_MS,
+      personId, kind: 'mfa', expiresAt: Date.now() + challengeMs,
       data: { tokenHash: sha256(challengeToken), info, ip: maskIp(ip), tries: 0, email, codeHash: null, codeSentAt: 0, codesSent: 0 },
     });
     return {
       info,
-      challenge: { twoFactorRequired: true, challengeId, challengeToken, expiresAt: Date.now() + CHALLENGE_MS, methods: { totp: !!s.totp?.confirmedAt, recovery: true, email: email ? { masked: maskEmail(email) } : null } },
+      challenge: { twoFactorRequired: true, challengeId, challengeToken, expiresAt: Date.now() + challengeMs, methods: { totp: !!s.totp?.confirmedAt, recovery: true, email: email ? { masked: maskEmail(email) } : null } },
     };
   }
 
@@ -260,13 +261,14 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
     try {
       const c = await ownedChallenge(req.body);
       if (!c) return res.status(401).json({ error: 'invalid-challenge' });
-      if (c.data.tries >= MAX_TRIES) { await store.deleteChallenge(c.id); return res.status(429).json({ error: 'too-many-tries' }); }
+      const maxTries = (await approvalSettings()).twoFactorMaxTries;
+      if (c.data.tries >= maxTries) { await store.deleteChallenge(c.id); return res.status(429).json({ error: 'too-many-tries' }); }
       const s = await a2fa(c.personId);
       const method = s.enabled ? await checkSecondFactor(c.personId, s, req.body, c) : null;
       if (!method) {
         await store.putChallenge(c.id, { ...c, data: { ...c.data, tries: c.data.tries + 1 } });
         await event(c.personId, 'TWO_FACTOR_FAILED', { result: 'failure', deviceId: c.data.info.deviceId, meta: { device: c.data.info.name, ip: c.data.ip }, notify: c.data.tries + 1 >= 3 });
-        return res.status(401).json({ error: 'invalid-code', triesLeft: Math.max(0, MAX_TRIES - c.data.tries - 1) });
+        return res.status(401).json({ error: 'invalid-code', triesLeft: Math.max(0, maxTries - c.data.tries - 1) });
       }
       await store.deleteChallenge(c.id); // single use
       await event(c.personId, 'TWO_FACTOR_SUCCESS', { deviceId: c.data.info.deviceId, meta: { method, device: c.data.info.name } });
@@ -658,9 +660,19 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
   });
 
   // ---- Super Admin: how many new-device requests one account may raise, in how many minutes, and how long a request waits ----------------------------------------------------
-  /** Safe bounds: the protection can be tuned but never switched off. */
-  const APPROVAL_BOUNDS = { maxRequests: [1, 20], windowMinutes: [1, 120], expiryMinutes: [1, 30] };
-  const APPROVAL_DEFAULTS = { maxRequests: 5, windowMinutes: 15, expiryMinutes: 5 };
+  /**
+   * Safe bounds: the protection can be tuned but never switched off. maxRequests / windowMinutes / expiryMinutes = new-device requests; passwordMaxFails in passwordWindowMinutes = wrong
+   * passwords before an account is paused; twoFactorMaxTries within twoFactorMinutes = second-step code tries and how long the second step stays open; webLoginMax per webLoginMinutes =
+   * sign-in attempts of the website from one internet address (the website reads these two through /v1/public/signin-limits).
+   */
+  const APPROVAL_BOUNDS = {
+    maxRequests: [1, 20], windowMinutes: [1, 120], expiryMinutes: [1, 30],
+    passwordMaxFails: [3, 20], passwordWindowMinutes: [1, 120], twoFactorMaxTries: [3, 10], twoFactorMinutes: [2, 30], webLoginMax: [3, 60], webLoginMinutes: [1, 60],
+  };
+  const APPROVAL_DEFAULTS = {
+    maxRequests: 5, windowMinutes: 15, expiryMinutes: 5,
+    passwordMaxFails: 10, passwordWindowMinutes: 15, twoFactorMaxTries: 5, twoFactorMinutes: 10, webLoginMax: 10, webLoginMinutes: 1,
+  };
   /** The settings in force (defaults until a Super Admin saves some); `custom` says whether any were saved. */
   async function approvalSettings() {
     const saved = (await store.secGet('secsettings', 'approval'))?.data ?? null;
@@ -683,16 +695,24 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
     if (!scope) return;
     if (!scope.all) return res.status(403).json({ error: 'Not allowed' });
     if (needRecent(req, res)) return;
+    const before = await approvalSettings();
     const next = {};
     for (const [k, [lo, hi]] of Object.entries(APPROVAL_BOUNDS)) {
-      const n = Number(req.body?.[k]);
+      if (req.body?.[k] === undefined || req.body?.[k] === null || req.body?.[k] === '') { next[k] = before[k]; continue; } // not sent: it stays as it is
+      const n = Number(req.body[k]);
       if (!Number.isInteger(n) || n < lo || n > hi) return res.status(400).json({ error: 'invalid', field: k, min: lo, max: hi });
       next[k] = n;
     }
-    const before = await approvalSettings();
     await store.secPut('secsettings', 'approval', req.personId, { ...next, updatedBy: req.personId, updatedAt: Date.now() });
-    await event(req.personId, 'APPROVAL_LIMITS_CHANGED', { meta: { before: { maxRequests: before.maxRequests, windowMinutes: before.windowMinutes, expiryMinutes: before.expiryMinutes }, after: next } });
+    const only = (o) => Object.fromEntries(Object.keys(APPROVAL_BOUNDS).map((k) => [k, o[k]]));
+    await event(req.personId, 'APPROVAL_LIMITS_CHANGED', { meta: { before: only(before), after: next } });
     res.json(await settingsReply());
+  });
+
+  /** The website's own sign-in rate (attempts per minutes from one address): not a secret, read by the website to set its limiter. */
+  app.get('/v1/public/signin-limits', enabled, rateLimit({ windowMs: 60_000, max: 120, key: (req) => req.ip }), async (req, res) => {
+    const c = await approvalSettings();
+    res.json({ webLoginMax: c.webLoginMax, webLoginMinutes: c.webLoginMinutes });
   });
 
   // ---- account recovery: lost the password AND the authenticator -------------------------------------------------------------------------------------------------------

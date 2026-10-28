@@ -304,7 +304,7 @@ class SecurityLogViewModel(private val security: SecurityService, private val au
                 load()
             } catch (e: CancellationException) { throw e } catch (e: Exception) {
                 _state.update { it.copy(limitsBusy = false, limitsError = when (e) {
-                    is SecurityFailure -> if (e.code == "invalid") "Use 1-20 requests, 1-120 minutes and 1-30 minutes of waiting." else e.message ?: "Not saved."
+                    is SecurityFailure -> if (e.code == "invalid") "A value is outside its allowed range. Check the ranges shown next to each field." else e.message ?: "Not saved."
                     is AuthFailure.InvalidCredentials -> "Your current password is not correct."
                     else -> "Not saved. Please try again."
                 }) }
