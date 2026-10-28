@@ -38,6 +38,9 @@ data class TrustedDevice(val id: String, val deviceId: String?, val name: String
 data class DevicesOverview(val devices: List<DeviceSession>, val trusted: List<TrustedDevice>)
 data class SecurityEvent(val id: String, val at: Long, val type: String, val result: String, val device: String?, val by: String?, val username: String? = null, val personId: String? = null, val seen: Boolean = true)
 
+/** New-device request limits (Super Admin): requests one account may raise within [windowMinutes], and how long a request waits ([expiryMinutes]). */
+data class ApprovalLimits(val maxRequests: Int = 5, val windowMinutes: Int = 15, val expiryMinutes: Int = 5)
+
 /** The login-history filters (all optional): result = success/failure/rejected, [types] = event codes, [device] = text in the device name, [fromMs]/[toMs] = time range. */
 data class HistoryFilter(val result: String? = null, val types: List<String> = emptyList(), val device: String = "", val fromMs: Long? = null, val toMs: Long? = null) {
     val isActive get() = result != null || types.isNotEmpty() || device.isNotBlank() || fromMs != null || toMs != null
@@ -86,6 +89,8 @@ interface SecurityService {
     suspend fun adminSessions(query: Map<String, String>): List<AdminSession>
     suspend fun adminRevokeSession(sessionId: String)
     suspend fun adminRevokeAll(personId: String): Int
+    suspend fun adminApprovalLimits(): ApprovalLimits
+    suspend fun saveApprovalLimits(limits: ApprovalLimits)
     suspend fun adminHistory(personId: String): List<SecurityEvent>
     suspend fun adminEvents(personId: String?, type: String?): List<SecurityEvent>
 }
@@ -229,6 +234,15 @@ class HttpSecurityService(
 
     override suspend fun adminRevokeSession(sessionId: String) { call(HttpMethod.Post, "/v1/admin/security/sessions/${sessionId.encodeURLParameter()}/revoke", JsonObject(emptyMap())) }
     override suspend fun adminRevokeAll(personId: String) = call(HttpMethod.Post, "/v1/admin/security/users/${personId.encodeURLParameter()}/revoke-all", JsonObject(emptyMap())).long("revoked").toInt()
+    override suspend fun adminApprovalLimits(): ApprovalLimits {
+        val s = call(HttpMethod.Get, "/v1/admin/security/approval-limits").obj("settings")
+        return ApprovalLimits(s?.long("maxRequests")?.toInt() ?: 5, s?.long("windowMinutes")?.toInt() ?: 15, s?.long("expiryMinutes")?.toInt() ?: 5)
+    }
+    override suspend fun saveApprovalLimits(limits: ApprovalLimits) {
+        call(HttpMethod.Post, "/v1/admin/security/approval-limits", buildJsonObject {
+            put("maxRequests", JsonPrimitive(limits.maxRequests)); put("windowMinutes", JsonPrimitive(limits.windowMinutes)); put("expiryMinutes", JsonPrimitive(limits.expiryMinutes))
+        })
+    }
     override suspend fun adminHistory(personId: String) = call(HttpMethod.Get, "/v1/admin/security/users/${personId.encodeURLParameter()}/history").list("events").map(::event)
     override suspend fun adminEvents(personId: String?, type: String?): List<SecurityEvent> {
         val qs = listOfNotNull(personId?.takeIf { it.isNotBlank() }?.let { "personId=${it.encodeURLParameter()}" }, type?.takeIf { it.isNotBlank() }?.let { "type=${it.encodeURLParameter()}" }).joinToString("&")

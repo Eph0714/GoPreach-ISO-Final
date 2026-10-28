@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.repository.AdminSession
 import com.emfitsolutions.gopreach.data.repository.AuthFailure
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
+import com.emfitsolutions.gopreach.data.repository.ApprovalLimits
 import com.emfitsolutions.gopreach.data.repository.AuthService
 import com.emfitsolutions.gopreach.data.repository.DeviceSession
 import com.emfitsolutions.gopreach.data.repository.HistoryFilter
@@ -30,7 +31,7 @@ val SecurityEventNames = mapOf(
     "PASSWORD_CHANGED" to "Password changed", "ACCOUNT_SECURITY_SETTINGS_CHANGED" to "Security settings changed", "ADMIN_SESSION_REVOKED" to "An administrator ended a session",
     "ADMIN_REVOKED_A_SESSION" to "Session ended by this administrator",
     "DEVICE_APPROVAL_ON" to "Approve new devices turned on", "DEVICE_APPROVAL_OFF" to "Approve new devices turned off", "LOGIN_APPROVAL_REQUESTED" to "New device is waiting for approval",
-    "LOGIN_APPROVAL_APPROVED" to "New device approved", "LOGIN_APPROVAL_REJECTED" to "New device rejected", "LOGIN_APPROVAL_USED" to "Approved device signed in",
+    "LOGIN_APPROVAL_APPROVED" to "New device approved", "LOGIN_APPROVAL_REJECTED" to "New device rejected", "LOGIN_APPROVAL_USED" to "Approved device signed in", "APPROVAL_LIMITS_CHANGED" to "New-device request limits changed",
 )
 
 /** The kinds of activity the login history can be narrowed to (label to the event codes the server filters on). */
@@ -257,14 +258,41 @@ class AdminDevicesViewModel(private val security: SecurityService) : ViewModel()
     }
 }
 
-data class SecurityLogUiState(val loading: Boolean = true, val events: List<SecurityEvent> = emptyList(), val personId: String = "", val type: String = "", val error: String? = null)
+data class SecurityLogUiState(
+    val loading: Boolean = true, val events: List<SecurityEvent> = emptyList(), val personId: String = "", val type: String = "", val error: String? = null,
+    val limits: ApprovalLimits = ApprovalLimits(), val limitsBusy: Boolean = false, val limitsMessage: String? = null, val limitsError: String? = null,
+)
 
 /** Security Audit Logs: the append-only record of security events across GoPreach (Super Admin only; the server enforces it). */
-class SecurityLogViewModel(private val security: SecurityService) : ViewModel() {
+class SecurityLogViewModel(private val security: SecurityService, private val auth: AuthService) : ViewModel() {
     private val _state = MutableStateFlow(SecurityLogUiState())
     val state: StateFlow<SecurityLogUiState> = _state.asStateFlow()
 
-    init { load() }
+    init { load(); loadLimits() }
+
+    private fun loadLimits() {
+        viewModelScope.launch { runCatching { security.adminApprovalLimits() }.onSuccess { l -> _state.update { it.copy(limits = l) } } }
+    }
+
+    /** Saves the new-device request limits after the Super Admin types their password again; the server checks the bounds and logs the change. */
+    fun saveLimits(limits: ApprovalLimits, password: String) {
+        if (_state.value.limitsBusy) return
+        _state.update { it.copy(limitsBusy = true, limitsError = null, limitsMessage = null) }
+        viewModelScope.launch {
+            try {
+                auth.reauthenticate(password)
+                security.saveApprovalLimits(limits)
+                _state.update { it.copy(limitsBusy = false, limits = limits, limitsMessage = "Saved. The new limits apply at once.") }
+                load()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                _state.update { it.copy(limitsBusy = false, limitsError = when (e) {
+                    is SecurityFailure -> if (e.code == "invalid") "Use 1-20 requests, 1-120 minutes and 1-30 minutes of waiting." else e.message ?: "Not saved."
+                    is AuthFailure.InvalidCredentials -> "Your current password is not correct."
+                    else -> "Not saved. Please try again."
+                }) }
+            }
+        }
+    }
 
     fun setPerson(v: String) = _state.update { it.copy(personId = v) }
     fun setType(v: String) { _state.update { it.copy(type = v) }; load() }

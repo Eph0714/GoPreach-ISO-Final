@@ -79,3 +79,7 @@ Rollback: revert the commit on `main` and redeploy. Approval is off for every ac
 * Expired login requests are purged hourly by the server (`purgeChallenges`). The account-recovery request flow is not built yet. Login-history filters (result, kind, time range, device) and a notification centre are on the Security page of web and Android; the API takes `result`, `type`, `q`, `from`, `to` on `/v1/security/events` and `all=1` on `/v1/security/notices`.
 * A Super Admin cannot bypass 2FA or approval, by design.
 * The 2FA and approval flows are covered by backend and web tests but have not been exercised on a physical device yet.
+
+## 8. Super Admin: new-device request limits
+
+`GET/POST /v1/admin/security/approval-limits` (Super Admin only; saving needs a password typed in the last 10 minutes). Fields: `maxRequests` (1-20, default 5), `windowMinutes` (1-120, default 15), `expiryMinutes` (1-30, default 5). Stored as kind `secsettings` in `security_docs`, read on every request so a change applies at once with no restart. Out-of-range values are refused with 400, so the protection can be tuned but never switched off. Each change is written to the audit log (`APPROVAL_LIMITS_CHANGED`, with the old and new values). Screen: Security Audit Logs on web and Android.

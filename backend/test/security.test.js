@@ -565,3 +565,39 @@ test('login history: filters by result, type, device text and date; the notice l
     assert.ok(all.notices.length >= 1 && all.notices.every((n) => n.seen === true) && all.unseen === 0);
   } finally { w.close(); }
 });
+
+test('approval limits: only the Super Admin manages them, within safe bounds; they change the request limit and expiry at once and are logged', async () => {
+  const w = await world();
+  try {
+    const sup = await w.signIn('sup001');
+    const adm = await w.signIn('adm001');
+    const ana = await w.signIn('ana001', dev('dev-1', 'Ana phone'));
+    // not for an ordinary account or a congregation Admin
+    assert.equal((await w.get('/v1/admin/security/approval-limits', ana.accessToken)).status, 403);
+    assert.equal((await w.get('/v1/admin/security/approval-limits', adm.accessToken)).status, 403);
+    assert.equal((await w.post('/v1/admin/security/approval-limits', { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3 }, adm.accessToken)).status, 403);
+
+    const first = await (await w.get('/v1/admin/security/approval-limits', sup.accessToken)).json();
+    assert.deepEqual({ ...first.settings }, { maxRequests: 5, windowMinutes: 15, expiryMinutes: 5, custom: false });
+
+    // bounds: the protection can be tuned, never switched off
+    for (const bad of [{ maxRequests: 0 }, { maxRequests: 21 }, { windowMinutes: 0 }, { windowMinutes: 121 }, { expiryMinutes: 0 }, { expiryMinutes: 31 }, { maxRequests: 'x' }]) {
+      assert.equal((await w.post('/v1/admin/security/approval-limits', { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3, ...bad }, sup.accessToken)).status, 400, JSON.stringify(bad));
+    }
+    const saved = await (await w.post('/v1/admin/security/approval-limits', { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3 }, sup.accessToken)).json();
+    assert.deepEqual(saved.settings, { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3, custom: true });
+
+    // in force straight away: the account turns approval on; the third request in the window is refused; a request lives 3 minutes
+    await w.post('/v1/security/device-approval', { enabled: true }, ana.accessToken);
+    const r1 = await (await w.login('ana001', { device: dev('x1') })).json();
+    assert.ok(Math.abs(r1.expiresAt - Date.now() - 3 * 60_000) < 5000, 'expires after the configured minutes');
+    assert.equal((await w.login('ana001', { device: dev('x2') })).status, 409);
+    assert.equal((await w.login('ana001', { device: dev('x3') })).status, 429);
+
+    const log = (await (await w.get('/v1/admin/security/events?personId=sup001&limit=50', sup.accessToken)).json()).events;
+    const change = log.find((e) => e.type === 'APPROVAL_LIMITS_CHANGED');
+    assert.ok(change, 'the change is in the audit log');
+    assert.deepEqual(change.meta.after, { maxRequests: 2, windowMinutes: 10, expiryMinutes: 3 });
+    assert.equal(change.meta.before.maxRequests, 5);
+  } finally { w.close(); }
+});

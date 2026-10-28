@@ -616,8 +616,46 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
     res.json({ events: rows.filter((e) => !type || e.data.type === type).slice(0, limit).map((e) => ({ ...publicEvent(e), personId: e.data.personId, username: e.data.username })) });
   });
 
+  // ---- Super Admin: how many new-device requests one account may raise, in how many minutes, and how long a request waits ----------------------------------------------------
+  /** Safe bounds: the protection can be tuned but never switched off. */
+  const APPROVAL_BOUNDS = { maxRequests: [1, 20], windowMinutes: [1, 120], expiryMinutes: [1, 30] };
+  const APPROVAL_DEFAULTS = { maxRequests: 5, windowMinutes: 15, expiryMinutes: 5 };
+  /** The settings in force (defaults until a Super Admin saves some); `custom` says whether any were saved. */
+  async function approvalSettings() {
+    const saved = (await store.secGet('secsettings', 'approval'))?.data ?? null;
+    const out = { ...APPROVAL_DEFAULTS, custom: !!saved };
+    for (const [k, [lo, hi]] of Object.entries(APPROVAL_BOUNDS)) {
+      const n = Number(saved?.[k]);
+      if (Number.isInteger(n) && n >= lo && n <= hi) out[k] = n;
+    }
+    return out;
+  }
+  const settingsReply = async () => ({ settings: await approvalSettings(), bounds: APPROVAL_BOUNDS, defaults: APPROVAL_DEFAULTS });
+  app.get('/v1/admin/security/approval-limits', enabled, auth, async (req, res) => {
+    const scope = await scopeOf(req, res);
+    if (!scope) return;
+    if (!scope.all) return res.status(403).json({ error: 'Not allowed' });
+    res.json(await settingsReply());
+  });
+  app.post('/v1/admin/security/approval-limits', enabled, auth, actLimit, async (req, res) => {
+    const scope = await scopeOf(req, res);
+    if (!scope) return;
+    if (!scope.all) return res.status(403).json({ error: 'Not allowed' });
+    if (needRecent(req, res)) return;
+    const next = {};
+    for (const [k, [lo, hi]] of Object.entries(APPROVAL_BOUNDS)) {
+      const n = Number(req.body?.[k]);
+      if (!Number.isInteger(n) || n < lo || n > hi) return res.status(400).json({ error: 'invalid', field: k, min: lo, max: hi });
+      next[k] = n;
+    }
+    const before = await approvalSettings();
+    await store.secPut('secsettings', 'approval', req.personId, { ...next, updatedBy: req.personId, updatedAt: Date.now() });
+    await event(req.personId, 'APPROVAL_LIMITS_CHANGED', { meta: { before: { maxRequests: before.maxRequests, windowMinutes: before.windowMinutes, expiryMinutes: before.expiryMinutes }, after: next } });
+    res.json(await settingsReply());
+  });
+
   return {
-    gate, createSession, event, deviceInfo, approvalRequired, deviceIsTrusted,
+    gate, createSession, event, deviceInfo, approvalRequired, deviceIsTrusted, approvalSettings,
     /** The account's password changed: every other session ends and no trusted device stays trusted. */
     async onPasswordChanged(personId, keepSessionId) {
       const n = await revokeMany(personId, { except: keepSessionId ?? null, by: 'system', reason: 'password-changed' });

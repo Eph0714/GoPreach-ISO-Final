@@ -70,7 +70,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
   const sec = mountSecurity(app, { store, auth, enabled, mailer, issue, secret, limits: limits.security });
   // Older apps still ask for login requests: there are none any more (devices no longer queue behind one session), so they simply see an empty list.
   const approvals = mountLoginApproval(app, {
-    store, auth, enabled, mailer, limits: limits.approval, requestMs: loginRequestMs,
+    store, auth, enabled, mailer, limits: limits.approval, requestMs: loginRequestMs, getSettings: () => sec.approvalSettings(),
     onDecision: (personId, type, c, req) => sec.event(personId, type, { result: type.endsWith('APPROVED') ? 'success' : 'rejected', notify: true, by: req?.personId ?? personId, meta: { device: c.data.device?.name ?? c.data.device ?? null, ip: c.data.ip ?? null, requestId: c.id, via: c.data.approvedBy ?? 'device' } }),
   });
 

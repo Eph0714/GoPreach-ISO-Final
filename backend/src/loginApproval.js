@@ -61,11 +61,11 @@ export function smtpMailer(mail = config.mail) {
   };
 }
 
-export function mountLoginApproval(app, { store, auth, enabled, mailer = null, limits = {}, requestMs = LOGIN_REQUEST_MS, onDecision = null }) {
+export function mountLoginApproval(app, { store, auth, enabled, mailer = null, limits = {}, requestMs = LOGIN_REQUEST_MS, onDecision = null, getSettings = null }) {
   const statusLimit = rateLimit({ windowMs: 60_000, max: 90, key: (req) => req.ip, ...limits.status });
   const codeLimit = rateLimit({ windowMs: 10 * 60_000, max: 12, key: (req) => `${req.ip}|${String(req.body?.requestId ?? '').slice(0, 64)}`, ...limits.code });
   const made = new Map(); // personId -> recent request times (so a stranger who knows the password cannot flood the owner's phone)
-  const recentMade = (id) => (made.get(id) ?? []).filter((t) => Date.now() - t < 15 * 60_000);
+  const recentMade = (id, windowMs = 15 * 60_000) => (made.get(id) ?? []).filter((t) => Date.now() - t < windowMs);
   const busy = new Set();
 
   const emailOf = async (personId) => {
@@ -76,13 +76,17 @@ export function mountLoginApproval(app, { store, auth, enabled, mailer = null, l
 
   /** Called by the password sign-in when another live session holds the account. Returns what the requesting device needs to carry on. */
   async function createRequest(personId, active, { device, ip }) {
-    if (recentMade(personId).length >= 5) return { tooMany: true };
-    made.set(personId, [...recentMade(personId), Date.now()]);
+    // The Super Admin may tune the limit (requests per window) and the life of a request; until then the defaults (5 in 15 minutes, 5 minutes) apply.
+    const cfg = (await getSettings?.()) ?? null;
+    const windowMs = (cfg?.windowMinutes ?? 15) * 60_000;
+    if (recentMade(personId, windowMs).length >= (cfg?.maxRequests ?? 5)) return { tooMany: true };
+    made.set(personId, [...recentMade(personId, Math.max(windowMs, 120 * 60_000)), Date.now()]);
+    const lifeMs = cfg?.custom ? cfg.expiryMinutes * 60_000 : requestMs;
     for (const old of await store.listChallenges(personId, 'loginreq')) if (old.data.status === 'pending') await store.putChallenge(old.id, { ...old, data: { ...old.data, status: 'superseded' } });
     const id = randomBytes(12).toString('base64url');
     const pollToken = randomBytes(24).toString('base64url');
     const email = mailer ? await emailOf(personId) : null; // fixed now: changing the address during the sign-in changes nothing
-    const expiresAt = Date.now() + requestMs;
+    const expiresAt = Date.now() + lifeMs;
     await store.putChallenge(id, {
       personId, kind: 'loginreq', expiresAt,
       data: { status: 'pending', device: device ?? null, ip: maskIp(ip), createdAt: Date.now(), pollHash: sha256(pollToken), email, codeHash: null, codeSentAt: 0, codesSent: 0, tries: 0 },
@@ -90,7 +94,7 @@ export function mountLoginApproval(app, { store, auth, enabled, mailer = null, l
     // The owner is told by e-mail too (never a token or a link that approves anything: approving needs one of the account's own signed-in devices).
     if (email && mailer) {
       const who = device?.name ?? device ?? 'a new device';
-      mailer.send(email, 'GoPreach: a new device is trying to sign in', `Someone entered your GoPreach password on ${who}. Approve or reject it from a device that is already signed in, within ${Math.round(requestMs / 60000)} minutes. If this was not you, do not approve it and change your password.`).catch((e) => console.error('approval e-mail failed', e?.message));
+      mailer.send(email, 'GoPreach: a new device is trying to sign in', `Someone entered your GoPreach password on ${who}. Approve or reject it from a device that is already signed in, within ${Math.round(lifeMs / 60000)} minutes. If this was not you, do not approve it and change your password.`).catch((e) => console.error('approval e-mail failed', e?.message));
     }
     return {
       requestId: id, ip: maskIp(ip), pollToken, expiresAt,

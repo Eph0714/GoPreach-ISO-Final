@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.repository.AdminSession
+import com.emfitsolutions.gopreach.data.repository.ApprovalLimits
 import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -153,6 +154,35 @@ fun AdminDevicesScreen(onBack: () -> Unit, viewModel: AdminDevicesViewModel = ko
 
 private val LOG_FILTERS = listOf("" to "Every event") + SecurityEventNames.entries.map { it.key to it.value }
 
+/** Super Admin: how many new-device requests one account may raise, in how many minutes, and how long a request waits. Needs the password again. */
+@Composable
+private fun ApprovalLimitsCard(limits: ApprovalLimits, busy: Boolean, message: String?, error: String?, onSave: (ApprovalLimits, String) -> Unit) {
+    var max by remember(limits) { mutableStateOf(limits.maxRequests.toString()) }
+    var window by remember(limits) { mutableStateOf(limits.windowMinutes.toString()) }
+    var expiry by remember(limits) { mutableStateOf(limits.expiryMinutes.toString()) }
+    var password by remember { mutableStateOf("") }
+    val parsed = ApprovalLimits(max.toIntOrNull() ?: -1, window.toIntOrNull() ?: -1, expiry.toIntOrNull() ?: -1)
+    val valid = parsed.maxRequests in 1..20 && parsed.windowMinutes in 1..120 && parsed.expiryMinutes in 1..30
+    androidx.compose.material3.Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("New-device request limits", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            Text("For accounts that turned on Approve new devices. Each account may raise at most this many requests in the time window; more tries are refused (Too many attempts) until it passes. Changes apply at once and are logged below.", style = MaterialTheme.typography.bodySmall)
+            val number = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
+            OutlinedTextField(value = max, onValueChange = { max = it.filter(Char::isDigit).take(2) }, label = { Text("Requests per account (1-20)") }, singleLine = true, keyboardOptions = number, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = window, onValueChange = { window = it.filter(Char::isDigit).take(3) }, label = { Text("Within (minutes, 1-120)") }, singleLine = true, keyboardOptions = number, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = expiry, onValueChange = { expiry = it.filter(Char::isDigit).take(2) }, label = { Text("A request waits (minutes, 1-30)") }, singleLine = true, keyboardOptions = number, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(
+                value = password, onValueChange = { password = it }, label = { Text("Your password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
+            )
+            message?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+            androidx.compose.material3.Button(onClick = { onSave(parsed, password); password = "" }, enabled = valid && password.isNotEmpty() && !busy, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Saving..." else "Save limits") }
+        }
+    }
+}
+
 /** Security Audit Logs: the append-only record of security events across GoPreach. Super Admin only. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -168,6 +198,7 @@ fun SecurityLogScreen(onBack: () -> Unit, viewModel: SecurityLogViewModel = koin
         },
     ) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            item { ApprovalLimitsCard(state.limits, state.limitsBusy, state.limitsMessage, state.limitsError, viewModel::saveLimits) }
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Append-only: nothing here can be changed or deleted, and it never holds a password, code, recovery code or token.", style = MaterialTheme.typography.bodySmall)
