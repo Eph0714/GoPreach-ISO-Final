@@ -525,3 +525,14 @@ test('device approval: the e-mail code settles a request when no device is at ha
     assert.equal(last, 429);
   } finally { w.close(); }
 });
+
+test('purgeChallenges drops long-expired login requests and keeps live and recently expired ones', async () => {
+  const st = new MemoryStore();
+  const now = Date.now();
+  await st.putChallenge('old', { personId: 'p', kind: 'loginreq', data: {}, expiresAt: now - 2 * 3_600_000 });
+  await st.putChallenge('recent', { personId: 'p', kind: 'loginreq', data: {}, expiresAt: now - 1000 });
+  await st.putChallenge('live', { personId: 'p', kind: 'loginreq', data: {}, expiresAt: now + 60_000 });
+  assert.equal(await st.purgeChallenges(), 1);
+  assert.equal((await st.getChallenge('live'))?.id, 'live');
+  assert.equal(await st.purgeChallenges(), 0);
+});

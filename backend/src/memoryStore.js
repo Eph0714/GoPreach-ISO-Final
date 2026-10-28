@@ -169,6 +169,8 @@ export class MemoryStore {
   async getChallenge(id) { const c = (this.challenges ??= new Map()).get(id); return c && c.expiresAt > Date.now() ? structuredClone(c) : null; }
   async listChallenges(personId, kind) { return [...(this.challenges ??= new Map()).values()].filter((c) => c.personId === personId && c.kind === kind && c.expiresAt > Date.now()).map((c) => structuredClone(c)); }
   async deleteChallenge(id) { (this.challenges ??= new Map()).delete(id); }
+  /** Drops every challenge that expired more than `graceMs` ago; returns how many. */
+  async purgeChallenges(graceMs = 3_600_000) { const m = (this.challenges ??= new Map()); let n = 0; for (const [k, c] of m) if (c.expiresAt < Date.now() - graceMs) { m.delete(k); n += 1; } return n; }
 
   async deleteRefreshTokens(personId) { for (const [k, v] of (this.refresh ??= new Map())) if (v.personId === personId) this.refresh.delete(k); }
 

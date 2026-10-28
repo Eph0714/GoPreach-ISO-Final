@@ -41,6 +41,10 @@ const app = createApp(lazyStore, { devAuth: process.env.AUTH_MODE === 'dev', hea
 // Hostinger's Node.js hosting passes the port in PORT and fronts the app with its own HTTPS proxy.
 const server = app.listen(config.port, () => console.log(`GoPreach API listening on ${config.port} (${config.nodeEnv}, store=${config.store})`));
 
+// Hourly housekeeping: login requests and e-mail codes live minutes; they are dropped an hour after they expire.
+const purgeTimer = setInterval(() => { store?.purgeChallenges?.().catch((e) => console.error('Challenge cleanup failed:', e.code ?? e.message)); }, 3_600_000);
+purgeTimer.unref();
+
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => server.close(async () => { await store?.close(); process.exit(0); }));
 }

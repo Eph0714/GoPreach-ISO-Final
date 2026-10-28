@@ -256,6 +256,8 @@ export class MysqlStore {
     return rows.map((r) => this._challenge(r));
   }
   async deleteChallenge(id) { await this.pool.query('DELETE FROM auth_challenges WHERE id = ?', [id]); }
+  /** Drops every challenge that expired more than `graceMs` ago; returns how many. */
+  async purgeChallenges(graceMs = 3_600_000) { const [r] = await this.pool.query('DELETE FROM auth_challenges WHERE expires_at < ?', [Date.now() - graceMs]); return r.affectedRows ?? 0; }
 
   // ---- the one active sign-in session of an account (see accounts.js) ----
   async getSession(personId) {
