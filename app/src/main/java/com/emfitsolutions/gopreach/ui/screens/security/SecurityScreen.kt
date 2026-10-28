@@ -14,6 +14,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Color
+import com.emfitsolutions.gopreach.data.repository.SecurityStatus
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -82,10 +90,7 @@ fun SecurityConfirmDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(message, style = MaterialTheme.typography.bodyMedium)
-                OutlinedTextField(
-                    value = password, onValueChange = { password = it }, singleLine = true, label = { Text("Current password") }, enabled = !busy,
-                    visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.fillMaxWidth(),
-                )
+                PasswordField(value = password, onValueChange = { password = it }, label = "Current password", enabled = !busy)
                 if (askCode) OutlinedTextField(
                     value = code, onValueChange = { code = it.take(14) }, singleLine = true, label = { Text("Authenticator code or recovery code") }, enabled = !busy, modifier = Modifier.fillMaxWidth(),
                 )
@@ -151,6 +156,10 @@ fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewMo
                 }
             }
 
+            // ---- summary: how well the account is protected, at a glance ----
+            if (status != null) item { ProtectionSummary(status, state.devices.count { it.status == "active" }) }
+            item { SectionHeader("Sign-in protection", "Two layers that keep a stranger out even if they learn your password.") }
+
             // ---- two-factor ----
             item {
                 Card {
@@ -161,7 +170,8 @@ fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewMo
                         }
                         Text("After your password, GoPreach asks for a code from an authenticator app (or a recovery code) before a new device gets in.", style = MaterialTheme.typography.bodySmall)
                         if (status != null && !status.enabled) {
-                            Button(onClick = { ask = Ask.Setup }, modifier = Modifier.fillMaxWidth()) { Text("Set up an authenticator app") }
+                            AuthenticatorAppHelp(onOpen = { runCatching { uriHandler.openUri(it) } })
+                            Button(onClick = { ask = Ask.Setup }, modifier = Modifier.fillMaxWidth()) { Text("Step 2: get my setup key") }
                         }
                         if (status != null && status.enabled) {
                             Fact("Recovery codes left", status.recoveryCodesLeft.toString())
@@ -185,21 +195,23 @@ fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewMo
                 }
             }
 
-            // ---- log out devices ----
+            // ---- approve new devices ----
             item {
                 Card {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Log out devices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("Logging a device out ends its session on the server at once: it can no longer open GoPreach and must sign in again (with a code, if two-factor is on).", style = MaterialTheme.typography.bodySmall)
-                        val others = state.devices.count { !it.current && it.status == "active" }
-                        OutlinedButton(onClick = { ask = Ask.LogOutOthers }, enabled = others > 0, modifier = Modifier.fillMaxWidth()) { Text("Log out other devices ($others)") }
-                        Button(onClick = { ask = Ask.LogOutAll }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Log Out All Devices") }
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Approve new devices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("When this is on, a device you have not trusted that enters your password only gets a request. Nothing opens until you approve it from a device that is already signed in, or confirm with an e-mail code. Your password alone is never enough.", style = MaterialTheme.typography.bodySmall)
+                        Fact("Status", if (status?.deviceApproval == true) "On" else "Off")
+                        if (status != null) {
+                            if (status.deviceApproval) OutlinedButton(onClick = { ask = Ask.DeviceApproval(false) }, modifier = Modifier.fillMaxWidth()) { Text("Turn off") }
+                            else Button(onClick = { ask = Ask.DeviceApproval(true) }, modifier = Modifier.fillMaxWidth()) { Text("Turn on") }
+                        }
                     }
                 }
             }
 
+            item { SectionHeader("Your devices", "Where you are signed in right now, and the devices that were. Log out anything you do not recognise.") }
             // ---- devices ----
-            item { Text("Devices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
             items(state.devices, key = { it.sessionId }) { d ->
                 Card(shape = RoundedCornerShape(14.dp)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -224,21 +236,6 @@ fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewMo
             }
             if (!state.loading && state.devices.isEmpty()) item { Text("No devices yet.", style = MaterialTheme.typography.bodySmall) }
 
-            // ---- approve new devices ----
-            item {
-                Card {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Approve new devices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("When this is on, a device you have not trusted that enters your password only gets a request. Nothing opens until you approve it from a device that is already signed in, or confirm with an e-mail code. Your password alone is never enough.", style = MaterialTheme.typography.bodySmall)
-                        Fact("Status", if (status?.deviceApproval == true) "On" else "Off")
-                        if (status != null) {
-                            if (status.deviceApproval) OutlinedButton(onClick = { ask = Ask.DeviceApproval(false) }, modifier = Modifier.fillMaxWidth()) { Text("Turn off") }
-                            else Button(onClick = { ask = Ask.DeviceApproval(true) }, modifier = Modifier.fillMaxWidth()) { Text("Turn on") }
-                        }
-                    }
-                }
-            }
-
             // ---- trusted ----
             item {
                 Card {
@@ -252,13 +249,27 @@ fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewMo
                                     Text(t.name, fontWeight = FontWeight.SemiBold)
                                     Text("since ${whenText(t.since)}, until ${whenText(t.expiresAt)}", style = MaterialTheme.typography.bodySmall)
                                 }
-                                ActionButton(ActionKind.Delete, onClick = { ask = Ask.Untrust(t.id, t.name) }, label = "Remove trusted status")
+                                ActionButton(ActionKind.Delete, onClick = { ask = Ask.Untrust(t.id, t.name) }, label = "Delete trusted device")
                             }
                         }
                     }
                 }
             }
 
+            // ---- log out devices ----
+            item {
+                Card {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Log out devices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text("Logging a device out ends its session on the server at once: it can no longer open GoPreach and must sign in again (with a code, if two-factor is on).", style = MaterialTheme.typography.bodySmall)
+                        val others = state.devices.count { !it.current && it.status == "active" }
+                        OutlinedButton(onClick = { ask = Ask.LogOutOthers }, enabled = others > 0, modifier = Modifier.fillMaxWidth()) { Text("Log out other devices ($others)") }
+                        Button(onClick = { ask = Ask.LogOutAll }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) { Text("Log Out All Devices") }
+                    }
+                }
+            }
+
+            item { SectionHeader("Activity", "What happened on your account lately.") }
             // ---- notification centre ----
             item {
                 Card {
@@ -313,7 +324,7 @@ fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewMo
             if (a.enable) "This device becomes the trusted one. Any other device that enters your password will wait for your approval." else "New devices will sign in with your password (and your code, if two-factor is on).",
             if (a.enable) "Turn on" else "Turn off", state.busy, confirmError, onConfirm = { p, _ -> viewModel.setDeviceApproval(a.enable, p) }, onDismiss = { ask = null },
         )
-        is Ask.Untrust -> SecurityConfirmDialog("Remove trusted status?", "${a.name} will ask for a code again.", "Remove", state.busy, confirmError, onConfirm = { p, _ -> viewModel.removeTrusted(a.id, p) }, onDismiss = { ask = null })
+        is Ask.Untrust -> SecurityConfirmDialog("Delete this trusted device?", "${a.name} is logged out and must sign in again with your password (and a code). Nothing is remembered on it.", "Delete", state.busy, confirmError, onConfirm = { p, _ -> viewModel.removeTrusted(a.id, p) }, onDismiss = { ask = null })
         null -> Unit
     }
 
@@ -323,14 +334,17 @@ fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewMo
             onDismissRequest = viewModel::cancelSetup,
             title = { Text("Your setup key") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("1. In an authenticator app (Google Authenticator, Microsoft Authenticator, Authy...) add an account by key.\n2. Key (time based, 6 digits):", style = MaterialTheme.typography.bodySmall)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                    AuthenticatorAppHelp(onOpen = { runCatching { uriHandler.openUri(it) } })
+                    Text("Step 2: add GoPreach to the app with this key", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text("Open the authenticator app and tap + (Add account). Choose \"Enter a setup key\" (Microsoft: \"Other account\", then \"Or enter code manually\"). Account name: GoPreach. Type or paste the key below and keep Time based selected, then tap Add. Or tap \"Open app\" to skip typing.", style = MaterialTheme.typography.bodySmall)
                     Text(setup.secret.chunked(4).joinToString(" "), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { clipboard.setText(AnnotatedString(setup.secret)) }) { Text("Copy key") }
                         OutlinedButton(onClick = { runCatching { uriHandler.openUri(setup.otpauthUri) } }) { Text("Open app") }
                     }
-                    Text("3. Type the 6-digit code it shows:", style = MaterialTheme.typography.bodySmall)
+                    Text("Step 3: type the 6-digit code to finish", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text("The app now lists GoPreach with a 6-digit number that changes every 30 seconds. Type the current number. From then on a new device needs your password and that number.", style = MaterialTheme.typography.bodySmall)
                     OutlinedTextField(value = code, onValueChange = { code = it.filter(Char::isDigit).take(6) }, singleLine = true, label = { Text("6-digit code") }, enabled = !state.busy, modifier = Modifier.fillMaxWidth())
                     state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
                 }
@@ -388,7 +402,7 @@ private fun RecoveryEmailDialog(busy: Boolean, error: String?, onConfirm: (Strin
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("A confirmed address lets you get a sign-in code by e-mail when your phone is not at hand.", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(value = email, onValueChange = { email = it }, singleLine = true, label = { Text("E-mail address") }, enabled = !busy, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email), modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = password, onValueChange = { password = it }, singleLine = true, label = { Text("Current password") }, enabled = !busy, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                PasswordField(value = password, onValueChange = { password = it }, label = "Current password", enabled = !busy)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
         },
@@ -411,6 +425,92 @@ private fun Banner(text: String, error: Boolean, onDismiss: () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(start = 14.dp, top = 4.dp, bottom = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             Text(text, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
             ActionButton(ActionKind.Save, onClick = onDismiss, label = "OK")
+        }
+    }
+}
+
+/** A password box with a Show / Hide button, so the person can check what was typed. */
+@Composable
+internal fun PasswordField(value: String, onValueChange: (String) -> Unit, label: String, enabled: Boolean = true, modifier: Modifier = Modifier.fillMaxWidth()) {
+    var shown by remember { mutableStateOf(false) }
+    OutlinedTextField(
+        value = value, onValueChange = onValueChange, singleLine = true, label = { Text(label) }, enabled = enabled, modifier = modifier,
+        visualTransformation = if (shown) androidx.compose.ui.text.input.VisualTransformation.None else PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        trailingIcon = {
+            IconButton(onClick = { shown = !shown }) {
+                Icon(if (shown) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, contentDescription = if (shown) "Hide password" else "Show password")
+            }
+        },
+    )
+}
+
+/** Step 1 of setting up two-factor: what an authenticator app is and where to get one (Play Store links; any authenticator app works). */
+@Composable
+internal fun AuthenticatorAppHelp(onOpen: (String) -> Unit) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Step 1: get an authenticator app", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("It is a free app that shows a new 6-digit code every 30 seconds. Install one of these (any one is fine), then come back. Already have one? Skip to step 2.", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = { onOpen("https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2") }, modifier = Modifier.fillMaxWidth()) { Text("Get Google Authenticator") }
+            OutlinedButton(onClick = { onOpen("https://play.google.com/store/apps/details?id=com.azure.authenticator") }, modifier = Modifier.fillMaxWidth()) { Text("Get Microsoft Authenticator") }
+        }
+    }
+}
+
+/** A section title with one plain line under it. */
+@Composable
+private fun SectionHeader(title: String, subtitle: String) {
+    Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** "Your account is well protected" and four status tiles: two-factor, approve new devices, recovery codes left, devices signed in. */
+@Composable
+private fun ProtectionSummary(status: SecurityStatus, activeDevices: Int) {
+    val on = status.enabled
+    val approval = status.deviceApproval
+    val good = Color(0xFF1F8A4C); val amber = Color(0xFFD98A00); val red = Color(0xFFC0392B); val grey = Color(0xFF9AA0A6)
+    val (tone, headline, advice) = when {
+        on && approval -> Triple(good, "Your account is well protected", "Two-factor sign-in and new-device approval are both on.")
+        on -> Triple(amber, "Your account is partly protected", "Turn on Approve new devices so nobody can sign in with only your password.")
+        approval -> Triple(amber, "Your account is partly protected", "Turn on two-factor sign-in so a password alone is never enough.")
+        else -> Triple(red, "Add a second step to protect your account", "Turn on two-factor sign-in and Approve new devices. It takes about two minutes.")
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = tone.copy(alpha = 0.12f))) {
+            Row(Modifier.padding(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                androidx.compose.foundation.layout.Box(Modifier.size(52.dp).background(tone, androidx.compose.foundation.shape.RoundedCornerShape(16.dp)), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                    Icon(Icons.Rounded.Security, contentDescription = null, tint = Color.White, modifier = Modifier.size(28.dp))
+                }
+                Column {
+                    Text(headline, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+                    Text(advice, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            StatusTile("Two-factor", if (on) "On" else "Off", if (on) good else grey, Modifier.weight(1f))
+            StatusTile("New devices", if (approval) "Approved" else "Open", if (approval) good else grey, Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+            StatusTile("Recovery codes", if (on) status.recoveryCodesLeft.toString() else "-", if (!on) grey else if (status.recoveryCodesLeft <= 2) amber else good, Modifier.weight(1f))
+            StatusTile("Devices signed in", activeDevices.toString(), good, Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun StatusTile(label: String, value: String, dot: Color, modifier: Modifier = Modifier) {
+    Card(modifier) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                androidx.compose.foundation.layout.Box(Modifier.size(10.dp).background(dot, androidx.compose.foundation.shape.CircleShape))
+                Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
+            }
         }
     }
 }

@@ -53,6 +53,8 @@ class HttpAuthService(
     private val deviceLabel: String? = null,
     /** Full description of this device (model, system, app version) for the device list; [deviceLabel] alone is what older servers read. */
     private val deviceInfo: DeviceInfo? = null,
+    /** Called whenever this device is signed out (by the person, by another device, or by the server): the app forgets every saved password then. */
+    private val onSignedOut: () -> Unit = {},
 ) : AuthService {
     private val prefs by lazy { stores.openSecure(PREFS) }
     private val lock = Mutex()
@@ -205,6 +207,7 @@ class HttpAuthService(
         ensureLoaded()
         val refresh = prefs.getString(K_REFRESH, null)
         clear()
+        runCatching(onSignedOut)
         if (refresh != null) scope.launch { runCatching { post("/v1/auth/logout", buildJsonObject { put("refreshToken", JsonPrimitive(refresh)) }, token = null) } }
     }
 
@@ -219,10 +222,12 @@ class HttpAuthService(
             reply.string("accessToken")
         } catch (e: AuthFailure.SessionEnded) {
             clear()
+            runCatching(onSignedOut) // signed out by the server (another device, a deleted trusted device, a password change): no saved password stays behind
             prefs.edit { putString(K_ENDED, "1") } // the sign-in screen explains why
             null
         } catch (e: AuthFailure.InvalidCredentials) {
             clear() // the server no longer knows this session (signed out elsewhere, password changed, account removed)
+            runCatching(onSignedOut)
             null
         }
     }

@@ -286,6 +286,8 @@ val infraModule = module {
                 name = "$maker $model", model = model, type = if (context.resources.configuration.smallestScreenWidthDp >= 600) "tablet" else "phone",
                 os = "Android", osVersion = android.os.Build.VERSION.RELEASE, appVersion = com.emfitsolutions.gopreach.BuildConfig.VERSION_NAME,
             ),
+            // Signing out, for any reason, forgets every saved password on this phone (remembered, fingerprint and PIN/pattern sign-in).
+            onSignedOut = { get<CredentialStore>().forgetPasswords(); get<com.emfitsolutions.gopreach.data.repository.QuickLoginStore>().disableAll() },
         )
     }
     single<com.emfitsolutions.gopreach.data.repository.SecurityService> {

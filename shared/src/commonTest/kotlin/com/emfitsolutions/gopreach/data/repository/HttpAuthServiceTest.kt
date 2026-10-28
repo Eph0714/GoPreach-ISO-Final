@@ -88,6 +88,21 @@ class HttpAuthServiceTest {
         assertFalse(auth.takeSessionEndedNotice(), "the message is shown once")
     }
 
+    @Test fun everySignOutMakesThePhoneForgetItsSavedPasswords() = runTest {
+        var forgotten = 0
+        // by the person
+        val own = HttpAuthService(HttpClient(MockEngine { respond(tokens, HttpStatusCode.OK, json) }), "https://api.test", MemoryStores(), CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined), onSignedOut = { forgotten++ })
+        own.signIn("p1@gopreach.internal", "pw")
+        own.signOut()
+        assertEquals(1, forgotten, "signing out forgets the saved passwords")
+        // by the server (another device, a deleted trusted device, a password change)
+        var call = 0
+        val engine = MockEngine { call++; if (call == 1) respond(tokens, HttpStatusCode.OK, json) else respond("""{"error":"session-ended"}""", HttpStatusCode.Unauthorized, json) }
+        val ended = HttpAuthService(HttpClient(engine), "https://api.test", MemoryStores(), CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined), onSignedOut = { forgotten++ })
+        ended.signIn("p1@gopreach.internal", "pw")
+        assertNull(ended.idToken(force = true))
+        assertEquals(2, forgotten, "a session the server ended forgets them too")
+    }
     @Test fun anOrdinaryExpiredLoginIsNotReportedAsSignedInElsewhere() = runTest {
         var call = 0
         val engine = MockEngine { call++; if (call == 1) respond(tokens, HttpStatusCode.OK, json) else respond("""{"error":"invalid-token"}""", HttpStatusCode.Unauthorized, json) }

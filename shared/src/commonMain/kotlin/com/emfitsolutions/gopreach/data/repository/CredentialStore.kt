@@ -29,6 +29,14 @@ class CredentialStore(private val stores: KeyValueStores) {
         prefs.edit().putString(KEY_USERNAME, username).putString(KEY_PASSWORD, password).apply()
     }
 
+    /**
+     * Signing out forgets every saved PASSWORD on this device (the remembered one and the biometric one); a username is not a secret and stays,
+     * so the next sign-in starts from the password box.
+     */
+    fun forgetPasswords() {
+        prefs.edit().remove(KEY_PASSWORD).remove(KEY_BIO_USERNAME).remove(KEY_BIO_PASSWORD).apply()
+    }
+
     /** Forgets only the remembered login — a biometric enrollment is untouched. */
     fun clearRemembered() {
         prefs.edit().remove(KEY_USERNAME).remove(KEY_PASSWORD).apply()

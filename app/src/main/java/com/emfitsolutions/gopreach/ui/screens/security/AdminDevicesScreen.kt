@@ -171,11 +171,7 @@ private fun ApprovalLimitsCard(limits: ApprovalLimits, busy: Boolean, message: S
             OutlinedTextField(value = max, onValueChange = { max = it.filter(Char::isDigit).take(2) }, label = { Text("Requests per account (1-20)") }, singleLine = true, keyboardOptions = number, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = window, onValueChange = { window = it.filter(Char::isDigit).take(3) }, label = { Text("Within (minutes, 1-120)") }, singleLine = true, keyboardOptions = number, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = expiry, onValueChange = { expiry = it.filter(Char::isDigit).take(2) }, label = { Text("A request waits (minutes, 1-30)") }, singleLine = true, keyboardOptions = number, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(
-                value = password, onValueChange = { password = it }, label = { Text("Your password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Password),
-            )
+            PasswordField(value = password, onValueChange = { password = it }, label = "Your password")
             message?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             androidx.compose.material3.Button(onClick = { onSave(parsed, password); password = "" }, enabled = valid && password.isNotEmpty() && !busy, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Saving..." else "Save limits") }

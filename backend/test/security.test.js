@@ -601,3 +601,24 @@ test('approval limits: only the Super Admin manages them, within safe bounds; th
     assert.equal(change.meta.before.maxRequests, 5);
   } finally { w.close(); }
 });
+
+test('deleting a trusted device logs out its other sessions, keeps the caller and other devices signed in, and the trust is gone', async () => {
+  const w = await world();
+  try {
+    const other = await w.signIn('ana001', dev('dev-3', 'Old tablet'));
+    const first = await w.signIn('ana001', dev('dev-1', 'Ana phone'));
+    const on = await (await w.post('/v1/security/device-approval', { enabled: true }, first.accessToken)).json();
+    // the same device signs in again by its trusted credential: a second session of that device
+    const again = await (await w.login('ana001', { device: dev('dev-1', 'Ana phone'), trustedToken: on.trustedToken })).json();
+    assert.ok(again.accessToken);
+    const list = await w.st.secList('trusted', 'ana001');
+    const removed = await (await w.post(`/v1/security/trusted/${list[0].id}/remove`, {}, first.accessToken)).json();
+    assert.equal(removed.ok, true);
+    assert.equal(removed.loggedOut, 1, 'the device\'s other session is logged out');
+    assert.equal((await w.get('/v1/security/status', again.accessToken)).status, 401, 'the deleted device is signed out on its very next call');
+    assert.equal((await w.get('/v1/security/status', first.accessToken)).status, 200, 'the caller stays signed in');
+    assert.equal((await w.get('/v1/security/status', other.accessToken)).status, 200, 'another device is untouched');
+    assert.equal((await w.login('ana001', { device: dev('dev-1', 'Ana phone'), trustedToken: on.trustedToken })).status, 409, 'the trust is gone: it needs approval again');
+    assert.equal((await w.post(`/v1/security/trusted/${list[0].id}/remove`, {}, first.accessToken)).status, 404, 'deleted once');
+  } finally { w.close(); }
+});

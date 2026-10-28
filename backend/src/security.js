@@ -486,8 +486,15 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
     const t = (await store.secList('trusted', req.personId)).find((x) => x.id.startsWith(prefix) && !x.data.revokedAt);
     if (!t) return res.status(404).json({ error: 'not-found' });
     await store.secPut('trusted', t.id, req.personId, { ...t.data, revokedAt: Date.now() });
-    await event(req.personId, 'TRUSTED_DEVICE_REMOVED', { sessionId: req.sessionId, deviceId: t.data.deviceId, meta: { device: t.data.name } });
-    res.json({ ok: true });
+    // Deleting a trusted device also logs that device out: its sessions end on the server (the one in the caller's hand stays, only its trust goes),
+    // so the device falls back to the sign-in screen, where the app forgets any saved password.
+    let loggedOut = 0;
+    for (const d of await store.secList('dsession', req.personId, { limit: 1000 })) {
+      if (d.id === req.sessionId || d.data.status === 'revoked' || d.data.deviceId !== t.data.deviceId) continue;
+      if (await revokeSession(req.personId, d.id, { by: 'self', reason: 'trusted-device-deleted' })) loggedOut += 1;
+    }
+    await event(req.personId, 'TRUSTED_DEVICE_REMOVED', { sessionId: req.sessionId, deviceId: t.data.deviceId, meta: { device: t.data.name, loggedOut } });
+    res.json({ ok: true, loggedOut });
   });
 
   // ---- the person's own log and notices ----------------------------------------------------------------------------------------------------------------------------------
