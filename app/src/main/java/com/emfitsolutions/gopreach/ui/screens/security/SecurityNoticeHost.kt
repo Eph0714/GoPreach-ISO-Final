@@ -60,13 +60,17 @@ class SecurityNoticeViewModel(private val security: SecurityService, userSession
     /** Cheap: a session another device logged out answers 401 and the app signs itself out by itself. */
     suspend fun checkSession() = security.checkSession()
 
+    /** Notices the person closed in this session: they never come back, even if the server is slow to mark them seen. */
+    private val dismissed = mutableSetOf<String>()
+
     suspend fun refresh() {
-        val unseen = security.notices()
+        val unseen = security.notices().filter { it.id !in dismissed }
         // The server marks them seen only when the person has read them; until then the same ones come back.
         _notices.value = unseen
     }
 
     fun dismiss() {
+        dismissed += _notices.value.map { it.id }
         _notices.value = emptyList()
         viewModelScope.launch { runCatching { security.markNoticesSeen() } }
     }

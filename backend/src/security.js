@@ -557,7 +557,8 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
     res.json({ notices: wanted.map((e) => ({ ...publicEvent(e), seen: !!e.data.seenAt })), unseen: mine.filter((e) => !e.data.seenAt).length });
   });
   app.post('/v1/security/notices/seen', enabled, auth, async (req, res) => {
-    for (const e of (await store.secList('secevent', req.personId, { limit: 100 })).filter((x) => x.data.notify && !x.data.seenAt)) await store.secPut('secevent', e.id, e.personId, { ...e.data, seenAt: Date.now() });
+    // the same 300 events the notice list reads: every notice shown can be marked seen (it used to be 100, so older unseen notices came back for ever)
+    for (const e of (await store.secList('secevent', req.personId, { limit: 300 })).filter((x) => x.data.notify && !x.data.seenAt)) await store.secPut('secevent', e.id, e.personId, { ...e.data, seenAt: Date.now() });
     res.json({ ok: true });
   });
 

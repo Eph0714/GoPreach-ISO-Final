@@ -823,3 +823,19 @@ test('one device: rename it everywhere, or remove it (its sessions are logged ou
     assert.ok(types.includes('DEVICE_REMOVED'));
   } finally { w.close(); }
 });
+
+test('notices: marking them seen clears every notice that was listed (not only the newest 100), so a closed notice never comes back', async () => {
+  const w = await world();
+  try {
+    const s = await w.signIn('ana001', dev('dev-1', 'Ana phone'));
+    for (let i = 0; i < 150; i += 1) {
+      await w.st.secPut('secevent', `n-${String(i).padStart(4, '0')}`, 'ana001', { at: Date.now() - 1000 + i, personId: 'ana001', type: 'NEW_DEVICE_LOGIN', result: 'success', meta: { device: `Device ${i}` }, notify: true, seenAt: null });
+    }
+    const before = await (await w.get('/v1/security/notices', s.accessToken)).json();
+    assert.ok(before.notices.length > 100, 'more than a hundred are listed');
+    assert.equal((await w.post('/v1/security/notices/seen', {}, s.accessToken)).status, 200);
+    const after = await (await w.get('/v1/security/notices', s.accessToken)).json();
+    assert.equal(after.notices.length, 0, 'none comes back');
+    assert.equal(after.unseen, 0);
+  } finally { w.close(); }
+});
