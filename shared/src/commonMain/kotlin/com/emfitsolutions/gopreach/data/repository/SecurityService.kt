@@ -67,6 +67,8 @@ interface SecurityService {
     suspend fun events(limit: Int = 60, filter: HistoryFilter = HistoryFilter()): List<SecurityEvent>
     /** The notification centre: unseen notices, or every notice (each with its seen flag) when [all]. */
     suspend fun notices(all: Boolean = false): List<SecurityEvent>
+    /** Is this phone's session still alive? A session logged out from another device answers 401 and the phone signs itself out (see [call]). */
+    suspend fun checkSession()
     suspend fun markNoticesSeen()
     suspend fun totpSetup(): TotpSetup
     /** Turns two-factor on; returns the recovery codes, shown once. */
@@ -191,6 +193,7 @@ class HttpSecurityService(
         return call(HttpMethod.Get, "/v1/security/events?$qs").list("events").map(::event)
     }
     override suspend fun notices(all: Boolean) = call(HttpMethod.Get, "/v1/security/notices" + if (all) "?all=1" else "").list("notices").map(::event)
+    override suspend fun checkSession() { call(HttpMethod.Get, "/v1/auth/session") }
     override suspend fun markNoticesSeen() { call(HttpMethod.Post, "/v1/security/notices/seen", JsonObject(emptyMap())) }
 
     override suspend fun totpSetup(): TotpSetup {

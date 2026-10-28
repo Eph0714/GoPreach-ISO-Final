@@ -647,3 +647,23 @@ test('approval limit is per device: tries from the website never use the phone\'
     assert.ok((await phone.json()).requestId);
   } finally { w.close(); }
 });
+
+test('a device that was logged out finds out by itself: the cheap session check answers 401 session-ended at once', async () => {
+  const w = await world();
+  try {
+    const phone = await w.signIn('ana001', dev('dev-1', 'Ana phone'));
+    const web = await w.signIn('ana001', dev('web-1', 'GoPreach Web'));
+    assert.equal((await w.get('/v1/auth/session', web.accessToken)).status, 200);
+    assert.equal((await w.get('/v1/auth/session')).status, 401, 'no token, no session');
+    // the phone logs every other device out
+    assert.equal((await w.post('/v1/security/devices/revoke-others', {}, phone.accessToken)).status, 200);
+    const gone = await w.get('/v1/auth/session', web.accessToken);
+    assert.equal(gone.status, 401);
+    assert.equal((await gone.json()).error, 'session-ended');
+    assert.equal((await w.get('/v1/auth/session', phone.accessToken)).status, 200, 'the phone that asked stays in');
+    // and the other way round: the browser logs everything out, the phone is told on its next check
+    const web2 = await w.signIn('ana001', dev('web-2', 'GoPreach Web'));
+    assert.equal((await w.post('/v1/security/devices/revoke-all', {}, web2.accessToken)).status, 200);
+    assert.equal((await w.get('/v1/auth/session', phone.accessToken)).status, 401);
+  } finally { w.close(); }
+});

@@ -518,6 +518,8 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
     res.json({ events: all.filter(historyFilter(req.query)).slice(0, limit).map(publicEvent) });
   });
   /** Notification centre: unseen notices by default; all=1 also lists the ones already seen (each with seen:true/false). */
+  /** The cheapest signed-in call: devices ask it every few seconds-minutes, and a session that was logged out gets 401 session-ended at once (auth.js), so the device signs itself out without anyone touching it. */
+  app.get('/v1/auth/session', enabled, auth, (req, res) => res.json({ ok: true }));
   app.get('/v1/security/notices', enabled, auth, async (req, res) => {
     const mine = (await store.secList('secevent', req.personId, { limit: 300 })).filter((e) => e.data.notify);
     const wanted = req.query.all === '1' ? mine : mine.filter((e) => !e.data.seenAt);

@@ -39,6 +39,9 @@ class SecurityNoticeViewModel(private val security: SecurityService, userSession
     private val _notices = MutableStateFlow<List<SecurityEvent>>(emptyList())
     val notices: StateFlow<List<SecurityEvent>> = _notices.asStateFlow()
 
+    /** Cheap: a session another device logged out answers 401 and the app signs itself out by itself. */
+    suspend fun checkSession() = security.checkSession()
+
     suspend fun refresh() {
         val unseen = security.notices()
         // The server marks them seen only when the person has read them; until then the same ones come back.
@@ -62,9 +65,13 @@ fun SecurityNoticeHost(onReview: () -> Unit = { SecurityNav.open?.invoke() }, vi
     val notices by viewModel.notices.collectAsStateWithLifecycle()
     LaunchedEffect(signedIn) {
         if (!signedIn) return@LaunchedEffect
+        // Every 30 seconds the phone asks whether its session is still alive (a logout from another device ends it at once); the notices come every other time.
+        var round = 0
         while (true) {
-            runCatching { viewModel.refresh() }
-            delay(60_000)
+            runCatching { viewModel.checkSession() }
+            if (round % 2 == 0) runCatching { viewModel.refresh() }
+            round++
+            delay(30_000)
         }
     }
     if (notices.isEmpty()) return
