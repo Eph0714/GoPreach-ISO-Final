@@ -18,9 +18,4 @@ class SessionViewModel(
      * right away, not just be blocked from a *future* sign-in. Called by
      * [GoPreachNavGraph] the moment [SessionState.isAccountBlocked] goes true. */
     fun signOut() = authRepository.signOut()
-
-    /** "Multiple Role Login Detection & Role Selection" spec §7 — called once
-     * from [com.emfitsolutions.gopreach.ui.screens.login.SelectRoleScreen]
-     * when the user taps Continue; see [UserSession.selectRole]. */
-    fun selectRole(assignmentId: String) = userSession.selectRole(assignmentId)
 }

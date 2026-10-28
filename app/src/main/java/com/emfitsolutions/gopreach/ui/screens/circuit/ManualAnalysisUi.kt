@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -65,7 +67,7 @@ fun AnalysisView(ui: AnalysisUi, compare: CompareUi, viewModel: PreviousManualRe
             Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.errorContainer) {
                 Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("The analysis could not be made: $err", style = MaterialTheme.typography.bodyMedium)
-                    OutlinedButton(onClick = { viewModel.startAnalysis(refresh = true) }) { Text("Try again") }
+                    ActionButton(ActionKind.Refresh, onClick = { viewModel.startAnalysis(refresh = true) }, label = "Try again")
                 }
             }
         }
@@ -87,8 +89,8 @@ fun AnalysisView(ui: AnalysisUi, compare: CompareUi, viewModel: PreviousManualRe
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { viewModel.refreshAnalysis() }, enabled = !ui.aiBusy && !ui.loading) { Text("Refresh Analysis") }
-            OutlinedButton(onClick = { onShare(plainText(a)) }) { Text("Export Summary") }
+            ActionButton(ActionKind.Refresh, onClick = { viewModel.refreshAnalysis() }, label = "Refresh Analysis", enabled = !ui.aiBusy && !ui.loading)
+            ActionButton(ActionKind.Export, onClick = { onShare(plainText(a)) }, label = "Export Summary")
         }
         ReportHeader(a)
         AiNote(a, ui.aiBusy) { viewModel.refreshAnalysis() }

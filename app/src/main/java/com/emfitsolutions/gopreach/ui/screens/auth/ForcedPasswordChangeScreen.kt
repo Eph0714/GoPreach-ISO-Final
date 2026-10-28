@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.auth
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
 import com.emfitsolutions.gopreach.platform.AppPermission
 import androidx.compose.foundation.layout.Arrangement
@@ -150,7 +152,7 @@ private fun ReviewStep(state: FirstLoginUiState, viewModel: ForcedPasswordChange
     }
     ReviewCard("Contact Information") { ReviewRow("Email", form.email) }
     state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-    OutlinedButton(onClick = viewModel::startEditing, enabled = !state.isBusy, modifier = Modifier.fillMaxWidth()) { Text("Edit Details") }
+    ActionButton(ActionKind.Edit, onClick = viewModel::startEditing, label = "Edit Details", enabled = !state.isBusy, modifier = Modifier.fillMaxWidth())
     Button(onClick = viewModel::askToConfirm, enabled = !state.isBusy, modifier = Modifier.fillMaxWidth()) {
         if (state.isBusy) CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp))
         Text("Confirm & Save")
@@ -161,7 +163,7 @@ private fun ReviewStep(state: FirstLoginUiState, viewModel: ForcedPasswordChange
             onDismissRequest = viewModel::dismissConfirm,
             title = { Text("Confirm Your Information") },
             text = { Text("Please make sure all your personal information is correct before continuing.") },
-            confirmButton = { TextButton(onClick = viewModel::confirmAndSave) { Text("Confirm & Save") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = viewModel::confirmAndSave, label = "Confirm & Save") },
             dismissButton = { TextButton(onClick = viewModel::dismissConfirm) { Text("Back / Edit") } },
         )
     }
@@ -205,8 +207,8 @@ private fun EditStep(state: FirstLoginUiState, viewModel: ForcedPasswordChangeVi
         },
     )
     state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-    Button(onClick = viewModel::applyEdits, modifier = Modifier.fillMaxWidth()) { Text("Done Editing") }
-    OutlinedButton(onClick = viewModel::cancelEditing, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+    ActionButton(ActionKind.Save, onClick = viewModel::applyEdits, label = "Done Editing", modifier = Modifier.fillMaxWidth())
+    ActionButton(ActionKind.Cancel, onClick = viewModel::cancelEditing, label = "Cancel", modifier = Modifier.fillMaxWidth())
 }
 
 // --- Step 3: optional login methods -----------------------------------------------------------

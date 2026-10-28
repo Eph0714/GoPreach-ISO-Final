@@ -1,5 +1,8 @@
 ﻿package com.emfitsolutions.gopreach.ui.screens.attendance
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import androidx.compose.material.icons.automirrored.rounded.ViewList
 import com.emfitsolutions.gopreach.ui.components.joinTableRow
 import com.emfitsolutions.gopreach.ui.components.ViewSegments
@@ -508,10 +511,7 @@ fun MeetingAttendanceScreen(
             title = { Text("Filters") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = dQuery, onValueChange = { dQuery = it }, label = { Text("Search date, meeting or remarks") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        trailingIcon = { if (dQuery.isNotEmpty()) IconButton(onClick = { dQuery = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
-                    )
+                    StandardSearchField(value = dQuery, onValueChange = { dQuery = it }, placeholder = "Search date, meeting or remarks", modifier = Modifier.fillMaxWidth())
                     if (range != null) FilterChip(selected = dKeepRange, onClick = { dKeepRange = !dKeepRange }, label = { Text("Report Submission range: $periodLabel") })
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(Modifier.weight(1f)) { SimpleDropdown("Year", dYear.toString(), years.map { it.toString() to it.toString() }, { dYear = it.toInt(); dKeepRange = false }) }
@@ -531,11 +531,11 @@ fun MeetingAttendanceScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                     year = dYear; month = dMonth; typeFilter = dType; showDeleted = dDeleted; query = dQuery
                     if (!dKeepRange) range = null
                     filtersOpen = false
-                }) { Text("Apply Filters") }
+                }, label = "Apply Filters")
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -633,12 +633,12 @@ fun MeetingAttendanceScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     deleting = null
                     scope.launch { (viewModel.delete(r, currentPersonId, roleName, reason.ifBlank { null }) as? AttendanceResult.Refused)?.let { message = it.message } }
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { deleting = null }, label = "Cancel") },
         )
     }
     historyOf?.let { r -> AttendanceHistoryDialog(r, viewModel) { historyOf = null } }
@@ -798,19 +798,16 @@ private fun AttendanceFormDialog(
             }
         },
         confirmButton = {
-            Button(
-                enabled = allValid && !busy,
-                onClick = {
+            ActionButton(ActionKind.Save, onClick = {
                     busy = true
                     scope.launch {
                         val problem = onSave(MeetingAttendanceInput(congregationId, type, date, parsed.filterNotNull(), remarks.ifBlank { null }), reason.ifBlank { null })
                         busy = false
                         if (problem != null) error = problem
                     }
-                },
-            ) { Text("Save") }
+                }, label = "Save", enabled = allValid && !busy)
         },
-        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -834,8 +831,8 @@ private fun RoundingDialog(current: AttendanceRounding, onDismiss: () -> Unit, o
                 Text("Records of months already received by the Circuit Overseer are history and never change.", style = MaterialTheme.typography.bodySmall)
             }
         },
-        confirmButton = { TextButton(enabled = mode != current, onClick = { if (recalc) confirm = true else onApply(mode, false) }) { Text("Apply") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { ActionButton(ActionKind.Save, onClick = { if (recalc) confirm = true else onApply(mode, false) }, label = "Apply", enabled = mode != current) },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
     if (confirm) {
         AlertDialog(
@@ -843,7 +840,7 @@ private fun RoundingDialog(current: AttendanceRounding, onDismiss: () -> Unit, o
             title = { Text("Recalculate historical records?") },
             text = { Text("Every saved weekly record that is not yet frozen will be recalculated from its original counts using \"${mode.label}\". This is recorded in the audit trail.") },
             confirmButton = { TextButton(onClick = { confirm = false; onApply(mode, true) }) { Text("Recalculate") } },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirm = false }, label = "Cancel") },
         )
     }
 }
@@ -869,6 +866,6 @@ private fun AttendanceHistoryDialog(record: MeetingAttendance, viewModel: Meetin
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Close") },
     )
 }

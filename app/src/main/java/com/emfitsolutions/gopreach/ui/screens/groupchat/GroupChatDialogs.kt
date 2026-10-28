@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.action_cancel
 import com.emfitsolutions.gopreach.shared.resources.action_save
@@ -253,7 +255,7 @@ fun CreateGroupChatDialog(
  * Elder/Admin/Super-Admin — see [com.emfitsolutions.gopreach.ui.screens
  * .groupchat.GroupChatScreen]'s `canManageSettings`), so no extra role check
  * is needed here in the UI; the real, congregation-scoped authority check
- * still happens server-side in firestore.rules' `canManageGroupChatsFor` (a
+ * still happens server-side in docs/legacy-firebase/firestore.rules' `canManageGroupChatsFor` (a
  * Coordinator Elder/Admin may only delete a chat in their *own* active
  * congregation; only the Super-Admin may delete across all of them). */
 @Composable
@@ -319,10 +321,7 @@ fun ManageParticipantsDialog(
         )
         if (fsGroup != null) Text("Only people assigned to ${fsGroup.name} can be in this chat. This changes the chat only - never a publisher's FS Group.", style = MaterialTheme.typography.bodySmall)
         if (fsGroup == null) Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-            TextButton(
-                onClick = { showDeleteConfirm = true },
-                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-            ) { Text(stringResource(Res.string.chat_delete_group_chat)) }
+            ActionButton(ActionKind.Delete, onClick = { showDeleteConfirm = true }, label = stringResource(Res.string.chat_delete_group_chat))
         }
     }
 
@@ -341,7 +340,7 @@ fun ManageParticipantsDialog(
                     }
                 }) { Text(stringResource(Res.string.chat_delete), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text(stringResource(Res.string.action_cancel)) } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { showDeleteConfirm = false }, label = stringResource(Res.string.action_cancel)) },
         )
     }
 }

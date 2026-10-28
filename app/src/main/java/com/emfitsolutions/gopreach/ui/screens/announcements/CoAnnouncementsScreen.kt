@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.announcements
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import android.app.DatePickerDialog
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -178,11 +182,7 @@ fun CoAnnouncementsScreen(
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item(key = "bar") { SelectedCongregationBar(selected.name, onChange = { CircuitScopeStore.selectCongregation(null) }) }
             item(key = "search") {
-                OutlinedTextField(
-                    value = query, onValueChange = { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Search by title") },
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
-                )
+                StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search by title", modifier = Modifier.fillMaxWidth())
             }
             item(key = "tabs") {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -237,7 +237,7 @@ fun CoAnnouncementsScreen(
             AnnouncementDetailsDialog(
                 announcement = current, congregationName = selected.name, viewModel = viewModel, showReaders = true, onDismiss = { viewing = null },
                 actions = {
-                    if (current.status != Announcement.STATUS_ARCHIVED) IconButton(onClick = { viewing = null; editor = EditorRequest(current, false) }) { Icon(Icons.Rounded.Edit, contentDescription = "Edit") }
+                    if (current.status != Announcement.STATUS_ARCHIVED) ActionIconButton(ActionKind.Edit, onClick = { viewing = null; editor = EditorRequest(current, false) }, contentDescription = "Edit")
                     IconButton(onClick = { viewing = null; editor = EditorRequest(current, true) }) { Icon(Icons.Rounded.ContentCopy, contentDescription = "Duplicate") }
                 },
             )
@@ -248,7 +248,7 @@ fun CoAnnouncementsScreen(
                 title = { Text("Archive this announcement?") },
                 text = { Text("\"${a.title}\" stops being shown to its recipients. It stays here under Archived, with its files.") },
                 confirmButton = { TextButton(onClick = { confirmArchive = null; scope.launch { viewModel.archive(a, actorPersonId); showToast("Announcement archived.") } }) { Text("Archive") } },
-                dismissButton = { TextButton(onClick = { confirmArchive = null }) { Text("Cancel") } },
+                dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmArchive = null }, label = "Cancel") },
             )
         }
         confirmDelete?.let { a ->
@@ -256,8 +256,8 @@ fun CoAnnouncementsScreen(
                 onDismissRequest = { confirmDelete = null },
                 title = { Text("Delete this announcement?") },
                 text = { Text("\"${a.title}\" and its ${a.attachments.size} file(s) will be permanently deleted. This can't be undone.") },
-                confirmButton = { TextButton(onClick = { confirmDelete = null; scope.launch { viewModel.delete(a, actorPersonId); showToast("Announcement deleted.") } }) { Text("Delete") } },
-                dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } },
+                confirmButton = { ActionButton(ActionKind.Delete, onClick = { confirmDelete = null; scope.launch { viewModel.delete(a, actorPersonId); showToast("Announcement deleted.") } }, label = "Delete") },
+                dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmDelete = null }, label = "Cancel") },
             )
         }
     }
@@ -543,7 +543,7 @@ private fun CoAnnouncementEditor(
                                 when (item.state) {
                                     UploadState.UPLOADING -> CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                                     UploadState.DONE -> Icon(Icons.Rounded.CheckCircle, contentDescription = "Uploaded", tint = MaterialTheme.colorScheme.primary)
-                                    UploadState.FAILED -> IconButton(onClick = { upload(item) }) { Icon(Icons.Rounded.Refresh, contentDescription = "Retry upload") }
+                                    UploadState.FAILED -> ActionIconButton(ActionKind.Refresh, onClick = { upload(item) }, contentDescription = "Retry upload")
                                 }
                                 IconButton(onClick = {
                                     val id = item.meta?.id
@@ -627,7 +627,7 @@ private fun CoAnnouncementEditor(
             onDismissRequest = { confirmDiscard = false },
             title = { Text("Discard your changes?") },
             text = { Text("What you typed and any newly attached files will be lost. Use Save Draft to keep them.") },
-            confirmButton = { TextButton(onClick = { confirmDiscard = false; discard() }) { Text("Discard") } },
+            confirmButton = { ActionButton(ActionKind.Delete, onClick = { confirmDiscard = false; discard() }, label = "Discard") },
             dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep editing") } },
         )
     }
@@ -666,11 +666,7 @@ private fun ElderPicker(
                 }
             }
         }
-        OutlinedTextField(
-            value = query, onValueChange = onQuery, singleLine = true, modifier = Modifier.fillMaxWidth(), placeholder = { Text("Search elders") },
-            leadingIcon = { Icon(Icons.Rounded.Search, null) },
-            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { onQuery("") }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
-        )
+        StandardSearchField(value = query, onValueChange = onQuery, placeholder = "Search elders", modifier = Modifier.fillMaxWidth())
         val matching = elders.filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) || it.roleLabel.contains(query.trim(), ignoreCase = true) }
         if (elders.isEmpty()) Text("No elder of this congregation has signed in yet, so none can be addressed.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         else Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.accountmanagement
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.Arrangement
@@ -102,7 +104,7 @@ fun TemporaryPasswordFlow(
                     },
                 ) { Text(if (working) "Setting..." else "Set password") }
             },
-            dismissButton = { TextButton(enabled = !working, onClick = onDismiss) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel", enabled = !working) },
         )
     } else {
         AlertDialog(
@@ -114,7 +116,7 @@ fun TemporaryPasswordFlow(
                     Text(shown, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 }
             },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = onDismiss, label = "Done") },
             dismissButton = {
                 TextButton(onClick = {
                     val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager

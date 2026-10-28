@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.contactrecord
 
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import com.emfitsolutions.gopreach.ui.components.keyboardPadding
 import android.content.ActivityNotFoundException
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
@@ -169,15 +170,7 @@ fun ContactRecordScreen(
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             HideInFullScreen(false) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                label = { Text("Search contacts") },
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            StandardSearchField(value = searchQuery, onValueChange = { searchQuery = it }, placeholder = "Search contacts", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
 
             }
             HideInFullScreen(true) {

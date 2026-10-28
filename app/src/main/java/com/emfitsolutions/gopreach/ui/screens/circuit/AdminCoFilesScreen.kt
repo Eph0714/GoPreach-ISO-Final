@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -98,11 +101,7 @@ fun AdminCoFilesScreen(onBack: () -> Unit, viewModel: AdminCoFilesViewModel = ko
             if (loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
             val co = selected
             if (co == null) {
-                OutlinedTextField(
-                    value = coQuery, onValueChange = { coQuery = it }, singleLine = true,
-                    placeholder = { Text("Search by name or circuit code") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                )
+                StandardSearchField(value = coQuery, onValueChange = { coQuery = it }, placeholder = "Search by name or circuit code", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
                 Row(Modifier.padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("ALL" to "All", "ACTIVE" to "Active", "INACTIVE" to "Inactive").forEach { (key, label) ->
                         FilterChip(selected = statusFilter == key, onClick = { statusFilter = key }, label = { Text(label) })
@@ -116,7 +115,7 @@ fun AdminCoFilesScreen(onBack: () -> Unit, viewModel: AdminCoFilesViewModel = ko
                 when {
                     error != null && accounts == null -> Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
-                        TextButton(onClick = { viewModel.loadAccounts() }) { Text("Try again") }
+                        ActionButton(ActionKind.Refresh, onClick = { viewModel.loadAccounts() }, label = "Try again")
                     }
                     !loading && rows.isEmpty() -> Text("No Circuit Overseer matches.", Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     else -> LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -124,12 +123,7 @@ fun AdminCoFilesScreen(onBack: () -> Unit, viewModel: AdminCoFilesViewModel = ko
                     }
                 }
             } else {
-                OutlinedTextField(
-                    value = query, onValueChange = viewModel::onQuery, singleLine = true,
-                    placeholder = { Text("Search ${co.name}'s files and folders...") }, leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { viewModel.clearSearch() }) { Icon(Icons.Rounded.Close, "Clear search") } },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                )
+                StandardSearchField(value = query, onValueChange = viewModel::onQuery, placeholder = "Search ${co.name}'s files and folders...", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
                 val path = listing?.path.orEmpty()
                 Text(
                     "File Manager" + path.joinToString("") { " / ${it.name}" }, style = MaterialTheme.typography.labelMedium,
@@ -155,7 +149,7 @@ fun AdminCoFilesScreen(onBack: () -> Unit, viewModel: AdminCoFilesViewModel = ko
                     when {
                         error != null && listing == null -> Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
-                            TextButton(onClick = { viewModel.refresh() }) { Text("Try again") }
+                            ActionButton(ActionKind.Refresh, onClick = { viewModel.refresh() }, label = "Try again")
                         }
                         !loading && folders.isEmpty() && files.isEmpty() -> Text("${co.name} has no files here.", Modifier.padding(24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         else -> LazyColumn(Modifier.fillMaxSize().padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

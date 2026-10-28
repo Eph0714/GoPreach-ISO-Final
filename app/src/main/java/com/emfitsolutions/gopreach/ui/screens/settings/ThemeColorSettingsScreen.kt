@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.settings
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.action_save
 import com.emfitsolutions.gopreach.shared.resources.dashboard_back_cd
@@ -177,8 +179,7 @@ fun ThemeColorSettingsScreen(
             // itself the moment ThemePreferenceRepository's StateFlow changes
             // (see ui/theme/Theme.kt) — nothing else to wire up here.
             val savedMessage = stringResource(Res.string.theme_color_settings_saved_message)
-            Button(
-                onClick = {
+            ActionButton(ActionKind.Save, onClick = {
                     // Save-only-once (spec §18: "do not write repeated
                     // database updates for every movement around the color
                     // wheel") — exactly one write, whichever of the two the
@@ -189,11 +190,7 @@ fun ThemeColorSettingsScreen(
                         viewModel.setColorOption(pendingOption)
                     }
                     showToast(savedMessage)
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(Res.string.action_save))
-            }
+                }, label = stringResource(Res.string.action_save), modifier = Modifier.fillMaxWidth())
         }
     }
 }

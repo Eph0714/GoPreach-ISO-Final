@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -414,6 +416,6 @@ private fun PublisherRecordsDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_close)) } },
+        confirmButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = stringResource(Res.string.action_close)) },
     )
 }

@@ -18,7 +18,7 @@ class PublisherForwardRequestRepository(
     fun observeAll(): Flow<List<PublisherForwardRequest>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(request: PublisherForwardRequest): PublisherForwardRequest {
-        val id = request.id.ifBlank { remote.newId(COLLECTION) }
+        val id = request.id.ifBlank { RecentCreates.idFor(COLLECTION, request) { remote.newId(COLLECTION) } }
         val withId = request.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId

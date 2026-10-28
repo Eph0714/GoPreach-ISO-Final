@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.publishers
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -238,20 +241,7 @@ fun ManagePublishersScreen(
                             options = listOf<Pair<AccountStatus?, String>>(null to "All statuses") + AccountStatus.entries.map { it to PublisherListFilter.statusLabel(it) },
                             onSelected = { statusFilter = it },
                         )
-                        else -> OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            placeholder = { Text("Search Publisher...") },
-                            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                            trailingIcon = {
-                                if (searchQuery.isNotEmpty()) {
-                                    IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") }
-                                }
-                            },
-                            singleLine = true,
-                            visualTransformation = VisualTransformation.None,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
+                        else -> StandardSearchField(value = searchQuery, onValueChange = { searchQuery = it }, placeholder = "Search Publisher...", modifier = Modifier.fillMaxWidth())
                     }
                 }
                 Box(modifier = Modifier.width(132.dp)) {
@@ -645,7 +635,7 @@ private fun CongregationMoveConfirmation(newName: String, onConfirm: () -> Unit,
             Text("This publisher will be moved to $newName. Their field service group is replaced by the one chosen here (or cleared). Reports and records they already made keep the congregation they were made in.")
         },
         confirmButton = { TextButton(onClick = onConfirm) { Text("Change Congregation") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 

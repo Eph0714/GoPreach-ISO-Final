@@ -31,7 +31,7 @@ class AnnouncementRepository(
     fun newId(): String = remote.newId(COLLECTION)
 
     suspend fun save(announcement: Announcement): Announcement {
-        val id = announcement.id.ifBlank { remote.newId(COLLECTION) }
+        val id = announcement.id.ifBlank { RecentCreates.idFor(COLLECTION, announcement) { remote.newId(COLLECTION) } }
         val withId = announcement.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId

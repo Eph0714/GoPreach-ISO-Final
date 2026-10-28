@@ -211,7 +211,7 @@ fun SupportingImageSection(
                     onClear()
                 }) { Text("Clear Image") }
             },
-            dismissButton = { TextButton(onClick = { showClearConfirm = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { showClearConfirm = false }, label = "Cancel") },
         )
     }
 }

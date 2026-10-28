@@ -152,8 +152,8 @@ private fun SyncErrorDetailsDialog(viewModel: SyncStatusIndicatorViewModel, onDi
                                         color = MaterialTheme.colorScheme.error,
                                     )
                                     Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
-                                        TextButton(onClick = { viewModel.discard(failure) }) { Text("Discard") }
-                                        TextButton(onClick = { viewModel.retry(failure) }) { Text("Retry") }
+                                        ActionButton(ActionKind.Delete, onClick = { viewModel.discard(failure) }, label = "Discard")
+                                        ActionButton(ActionKind.Refresh, onClick = { viewModel.retry(failure) }, label = "Retry")
                                     }
                                 }
                             }
@@ -162,6 +162,6 @@ private fun SyncErrorDetailsDialog(viewModel: SyncStatusIndicatorViewModel, onDi
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Close") },
     )
 }

@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -89,14 +93,7 @@ fun CircuitCodesScreen(
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             HideInFullScreen(false) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text("Search code, description or overseer") },
-                singleLine = true,
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search code, description or overseer", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
             }
             HideInFullScreen(true) {
             Row(modifier = Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -145,8 +142,8 @@ fun CircuitCodesScreen(
                                 AssistChip(onClick = {}, label = { Text(if (row.code.status == RecordStatus.ACTIVE) "Active" else "Inactive") })
                             }
                             Row {
-                                IconButton(onClick = { editing = row }) { Icon(Icons.Rounded.Edit, contentDescription = "Edit") }
-                                IconButton(onClick = { deleteError = null; deleting = row }) { Icon(Icons.Rounded.Delete, contentDescription = "Delete") }
+                                ActionIconButton(ActionKind.Edit, onClick = { editing = row }, contentDescription = "Edit")
+                                ActionIconButton(ActionKind.Delete, onClick = { deleteError = null; deleting = row }, contentDescription = "Delete")
                             }
                         }
                     }
@@ -196,13 +193,13 @@ fun CircuitCodesScreen(
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.delete(row, currentPersonId) { problem ->
                         if (problem == null) { showToast("Circuit Code ${row.code.code} deleted."); deleting = null } else deleteError = problem
                     }
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { deleting = null }, label = "Cancel") },
         )
     }
 }

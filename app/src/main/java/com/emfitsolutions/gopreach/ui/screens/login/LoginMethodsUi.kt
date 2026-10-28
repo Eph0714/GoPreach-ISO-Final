@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.login
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -150,7 +152,7 @@ fun PasswordConfirmDialog(
                 Text("Continue")
             }
         },
-        dismissButton = { TextButton(enabled = !checking, onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel", enabled = !checking) },
     )
 }
 
@@ -204,7 +206,7 @@ fun LoginMethodsSection(viewModel: LoginMethodsViewModel = koinViewModel()) {
                 passkeys.orEmpty().forEach { passkey ->
                     androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         Text(passkey.name, modifier = Modifier.padding(start = 8.dp).weight(1f), style = MaterialTheme.typography.bodyMedium)
-                        TextButton(onClick = { removingPasskey = passkey }) { Text("Remove") }
+                        ActionButton(ActionKind.Delete, onClick = { removingPasskey = passkey }, label = "Remove")
                     }
                 }
                 TextButton(onClick = { viewModel.addPasskey(context) { message = it } }) { Text(if (count == 0) "Set up Passkey" else "Add another Passkey") }
@@ -273,7 +275,7 @@ fun LoginMethodsSection(viewModel: LoginMethodsViewModel = koinViewModel()) {
             title = { Text("Disable ${method.label}?") },
             text = { Text("You'll sign in with your password (or another method) instead. You can set it up again any time.") },
             confirmButton = { TextButton(onClick = { viewModel.disable(method); disabling = null }) { Text("Disable") } },
-            dismissButton = { TextButton(onClick = { disabling = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { disabling = null }, label = "Cancel") },
         )
     }
 
@@ -282,8 +284,8 @@ fun LoginMethodsSection(viewModel: LoginMethodsViewModel = koinViewModel()) {
             onDismissRequest = { removingPasskey = null },
             title = { Text("Remove this passkey?") },
             text = { Text("\"${passkey.name}\" will no longer sign in to your account. You can add a new one any time. (Also delete it from your phone's passkey manager if you like.)") },
-            confirmButton = { TextButton(onClick = { viewModel.removePasskey(passkey.id) { message = it }; removingPasskey = null }) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = { removingPasskey = null }) { Text("Cancel") } },
+            confirmButton = { ActionButton(ActionKind.Delete, onClick = { viewModel.removePasskey(passkey.id) { message = it }; removingPasskey = null }, label = "Remove") },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { removingPasskey = null }, label = "Cancel") },
         )
     }
 
@@ -292,7 +294,7 @@ fun LoginMethodsSection(viewModel: LoginMethodsViewModel = koinViewModel()) {
             onDismissRequest = { message = null },
             title = { Text("Login Methods") },
             text = { Text(text) },
-            confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = { message = null }, label = "OK") },
         )
     }
 

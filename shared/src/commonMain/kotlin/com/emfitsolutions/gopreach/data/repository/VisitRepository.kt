@@ -15,6 +15,8 @@ class VisitRepository(
     private val remote: RemoteCollections,
     private val monthLock: MonthLockGuard,
 ) {
+    private val recentCreates = RecentCreateGuard()
+
     fun observeForInterestedPerson(interestedPersonId: String): Flow<List<Visit>> =
         offline.observeCollection(visitsPath(interestedPersonId))
 
@@ -72,7 +74,10 @@ class VisitRepository(
     suspend fun save(visit: Visit): Visit {
         monthLock.requireOpenForPublisher(visit.publisherPersonId, visit.visitDate) // a month submitted to the Circuit Overseer is locked
         val path = visitsPath(visit.interestedPersonId)
-        val id = visit.id.ifBlank { remote.newId(path) }
+        // The same new visit arriving again within seconds (a repeated tap) is the same visit: it overwrites, never adds a copy.
+        val id = visit.id.ifBlank {
+            recentCreates.idFor(listOf(visit.interestedPersonId, visit.createdByPersonId, visit.publisherPersonId, visit.visitDate, visit.topicDiscussed, visit.outcome, visit.followUpDate).joinToString("|")) { remote.newId(path) }
+        }
         val withId = visit.copy(id = id)
         offline.save(path, id, withId)
         return withId

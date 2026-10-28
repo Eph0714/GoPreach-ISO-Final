@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.ui.components.joinTableRow
 import com.emfitsolutions.gopreach.ui.components.co.CoButton
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
@@ -147,7 +149,7 @@ fun CircuitReportScreen(
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(enabled = rows.isNotEmpty(), onClick = { CircuitReportExporter.print(context, header, rows, total, syncNote) }) { Text("Print Circuit Report / PDF") }
+                        ActionButton(ActionKind.Print, onClick = { CircuitReportExporter.print(context, header, rows, total, syncNote) }, label = "Print Circuit Report / PDF", enabled = rows.isNotEmpty())
                         CoButton("Excel", { CircuitReportExporter.shareExcel(context, header, rows, total, syncNote) }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart, enabled = rows.isNotEmpty())
                     }
                     com.emfitsolutions.gopreach.ui.components.RecordViewToggle(viewMode)

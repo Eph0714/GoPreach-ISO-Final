@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -158,7 +162,7 @@ fun FileManagerScreen(onBack: () -> Unit, viewModel: FileManagerViewModel = koin
                     navigationIcon = { IconButton(onClick = { viewModel.clearSelection() }) { Icon(Icons.Rounded.Close, "Clear selection") } },
                     actions = {
                         IconButton(onClick = { movingSelection = true }) { Icon(Icons.Rounded.DriveFileMove, "Move") }
-                        IconButton(onClick = { deletingSelection = true }) { Icon(Icons.Rounded.Delete, "Delete") }
+                        ActionIconButton(ActionKind.Delete, onClick = { deletingSelection = true }, contentDescription = "Delete")
                     },
                 )
             } else {
@@ -171,15 +175,7 @@ fun FileManagerScreen(onBack: () -> Unit, viewModel: FileManagerViewModel = koin
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = viewModel::onQuery,
-                placeholder = { Text("Search files and folders...") },
-                leadingIcon = { Icon(Icons.Rounded.Search, null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { viewModel.clearSearch() }) { Icon(Icons.Rounded.Close, "Clear search") } },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            StandardSearchField(value = query, onValueChange = viewModel::onQuery, placeholder = "Search files and folders...", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
 
             if (query.isNotBlank()) {
                 SearchResults(
@@ -189,8 +185,8 @@ fun FileManagerScreen(onBack: () -> Unit, viewModel: FileManagerViewModel = koin
                 )
             } else {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FilledTonalButton(onClick = { picker.launch(DOCUMENT_MIME_TYPES) }) { Icon(Icons.Rounded.Upload, null, Modifier.size(18.dp)); Spacer(Modifier.size(6.dp)); Text("Upload File") }
-                    FilledTonalButton(onClick = { creating = true }) { Icon(Icons.Rounded.CreateNewFolder, null, Modifier.size(18.dp)); Spacer(Modifier.size(6.dp)); Text("New Folder") }
+                    ActionButton(ActionKind.Import, onClick = { picker.launch(DOCUMENT_MIME_TYPES) }, label = "Upload File")
+                    ActionButton(ActionKind.Add, onClick = { creating = true }, label = "New Folder")
                     Spacer(Modifier.weight(1f))
                     IconButton(onClick = { viewModel.setGrid(!grid) }) { Icon(if (grid) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView, if (grid) "List view" else "Grid view") }
                     Box {
@@ -215,7 +211,7 @@ fun FileManagerScreen(onBack: () -> Unit, viewModel: FileManagerViewModel = koin
                 when {
                     error != null && listing == null -> Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
-                        TextButton(onClick = { viewModel.refresh() }) { Text("Try again") }
+                        ActionButton(ActionKind.Refresh, onClick = { viewModel.refresh() }, label = "Try again")
                     }
                     !loading && folders.isEmpty() && files.isEmpty() -> Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Rounded.Folder, null, Modifier.size(56.dp), tint = MaterialTheme.colorScheme.outline)
@@ -392,7 +388,7 @@ private fun SearchResults(searching: Boolean, result: List<CoSearchItem>, total:
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         TextButton(onClick = { onOpenFolder(if (item.isFolder) item.id else item.folderId) }) { Text(if (item.isFolder) "Open" else "Show folder") }
-                        if (!item.isFolder) TextButton(onClick = { onDownload(item) }) { Text("Download") }
+                        if (!item.isFolder) ActionButton(ActionKind.Export, onClick = { onDownload(item) }, label = "Download")
                     }
                 }
             }

@@ -18,7 +18,7 @@ class MotherFormsAuditTest {
     )
 
     /** Sign-in flow and the two homepages themselves. */
-    private val notMainForms = setOf("LOGIN", "ABOUT", "FORGOT_PASSWORD", "FORCED_PASSWORD_CHANGE", "SELECT_ROLE", "ADMIN_HOME", "PUBLISHER_HOME")
+    private val notMainForms = setOf("LOGIN", "ABOUT", "FORGOT_PASSWORD", "FORCED_PASSWORD_CHANGE", "ADMIN_HOME", "PUBLISHER_HOME")
 
     private fun graphRoutes(): Set<String> {
         val source = listOf("src/main/java/com/emfitsolutions/gopreach/ui/navigation/GoPreachNavGraph.kt", "app/src/main/java/com/emfitsolutions/gopreach/ui/navigation/GoPreachNavGraph.kt")
@@ -53,7 +53,7 @@ class MotherFormsAuditTest {
     }
 
     @Test fun homepagesAndSignInScreensGetNoHomeButton() {
-        for (route in listOf(Destinations.LOGIN, Destinations.ADMIN_HOME, Destinations.PUBLISHER_HOME, Destinations.SELECT_ROLE, Destinations.FORCED_PASSWORD_CHANGE)) {
+        for (route in listOf(Destinations.LOGIN, Destinations.ADMIN_HOME, Destinations.PUBLISHER_HOME, Destinations.FORCED_PASSWORD_CHANGE)) {
             assertFalse(route, Destinations.isMotherForm(route))
         }
         assertFalse(Destinations.isMotherForm(null))

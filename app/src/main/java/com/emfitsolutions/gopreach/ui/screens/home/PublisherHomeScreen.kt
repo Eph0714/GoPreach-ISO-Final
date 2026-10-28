@@ -1,6 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -8,6 +11,11 @@ import com.emfitsolutions.gopreach.ui.theme.heroBackground
 import com.emfitsolutions.gopreach.ui.theme.glass
 import com.emfitsolutions.gopreach.shared.resources.app_name
 import androidx.compose.runtime.mutableStateMapOf
+import com.emfitsolutions.gopreach.ui.components.AdminCapabilities
+import com.emfitsolutions.gopreach.ui.components.SideItem
+import com.emfitsolutions.gopreach.ui.components.adminSideItems
+import com.emfitsolutions.gopreach.ui.components.navGroupOf as navGroupOfRoute
+import com.emfitsolutions.gopreach.ui.components.withStandardIcon
 import com.emfitsolutions.gopreach.ui.components.NavProfileHeader
 import com.emfitsolutions.gopreach.ui.components.NavMenuRow
 import com.emfitsolutions.gopreach.ui.components.NavGroupSection
@@ -140,6 +148,7 @@ import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Assignment
 import androidx.compose.material.icons.rounded.AssignmentInd
 import androidx.compose.material.icons.rounded.Bookmarks
+import androidx.compose.material.icons.rounded.Assignment
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.Event
@@ -154,6 +163,7 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PersonSearch
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Timer
@@ -270,13 +280,17 @@ fun PublisherHomeScreen(
     val currentPersonId = session.person?.id.orEmpty()
     LaunchedEffect(currentPersonId) { layoutViewModel.setPersonId(currentPersonId) }
     val moduleLayout by layoutViewModel.layout.collectAsStateWithLifecycle()
-    // "Multiple Role Login Detection & Role Selection" spec §7 — this screen
-    // only ever renders when the session's own active role already resolved
-    // to Publisher (see GoPreachNavGraph's routing), so its own assignment
-    // *is* [session.activeRoleAssignment] — no separate re-scan needed (the
-    // old scan here also predates the ACTIVE-status bugfix that resolving
-    // through activeRoleAssignment already carries).
-    val ownPublisherAssignment = session.activeRoleAssignment
+    // Unified multi-role account: this is the Main Form of everyone who holds a Publisher category, whatever other roles they have too.
+    // [caps] is what those other (Admin-track) roles may open; it is offered in the side panel, never on the main dashboard.
+    val ownPublisherAssignment = session.publisherAssignment
+    // The "Field Service Record" tab: only for the Overseer, Servant or Assistant of an FS Group, read from the group's own slots (one tab, however many slots the person holds).
+    val groupRepositoryForTab = org.koin.compose.koinInject<com.emfitsolutions.gopreach.data.repository.GroupRepository>()
+    val allGroupsForTab by groupRepositoryForTab.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
+    val mySlotGroup = allGroupsForTab.firstOrNull { g -> g.congregationId == ownPublisherAssignment?.congregationId && currentPersonId in listOfNotNull(g.overseerPersonId, g.servantPersonId, g.assistantPersonId) }
+    val showFieldServiceRecord = mySlotGroup != null
+    val caps = remember(session.person, session.roleAssignments, session.grant, session.groups) { AdminCapabilities.of(session) }
+    val adminScope: Set<String>? = if (caps.isSuperAdmin) null else setOfNotNull(session.primaryAdminAssignment?.congregationId)
+    val hasAdminRoles = session.primaryAdminAssignment != null && !caps.isCircuitOverseer
     val category = (ownPublisherAssignment?.resolvedRoleTypeOrNull() as? RoleType.Publisher)?.category
     val isPioneer = isPioneerCategory(category)
 
@@ -293,8 +307,10 @@ fun PublisherHomeScreen(
     // Unified notification balloon (spec: transfer requests, announcements,
     // calendar schedule — no Monthly Report category for a Publisher) —
     // congregation-scoped to this Publisher's own congregation, never "all".
-    val notificationItemsFlow = remember(ownPublisherAssignment?.congregationId, currentPersonId) {
-        notificationCenterViewModel.itemsForPublisher(currentPersonId, ownPublisherAssignment?.congregationId)
+    val notificationItemsFlow = remember(ownPublisherAssignment?.congregationId, currentPersonId, hasAdminRoles, adminScope) {
+        val own = notificationCenterViewModel.itemsForPublisher(currentPersonId, ownPublisherAssignment?.congregationId)
+        if (!hasAdminRoles) own
+        else kotlinx.coroutines.flow.combine(own, notificationCenterViewModel.itemsForAdmin(adminScope, false)) { a, b -> (a + b).distinctBy { it.id } }
     }
     val visibleNotificationItemsFlow = remember(notificationItemsFlow, currentPersonId) {
         notificationCenterViewModel.visibleItemsFor(notificationItemsFlow, currentPersonId)
@@ -354,8 +370,8 @@ fun PublisherHomeScreen(
             onDismissRequest = { showExitConfirm = false },
             title = { Text(stringResource(Res.string.home_exit_title)) },
             text = { Text(stringResource(Res.string.home_exit_message)) },
-            confirmButton = { TextButton(onClick = { activity?.finish() }) { Text(stringResource(Res.string.home_exit_confirm)) } },
-            dismissButton = { TextButton(onClick = { showExitConfirm = false }) { Text(stringResource(Res.string.home_exit_cancel)) } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = { activity?.finish() }, label = stringResource(Res.string.home_exit_confirm)) },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { showExitConfirm = false }, label = stringResource(Res.string.home_exit_cancel)) },
         )
     }
 
@@ -366,7 +382,14 @@ fun PublisherHomeScreen(
     // Pioneer-gating actually do; [moduleLayout] changing (a move, a reset,
     // or the initial load from another device) re-splits the same catalog
     // without re-fetching anything.
-    val allTiles = publisherModuleTiles(isPioneer, unseenAnnouncements, incomingForwards.size, incomingAssignments.size)
+    // Duplicate audit: Meeting and Cart Assignment exists as a read-only publisher view and as the editor; one entry only - the editor when
+    // any of the account's roles may edit, else the read-only view. Same route-level de-duplication for every other module below.
+    val meetingRoute = if (caps.canEditMeetingAssignments) Destinations.MEETING_ASSIGNMENTS else Destinations.PUBLISHER_MEETING_ASSIGNMENTS
+    val allTiles = publisherModuleTiles(isPioneer, unseenAnnouncements, incomingForwards.size, incomingAssignments.size, meetingRoute)
+    val tileRoutes = remember(allTiles) { allTiles.map { it.route }.toSet() }
+    val responsibilityItems: List<SideItem> = if (!hasAdminRoles) listOf(SideItem("Security & Device Management", Icons.Rounded.Security, Destinations.SECURITY)) else adminSideItems(caps, includeTabModules = true)
+        .filter { it.route !in tileRoutes }
+        .map { if (it.route == Destinations.MANAGE_ANNOUNCEMENTS) it.copy(label = "Manage Announcements") else it }
     val tilesById = remember(allTiles) { allTiles.associateBy { it.id } }
     val mainFormTiles = remember(moduleLayout, tilesById) { moduleLayout.mainFormModules().mapNotNull { tilesById[it] } }
     val sidePanelTiles = remember(moduleLayout, tilesById) { moduleLayout.sidePanelModules().mapNotNull { tilesById[it] } }
@@ -427,11 +450,12 @@ fun PublisherHomeScreen(
         drawerContent = {
             SidePanelDrawerContent(
                 tiles = sidePanelTiles,
+                responsibilities = responsibilityItems,
                 onNavigate = { route -> reopenSidePanelOnReturn = true; drawerScope.launch { drawerState.close() }; onNavigate(route) },
                 onLongPressModule = onLongPressModule,
                 onResetLayout = { showResetConfirm = true },
                 userName = session.person?.fullName.orEmpty(),
-                roleLabel = category?.displayLabel() ?: stringResource(Res.string.role_label_publisher),
+                roleLabel = if (hasAdminRoles) session.activeRoleLabel.orEmpty() else category?.displayLabel() ?: stringResource(Res.string.role_label_publisher),
                 scopeLabel = congregationName.orEmpty(),
                 profileImageUrl = session.person?.profileImageUrl,
             )
@@ -447,7 +471,7 @@ fun PublisherHomeScreen(
     Column(modifier = Modifier.fillMaxSize().then(if (mainTab == 0) Modifier.verticalScroll(mainScroll) else Modifier)) {
             com.emfitsolutions.gopreach.ui.components.AlarmRingingBanner()
             com.emfitsolutions.gopreach.ui.components.OfflineSessionBanner()
-            PublisherWelcomeHeader(
+            if (mainTab == 0 || mainTab == 3) PublisherWelcomeHeader(
                 weatherFooter = { com.emfitsolutions.gopreach.ui.screens.weather.WeatherSummaryLine(currentPersonId, onClick = { onNavigate(Destinations.WEATHER) }) },
                 greetingName = session.person?.firstName?.takeIf { it.isNotBlank() } ?: "there",
                 fullName = session.person?.fullName ?: "—",
@@ -474,25 +498,36 @@ fun PublisherHomeScreen(
                     })
                 },
                 onSignOut = viewModel::signOut,
-                onSwitchRole = if (session.roleOptions.size > 1) viewModel::switchRole else null,
                 compact = mainTab != 0,
             )
 
-            PublisherMainTabs(selected = mainTab, onSelect = { mainTab = it })
+            if (mainTab == 0 || mainTab == 3) PublisherMainTabs(selected = mainTab, onSelect = { mainTab = it }, showFieldServiceRecord = showFieldServiceRecord)
 
             // "Territory Map" tab: the same screen and the same scope/role restrictions the Territory Map route uses for a Publisher
             // (own congregation only, view-only).
-            if (mainTab == 1) Box(modifier = Modifier.weight(1f).fillMaxWidth().consumeWindowInsets(WindowInsets.statusBars)) {
-                com.emfitsolutions.gopreach.ui.screens.territories.TerritoryMapScreen(
-                    fixedCongregationId = ownPublisherAssignment?.congregationId,
-                    currentPersonId = currentPersonId,
-                    embedded = true,
-                    onBack = { mainTab = 0 },
-                )
+            if (mainTab == 1) Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                // A full-screen form of its own, like Ministry: a back bar, then the map (the planner header and tab strip are not shown here).
+                Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { mainTab = 0 }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+                    Text("Territory Map", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                }
+                Box(modifier = Modifier.weight(1f).fillMaxWidth().consumeWindowInsets(WindowInsets.statusBars)) {
+                    com.emfitsolutions.gopreach.ui.screens.territories.TerritoryMapScreen(
+                        fixedCongregationId = ownPublisherAssignment?.congregationId,
+                        currentPersonId = currentPersonId,
+                        embedded = true,
+                        onBack = { mainTab = 0 },
+                    )
+                }
             }
 
             // "Ministry" tab: pick Searching / Return Visit / Bible Study, then manage that list (same screen and rules as the modules).
-            if (mainTab == 2) Column(modifier = Modifier.weight(1f).fillMaxWidth().consumeWindowInsets(WindowInsets.statusBars)) {
+            if (mainTab == 2) Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                // A full-screen form of its own: a back bar, the three tabs, then the list (the planner header and tab strip are not shown here).
+                Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { mainTab = 0 }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+                    Text("Ministry", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                }
                 MinistrySubTabs(ministryStage) { ministryStage = it; ministryScope = 0 }
                 MinistryScopeButtons(ministryStage, ministryScope) { ministryScope = it }
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -529,6 +564,24 @@ fun PublisherHomeScreen(
                     ),
                     onBack = { mainTab = 0 },
                     embedded = true,
+                )
+            }
+
+            // "Field Service Record" tab: the Field Service Report of the Admin App (same fields, validation and totals), limited to the people of this FS Group.
+            if (mainTab == 4 && mySlotGroup != null) Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                com.emfitsolutions.gopreach.ui.screens.fieldservicereport.FieldServiceReportScreen(
+                    fixedCongregationId = mySlotGroup.congregationId,
+                    currentPersonId = currentPersonId,
+                    recordScope = com.emfitsolutions.gopreach.domain.RecordScope(congregationId = mySlotGroup.congregationId, groupId = mySlotGroup.id),
+                    activeRoleLabel = when (currentPersonId) {
+                        mySlotGroup.overseerPersonId -> "Group Overseer"
+                        mySlotGroup.servantPersonId -> "Group Servant"
+                        else -> "Group Assistant"
+                    } + " · " + mySlotGroup.name,
+                    currentRole = null,
+                    canSendToCircuit = false,
+                    canManageLocks = false,
+                    onBack = { mainTab = 0 },
                 )
             }
 
@@ -788,7 +841,7 @@ fun PublisherHomeScreen(
                     }
                 },
                 confirmButton = {},
-                dismissButton = { TextButton(onClick = { pendingModuleId = null }) { Text(stringResource(Res.string.action_cancel)) } },
+                dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingModuleId = null }, label = stringResource(Res.string.action_cancel)) },
             )
         } else {
             // Step 2 — confirmation (spec §2: "Do you want to move this
@@ -827,14 +880,14 @@ fun PublisherHomeScreen(
             title = { Text(stringResource(Res.string.dashboard_layout_reset_title)) },
             text = { Text(stringResource(Res.string.dashboard_layout_reset_confirm)) },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                     layoutViewModel.resetLayout()
                     showResetConfirm = false
                     drawerScope.launch { drawerState.close() }
                     showToast(resetSuccessMessage)
-                }) { Text(stringResource(Res.string.dashboard_layout_reset_confirm_button)) }
+                }, label = stringResource(Res.string.dashboard_layout_reset_confirm_button))
             },
-            dismissButton = { TextButton(onClick = { showResetConfirm = false }) { Text(stringResource(Res.string.action_cancel)) } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { showResetConfirm = false }, label = stringResource(Res.string.action_cancel)) },
         )
     }
 }
@@ -844,13 +897,13 @@ private data class MainTabSpec(val label: String, val icon: ImageVector, val col
 /** The Main Form's four tabs, each with its own colour (planner blue, map green, ministry violet, weather amber): an icon over a label, the open tab filled with a soft tint and underlined in its colour, a thin line between
  * the tabs and another under the whole strip, so the tabs read as buttons rather than plain text. */
 @Composable
-private fun PublisherMainTabs(selected: Int, onSelect: (Int) -> Unit) {
+private fun PublisherMainTabs(selected: Int, onSelect: (Int) -> Unit, showFieldServiceRecord: Boolean = false) {
     val tabs = listOf(
         MainTabSpec("My Planner", Icons.Rounded.CalendarMonth, Color(0xFF1E6FD9)),
         MainTabSpec("Territory Map", Icons.Rounded.Map, Color(0xFF2E8B57)),
         MainTabSpec("Ministry", Icons.Rounded.PeopleAlt, Color(0xFF7E57C2)),
         MainTabSpec("Weather", Icons.Rounded.WbSunny, Color(0xFFE39A00)),
-    )
+    ) + if (showFieldServiceRecord) listOf(MainTabSpec("Field Service Record", Icons.Rounded.Assignment, Color(0xFF00897B))) else emptyList()
     val line = MaterialTheme.colorScheme.outlineVariant
     androidx.compose.material3.Surface(color = MaterialTheme.colorScheme.surface, shadowElevation = 3.dp) {
         Column {
@@ -872,7 +925,8 @@ private fun PublisherMainTabs(selected: Int, onSelect: (Int) -> Unit) {
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) tab.color else MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(top = 2.dp, start = 2.dp, end = 2.dp),
                         )
@@ -894,19 +948,20 @@ private val ministryTones = listOf(Color(0xFF212121), Color(0xFF2E7D32), Color(0
 private fun MinistrySubTabs(stage: Int, onStage: (Int) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ministryKinds.forEachIndexed { index, label ->
-            val tone = if (index == 0) MaterialTheme.colorScheme.onSurface else ministryTones[index]
+            // All three tabs use the theme colour (selected = solid theme colour, the others a light tint of it).
+            val tone = MaterialTheme.colorScheme.primary
             val on = index == stage
             androidx.compose.material3.Surface(
                 onClick = { onStage(index) },
                 shape = RoundedCornerShape(12.dp),
-                color = if (on) (if (index == 0) MaterialTheme.colorScheme.onSurface else tone) else tone.copy(alpha = 0.08f),
+                color = if (on) tone else tone.copy(alpha = 0.08f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, tone.copy(alpha = if (on) 1f else 0.35f)),
                 modifier = Modifier.weight(1f).semantics { this.role = Role.Tab; this.selected = on },
             ) {
                 Box(modifier = Modifier.heightIn(min = 44.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
                     Text(
                         label, style = MaterialTheme.typography.labelLarge, fontWeight = if (on) FontWeight.Bold else FontWeight.SemiBold,
-                        color = if (on) (if (index == 0) MaterialTheme.colorScheme.surface else Color.White) else tone, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = if (on) MaterialTheme.colorScheme.onPrimary else tone, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -914,7 +969,7 @@ private fun MinistrySubTabs(stage: Int, onStage: (Int) -> Unit) {
     }
 }
 
-/** Under a sub-tab, a radio group of three: whose records to list - mine, my FS Group's, or the whole congregation's. Choosing one lists its records at once. */
+/** Under a sub-tab, one labelled dropdown of three: whose records to list - mine, my FS Group's, or the whole congregation's. Choosing one lists its records at once. */
 @Composable
 private fun MinistryScopeButtons(stage: Int, scope: Int, onScope: (Int) -> Unit) {
     val names = when (stage) {
@@ -922,28 +977,29 @@ private fun MinistryScopeButtons(stage: Int, scope: Int, onScope: (Int) -> Unit)
         2 -> listOf("My Bible Studies", "My FS Group Bible Studies", "Congregation Bible Studies")
         else -> listOf("My Searching", "My FS Group Searching", "Congregation Searching")
     }
-    val tone = if (stage == 0) MaterialTheme.colorScheme.primary else ministryTones[stage]
-    // One row of three: each option takes a third of the width, the radio above-left of a small label that wraps inside its own third.
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp).selectableGroup(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        names.forEachIndexed { index, label ->
-            val on = index == scope
-            Row(
-                modifier = Modifier.weight(1f).heightIn(min = 44.dp).selectable(selected = on, onClick = { onScope(index) }, role = Role.RadioButton),
-                verticalAlignment = Alignment.CenterVertically,
+    var open by remember { mutableStateOf(false) }
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Show", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(end = 8.dp))
+        Box(modifier = Modifier.weight(1f)) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = { open = true },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { contentDescription = "Whose records to list: ${names[scope]}" },
+                shape = RoundedCornerShape(12.dp),
             ) {
-                androidx.compose.material3.RadioButton(
-                    selected = on, onClick = null, modifier = Modifier.size(30.dp),
-                    colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = tone),
-                )
-                Text(
-                    label, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
-                    color = if (on) tone else MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(start = 2.dp), maxLines = 3,
-                )
+                Text(names[scope], modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+            }
+            androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                names.forEachIndexed { index, label ->
+                    androidx.compose.material3.DropdownMenuItem(
+                        text = { Text(label, fontWeight = if (index == scope) FontWeight.Bold else FontWeight.Normal) },
+                        onClick = { open = false; onScope(index) },
+                    )
+                }
             }
         }
     }
 }
-
 
 /** Welcome header — a flat, solid panel in the theme's own primary color
  * (never hard-coded green/blue, and no gradient — "use solid color in
@@ -974,7 +1030,6 @@ private fun PublisherWelcomeHeader(
     onOpenSidePanel: () -> Unit,
     onImagePicked: (android.net.Uri) -> Unit,
     onSignOut: () -> Unit,
-    onSwitchRole: (() -> Unit)? = null,
     // "Add Module: Preaching Availability" — a Publisher's only path to
     // AccountSettingsScreen (name/username/password, and now Preaching
     // Availability); see ProfileMenuButton's own doc comment on why this
@@ -1037,7 +1092,6 @@ private fun PublisherWelcomeHeader(
                     profileImageUrl = profileImageUrl,
                     onImagePicked = onImagePicked,
                     onSignOut = onSignOut,
-                    onSwitchRole = onSwitchRole,
                     onOpenAccountSettings = onOpenAccountSettings,
                     onOpenSettings = onOpenSettings,
                 )
@@ -1197,6 +1251,7 @@ private fun publisherModuleTiles(
     unseenAnnouncements: Int,
     pendingPublisherForwards: Int,
     pendingHouseholderAssignments: Int,
+    meetingAssignmentsRoute: String = Destinations.PUBLISHER_MEETING_ASSIGNMENTS,
 ): List<PublisherModuleTile> = buildList {
     add(PublisherModuleTile(DashboardModuleId.MONTHLY_REPORT, stringResource(Res.string.home_tile_monthly_report_title), stringResource(Res.string.home_tile_monthly_report_subtitle), Icons.Rounded.Assignment, Destinations.MONTHLY_REPORT))
     // "Allow the publisher to see all his submitted Report record" —
@@ -1229,7 +1284,7 @@ private fun publisherModuleTiles(
     // 'Meeting Assignments.' The publisher will see only meeting
     // assignments under their congregation" — read-only, see
     // GoPreachNavGraph's PUBLISHER_MEETING_ASSIGNMENTS composable.
-    add(PublisherModuleTile(DashboardModuleId.MEETING_CART_ASSIGNMENT, stringResource(Res.string.home_tile_meeting_cart_assignment_title), stringResource(Res.string.home_tile_meeting_cart_assignment_subtitle), Icons.Rounded.Event, Destinations.PUBLISHER_MEETING_ASSIGNMENTS))
+    add(PublisherModuleTile(DashboardModuleId.MEETING_CART_ASSIGNMENT, stringResource(Res.string.home_tile_meeting_cart_assignment_title), stringResource(Res.string.home_tile_meeting_cart_assignment_subtitle), Icons.Rounded.Event, meetingAssignmentsRoute))
     // "Add a Button under Meeting [and Cart] Assignment[:] 'My
     // Assignments'... the publisher can see all the assignments under
     // his name" — a cross-cut of every Midweek/Public Talk/Cart
@@ -1316,6 +1371,8 @@ private fun navGroupOf(id: DashboardModuleId): NavGroup = when (id) {
 @Composable
 private fun SidePanelDrawerContent(
     tiles: List<PublisherModuleTile>,
+    /** The modules of the account's other (Admin-track) roles, already de-duplicated against [tiles]; shown in the same collapsible groups. */
+    responsibilities: List<SideItem>,
     onNavigate: (String) -> Unit,
     onLongPressModule: (DashboardModuleId) -> Unit,
     onResetLayout: () -> Unit,
@@ -1325,7 +1382,12 @@ private fun SidePanelDrawerContent(
     profileImageUrl: String?,
 ) {
     val expanded = remember { mutableStateMapOf<NavGroup, Boolean>() }
-    val grouped = NavGroup.entries.mapNotNull { group -> tiles.filter { navGroupOf(it.id) == group }.takeIf { it.isNotEmpty() }?.let { group to it } }
+    val groupedResponsibilities = responsibilities.map { it.withStandardIcon() }
+    val grouped = NavGroup.entries.mapNotNull { group ->
+        val own = tiles.filter { navGroupOf(it.id) == group }
+        val others = groupedResponsibilities.filter { navGroupOfRoute(it.route) == group }
+        if (own.isEmpty() && others.isEmpty()) null else Triple(group, own, others)
+    }
     ModalDrawerSheet {
         NavProfileHeader(
             appName = stringResource(Res.string.app_name),
@@ -1333,7 +1395,7 @@ private fun SidePanelDrawerContent(
         )
         HorizontalDivider()
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            if (tiles.isEmpty()) {
+            if (tiles.isEmpty() && responsibilities.isEmpty()) {
                 Text(
                     stringResource(Res.string.dashboard_layout_side_panel_empty),
                     style = MaterialTheme.typography.bodyMedium,
@@ -1341,18 +1403,24 @@ private fun SidePanelDrawerContent(
                     modifier = Modifier.padding(20.dp),
                 )
             } else {
-                grouped.forEach { (group, groupTiles) ->
+                grouped.forEach { (group, groupTiles, groupOthers) ->
                     NavGroupSection(
                         group = group,
                         expanded = expanded[group] == true,
                         containsActive = false,
-                        itemCount = groupTiles.size,
+                        itemCount = groupTiles.size + groupOthers.size,
                         onToggle = { expanded[group] = expanded[group] != true },
                     ) {
                         groupTiles.forEach { tile ->
                             NavMenuRow(
                                 icon = tile.icon, label = tile.title, group = group, selected = false, badge = tile.badge,
                                 onClick = { onNavigate(tile.route) }, onLongClick = { onLongPressModule(tile.id) },
+                            )
+                        }
+                        groupOthers.forEach { item ->
+                            NavMenuRow(
+                                icon = item.icon, label = item.label, group = group, selected = false,
+                                onClick = { onNavigate(item.route) },
                             )
                         }
                     }

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.chat_attachment_fallback
 import com.emfitsolutions.gopreach.shared.resources.chat_close
@@ -53,7 +55,7 @@ import com.emfitsolutions.gopreach.ui.components.formatRecordTimestamp
  * searchable, each row showing uploader/date/size with a Download action.
  * Scoped to the group chat this dialog was opened from (participant access
  * is already enforced by the fact they could open the chat at all — see
- * firestore.rules' groupChats match).
+ * docs/legacy-firebase/firestore.rules' groupChats match).
  */
 @Composable
 fun SharedDocumentsDialog(groupName: String, messages: List<GroupChatMessage>, onDismiss: () -> Unit) {
@@ -124,15 +126,13 @@ private fun DocumentRow(message: GroupChatMessage) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onClick = {
+        ActionIconButton(ActionKind.Export, onClick = {
             val mime = when (message.attachmentType) {
                 GroupChatAttachmentType.IMAGE -> "image/*"
                 GroupChatAttachmentType.PDF -> "application/pdf"
                 else -> "*/*"
             }
             actions.openFile(message.attachmentUrl!!, mime)
-        }) {
-            Icon(Icons.Rounded.Download, contentDescription = stringResource(Res.string.chat_download_cd))
-        }
+        }, contentDescription = stringResource(Res.string.chat_download_cd))
     }
 }

@@ -96,4 +96,74 @@ class HttpAuthServiceTest {
         assertNull(auth.idToken(force = true))
         assertFalse(auth.takeSessionEndedNotice())
     }
+
+    // ---- two-factor sign-in ----
+    private val challenge = """{"twoFactorRequired":true,"challengeId":"c1","challengeToken":"secret1","expiresAt":9999999999999,"methods":{"totp":true,"recovery":true,"email":{"masked":"a**@example.com"}}}"""
+
+    @Test fun aPasswordRightButTwoFactorAccountSignsNobodyInAndReturnsTheChallenge() = runTest {
+        val auth = service(MemoryStores(), MockEngine { respond(challenge, HttpStatusCode.Accepted, json) })
+        val e = assertFailsWith<AuthFailure.TwoFactorRequired> { auth.signIn("p1@gopreach.internal", "pw") }
+        assertEquals("c1", e.challenge.challengeId)
+        assertEquals("secret1", e.challenge.challengeToken)
+        assertTrue(e.challenge.totp && e.challenge.recovery)
+        assertEquals("a**@example.com", e.challenge.emailMasked)
+        assertNull(auth.currentUser, "nothing is signed in before the second factor")
+    }
+
+    @Test fun aRightCodeCompletesTheSignInAndTheTrustedCredentialIsKeptForTheNextOne() = runTest {
+        val stores = MemoryStores()
+        val bodies = mutableListOf<String>()
+        val engine = MockEngine { req ->
+            bodies += req.body.toByteArray().decodeToString()
+            if (req.url.encodedPath.endsWith("/2fa/verify")) respond("""{"accessToken":"a1","refreshToken":"r1","expiresAt":1,"personId":"p1","trustedToken":"trusted-credential"}""", HttpStatusCode.OK, json)
+            else respond(challenge, HttpStatusCode.Accepted, json)
+        }
+        val auth = service(stores, engine)
+        val c = assertFailsWith<AuthFailure.TwoFactorRequired> { auth.signIn("p1@gopreach.internal", "pw") }.challenge
+        auth.verifyTwoFactor(c, SecondFactor.AUTHENTICATOR_APP, " 123456 ", trustDevice = true)
+        val sent = bodies.last()
+        assertTrue(sent.contains("\"challengeId\":\"c1\"") && sent.contains("\"code\":\"123456\"") && sent.contains("\"trustDevice\":true"), sent)
+        assertEquals("p1", auth.currentUser?.uid)
+        // the next password sign-in presents the trusted credential
+        auth.signOut()
+        runCatching { auth.signIn("p1@gopreach.internal", "pw") }
+        assertTrue(bodies.last().contains("\"trustedToken\":\"trusted-credential\""), bodies.last())
+    }
+
+    @Test fun recoveryAndEmailCodesUseTheirOwnFieldsAndAWrongCodeIsReportedWithTheTriesLeft() = runTest {
+        val bodies = mutableListOf<String>()
+        val engine = MockEngine { req -> bodies += req.body.toByteArray().decodeToString(); respond("""{"error":"invalid-code","triesLeft":3}""", HttpStatusCode.Unauthorized, json) }
+        val auth = service(MemoryStores(), engine)
+        val c = TwoFactorChallenge("c1", "s1", 0L, totp = true, recovery = true, emailMasked = null)
+        val e = assertFailsWith<AuthFailure.InvalidCode> { auth.verifyTwoFactor(c, SecondFactor.RECOVERY_CODE, "ABCDE-FGHJK", false) }
+        assertEquals(3, e.triesLeft)
+        assertTrue(bodies.last().contains("\"recoveryCode\":\"ABCDE-FGHJK\""), bodies.last())
+        assertFailsWith<AuthFailure.InvalidCode> { auth.verifyTwoFactor(c, SecondFactor.EMAIL_CODE, "111111", false) }
+        assertTrue(bodies.last().contains("\"emailCode\":\"111111\""), bodies.last())
+        assertNull(auth.currentUser)
+    }
+
+    @Test fun anExpiredOrUsedUpChallengeIsReportedAsExpired() = runTest {
+        val c = TwoFactorChallenge("c1", "s1", 0L, true, true, null)
+        val gone = service(MemoryStores(), MockEngine { respond("""{"error":"invalid-challenge"}""", HttpStatusCode.Unauthorized, json) })
+        assertFailsWith<AuthFailure.ChallengeExpired> { gone.verifyTwoFactor(c, SecondFactor.AUTHENTICATOR_APP, "123456", false) }
+        val tooMany = service(MemoryStores(), MockEngine { respond("""{"error":"too-many-tries"}""", HttpStatusCode.TooManyRequests, json) })
+        assertFailsWith<AuthFailure.ChallengeExpired> { tooMany.verifyTwoFactor(c, SecondFactor.AUTHENTICATOR_APP, "123456", false) }
+    }
+
+    @Test fun signInSendsTheFullDeviceDescriptionWithAStableDeviceId() = runTest {
+        val bodies = mutableListOf<String>()
+        val engine = MockEngine { req -> bodies += req.body.toByteArray().decodeToString(); respond(tokens, HttpStatusCode.OK, json) }
+        val stores = MemoryStores()
+        val auth = HttpAuthService(HttpClient(engine), "https://api.test", stores, CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined), deviceLabel = "GoPreach Android (Test Phone)",
+            deviceInfo = DeviceInfo("Test Phone", "TP-1", "phone", "Android", "14", "1.165.0"))
+        auth.signIn("p1@gopreach.internal", "pw")
+        val first = bodies.last()
+        assertTrue(first.contains("\"type\":\"phone\"") && first.contains("\"osVersion\":\"14\"") && first.contains("\"appVersion\":\"1.165.0\"") && first.contains("\"model\":\"TP-1\""), first)
+        val id = Regex("\"id\":\"([0-9a-f]{36})\"").find(first)?.groupValues?.get(1)
+        assertNotNull(id, first)
+        auth.signOut()
+        auth.signIn("p1@gopreach.internal", "pw")
+        assertTrue(bodies.last().contains("\"id\":\"$id\""), "the same installation keeps the same device id")
+    }
 }

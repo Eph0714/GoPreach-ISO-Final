@@ -1,5 +1,8 @@
 ﻿package com.emfitsolutions.gopreach.ui.screens.attendance
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -210,7 +213,7 @@ fun ReportSubmissionScreen(
                         }, label = { Text(p) })
                     }
                 }
-                Button(onClick = { apply() }) { Text("Apply Month Range") }
+                ActionButton(ActionKind.Save, onClick = { apply() }, label = "Apply Month Range")
                 notice?.let { Text(it, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
 
                 // ---- folder summary ----
@@ -238,10 +241,7 @@ fun ReportSubmissionScreen(
                 }
 
                 // ---- search / filters / view ----
-                OutlinedTextField(
-                    value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), singleLine = true, label = { Text("Search reports...") },
-                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
-                )
+                StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search reports...", modifier = Modifier.fillMaxWidth())
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = kindFilter == null, onClick = { kindFilter = null }, label = { Text("All Types") })
                     SubmissionKind.entries.filter { !(isCo && it == SubmissionKind.ATTENDANCE) }.forEach { k ->

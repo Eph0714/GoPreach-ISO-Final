@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.territoryassignments
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.data.print.escapeHtml
 import androidx.compose.foundation.background
 import com.emfitsolutions.gopreach.ui.components.RecordFound
@@ -104,7 +106,7 @@ fun AllTerritoriesDialog(
                             // "Print / PDF" of the Municipality x FS Group list (system print dialog, Save as PDF).
                             val colors = MaterialTheme.colorScheme
                             val dark = androidx.compose.foundation.isSystemInDarkTheme()
-                            IconButton(onClick = {
+                            ActionIconButton(ActionKind.Print, onClick = {
                                 if (mode == AllTerritoriesMode.LIST) {
                                     // List View prints exactly what's on screen: the same Municipality bars, the same
                                     // colored Group columns, the same layout — not a different plain table.
@@ -121,7 +123,7 @@ fun AllTerritoriesDialog(
                                         ),
                                         PrintOptions(OrientationMode.LANDSCAPE),
                                     )
-                                    return@IconButton
+                                    return@ActionIconButton
                                 }
                                 ReportPrinter.print(
                                     context,
@@ -137,7 +139,7 @@ fun AllTerritoriesDialog(
                                         }.sortedWith(compareBy({ it[0] }, { it[1] })),
                                     ),
                                 )
-                            }) { Icon(Icons.Rounded.Print, contentDescription = "Print or save as PDF") }
+                            }, contentDescription = "Print or save as PDF")
                         },
                     )
                     Row(

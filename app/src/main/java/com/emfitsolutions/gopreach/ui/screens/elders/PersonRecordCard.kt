@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.elders
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -97,7 +99,7 @@ fun PersonRecordCard(
             }
             if (onViewDetails != null) androidx.compose.material3.TextButton(onClick = onViewDetails, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp)) { Text("Details", style = MaterialTheme.typography.labelLarge, maxLines = 1) }
             if (!readOnly) {
-                IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary) }
+                ActionIconButton(ActionKind.Edit, onClick = onEdit, contentDescription = "Edit")
                 Box {
                     IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, contentDescription = "More options") }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {

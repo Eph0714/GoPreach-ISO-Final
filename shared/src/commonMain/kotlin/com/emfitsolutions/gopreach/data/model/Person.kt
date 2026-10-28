@@ -96,8 +96,7 @@ data class Person(
      * Denormalized copy of this session's currently-active
      * [RoleAssignment.congregationId]/[AdminRole] (as its `name`), kept in
      * sync by [com.emfitsolutions.gopreach.domain.UserSession] every time
-     * the signed-in account's active role changes (login, or picking a role
-     * on [com.emfitsolutions.gopreach.ui.screens.login.SelectRoleScreen]).
+     * the signed-in account's active role changes (login, or a role being added or removed).
      * Same trade-off as [isSuperAdmin] above: exists only so Group Chat
      * Firestore/Storage rules can check "which congregation/role is this
      * caller currently acting as" with a single `get()` on this known-path

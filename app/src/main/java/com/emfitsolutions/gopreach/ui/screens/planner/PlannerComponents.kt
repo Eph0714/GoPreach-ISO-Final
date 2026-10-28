@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.ui.theme.readableAccent
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
@@ -846,8 +848,8 @@ private fun NumberEntryDialog(label: String, initial: Int, onDismiss: () -> Unit
                 modifier = Modifier.fillMaxWidth(),
             )
         },
-        confirmButton = { TextButton(onClick = { onSave(text.toIntOrNull()?.coerceAtLeast(0) ?: initial) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { ActionButton(ActionKind.Save, onClick = { onSave(text.toIntOrNull()?.coerceAtLeast(0) ?: initial) }, label = "Save") },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -986,8 +988,8 @@ internal fun MonthlyGoalEditDialog(initialGoalHours: Int, onDismiss: () -> Unit,
                 onValueEntered = { goalHours = it },
             )
         },
-        confirmButton = { TextButton(onClick = { onSave(goalHours) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { ActionButton(ActionKind.Save, onClick = { onSave(goalHours) }, label = "Save") },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -1092,11 +1094,7 @@ internal fun CreditHourEntryDialog(
                 Text(NO_CREDIT_CATEGORIES_MESSAGE, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
                 val openManager = LocalOpenCreditCategoryManager.current
                 if (openManager != null) {
-                    TextButton(onClick = { onDismiss(); openManager() }, contentPadding = PaddingValues(horizontal = 0.dp)) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Add Credit Hour Category")
-                    }
+                    ActionButton(ActionKind.Add, onClick = { onDismiss(); openManager() }, label = "Add Credit Hour Category")
                 } else {
                     Text(NO_CREDIT_CATEGORIES_PUBLISHER_HINT, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -1219,9 +1217,9 @@ internal fun CreditHourRecordDetailDialog(
             Row {
                 if (canEdit) {
                     TextButton(onClick = { confirmDelete = true }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-                    TextButton(onClick = onEdit) { Text("Edit") }
+                    ActionButton(ActionKind.Edit, onClick = onEdit, label = "Edit")
                 }
-                TextButton(onClick = onDismiss) { Text("Close") }
+                ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Close")
             }
         },
     )
@@ -1232,7 +1230,7 @@ internal fun CreditHourRecordDetailDialog(
             title = { Text("Delete this entry?") },
             text = { Text("${formatHoursMinutes(record.totalMinutes)} of $categoryName will be removed from every planner total.") },
             confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmDelete = false }, label = "Cancel") },
         )
     }
 }

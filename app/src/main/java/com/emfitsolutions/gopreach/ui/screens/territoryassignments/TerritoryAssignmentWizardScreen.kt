@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.territoryassignments
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -292,7 +295,7 @@ fun TerritoryAssignmentWizardScreen(
                 if (step > STEP_GROUP) {
                     TextButton(onClick = { step-- }, enabled = !uiState.isSaving) { Text("Back") }
                 } else {
-                    TextButton(onClick = onDone, enabled = !uiState.isSaving) { Text("Cancel") }
+                    ActionButton(ActionKind.Cancel, onClick = onDone, label = "Cancel", enabled = !uiState.isSaving)
                 }
                 if (step < STEP_CONFIRM) {
                     TextButton(onClick = { if (nextEnabled) step++ else nextTappedWhileInvalid = true }) { Text("Next") }
@@ -406,14 +409,7 @@ private fun MunicipalitiesStep(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
-            OutlinedTextField(
-                value = search,
-                onValueChange = { search = it },
-                label = { Text("Search municipality / city") },
-                singleLine = true,
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            StandardSearchField(value = search, onValueChange = { search = it }, placeholder = "Search municipality / city", modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(onClick = {
                     onSelectedMunicipalitiesChange((selectedMunicipalities + visible).distinctBy { it.id })
@@ -511,14 +507,7 @@ private fun BarangaysStep(
             item(key = "header_${muncity.id}") {
                 Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
                     Text(muncity.name.uppercase(), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                    OutlinedTextField(
-                        value = search,
-                        onValueChange = { searchByMuncity = searchByMuncity + (muncity.id to it) },
-                        label = { Text("Search barangay in ${muncity.name}") },
-                        singleLine = true,
-                        visualTransformation = VisualTransformation.None,
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    )
+                    StandardSearchField(value = search, onValueChange = { searchByMuncity = searchByMuncity + (muncity.id to it) }, placeholder = "Search barangay in ${muncity.name}", modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                         OutlinedButton(onClick = {
                             onBarangaysChange(muncity.id, (selected + selectableVisible).distinctBy { it.id })

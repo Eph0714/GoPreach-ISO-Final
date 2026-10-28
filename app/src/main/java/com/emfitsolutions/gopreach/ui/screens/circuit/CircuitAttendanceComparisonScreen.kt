@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -211,13 +214,13 @@ fun CircuitAttendanceComparisonScreen(
                 }
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search congregation") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search congregation", modifier = Modifier.fillMaxWidth())
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                             FilterChip(selected = onlyChanged, onClick = { onlyChanged = !onlyChanged }, label = { Text("Hide unchanged") })
                             Text("Records Found: ${shown.size}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { TableReportExporter.print(context, exportData()) }) { Icon(Icons.Rounded.Print, contentDescription = null); Text("  Print / PDF") }
+                            ActionButton(ActionKind.Print, onClick = { TableReportExporter.print(context, exportData()) }, label = "  Print / PDF")
                             OutlinedButton(onClick = { TableReportExporter.shareExcel(context, exportData()) }) { Icon(Icons.Rounded.TableChart, contentDescription = null); Text("  Excel") }
                         }
                     }

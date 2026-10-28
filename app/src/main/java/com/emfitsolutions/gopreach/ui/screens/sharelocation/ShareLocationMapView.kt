@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.sharelocation
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.ui.components.keyboardPadding
 import android.graphics.Bitmap
 import com.emfitsolutions.gopreach.data.model.displayName
@@ -316,7 +318,7 @@ fun ShareLocationMapView(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedButton(onClick = { reloadToken++ }) { Text("Retry") }
+                ActionButton(ActionKind.Refresh, onClick = { reloadToken++ }, label = "Retry")
             }
         } else if (filteredPoints.isEmpty()) {
             // "Display an appropriate message if no Publisher matches the
@@ -453,9 +455,7 @@ private fun SharePointDetailsSheet(
             DetailRow(label = "Congregation", value = row.congregationName)
             DetailRow(label = "Coordinates", value = formatCoordinatesDms(row.location.lat, row.location.lng))
             DetailRow(label = "Last Updated", value = formatShareRelativeTime(row.location.updatedAt))
-            Button(onClick = onOpenTerritoryMap, modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-                Text("View in Territory Map")
-            }
+            ActionButton(ActionKind.Map, onClick = onOpenTerritoryMap, label = "View in Territory Map", modifier = Modifier.fillMaxWidth().padding(top = 16.dp))
         }
     }
 }

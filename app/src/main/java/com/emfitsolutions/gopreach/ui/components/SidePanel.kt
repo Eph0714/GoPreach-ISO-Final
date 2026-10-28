@@ -97,6 +97,7 @@ import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.AssignmentInd
 import androidx.compose.material.icons.rounded.SwapHoriz
+import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.HorizontalDivider
@@ -146,72 +147,11 @@ private data class SideSection(val title: String, val items: List<SideItem>)
 @Composable
 fun GoPreachSidePanelContent(
     activeRoute: String?,
-    canManageCongregationsAndAdmins: Boolean,
-    canEnrollCoordinatorElder: Boolean,
-    canEnrollServiceOverseer: Boolean,
-    canEnrollMinisterialServant: Boolean,
-    canManageAnnouncements: Boolean,
-    canViewFieldServiceReport: Boolean,
-    canViewDeletedRecords: Boolean = false,
-    canViewForwardRequests: Boolean,
-    canManageHouseholderAssignment: Boolean,
-    canEnrollRegularElderOrPublisher: Boolean,
-    /** "CREATING PUBLISHER" spec — Service Overseer can also create/manage
-     * Publishers under their own congregation, in addition to everyone
-     * [canEnrollRegularElderOrPublisher] already covers. */
-    canEnrollPublisher: Boolean,
-    canManagePublishersAndGroups: Boolean,
-    /** "CREATING GROUPS" spec — Coordinator Elder *or* Service Overseer can
-     * create a Group under their own congregation, in addition to everyone
-     * [canManagePublishersAndGroups] already covers (Super-Admin/Admin/
-     * Coordinator Elder). Service Overseer gets Groups specifically, not the
-     * wider Publisher-management access. */
-    canManageGroups: Boolean,
-    /** Territory Assignment module — see AdminHomeScreen's own derivation
-     * (same role set as [canManageGroups]: canManagePublishersAndGroups plus
-     * Service Overseer/Secretary). */
-    canManageTerritoryAssignments: Boolean,
-    canManageTerritories: Boolean,
-    /** The Ministerial Servant's simple menu: only the dashboard, the Territory Map, the calendar and the weather are offered. */
-    simpleMenu: Boolean = false,
-    canEditMeetingAssignments: Boolean,
-    canAccessControlPanel: Boolean,
-    isSuperAdmin: Boolean,
-    canViewUserLogs: Boolean,
-    canManageUsers: Boolean,
-    /** Circuit Overseer module — Super-Admin only: Circuit Codes, Circuit Overseer Accounts, Circuit Assignment. */
-    canManageCircuits: Boolean = false,
-    /** The signed-in account is a Circuit Overseer: adds its Circuit Dashboard to REPORTS. */
-    isCircuitOverseer: Boolean = false,
-    /** Account Management spec §5 — Super-Admin, Admin, Coordinator Elder,
-     * Service Overseer (+ Secretary). See AdminHomeScreen's own derivation. */
-    canManageAccountCredentials: Boolean,
-    /** "Contact Record" module — Super-Admin, Coordinator Elder, and Regular
-     * Elder only (not Admin, not Service Overseer/Ministerial Servant). */
-    canViewContactRecord: Boolean,
-    /** "Session Timeout Setting" — Super-Admin, every Admin, every Elder. */
-    canManageSessionTimeout: Boolean,
-    /** Spec §15 — "Elders should be able to see Interested Person information
-     * according to their existing Congregation/Group access scope": Admin/
-     * Coordinator Elder/Service Overseer/Regular Elder, read-only, scoped to
-     * their own congregation (or own Group). Distinct from [isSuperAdmin]'s
-     * own [Destinations.ALL_INTERESTED_RECORDS] item below, which is full
-     * read/write across every congregation. */
-    canViewInterestedPeopleScope: Boolean,
-    /** Always null since "Multiple Role Login Detection & Role Selection"
-     * (spec §7/§11) retired the old mid-session Admin<->Publisher switch in
-     * favor of choosing a role once at login — kept as a parameter (instead
-     * of deleted outright) only so this drawer item's rendering doesn't need
-     * touching if that ever changes; see GoPreachNavGraph's ADMIN_HOME
-     * composable for the actual call site. */
+    /** What the consolidated roles of this session may open (see [AdminCapabilities]); the panel does no permission checks of its own. */
+    caps: AdminCapabilities,
     onSwitchToPublisher: (() -> Unit)?,
     onNavigate: (String) -> Unit,
     onSignOut: () -> Unit,
-    /** Super-Admin, Admin, Service Overseer, Secretary and Coordinator Elder may enter a field service record on a publisher's behalf. */
-    canEnterManualFieldService: Boolean = false,
-    canManageMeetingAttendance: Boolean = false,
-    /** The roles that send the Field Service Report to the Circuit Overseer may also review what they sent. */
-    canViewSentReports: Boolean = false,
     /** Reports every module this session may open, so Quick Access can resolve (and permission-check) cards copied from here. */
     onItemsAvailable: (List<SideItem>) -> Unit = {},
     /** Long-press-and-drag a module toward Quick Access; null disables dragging. */
@@ -223,6 +163,176 @@ fun GoPreachSidePanelContent(
     scopeLabel: String = "",
     profileImageUrl: String? = null,
 ) {
+    val availableItems = adminSideItems(caps)
+    LaunchedEffect(availableItems.map { it.route }) { onItemsAvailable(availableItems) }
+
+    // The same design system for every role: the modules this session is authorized to see (decided above, unchanged) are shown under
+    // CONTROL PANEL / INPUT / RECORD / REPORTS / MANAGEMENT / SETTINGS / TOOLS - a group a role has no modules in is simply not shown.
+    // Every group starts COLLAPSED and each is toggled on its own; nothing here expands one group because another was opened or because
+    // a module was visited.
+    val grouped = NavGroup.entries.mapNotNull { group ->
+        availableItems.filter { navGroupOf(it.route) == group }.map { it.withStandardIcon() }.takeIf { it.isNotEmpty() }?.let { group to it }
+    }
+    val expanded = remember { mutableStateMapOf<NavGroup, Boolean>() }
+
+    ModalDrawerSheet {
+        NavProfileHeader(
+            appName = stringResource(Res.string.app_name),
+            userName = userName,
+            roleLabel = roleLabel,
+            scopeLabel = scopeLabel,
+            profileImageUrl = profileImageUrl,
+        )
+        HorizontalDivider()
+        LazyColumn(modifier = Modifier.weight(1f)) {
+            items(grouped, key = { it.first }) { (group, groupItems) ->
+                NavGroupSection(
+                    group = group,
+                    expanded = expanded[group] == true,
+                    containsActive = groupItems.any { it.route == activeRoute },
+                    itemCount = groupItems.size,
+                    onToggle = { expanded[group] = expanded[group] != true },
+                ) {
+                    groupItems.forEach { item -> SideDrawerItem(item, group, activeRoute, onNavigate, dragState, onDragStarted) }
+                }
+            }
+        }
+        // Footer: secondary actions, kept apart from the navigation groups; Sign out is visually distinct so it is not tapped by accident.
+        HorizontalDivider()
+        Column(Modifier.padding(vertical = 4.dp)) {
+            FooterRow(Icons.Rounded.Settings, "Settings", selected = activeRoute == Destinations.SETTINGS || activeRoute == Destinations.ACCOUNT_SETTINGS) { onNavigate(Destinations.SETTINGS) }
+            if (onSwitchToPublisher != null) FooterRow(Icons.Rounded.SwapHoriz, stringResource(Res.string.side_ministry_report_app), selected = false, onClick = onSwitchToPublisher)
+            FooterRow(Icons.AutoMirrored.Rounded.Logout, stringResource(Res.string.side_sign_out), selected = false, danger = true, onClick = onSignOut)
+        }
+    }
+}
+
+/**
+ * Where a module is shown. This is only a display decision - authorization is made by the caller's own booleans before an item ever reaches
+ * the panel, and the route is never changed. A module not listed here falls under TOOLS so every item always belongs to a group.
+ */
+internal fun navGroupOf(route: String): NavGroup = when (route) {
+    Destinations.DASHBOARD_REPORTS -> NavGroup.CONTROL_PANEL
+
+    Destinations.MANUAL_FIELD_SERVICE, Destinations.MEETING_ATTENDANCE, Destinations.MEETING_ASSIGNMENTS, Destinations.PUBLISHER_ASSIGNMENT -> NavGroup.INPUT
+
+    Destinations.SCOPED_INTERESTED_RECORDS, Destinations.HOUSEHOLDER_VISIT_HISTORY, Destinations.FORWARD_REQUESTS, Destinations.DELETED_RECORDS,
+    Destinations.CONTACT_RECORD, Destinations.USER_LOGS, Destinations.CIRCUIT_CONGREGATIONS,
+    Destinations.circuitPublishers(), Destinations.circuitLeaders() -> NavGroup.RECORD
+
+    Destinations.FIELD_SERVICE_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.CIRCUIT_REPORTS_INBOX, Destinations.CIRCUIT_REPORT,
+    Destinations.RECEIVED_REPORTS, Destinations.RECEIVED_SNAPSHOTS, Destinations.SENT_REPORTS, Destinations.RECEIVED_ATTENDANCE, Destinations.ADMIN_COMPARATIVE,
+    Destinations.REPORT_SUBMISSION, Destinations.COMPARATIVE_REPORT, Destinations.CONGREGATION_COMPARATIVE -> NavGroup.REPORTS
+
+    Destinations.MANAGE_CONGREGATIONS, Destinations.MANAGE_ADMINS, Destinations.MANAGE_ELDERS, Destinations.MANAGE_MINISTERIAL_SERVANTS,
+    Destinations.MANAGE_GROUPS, Destinations.MANAGE_PUBLISHERS, Destinations.MANAGE_TERRITORY_ASSIGNMENTS, Destinations.ACCOUNT_MANAGEMENT,
+    Destinations.MANAGE_USERS, Destinations.ADMIN_CO_FILES, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_CIRCUIT_CODES, Destinations.MANAGE_CIRCUIT_OVERSEERS,
+    Destinations.CIRCUIT_ASSIGNMENT -> NavGroup.MANAGEMENT
+
+    Destinations.ADMIN_DEVICES, Destinations.ADMIN_SECURITY_LOG -> NavGroup.MANAGEMENT
+
+    Destinations.CONTROL_PANEL, Destinations.THEME_COLOR_SETTINGS, Destinations.SESSION_TIMEOUT_SETTING, Destinations.CREDIT_HOUR_CATEGORIES, Destinations.SECURITY -> NavGroup.SETTINGS
+
+    else -> NavGroup.TOOLS
+}
+
+/** One consistent, function-based icon per module: the duplicates and look-alikes of the old drawer are replaced; the destination is untouched. */
+internal fun SideItem.withStandardIcon(): SideItem {
+    val icon = when (route) {
+        Destinations.MANAGE_ELDERS -> Icons.Rounded.SupervisorAccount
+        Destinations.MANAGE_MINISTERIAL_SERVANTS -> Icons.Rounded.Badge
+        Destinations.circuitLeaders() -> Icons.Rounded.SupervisorAccount
+        Destinations.CIRCUIT_ASSIGNMENT -> Icons.Rounded.AltRoute
+        Destinations.MANAGE_CIRCUIT_CODES -> Icons.Rounded.VpnKey
+        Destinations.CREDIT_HOUR_CATEGORIES -> Icons.Rounded.Category
+        Destinations.ACCOUNT_MANAGEMENT -> Icons.Rounded.Key
+        Destinations.CONGREGATION_COMPARATIVE, Destinations.COMPARATIVE_REPORT, Destinations.ADMIN_COMPARATIVE -> Icons.Rounded.CompareArrows
+        Destinations.CIRCUIT_REPORTS_INBOX, Destinations.RECEIVED_REPORTS -> Icons.Rounded.Inbox
+        Destinations.MEETING_ATTENDANCE -> Icons.Rounded.HowToReg
+        else -> this.icon
+    }
+    return if (icon === this.icon) this else copy(icon = icon)
+}
+
+@Composable
+private fun FooterRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, selected: Boolean, danger: Boolean = false, onClick: () -> Unit) {
+    val tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 1.dp)
+            .heightIn(min = 46.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** One side-panel entry. Tap navigates; long-press-and-drag lifts it toward the Quick Access grid (the drawer closes so the
+ * grid is visible, and the finger keeps driving [dragState] in window coordinates until release). */
+@Composable
+private fun SideDrawerItem(
+    item: SideItem,
+    group: NavGroup,
+    activeRoute: String?,
+    onNavigate: (String) -> Unit,
+    dragState: com.emfitsolutions.gopreach.ui.screens.home.QuickAccessDragState?,
+    onDragStarted: () -> Unit,
+) {
+    var coords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
+    var lifted by remember { mutableStateOf(false) }
+    val scale by androidx.compose.animation.core.animateFloatAsState(if (lifted) 1.06f else 1f, androidx.compose.animation.core.tween(140), label = "sideLift")
+    var modifier = Modifier
+        .graphicsLayer { scaleX = scale; scaleY = scale }
+        .onGloballyPositioned { coords = it }
+    if (dragState != null) {
+        modifier = modifier.pointerInput(item.route) {
+            detectDragGesturesAfterLongPress(
+                onDragStart = { offset ->
+                    lifted = true
+                    dragState.item = item
+                    coords?.let { dragState.rootPos = it.localToRoot(offset) }
+                    onDragStarted()
+                },
+                onDrag = { change, _ ->
+                    change.consume()
+                    coords?.let { dragState.rootPos = it.localToRoot(change.position) }
+                },
+                onDragEnd = {
+                    lifted = false
+                    dragState.item?.let { dragState.onDrop?.invoke(it, dragState.rootPos) }
+                    dragState.item = null
+                },
+                onDragCancel = {
+                    lifted = false
+                    dragState.item = null
+                },
+            )
+        }
+    }
+    NavMenuRow(
+        icon = item.icon,
+        label = item.label,
+        group = group,
+        selected = activeRoute == item.route,
+        onClick = { onNavigate(item.route) },
+        modifier = modifier,
+    )
+}
+
+/**
+ * Every module the consolidated roles in [caps] may open, as one flat list in which a route appears once even when several roles grant it.
+ * [includeTabModules] adds the modules the Admin Main Form reaches through its tab strip (Publishers, Field Service, Attendance, Territory Map):
+ * the unified Publisher Main Form has no tab strip, so it asks for them here.
+ */
+@Composable
+fun adminSideItems(caps: AdminCapabilities, includeTabModules: Boolean = false): List<SideItem> = with(caps) {
     // "Admin Dashboard Menu Reorganization" spec — the drawer's existing
     // collapsible-section treeview (this composable already had exactly
     // that shape) regrouped into ENROLLMENT / REPORTS / CONTROL PANEL, in
@@ -351,6 +461,10 @@ fun GoPreachSidePanelContent(
             add(SideItem("Offline Maps", Icons.Rounded.Map, Destinations.OFFLINE_MAPS))
             add(SideItem("Voice Notes & Minutes", Icons.Rounded.Mic, Destinations.VOICE_NOTES))
             if (canViewUserLogs) add(SideItem(stringResource(Res.string.side_user_logs), Icons.Rounded.History, Destinations.USER_LOGS))
+            if (canMonitorDevices) add(SideItem("Device & Session Management", Icons.Rounded.Security, Destinations.ADMIN_DEVICES))
+            if (canViewSecurityLog) add(SideItem("Security Audit Logs", Icons.Rounded.Security, Destinations.ADMIN_SECURITY_LOG))
+            // Every account has its own security settings: two-factor sign-in, its devices and its trusted devices.
+            add(SideItem("Security & Device Management", Icons.Rounded.Security, Destinations.SECURITY))
             if (canViewContactRecord) add(SideItem(stringResource(Res.string.side_contact_record), Icons.Rounded.Contacts, Destinations.CONTACT_RECORD))
             // "Theme Color Settings — Simplified User Experience" (spec §16/
             // §24) — a per-device preference every signed-in role already
@@ -368,165 +482,14 @@ fun GoPreachSidePanelContent(
         }
         if (controlPanelItems.isNotEmpty()) add(SideSection(stringResource(Res.string.side_section_control_panel), controlPanelItems))
     }
-
-    val simpleRoutes = setOf(Destinations.DASHBOARD_REPORTS, Destinations.MANAGE_TERRITORIES_BASE, Destinations.CALENDAR, Destinations.WEATHER)
-    val availableItems = sections.flatMap { it.items }.let { all -> if (simpleMenu) all.filter { it.route in simpleRoutes } else all }
-    LaunchedEffect(availableItems.map { it.route }) { onItemsAvailable(availableItems) }
-
-    // The same design system for every role: the modules this session is authorized to see (decided above, unchanged) are shown under
-    // CONTROL PANEL / INPUT / RECORD / REPORTS / MANAGEMENT / SETTINGS / TOOLS - a group a role has no modules in is simply not shown.
-    // Every group starts COLLAPSED and each is toggled on its own; nothing here expands one group because another was opened or because
-    // a module was visited.
-    val grouped = NavGroup.entries.mapNotNull { group ->
-        availableItems.filter { navGroupOf(it.route) == group }.map { it.withStandardIcon() }.takeIf { it.isNotEmpty() }?.let { group to it }
+    val tabItems = if (!includeTabModules) emptyList() else buildList {
+        if (canEnrollPublisher) add(SideItem("Publishers", Icons.Rounded.People, Destinations.MANAGE_PUBLISHERS))
+        if (canViewFieldServiceGroupReport) add(SideItem("Field Service Group Report", Icons.Rounded.Assessment, Destinations.FIELD_SERVICE_REPORT))
+        if (canEnterManualFieldService) add(SideItem("Manual Field Service Entry", Icons.Rounded.EditNote, Destinations.MANUAL_FIELD_SERVICE))
+        if (canManageMeetingAttendance) add(SideItem("Meeting Attendance", Icons.Rounded.HowToReg, Destinations.MEETING_ATTENDANCE))
+        if (canViewTerritoryMap) add(SideItem(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
     }
-    val expanded = remember { mutableStateMapOf<NavGroup, Boolean>() }
-
-    ModalDrawerSheet {
-        NavProfileHeader(
-            appName = stringResource(Res.string.app_name),
-            userName = userName,
-            roleLabel = roleLabel,
-            scopeLabel = scopeLabel,
-            profileImageUrl = profileImageUrl,
-        )
-        HorizontalDivider()
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            items(grouped, key = { it.first }) { (group, groupItems) ->
-                NavGroupSection(
-                    group = group,
-                    expanded = expanded[group] == true,
-                    containsActive = groupItems.any { it.route == activeRoute },
-                    itemCount = groupItems.size,
-                    onToggle = { expanded[group] = expanded[group] != true },
-                ) {
-                    groupItems.forEach { item -> SideDrawerItem(item, group, activeRoute, onNavigate, dragState, onDragStarted) }
-                }
-            }
-        }
-        // Footer: secondary actions, kept apart from the navigation groups; Sign out is visually distinct so it is not tapped by accident.
-        HorizontalDivider()
-        Column(Modifier.padding(vertical = 4.dp)) {
-            FooterRow(Icons.Rounded.Settings, "Settings", selected = activeRoute == Destinations.SETTINGS || activeRoute == Destinations.ACCOUNT_SETTINGS) { onNavigate(Destinations.SETTINGS) }
-            if (onSwitchToPublisher != null) FooterRow(Icons.Rounded.SwapHoriz, stringResource(Res.string.side_ministry_report_app), selected = false, onClick = onSwitchToPublisher)
-            FooterRow(Icons.AutoMirrored.Rounded.Logout, stringResource(Res.string.side_sign_out), selected = false, danger = true, onClick = onSignOut)
-        }
-    }
-}
-
-/**
- * Where a module is shown. This is only a display decision - authorization is made by the caller's own booleans before an item ever reaches
- * the panel, and the route is never changed. A module not listed here falls under TOOLS so every item always belongs to a group.
- */
-private fun navGroupOf(route: String): NavGroup = when (route) {
-    Destinations.DASHBOARD_REPORTS -> NavGroup.CONTROL_PANEL
-
-    Destinations.MANUAL_FIELD_SERVICE, Destinations.MEETING_ATTENDANCE, Destinations.MEETING_ASSIGNMENTS, Destinations.PUBLISHER_ASSIGNMENT -> NavGroup.INPUT
-
-    Destinations.SCOPED_INTERESTED_RECORDS, Destinations.HOUSEHOLDER_VISIT_HISTORY, Destinations.FORWARD_REQUESTS, Destinations.DELETED_RECORDS,
-    Destinations.CONTACT_RECORD, Destinations.USER_LOGS, Destinations.CIRCUIT_CONGREGATIONS,
-    Destinations.circuitPublishers(), Destinations.circuitLeaders() -> NavGroup.RECORD
-
-    Destinations.FIELD_SERVICE_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.CIRCUIT_REPORTS_INBOX, Destinations.CIRCUIT_REPORT,
-    Destinations.RECEIVED_REPORTS, Destinations.RECEIVED_SNAPSHOTS, Destinations.SENT_REPORTS, Destinations.RECEIVED_ATTENDANCE, Destinations.ADMIN_COMPARATIVE,
-    Destinations.REPORT_SUBMISSION, Destinations.COMPARATIVE_REPORT, Destinations.CONGREGATION_COMPARATIVE -> NavGroup.REPORTS
-
-    Destinations.MANAGE_CONGREGATIONS, Destinations.MANAGE_ADMINS, Destinations.MANAGE_ELDERS, Destinations.MANAGE_MINISTERIAL_SERVANTS,
-    Destinations.MANAGE_GROUPS, Destinations.MANAGE_PUBLISHERS, Destinations.MANAGE_TERRITORY_ASSIGNMENTS, Destinations.ACCOUNT_MANAGEMENT,
-    Destinations.MANAGE_USERS, Destinations.ADMIN_CO_FILES, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_CIRCUIT_CODES, Destinations.MANAGE_CIRCUIT_OVERSEERS,
-    Destinations.CIRCUIT_ASSIGNMENT -> NavGroup.MANAGEMENT
-
-    Destinations.CONTROL_PANEL, Destinations.THEME_COLOR_SETTINGS, Destinations.SESSION_TIMEOUT_SETTING, Destinations.CREDIT_HOUR_CATEGORIES -> NavGroup.SETTINGS
-
-    else -> NavGroup.TOOLS
-}
-
-/** One consistent, function-based icon per module: the duplicates and look-alikes of the old drawer are replaced; the destination is untouched. */
-private fun SideItem.withStandardIcon(): SideItem {
-    val icon = when (route) {
-        Destinations.MANAGE_ELDERS -> Icons.Rounded.SupervisorAccount
-        Destinations.MANAGE_MINISTERIAL_SERVANTS -> Icons.Rounded.Badge
-        Destinations.circuitLeaders() -> Icons.Rounded.SupervisorAccount
-        Destinations.CIRCUIT_ASSIGNMENT -> Icons.Rounded.AltRoute
-        Destinations.MANAGE_CIRCUIT_CODES -> Icons.Rounded.VpnKey
-        Destinations.CREDIT_HOUR_CATEGORIES -> Icons.Rounded.Category
-        Destinations.ACCOUNT_MANAGEMENT -> Icons.Rounded.Key
-        Destinations.CONGREGATION_COMPARATIVE, Destinations.COMPARATIVE_REPORT, Destinations.ADMIN_COMPARATIVE -> Icons.Rounded.CompareArrows
-        Destinations.CIRCUIT_REPORTS_INBOX, Destinations.RECEIVED_REPORTS -> Icons.Rounded.Inbox
-        Destinations.MEETING_ATTENDANCE -> Icons.Rounded.HowToReg
-        else -> this.icon
-    }
-    return if (icon === this.icon) this else copy(icon = icon)
-}
-
-@Composable
-private fun FooterRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, selected: Boolean, danger: Boolean = false, onClick: () -> Unit) {
-    val tint = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 1.dp)
-            .heightIn(min = 46.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (selected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = if (danger) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
-
-/** One side-panel entry. Tap navigates; long-press-and-drag lifts it toward the Quick Access grid (the drawer closes so the
- * grid is visible, and the finger keeps driving [dragState] in window coordinates until release). */
-@Composable
-private fun SideDrawerItem(
-    item: SideItem,
-    group: NavGroup,
-    activeRoute: String?,
-    onNavigate: (String) -> Unit,
-    dragState: com.emfitsolutions.gopreach.ui.screens.home.QuickAccessDragState?,
-    onDragStarted: () -> Unit,
-) {
-    var coords by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
-    var lifted by remember { mutableStateOf(false) }
-    val scale by androidx.compose.animation.core.animateFloatAsState(if (lifted) 1.06f else 1f, androidx.compose.animation.core.tween(140), label = "sideLift")
-    var modifier = Modifier
-        .graphicsLayer { scaleX = scale; scaleY = scale }
-        .onGloballyPositioned { coords = it }
-    if (dragState != null) {
-        modifier = modifier.pointerInput(item.route) {
-            detectDragGesturesAfterLongPress(
-                onDragStart = { offset ->
-                    lifted = true
-                    dragState.item = item
-                    coords?.let { dragState.rootPos = it.localToRoot(offset) }
-                    onDragStarted()
-                },
-                onDrag = { change, _ ->
-                    change.consume()
-                    coords?.let { dragState.rootPos = it.localToRoot(change.position) }
-                },
-                onDragEnd = {
-                    lifted = false
-                    dragState.item?.let { dragState.onDrop?.invoke(it, dragState.rootPos) }
-                    dragState.item = null
-                },
-                onDragCancel = {
-                    lifted = false
-                    dragState.item = null
-                },
-            )
-        }
-    }
-    NavMenuRow(
-        icon = item.icon,
-        label = item.label,
-        group = group,
-        selected = activeRoute == item.route,
-        onClick = { onNavigate(item.route) },
-        modifier = modifier,
-    )
+    val simpleRoutes = setOf(Destinations.DASHBOARD_REPORTS, Destinations.MANAGE_TERRITORIES_BASE, Destinations.CALENDAR, Destinations.WEATHER, Destinations.SECURITY)
+    val all = (sections.flatMap { it.items } + tabItems).let { all -> if (simpleMenu) all.filter { it.route in simpleRoutes } else all }
+    all.distinctBy { it.route }
 }

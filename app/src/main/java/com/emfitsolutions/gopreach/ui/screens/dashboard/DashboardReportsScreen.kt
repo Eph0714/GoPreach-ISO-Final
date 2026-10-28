@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.dashboard
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.action_close
 import com.emfitsolutions.gopreach.shared.resources.dashboard_all_congregations
@@ -458,7 +461,7 @@ fun DashboardStatsContent(
                         ) {
                             Icon(Icons.Rounded.TableChart, contentDescription = stringResource(Res.string.reports_export_excel_cd))
                         }
-                        TextButton(onClick = { selectedDetail = null }) { Text(stringResource(Res.string.action_close)) }
+                        ActionButton(ActionKind.Cancel, onClick = { selectedDetail = null }, label = stringResource(Res.string.action_close))
                     }
                 },
             )
@@ -536,9 +539,7 @@ fun DashboardReportsScreen(
                     // automatically — spec §15), so this is a reassurance affordance
                     // more than a functional necessity; kept per spec §3's explicit
                     // "refresh" requirement.
-                    IconButton(onClick = { viewModel.selectCongregation(uiState.selectedCongregationId) }) {
-                        Icon(Icons.Rounded.Refresh, contentDescription = stringResource(Res.string.dashboard_refresh_cd))
-                    }
+                    ActionIconButton(ActionKind.Refresh, onClick = { viewModel.selectCongregation(uiState.selectedCongregationId) }, contentDescription = stringResource(Res.string.dashboard_refresh_cd))
                     if (canExport) {
                         // Same "print preview always offers Save as PDF" +
                         // plain-CSV-for-Excel pair [ReportsScreen] already

@@ -24,7 +24,7 @@ class BibleTextRecordRepository(
             .map { list -> list.filter { it.publisherPersonId == publisherPersonId } }
 
     suspend fun save(record: BibleTextRecord): BibleTextRecord {
-        val id = record.id.ifBlank { remote.newId(COLLECTION) }
+        val id = record.id.ifBlank { RecentCreates.idFor(COLLECTION, record) { remote.newId(COLLECTION) } }
         val withId = record.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId

@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.meetingassignments
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.data.print.escapeHtml
 import android.app.DatePickerDialog
 import androidx.compose.foundation.background
@@ -284,21 +287,14 @@ private fun MidweekMeetingScheduleTab(
                                 )
                             }
                             if (!readOnly) {
-                                IconButton(onClick = { editingItem = Triple(section, index, item) }) {
-                                    Icon(Icons.Rounded.Edit, contentDescription = "Edit assignment")
-                                }
-                                IconButton(onClick = { pendingDelete = section to index }) {
-                                    Icon(Icons.Rounded.Delete, contentDescription = "Delete assignment")
-                                }
+                                ActionIconButton(ActionKind.Edit, onClick = { editingItem = Triple(section, index, item) }, contentDescription = "Edit assignment")
+                                ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = section to index }, contentDescription = "Delete assignment")
                             }
                         }
                     }
                 }
                 if (!readOnly) {
-                    TextButton(onClick = { editingItem = Triple(section, null, null) }) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                        Text("Add Assignment")
-                    }
+                    ActionButton(ActionKind.Add, onClick = { editingItem = Triple(section, null, null) }, label = "Add Assignment")
                 }
             }
         }
@@ -330,14 +326,14 @@ private fun MidweekMeetingScheduleTab(
             title = { Text("Delete Assignment?") },
             text = { Text("This removes it from the schedule for this week.") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     val current = (schedule?.itemsFor(section) ?: emptyList()).toMutableList()
                     if (index in current.indices) current.removeAt(index)
                     viewModel.saveSectionItems(schedule, congregationId, weekStart, section, current, currentPersonId)
                     pendingDelete = null
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDelete = null }, label = "Cancel") },
         )
     }
 }
@@ -492,10 +488,7 @@ private fun PublicTalkScheduleTab(
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!readOnly) {
-                OutlinedButton(onClick = { showAdd = true }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text("Add Schedule")
-                }
+                ActionButton(ActionKind.Add, onClick = { showAdd = true }, label = "Add Schedule", modifier = Modifier.weight(1f))
             }
             IconButton(onClick = { ReportPrinter.print(context, publicTalkReportTable(congregationName, rows, dateFormat)) }) {
                 Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Print Public Talk and Watchtower Study Schedule")
@@ -520,12 +513,8 @@ private fun PublicTalkScheduleTab(
                                 Text(dateFormat.format(Date(row.date)), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                 if (!readOnly) {
                                     Row {
-                                        IconButton(onClick = { pendingEdit = row }) {
-                                            Icon(Icons.Rounded.Edit, contentDescription = "Edit schedule")
-                                        }
-                                        IconButton(onClick = { pendingDelete = row }) {
-                                            Icon(Icons.Rounded.Delete, contentDescription = "Delete schedule")
-                                        }
+                                        ActionIconButton(ActionKind.Edit, onClick = { pendingEdit = row }, contentDescription = "Edit schedule")
+                                        ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = row }, contentDescription = "Delete schedule")
                                     }
                                 }
                             }
@@ -573,13 +562,13 @@ private fun PublicTalkScheduleTab(
             title = { Text("Delete this schedule?") },
             text = { Text("This removes the ${dateFormat.format(Date(toDelete.date))} row.") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.deletePublicTalkRow(toDelete, currentPersonId)
                     showToast("Schedule deleted.")
                     pendingDelete = null
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDelete = null }, label = "Cancel") },
         )
     }
 }
@@ -735,10 +724,7 @@ private fun CartAssignmentTab(
     Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!readOnly) {
-                OutlinedButton(onClick = { showAdd = true }, modifier = Modifier.weight(1f)) {
-                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text("Add Cart Assignment")
-                }
+                ActionButton(ActionKind.Add, onClick = { showAdd = true }, label = "Add Cart Assignment", modifier = Modifier.weight(1f))
             }
             IconButton(onClick = { ReportPrinter.print(context, cartAssignmentReportTable(congregationName, rows, dateFormat)) }) {
                 Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Print Cart Assignment")
@@ -763,12 +749,8 @@ private fun CartAssignmentTab(
                                 Text(dateFormat.format(Date(row.date)), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                 if (!readOnly) {
                                     Row {
-                                        IconButton(onClick = { pendingEdit = row }) {
-                                            Icon(Icons.Rounded.Edit, contentDescription = "Edit cart assignment")
-                                        }
-                                        IconButton(onClick = { pendingDelete = row }) {
-                                            Icon(Icons.Rounded.Delete, contentDescription = "Delete cart assignment")
-                                        }
+                                        ActionIconButton(ActionKind.Edit, onClick = { pendingEdit = row }, contentDescription = "Edit cart assignment")
+                                        ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = row }, contentDescription = "Delete cart assignment")
                                     }
                                 }
                             }
@@ -810,13 +792,13 @@ private fun CartAssignmentTab(
             title = { Text("Permanently Delete Cart Assignment?") },
             text = { Text("This permanently removes the ${dateFormat.format(Date(toDelete.date))} — ${toDelete.location} row. This cannot be undone.") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.deleteCartAssignment(toDelete, currentPersonId)
                     showToast("Cart assignment deleted.")
                     pendingDelete = null
-                }) { Text("Delete Permanently") }
+                }, label = "Delete Permanently")
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDelete = null }, label = "Cancel") },
         )
     }
 }
@@ -1109,9 +1091,7 @@ private fun PublisherAutocompleteField(
                 visualTransformation = VisualTransformation.None,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = { addName(manualText); manualText = "" }, enabled = manualText.isNotBlank()) {
-                Icon(Icons.Rounded.Add, contentDescription = "Add $label")
-            }
+            ActionIconButton(ActionKind.Add, onClick = { addName(manualText); manualText = "" }, contentDescription = "Add $label", enabled = manualText.isNotBlank())
         }
         if (selectedNames.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

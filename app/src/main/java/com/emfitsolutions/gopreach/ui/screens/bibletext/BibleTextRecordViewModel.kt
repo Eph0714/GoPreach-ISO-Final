@@ -73,7 +73,7 @@ val SUGGESTED_EVENTS: List<String> = listOf(
  * (never a value the UI lets the Publisher type/pick themselves) — the same
  * "ownership from the session, not the frontend" rule
  * [BibleTextRecordRepository]'s own doc comment describes, backed
- * server-side by firestore.rules' matching `bibleTextRecords`/
+ * server-side by docs/legacy-firebase/firestore.rules' matching `bibleTextRecords`/
  * `bibleTextCategories` blocks.
  */
 class BibleTextRecordViewModel(

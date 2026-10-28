@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -11,7 +15,10 @@ import com.emfitsolutions.gopreach.ui.components.stageColor
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -258,6 +265,66 @@ fun PipelineScreen(
     }
 }
 
+/**
+ * The Ministry toolbar: Add [category], then Export (Print / PDF / Excel / Word of every record matching the filters, not just a page), then a Recycle Bin button
+ * with a visible label. One row that wraps instead of overlapping; the same on all three tabs.
+ */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun MinistryToolbar(
+    kind: String,
+    hasRecords: Boolean,
+    recordCount: Int,
+    showInactive: Boolean,
+    favoritesOnly: Boolean,
+    onAdd: () -> Unit,
+    onFavorites: (Boolean) -> Unit,
+    onRecycle: () -> Unit,
+    onExport: (String) -> Unit,
+) {
+    var menu by remember { mutableStateOf(false) }
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(com.emfitsolutions.gopreach.ui.components.ActionSpacing.Gap),
+        verticalArrangement = Arrangement.spacedBy(com.emfitsolutions.gopreach.ui.components.ActionSpacing.Gap),
+    ) {
+        ActionButton(ActionKind.Add, onClick = onAdd, label = "Add $kind")
+        androidx.compose.foundation.layout.Box {
+            ActionButton(ActionKind.Export, onClick = { menu = true }, label = "Export", enabled = hasRecords)
+            androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                listOf("print" to "Print", "pdf" to "PDF", "excel" to "Excel", "word" to "Word").forEach { (key, label) ->
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; onExport(key) })
+                }
+                Text(
+                    "Exports all $recordCount records matching the filters.",
+                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+            }
+        }
+        // The label never changes; an outline shows that inactive records are listed.
+        ActionButton(
+            ActionKind.Recycle, onClick = onRecycle, label = "Recycle Bin",
+            modifier = if (showInactive) Modifier.background(androidx.compose.ui.graphics.Color.Transparent).border(2.dp, MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) else Modifier,
+        )
+        // Favorites: a visible labelled button (gold and filled while only the starred records are shown).
+        val gold = androidx.compose.ui.graphics.Color(0xFFE6B800)
+        androidx.compose.material3.Button(
+            onClick = { onFavorites(!favoritesOnly) },
+            modifier = Modifier.heightIn(min = com.emfitsolutions.gopreach.ui.components.ActionSpacing.ButtonHeight),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                containerColor = if (favoritesOnly) gold else MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = if (favoritesOnly) androidx.compose.ui.graphics.Color(0xFF231B05) else MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        ) {
+            Icon(if (favoritesOnly) Icons.Rounded.Star else Icons.Rounded.StarBorder, contentDescription = null, tint = if (favoritesOnly) androidx.compose.ui.graphics.Color(0xFF231B05) else gold, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Favorites", maxLines = 1)
+        }
+    }
+}
+
 /** The Favorites filter: on = only the records this person starred. */
 @Composable
 internal fun FavoritesToggle(on: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
@@ -417,25 +484,41 @@ private fun PipelineListScreen(
                 }
             }
             HideInFullScreen(true) {
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    // Upper left: add a new Searching / Return Visit / Bible Study record (it takes the stage of the open list).
-                    androidx.compose.material3.FilledIconButton(onClick = { showCreateDialog = true }, modifier = Modifier.size(44.dp)) { Icon(Icons.Rounded.Add, contentDescription = "New ${stage.label()} Record") }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        FavoritesToggle(favoritesOnly, onChange = { favoritesOnly = it })
-                        if (!householderHistory) RecycleBinToggle(showInactive, onChange = { if (hostControlsInactive) onHostShowInactiveChange?.invoke(it) else localShowInactive = it })
-                    }
-                }
+                val toolbarContext = androidx.compose.ui.platform.LocalContext.current
+                MinistryToolbar(
+                    kind = kind,
+                    hasRecords = people.isNotEmpty(),
+                    recordCount = people.size,
+                    showInactive = showInactive,
+                    favoritesOnly = favoritesOnly,
+                    onAdd = { showCreateDialog = true },
+                    onFavorites = { favoritesOnly = it },
+                    onRecycle = { val next = !showInactive; if (hostControlsInactive) onHostShowInactiveChange?.invoke(next) else localShowInactive = next },
+                    onExport = { choice ->
+                        val data = com.emfitsolutions.gopreach.data.export.TableReportData(
+                            title = exportTable.title,
+                            details = listOf("Showing" to exportTable.title, "Search" to searchText.ifBlank { "—" }, "Records" to if (showInactive) "Active and inactive (Recycle Bin)" else "Active"),
+                            recordsFound = exportTable.count.toString(),
+                            table = listOf(exportTable.columns) + exportTable.rows,
+                            summary = listOf(listOf("Metric", "Value")) + exportTable.totals.map { listOf(it.first, it.second) },
+                            generatedBy = "",
+                            generatedAt = java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(java.util.Date()),
+                        )
+                        when (choice) {
+                            "print" -> actions.print(exportTable)
+                            "pdf" -> { showToast("In the print window choose \"Save as PDF\"."); actions.print(exportTable) }
+                            "excel" -> com.emfitsolutions.gopreach.data.export.TableReportExporter.shareExcel(toolbarContext, data)
+                            "word" -> com.emfitsolutions.gopreach.data.export.TableReportExporter.shareWord(toolbarContext, data)
+                        }
+                    },
+                )
             }
             HideInFullScreen(true) {
                 AreaFilterBar(
                     areas = areaOptions, mode = areaMode, municipality = areaMunicipality, barangay = areaBarangay,
                     onChange = { m, mun, bar -> areaMode = m; areaMunicipality = mun; areaBarangay = bar },
                     query = searchText, onQueryChange = { searchText = it },
-                    actions = if (householderHistory) ({
-                        IconButton(onClick = { actions.print(exportTable) }, enabled = people.isNotEmpty(), modifier = Modifier.size(40.dp)) { Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Print / Export as PDF", modifier = Modifier.size(22.dp)) }
-                        IconButton(onClick = { exportLauncher.launch("gopreach-${kind.lowercase().replace(' ', '-')}-records.csv") }, enabled = people.isNotEmpty(), modifier = Modifier.size(40.dp)) { Icon(Icons.Rounded.TableChart, contentDescription = "Export as Excel", modifier = Modifier.size(22.dp)) }
-                        RecycleBinToggle(showInactive, onChange = { if (hostControlsInactive) onHostShowInactiveChange?.invoke(it) else localShowInactive = it })
-                    }) else null,
+                    actions = null,
                 )
             }
             if (people.isEmpty()) {
@@ -548,10 +631,10 @@ private fun PipelineListScreen(
     noLocationFor?.let { (p, what) ->
         AlertDialog(
             onDismissRequest = { noLocationFor = null },
-            title = { Text("No saved location") },
-            text = { Text("${p.name} has no valid saved coordinates, so $what cannot be shown. Open the details to add or correct the location.") },
+            title = { Text("No saved map location") },
+            text = { Text("No saved map location is available for this record (${p.name}), so $what cannot be shown. Nothing was added to the map. Open the details to add or correct the location.") },
             confirmButton = { TextButton(onClick = { noLocationFor = null; onOpenPerson(p) }) { Text("Open details") } },
-            dismissButton = { TextButton(onClick = { noLocationFor = null }) { Text("Close") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { noLocationFor = null }, label = "Close") },
         )
     }
 }
@@ -890,14 +973,7 @@ private fun CurrentAddressGroup(
                 LocationDetection.NONE -> Unit
             }
             if (onUpdateFromCoordinates != null) {
-                OutlinedButton(
-                    onClick = onUpdateFromCoordinates,
-                    enabled = detection != LocationDetection.RESOLVING,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Icon(Icons.Rounded.LocationOn, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                    Text("Update the Current Address")
-                }
+                ActionButton(ActionKind.Edit, onClick = onUpdateFromCoordinates, label = "Update the Current Address", enabled = detection != LocationDetection.RESOLVING, modifier = Modifier.fillMaxWidth())
             }
             com.emfitsolutions.gopreach.ui.components.PhilippineAddressPicker(
                 province = province,
@@ -1060,7 +1136,7 @@ internal fun PipelinePersonDetailScreen(
     // per that spec's own explicit exclusion. [canManageAllVisitHistory] is
     // the pre-existing Super-Admin override (SuperAdminInterestedRecordsScreen)
     // and always wins regardless of stage/ownership. A hidden/disabled
-    // button is never the real enforcement — see firestore.rules'
+    // button is never the real enforcement — see docs/legacy-firebase/firestore.rules'
     // `interestedPeople`/`visits` rules for the actual one; this only keeps
     // the UI from offering an action the backend would reject anyway.
     val isOwner = currentPersonId == livePerson.publisherPersonId
@@ -1101,10 +1177,10 @@ internal fun PipelinePersonDetailScreen(
                     // Super-Admin override) ever sees this, regardless of
                     // stage.
                     if (canManageParent) {
-                        IconButton(onClick = { showEditDialog = true }) { Icon(Icons.Rounded.Edit, contentDescription = "Edit") }
+                        ActionIconButton(ActionKind.Edit, onClick = { showEditDialog = true }, contentDescription = "Edit")
                         // Delete lives here, inside the details, and asks first. A record already moved to Inactive offers Reactivate instead.
                         if (livePerson.status == RecordStatus.ACTIVE) {
-                            IconButton(onClick = { showDeleteDialog = true }) { Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error) }
+                            ActionIconButton(ActionKind.Delete, onClick = { showDeleteDialog = true }, contentDescription = "Delete")
                         } else {
                             IconButton(onClick = { showBinChoice = true }) { Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Restore or delete permanently") }
                         }
@@ -1116,7 +1192,7 @@ internal fun PipelinePersonDetailScreen(
             // "Add Visit" only applies once there's an actual visit history to
             // keep — Searching has none yet (spec's own module description).
             if (canAddVisit) {
-                androidx.compose.material3.ExtendedFloatingActionButton(onClick = { showAddVisit = true }, icon = { Icon(Icons.Rounded.Add, contentDescription = null) }, text = { Text("Log Visit") })
+                ActionButton(ActionKind.Add, onClick = { showAddVisit = true }, label = "Log Visit")
             }
         },
     ) { padding ->
@@ -1131,6 +1207,19 @@ internal fun PipelinePersonDetailScreen(
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.error,
                     )
+                }
+            }
+            // Street View and the map right under the record's name: no scrolling down to the Location section to find them.
+            item {
+                val quickContext = androidx.compose.ui.platform.LocalContext.current
+                val where = livePerson.validCoordinates()
+                if (where != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        ActionButton(ActionKind.Map, onClick = { com.emfitsolutions.gopreach.ui.components.openStreetViewExternally(quickContext, where.first, where.second) }, label = "Street View", modifier = Modifier.weight(1f))
+                        ActionButton(ActionKind.Map, onClick = { com.emfitsolutions.gopreach.ui.components.openCoordinatesInMaps(quickContext, where.first, where.second, livePerson.name) }, label = "Show Map", modifier = Modifier.weight(1f))
+                    }
+                } else {
+                    Text("No saved location, so Street View and the map are not available. Edit the record to capture its coordinates.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             item {
@@ -1255,7 +1344,7 @@ internal fun PipelinePersonDetailScreen(
                             // (spec §8) for a Return Visit/Searching record —
                             // a hidden button isn't the real enforcement (see
                             // saveVisit/deleteVisit's own doc comments for the
-                            // backstop check, and firestore.rules for the
+                            // backstop check, and docs/legacy-firebase/firestore.rules for the
                             // actual one), but another Publisher's entry shows
                             // no action controls at all rather than a
                             // disabled one, per spec §17. "Territory Map
@@ -1268,8 +1357,8 @@ internal fun PipelinePersonDetailScreen(
                                 if (stage == PipelineStage.BIBLE_STUDY) isOwner else visit.createdByPersonId == currentPersonId
                             if (canManageThisVisit) {
                                 Row {
-                                    IconButton(onClick = { pendingEditVisit = visit }) { Icon(Icons.Rounded.Edit, contentDescription = "Edit visit") }
-                                    IconButton(onClick = { pendingDeleteVisit = visit }) { Icon(Icons.Rounded.Delete, contentDescription = "Delete visit") }
+                                    ActionIconButton(ActionKind.Edit, onClick = { pendingEditVisit = visit }, contentDescription = "Edit visit")
+                                    ActionIconButton(ActionKind.Delete, onClick = { pendingDeleteVisit = visit }, contentDescription = "Delete visit")
                                 }
                             }
                         }
@@ -1351,13 +1440,13 @@ internal fun PipelinePersonDetailScreen(
             title = { Text("Delete Visit?") },
             text = { Text("This will permanently delete the visit logged on ${dateFormat.format(Date(toDeleteVisit.visitDate))}. This cannot be undone.") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.deleteVisit(person.id, toDeleteVisit, currentPersonId, canManageAllVisitHistory, stage, livePerson.publisherPersonId)
                     showToast("Visit deleted.")
                     pendingDeleteVisit = null
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { pendingDeleteVisit = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDeleteVisit = null }, label = "Cancel") },
         )
     }
 
@@ -1386,14 +1475,14 @@ internal fun PipelinePersonDetailScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                     val fromLabel = livePerson.pipelineStage.fullLabel()
                     viewModel.advanceStage(livePerson, toStage, currentPersonId)
                     showToast("Status successfully changed from $fromLabel to ${toStage.fullLabel()}.")
                     pendingStageChange = null
-                }) { Text("Confirm") }
+                }, label = "Confirm")
             },
-            dismissButton = { TextButton(onClick = { pendingStageChange = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingStageChange = null }, label = "Cancel") },
         )
     }
 
@@ -1584,14 +1673,7 @@ private fun ForwardToCongregationDialog(
         maxContentHeight = 420.dp,
         hasUnsavedChanges = selected != null,
     ) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it; selected = null },
-            label = { Text("Search by congregation name or language") },
-            singleLine = true,
-            visualTransformation = VisualTransformation.None,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        StandardSearchField(value = query, onValueChange = { query = it; selected = null }, placeholder = "Search by congregation name or language", modifier = Modifier.fillMaxWidth())
         LazyColumn(modifier = Modifier.heightIn(max = 280.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items(filtered, key = { it.id }) { c ->
                 Card(
@@ -1655,14 +1737,7 @@ private fun ForwardToPublisherDialog(
         maxContentHeight = 420.dp,
         hasUnsavedChanges = selected != null,
     ) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it; selected = null },
-            label = { Text("Search by publisher name") },
-            singleLine = true,
-            visualTransformation = VisualTransformation.None,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        StandardSearchField(value = query, onValueChange = { query = it; selected = null }, placeholder = "Search by publisher name", modifier = Modifier.fillMaxWidth())
         LazyColumn(modifier = Modifier.heightIn(max = 280.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             items(filtered, key = { it.id }) { p ->
                 Card(
@@ -1800,7 +1875,7 @@ private fun GpsLocationSection(person: InterestedPerson, currentPersonId: String
                     },
                 ) { Text("Clear") }
             },
-            dismissButton = { TextButton(onClick = { showClearConfirm = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { showClearConfirm = false }, label = "Cancel") },
         )
     }
 }
@@ -1882,7 +1957,7 @@ private fun VisitDetailDialog(
     // same rule the row's own Edit/Delete icons already use (see the call
     // site); false hides both actions here too, a disabled button is never
     // the real enforcement (see saveVisit/deleteVisit's own doc comments for
-    // the backstop check, firestore.rules for the actual one).
+    // the backstop check, docs/legacy-firebase/firestore.rules for the actual one).
     canEdit: Boolean,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -1931,9 +2006,9 @@ private fun VisitDetailDialog(
             Row {
                 if (canEdit) {
                     TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-                    TextButton(onClick = onEdit) { Text("Edit") }
+                    ActionButton(ActionKind.Edit, onClick = onEdit, label = "Edit")
                 }
-                TextButton(onClick = onDismiss) { Text("Close") }
+                ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Close")
             }
         },
     )
@@ -1973,20 +2048,13 @@ private fun InterestedPerson.validCoordinates(): Pair<Double, Double>? {
 @Composable
 private fun RecordQuickActions(onDetails: () -> Unit, onMap: () -> Unit, onStreetView: () -> Unit) {
     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        RecordQuickAction(Icons.Rounded.Info, "Show Details", androidx.compose.ui.graphics.Color(0xFF7E57C2), onDetails)
-        RecordQuickAction(Icons.Rounded.Map, "Show Maps", androidx.compose.ui.graphics.Color(0xFF2E8B57), onMap)
-        RecordQuickAction(Icons.Rounded.Streetview, "Show Street View", androidx.compose.ui.graphics.Color(0xFFC79100), onStreetView)
+        ActionIconButton(ActionKind.View, onClick = onDetails, contentDescription = "Show Details")
+        ActionIconButton(ActionKind.Map, onClick = onMap, contentDescription = "Show Maps")
+        ActionIconButton(ActionKind.Map, onClick = onStreetView, contentDescription = "Show Street View", icon = Icons.Rounded.Streetview)
     }
 }
 
-@Composable
-private fun RecordQuickAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, tint: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
-    androidx.compose.material3.FilledTonalIconButton(
-        onClick = onClick,
-        modifier = Modifier.size(40.dp),
-        colors = androidx.compose.material3.IconButtonDefaults.filledTonalIconButtonColors(containerColor = tint.copy(alpha = 0.14f), contentColor = tint),
-    ) { Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp)) }
-}
+
 /**
  * A record in the recycle bin (Inactive): choose to restore it (Active again) or delete it permanently. A permanent delete asks once more, and the record
  * is kept whole in Deleted Records ([PipelineViewModel.permanentlyDelete]).
@@ -1999,11 +2067,11 @@ internal fun RecycleBinChoiceDialog(recordLabel: String, canDeletePermanently: B
             onDismissRequest = onDismiss,
             title = { Text("\"$recordLabel\" is in the recycle bin") },
             text = { Text("Restore it to make it active again, or delete it permanently.") },
-            confirmButton = { TextButton(onClick = onRestore) { Text("Restore") } },
+            confirmButton = { ActionButton(ActionKind.Refresh, onClick = onRestore, label = "Restore") },
             dismissButton = {
                 Row {
                     if (canDeletePermanently) TextButton(onClick = { confirming = true }) { Text("Delete permanently", color = MaterialTheme.colorScheme.error) }
-                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel")
                 }
             },
         )
@@ -2013,7 +2081,7 @@ internal fun RecycleBinChoiceDialog(recordLabel: String, canDeletePermanently: B
             title = { Text("Delete \"$recordLabel\" permanently?") },
             text = { Text("It leaves your lists for good, with all of its visits. A copy stays in Deleted Records.") },
             confirmButton = { TextButton(onClick = onDeletePermanently) { Text("Delete permanently", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
         )
     }
 }

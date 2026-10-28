@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.settings
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.action_ok
 import com.emfitsolutions.gopreach.shared.resources.dashboard_back_cd
@@ -407,7 +409,7 @@ private fun NotificationSoundSection(viewModel: SettingsViewModel) {
                 }
             },
             confirmButton = {
-                TextButton(onClick = { diagnosticsResult = null }) { Text(stringResource(Res.string.action_ok)) }
+                ActionButton(ActionKind.Save, onClick = { diagnosticsResult = null }, label = stringResource(Res.string.action_ok))
             },
         )
     }

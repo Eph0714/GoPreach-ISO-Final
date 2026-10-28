@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -92,14 +96,7 @@ fun CircuitOverseerAccountsScreen(
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             HideInFullScreen(false) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text("Search name, username, circuit or congregation") },
-                singleLine = true,
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search name, username, circuit or congregation", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
             }
             HideInFullScreen(true) {
             Row(
@@ -165,9 +162,9 @@ fun CircuitOverseerAccountsScreen(
                                 AssistChip(onClick = {}, label = { Text(if (row.person.isTemporaryCredential && row.person.accountStatus == AccountStatus.ACTIVE) "TEMPORARY ACCOUNT" else row.person.accountStatus.name) })
                             }
                             Row {
-                                IconButton(onClick = { onView(row.person.id) }) { Icon(Icons.Rounded.Visibility, contentDescription = "View") }
-                                IconButton(onClick = { onEdit(row.person.id) }) { Icon(Icons.Rounded.Edit, contentDescription = "Edit") }
-                                IconButton(onClick = { deleteError = null; deleting = row }) { Icon(Icons.Rounded.Delete, contentDescription = "Delete") }
+                                ActionIconButton(ActionKind.View, onClick = { onView(row.person.id) }, contentDescription = "View")
+                                ActionIconButton(ActionKind.Edit, onClick = { onEdit(row.person.id) }, contentDescription = "Edit")
+                                ActionIconButton(ActionKind.Delete, onClick = { deleteError = null; deleting = row }, contentDescription = "Delete")
                             }
                         }
                     }
@@ -189,13 +186,13 @@ fun CircuitOverseerAccountsScreen(
             },
             confirmButton = {
                 if (blocker == null) {
-                    TextButton(onClick = {
+                    ActionButton(ActionKind.Delete, onClick = {
                         viewModel.delete(row, currentPersonId) { problem ->
                             if (problem == null) { showToast("${row.person.fullName} deleted."); deleting = null } else deleteError = problem
                         }
-                    }) { Text("Delete") }
+                    }, label = "Delete")
                 } else {
-                    TextButton(onClick = { deleting = null; onEdit(row.person.id) }) { Text("Edit assignments") }
+                    ActionButton(ActionKind.Edit, onClick = { deleting = null; onEdit(row.person.id) }, label = "Edit assignments")
                 }
             },
             dismissButton = { TextButton(onClick = { deleting = null }) { Text(if (blocker != null) "Close" else "Cancel") } },

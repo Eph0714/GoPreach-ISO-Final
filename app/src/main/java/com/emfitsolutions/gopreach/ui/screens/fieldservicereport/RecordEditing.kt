@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -146,10 +148,8 @@ fun RecordEditDialog(
             }
         },
         confirmButton = {
-            Button(
-                enabled = publisher != null && !busy,
-                onClick = {
-                    val p = publisher ?: return@Button
+            ActionButton(ActionKind.Save, onClick = {
+                    val p = publisher ?: return@ActionButton
                     busy = true
                     scope.launch {
                         val message = manual.save(
@@ -164,10 +164,9 @@ fun RecordEditDialog(
                         busy = false
                         if (message == null) onDismiss() else error = message
                     }
-                },
-            ) { Text("Save") }
+                }, label = "Save", enabled = publisher != null && !busy)
         },
-        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -186,7 +185,7 @@ fun RecordDeleteDialog(name: String, monthLabel: String, onConfirm: () -> Unit, 
         onDismissRequest = onDismiss,
         title = { Text("Delete record?") },
         text = { Text("$name's field service record for $monthLabel will be deleted.") },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Delete") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { ActionButton(ActionKind.Delete, onClick = onConfirm, label = "Delete") },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }

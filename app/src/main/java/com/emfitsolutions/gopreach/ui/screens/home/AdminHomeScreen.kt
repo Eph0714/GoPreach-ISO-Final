@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.dashboard_quick_action_publishers
 import com.emfitsolutions.gopreach.shared.resources.dashboard_section_account
@@ -74,6 +76,7 @@ import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Tune
+import com.emfitsolutions.gopreach.ui.components.AdminCapabilities
 import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -154,182 +157,37 @@ fun AdminHomeScreen(
     val session by viewModel.state.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
     val pendingSyncCount by viewModel.pendingSyncCount.collectAsStateWithLifecycle()
-    // "Multiple Role Login Detection & Role Selection" spec §7 — the
-    // session's single active role (auto for a one-role account, or
-    // whichever SelectRoleScreen entry the user picked), not always the most
-    // senior Admin-track role the account happens to hold.
+    // Unified multi-role account: [role] is the most senior Admin-track role (it scopes the session); every permission flag below is the
+    // union of what ALL the roles consolidated into this session grant (see AdminCapabilities), so no role is ever chosen at login.
     val role = session.activeAdminRole
     val currentPersonId = session.person?.id.orEmpty()
+    val caps = remember(session.person, session.roleAssignments, session.grant, session.groups) { AdminCapabilities.of(session) }
 
-    val isSuperAdmin = role == AdminRole.SUPER_ADMIN
-    // "REDESIGN THE CIRCUIT OVERSEER AND OTHER USER DASHBOARD" spec —
-    // Circuit Overseer (and any other future grant-based restricted role)
-    // carries no built-in access of its own (see AdminRole.CIRCUIT_OVERSEER's
-    // doc comment); every capability they have comes from their own
-    // UserAccessGrant instead. Checked by permission only, not scope, here —
-    // this only decides whether a drawer item is *offered at all*; the
-    // screen it opens, and firestore.rules underneath it, still enforce the
-    // grant's actual congregation/group scope on every read and write.
-    val grantPermissions = session.grant?.resolvedPermissions.orEmpty()
-    val canEnrollCoordinatorElder = role == AdminRole.SUPER_ADMIN || role == AdminRole.ADMIN_PER_CONGREGATION
-    val canEnrollRegularElderOrPublisher = canEnrollCoordinatorElder || role == AdminRole.COORDINATOR_ELDER
-    // "CREATING PUBLISHER" spec — Service Overseer can also create/manage
-    // Publishers under their own congregation, on top of everyone
-    // [canEnrollRegularElderOrPublisher] already covers. Kept as its own flag
-    // so Service Overseer doesn't also gain Regular Elder enrollment access.
-    val canEnrollPublisher = canEnrollRegularElderOrPublisher || role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY ||
-        Permission.MANAGE_PUBLISHERS in grantPermissions
-    // New Service Overseer role — unlike Coordinator Elder enrollment, a
-    // Coordinator Elder *can* create one (same three-role set as Regular
-    // Elder/Publisher enrollment above).
-    val canEnrollServiceOverseer = canEnrollRegularElderOrPublisher
-    // "MINISTERIAL ACCOUNT" spec — same enroller set as Service Overseer
-    // (Super-Admin/Admin-own-congregation/Coordinator Elder), but with no
-    // per-congregation cap: multiple Ministerial Servants are allowed.
-    // Ministerial Servant is a RegularElderRole-adjacent AdminRole stored in
-    // the same `roleAssignments` collection Regular Elder is — firestore.rules
-    // gates that whole collection on VIEW_ELDERS/MANAGE_ELDERS regardless of
-    // which AdminRole a given document actually holds, so a grant-based
-    // Circuit Overseer's MANAGE_ELDERS permission already covers this at the
-    // data layer; this just surfaces the matching drawer item too.
-    val canEnrollMinisterialServant = canEnrollRegularElderOrPublisher || Permission.MANAGE_ELDERS in grantPermissions
-    // "Announcement Module" — Super-Admin (any congregation), Admin/
-    // Coordinator Elder (own congregation only). No Service Overseer/
-    // Ministerial Servant per the spec's explicit access list.
-    val canManageAnnouncements = canEnrollRegularElderOrPublisher
-    // "Consolidated Monthly Report" spec — Service Overseer, Coordinator
-    // Elder, Admin (own congregation), and Super-Admin (all congregations).
-    val canViewConsolidatedReport = canEnrollRegularElderOrPublisher || role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY
-    // "Field Service Group Report" — same viewer set as the Consolidated
-    // Report, widened to also include Regular Elder ("Use the entities for
-    // Admin, Coordinator/Elder, Regular Elder, Service Overseer"): Super-
-    // Admin (every congregation), Admin/Coordinator Elder/Service Overseer/
-    // Regular Elder (own congregation only).
-    val canViewFieldServiceGroupReport = canViewConsolidatedReport || role == AdminRole.REGULAR_ELDER || (role == AdminRole.MINISTERIAL_SERVANT && session.isGroupRole)
-    // "Forward to Other Congregation" incoming review queue — Super-Admin/
-    // Admin/Coordinator Elder/Service Overseer keep full Accept/Decline/
-    // Assign access (same viewer set as the Consolidated Report); Regular
-    // Elder/Ministerial Servant also see it now (notification balloon spec:
-    // "Incoming approval request for transfer [All]"), but strictly
-    // view-only — see GoPreachNavGraph's FORWARD_REQUESTS composable, which
-    // computes that separately and is the actual enforcement (this flag only
-    // decides whether the drawer/balloon offer the screen at all).
-    val canViewForwardRequests = canViewConsolidatedReport || role == AdminRole.REGULAR_ELDER || role == AdminRole.MINISTERIAL_SERVANT
-    // "House Holder Assignment" module — spec's own exact access list:
-    // Super-Admin (all congregations), Admin/Service Overseer (own
-    // congregation only) — deliberately narrower than [canViewForwardRequests]
-    // above (no Coordinator Elder/Regular Elder/Ministerial Servant; the
-    // spec never names them). Secretary gets the same access Service
-    // Overseer already does everywhere else in this app.
-    val canManageHouseholderAssignment = role == AdminRole.SUPER_ADMIN || role == AdminRole.ADMIN_PER_CONGREGATION ||
-        role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY
-    // Recently Visited needs somewhere to open a record: the Publisher Assignment module, or the scoped read-only list.
-    val showRecentlyVisited = canManageHouseholderAssignment || role == AdminRole.COORDINATOR_ELDER
-    // "Manage Publisher Report" module — Super-Admin (every congregation),
-    // Admin/Coordinator Elder/Service Overseer (own congregation only); same
-    // access set as the Consolidated Report. A Circuit Overseer with any of
-    // the report-view permissions also reaches it, but always read-only —
-    // see GoPreachNavGraph's MANAGE_PUBLISHER_REPORTS composable, which
-    // computes that separately: firestore.rules blocks every grant holder
-    // from writing `monthlyReports` regardless of permission ("A restricted
-    // user's report access is view-only in every one of the spec's own
-    // worked examples"), so this module can never grant them edit rights,
-    // only viewing/printing.
-    // Regular Elder/Ministerial Servant also reach this now (notification
-    // balloon spec: "Incoming Publisher Monthly Reports [Not for
-    // Publisher]") — same "widen visibility, not authority" call as
-    // [canViewForwardRequests] above; GoPreachNavGraph's `canEditPublisherReports`
-    // already excludes both of them, so they land here read-only.
-    val canManagePublisherReports = canViewConsolidatedReport || role == AdminRole.REGULAR_ELDER || role == AdminRole.MINISTERIAL_SERVANT ||
-        grantPermissions.any {
-            it == Permission.VIEW_PUBLISHER_REPORTS || it == Permission.VIEW_GROUP_REPORTS || it == Permission.VIEW_CONGREGATION_REPORTS
-        }
-    // Control Panel: full access for Super-Admin, own-congregation for Admin (spec §3 permission matrix).
-    val canAccessControlPanel = role == AdminRole.SUPER_ADMIN || role == AdminRole.ADMIN_PER_CONGREGATION
-    // User logs: Super-Admin (all) and Admin/Coordinator Elder (own congregation); Regular Elder has no access.
-    val canViewUserLogs = role == AdminRole.SUPER_ADMIN || role == AdminRole.ADMIN_PER_CONGREGATION || role == AdminRole.COORDINATOR_ELDER
-    // "Contact Record" module — "Super Admin can see all congregation
-    // Contact Records. Admin, Congregation Elder, Regular Elder, and
-    // Service Overseer can only see Contact Records from their own
-    // congregation" (Call/Message/Search/Filter redesign) — widened from
-    // Super-Admin/Coordinator Elder/Regular Elder only to also include
-    // Admin and Service Overseer, per that explicit access list.
-    val canViewContactRecord = role == AdminRole.SUPER_ADMIN || role == AdminRole.ADMIN_PER_CONGREGATION ||
-        role == AdminRole.COORDINATOR_ELDER || role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY || role == AdminRole.REGULAR_ELDER
-    // Publishers/Groups: Super-Admin/Admin/Coordinator Elder only (spec §3 permission matrix — Regular Elder ❌).
-    val canManagePublishersAndGroups = canViewUserLogs
-    // "Territory Map" — "allow the publishers, coordinator elders, regular
-    // elders, service overseer and admin to see... their congregation only,
-    // however the super admin can see all territory in all congregation" —
-    // its own (wider than [canManagePublishersAndGroups]) set: Super-Admin,
-    // Admin, Coordinator Elder, Service Overseer, and Regular Elder. Always
-    // view-only regardless of role — the screen itself has no edit/delete
-    // action for anyone (see TerritoryMapScreen).
-    // The Ministerial Servant sees it too (as a reference): the Territory Map is the first card of their simple Quick Access.
-    val isMinisterialServant = role == AdminRole.MINISTERIAL_SERVANT
-    val canViewTerritoryMap = role == AdminRole.SUPER_ADMIN || role == AdminRole.ADMIN_PER_CONGREGATION ||
-        role == AdminRole.COORDINATOR_ELDER || role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY || role == AdminRole.REGULAR_ELDER || isMinisterialServant
-    // Spec §15 — "Elders should be able to see Interested Person information
-    // according to their existing Congregation/Group access scope." Own
-    // Congregation/Group only, read-only (see ElderInterestedRecordsScreen).
-    // Excludes Super-Admin, who already has the separate, full read/write
-    // ALL_INTERESTED_RECORDS drawer item instead — this scoped screen would
-    // be redundant (and congregationId-less) for that role.
-    // "House Holder Records": Super-Admin now uses it too (all congregations), and so does the Circuit Overseer (assigned ones).
-    val canViewInterestedPeopleScope = role == AdminRole.SUPER_ADMIN || role == AdminRole.CIRCUIT_OVERSEER ||
-        role == AdminRole.ADMIN_PER_CONGREGATION || role == AdminRole.COORDINATOR_ELDER ||
-        role == AdminRole.SERVICE_OVERSEER || role == AdminRole.REGULAR_ELDER
-    // "Meeting Assignments" — "the Coordinator-elder, elder, service
-    // overseer, admin can make an assignment for the meetings, the super
-    // admin can do so [too]" — same role set as [canViewTerritoryMap] today,
-    // kept as its own flag since the two features may diverge later.
-    val canEditMeetingAssignments = role == AdminRole.SUPER_ADMIN || role == AdminRole.ADMIN_PER_CONGREGATION ||
-        role == AdminRole.COORDINATOR_ELDER || role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY || role == AdminRole.REGULAR_ELDER
-    // "CREATING GROUPS" spec — Service Overseer can also create/manage
-    // Groups under their own congregation, same as Coordinator Elder,
-    // without gaining the wider Publisher-management access above.
-    // RBAC: resolved from every role the user holds, so a Group Overseer/Servant/Assistant (own group only)
-    // reaches the screen too; the screen itself narrows what they can see and do.
-    val canManageGroups = canManagePublishersAndGroups || role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY ||
-        Permission.MANAGE_GROUPS in grantPermissions ||
-        com.emfitsolutions.gopreach.domain.GroupAccessScope.resolve(session.person, session.roleAssignments).canOpen
-    // Territory Assignment module — same five built-in roles as the spec
-    // calls for (Super-Admin/Admin/Coordinator Elder via
-    // canManagePublishersAndGroups, plus Service Overseer/Secretary), same
-    // direct-role-check pattern as [canManageGroups] just above rather than
-    // routing through [PermissionChecker.hasPermission]. Deliberately NO
-    // `Permission.MANAGE_TERRITORY_ASSIGNMENTS in grantPermissions` branch
-    // (unlike canManageGroups) — firestore.rules' canManageTerritoryAssignmentsFor
-    // has no grant-based path at all, by design (its own comment explains why:
-    // avoiding the "restrictedAllows() always true for built-in roles" gap
-    // this feature was specifically built to close). A grant-only branch here
-    // would show the Add button to a restricted user whose every save would
-    // then be rejected server-side — this stays an exact mirror of the
-    // server's fixed role list instead.
-    val canManageTerritoryAssignments = canManagePublishersAndGroups || role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY
-    // Drawer-only widening of the Regular Elder item for a grant-based
-    // Circuit Overseer — deliberately *not* folded into
-    // [canEnrollRegularElderOrPublisher] itself, since that flag also drives
-    // Service Overseer/Ministerial Servant enrollment and the Consolidated
-    // Report below, none of which MANAGE_ELDERS implies.
-    val canManageRegularEldersForDrawer = canEnrollRegularElderOrPublisher || Permission.MANAGE_ELDERS in grantPermissions
-    // "Elder Dashboard Consistent with Admin/Super-Admin Dashboard" spec §1 —
-    // every admin-track role (including both Elder roles) now navigates
-    // through the same Side Panel-driven Main Form; the old tile-grid body
-    // (quick actions, DashboardTile grid, "Sign Out" tile) is hidden for all
-    // of them, not just Super-Admin/Admin. This used to leave Coordinator/
-    // Regular Elder on the old tile-grid layout — a real, visible
-    // inconsistency, not a deliberate role distinction — while
-    // Super-Admin/Admin already had the clean drawer+stats Main Form.
-    // Elder-appropriate destinations are still reachable, just through the
-    // drawer (see GoPreachSidePanelContent, already gated by the same
-    // canManagePublishersAndGroups/canEnrollRegularElderOrPublisher/etc.
-    // booleans below, which are already Elder-aware).
-    // "REDESIGN THE CIRCUIT OVERSEER AND OTHER USER DASHBOARD" spec: "Make the
-    // Dashboard and main form the same as the admin user" — Circuit Overseer
-    // (and any other future grant-based restricted role) gets the same
-    // drawer+stats shell as every built-in Admin-track role, instead of the
-    // old tile-grid layout it was still stuck on.
+    val isSuperAdmin = caps.isSuperAdmin
+    val canEnrollCoordinatorElder = caps.canEnrollCoordinatorElder
+    val canEnrollRegularElderOrPublisher = caps.canEnrollRegularElderOrPublisher
+    val canEnrollPublisher = caps.canEnrollPublisher
+    val canEnrollServiceOverseer = caps.canEnrollServiceOverseer
+    val canEnrollMinisterialServant = caps.canEnrollMinisterialServant
+    val canManageAnnouncements = caps.canManageAnnouncements
+    val canViewConsolidatedReport = caps.canViewConsolidatedReport
+    val canViewFieldServiceGroupReport = caps.canViewFieldServiceGroupReport
+    val canViewForwardRequests = caps.canViewForwardRequests
+    val canManageHouseholderAssignment = caps.canManageHouseholderAssignment
+    val showRecentlyVisited = caps.showRecentlyVisited
+    val canManagePublisherReports = caps.canManagePublisherReports
+    val canAccessControlPanel = caps.canAccessControlPanel
+    val canViewUserLogs = caps.canViewUserLogs
+    val canViewContactRecord = caps.canViewContactRecord
+    val canManagePublishersAndGroups = caps.canManagePublishersAndGroups
+    val isMinisterialServant = caps.simpleMenu
+    val canViewTerritoryMap = caps.canViewTerritoryMap
+    val canViewInterestedPeopleScope = caps.canViewInterestedPeopleScope
+    val canEditMeetingAssignments = caps.canEditMeetingAssignments
+    val canManageGroups = caps.canManageGroups
+    val canManageTerritoryAssignments = caps.canManageTerritoryAssignments
+    val canManageRegularEldersForDrawer = caps.canEnrollRegularElderOrPublisher
+    // The Main Form is the drawer+stats shell for every Admin-track role (Circuit Overseer included), never the old tile grid.
     val hideMainFormButtons = isSuperAdmin || role == AdminRole.ADMIN_PER_CONGREGATION ||
         role == AdminRole.COORDINATOR_ELDER || role == AdminRole.SERVICE_OVERSEER || role == AdminRole.SECRETARY || role == AdminRole.REGULAR_ELDER ||
         role == AdminRole.MINISTERIAL_SERVANT || role == AdminRole.CIRCUIT_OVERSEER
@@ -484,8 +342,8 @@ fun AdminHomeScreen(
             onDismissRequest = { showExitConfirm = false },
             title = { Text(stringResource(Res.string.home_exit_title)) },
             text = { Text(stringResource(Res.string.home_exit_message)) },
-            confirmButton = { TextButton(onClick = { activity?.finish() }) { Text(stringResource(Res.string.home_exit_confirm)) } },
-            dismissButton = { TextButton(onClick = { showExitConfirm = false }) { Text(stringResource(Res.string.home_exit_cancel)) } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = { activity?.finish() }, label = stringResource(Res.string.home_exit_confirm)) },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { showExitConfirm = false }, label = stringResource(Res.string.home_exit_cancel)) },
         )
     }
 
@@ -501,14 +359,7 @@ fun AdminHomeScreen(
     // Drag from the side panel to Quick Access: shared drag state, the modules the side panel currently offers, and the overlay origin.
     val dragState = remember { QuickAccessDragState() }
     // The tab strip's modules for this role (the same permissions the drawer and Quick Access used for them).
-    val tabsAllowed = buildSet {
-        if (role != AdminRole.CIRCUIT_OVERSEER) {
-            if (canEnrollPublisher) add(com.emfitsolutions.gopreach.ui.components.AdminTab.PUBLISHERS)
-            if (canViewFieldServiceGroupReport) add(com.emfitsolutions.gopreach.ui.components.AdminTab.FIELD_SERVICE)
-            if (role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles && !session.isGroupRole) add(com.emfitsolutions.gopreach.ui.components.AdminTab.ATTENDANCE)
-            if (canViewTerritoryMap) add(com.emfitsolutions.gopreach.ui.components.AdminTab.TERRITORY)
-        }
-    }
+    val tabsAllowed = caps.tabModules
     androidx.compose.runtime.SideEffect { com.emfitsolutions.gopreach.ui.components.AdminTabsStore.allowed = tabsAllowed }
     // The panel's profile header names the user's congregation (their scope).
     val congregationRepository = org.koin.compose.koinInject<com.emfitsolutions.gopreach.data.repository.CongregationRepository>()
@@ -528,43 +379,7 @@ fun AdminHomeScreen(
                     else -> allCongregations.firstOrNull { it.id == session.person?.activeCongregationId }?.name.orEmpty()
                 },
                 profileImageUrl = session.person?.profileImageUrl,
-                canManageCongregationsAndAdmins = isSuperAdmin,
-                canEnrollCoordinatorElder = canEnrollCoordinatorElder,
-                canEnrollServiceOverseer = canEnrollServiceOverseer,
-                canEnrollMinisterialServant = canEnrollMinisterialServant,
-                canManageAnnouncements = canManageAnnouncements,
-                canViewFieldServiceReport = canViewFieldServiceGroupReport || role == AdminRole.CIRCUIT_OVERSEER,
-                canManageCircuits = isSuperAdmin,
-                isCircuitOverseer = role == AdminRole.CIRCUIT_OVERSEER,
-                // Deleted Records: Super-Admin and the roles that can manage their congregation's records.
-                canViewDeletedRecords = isSuperAdmin || canEnrollPublisher,
-                canViewForwardRequests = canViewForwardRequests,
-                canManageHouseholderAssignment = canManageHouseholderAssignment,
-                canEnrollRegularElderOrPublisher = canManageRegularEldersForDrawer,
-                canEnrollPublisher = canEnrollPublisher,
-                canManagePublishersAndGroups = canManagePublishersAndGroups,
-                canManageGroups = canManageGroups,
-                canManageTerritoryAssignments = canManageTerritoryAssignments,
-                canManageTerritories = canViewTerritoryMap || role == AdminRole.CIRCUIT_OVERSEER,
-                simpleMenu = isMinisterialServant,
-                canEditMeetingAssignments = canEditMeetingAssignments,
-                canAccessControlPanel = canAccessControlPanel,
-                isSuperAdmin = isSuperAdmin,
-                canViewUserLogs = canViewUserLogs,
-                canManageUsers = canManageUsers,
-                canManageAccountCredentials = canManageAccountCredentials,
-                canViewContactRecord = canViewContactRecord,
-                // Same role set: Super-Admin, Admin, Coordinator Elder, Regular
-                // Elder, Service Overseer, Secretary.
-                // Super-Admin only: the Session Timeout is one online setting that every user's phone follows.
-                canManageSessionTimeout = isSuperAdmin,
-                canEnterManualFieldService = role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles || session.isGroupRole,
-                // Meeting Attendance and the Congregation Comparative Report: the congregation-wide roles and the Super-Admin (not a group role).
-                canManageMeetingAttendance = role in com.emfitsolutions.gopreach.ui.screens.manualreport.ManualEntryRoles && !session.isGroupRole,
-                canViewSentReports = role in setOf(
-                    AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY,
-                ),
-                canViewInterestedPeopleScope = canViewInterestedPeopleScope,
+                caps = caps,
                 onSwitchToPublisher = onSwitchToPublisher?.let { switchAction ->
                     { coroutineScope.launch { drawerState.close() }; switchAction() }
                 },
@@ -648,7 +463,6 @@ fun AdminHomeScreen(
                         ProfileMenuButton(
                             fullName = session.person?.fullName ?: "—",
                             roleLabel = session.activeRoleLabel ?: role?.name?.replace('_', ' ') ?: stringResource(Res.string.role_label_admin_fallback),
-                            onSwitchRole = if (session.roleOptions.size > 1) viewModel::switchRole else null,
                             online = if (role == AdminRole.CIRCUIT_OVERSEER) isOnline else null,
                             profileImageUrl = session.person?.profileImageUrl,
                             onImagePicked = { uri ->

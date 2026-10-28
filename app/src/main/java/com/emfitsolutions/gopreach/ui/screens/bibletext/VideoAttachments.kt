@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.bibletext
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import android.net.Uri
 import android.widget.VideoView
 import androidx.compose.foundation.background
@@ -197,10 +200,7 @@ internal fun AddVideoSection(
             modifier = Modifier.fillMaxWidth(),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Button(onClick = { addFrom(link) }, enabled = link.isNotBlank() && !isLooking) {
-                Icon(Icons.Rounded.VideoLibrary, contentDescription = null, modifier = Modifier.padding(end = 6.dp).size(18.dp))
-                Text("Add video")
-            }
+            ActionButton(ActionKind.Add, onClick = { addFrom(link) }, label = "Add video", enabled = link.isNotBlank() && !isLooking)
             TextButton(
                 onClick = {
                     val copied = clipboard.getText()?.text?.trim().orEmpty()
@@ -304,17 +304,13 @@ private fun VideoTile(item: GalleryVideo, viewModel: VideoViewModel, modifier: M
                 key in downloaded -> IconButton(onClick = { viewModel.removeDownload(video); showToast("Offline copy removed.") }) {
                     Icon(Icons.Rounded.DownloadDone, contentDescription = "Downloaded for offline use — tap to remove the copy", tint = MaterialTheme.colorScheme.primary)
                 }
-                else -> IconButton(onClick = { viewModel.download(video); showToast("Downloading \"${video.title}\"…") }) {
-                    Icon(Icons.Rounded.Download, contentDescription = "Download for offline use", tint = MaterialTheme.colorScheme.primary)
-                }
+                else -> ActionIconButton(ActionKind.Export, onClick = { viewModel.download(video); showToast("Downloading \"${video.title}\"…") }, contentDescription = "Download for offline use")
             }
             IconButton(onClick = { if (!openVideoInJwLibrary(context, video.jwLocale, video.lank)) showToast("Couldn't open JW Library.") }) {
                 Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "Open in JW Library", tint = MaterialTheme.colorScheme.primary)
             }
             Spacer(modifier = Modifier.weight(1f))
-            IconButton(onClick = { confirmRemove = true }) {
-                Icon(Icons.Rounded.Delete, contentDescription = "Remove video", tint = MaterialTheme.colorScheme.error)
-            }
+            ActionIconButton(ActionKind.Delete, onClick = { confirmRemove = true }, contentDescription = "Remove video")
         }
     }
     if (showPlayer) VideoPlayerDialog(video = video, onDismiss = { showPlayer = false }, viewModel = viewModel)
@@ -323,8 +319,8 @@ private fun VideoTile(item: GalleryVideo, viewModel: VideoViewModel, modifier: M
             onDismissRequest = { confirmRemove = false },
             title = { Text("Remove video?") },
             text = { Text("Remove \"${video.title}\" from this event? A downloaded copy on this device is kept until you remove it.") },
-            confirmButton = { TextButton(onClick = { confirmRemove = false; item.onRemove() }) { Text("Remove") } },
-            dismissButton = { TextButton(onClick = { confirmRemove = false }) { Text("Cancel") } },
+            confirmButton = { ActionButton(ActionKind.Delete, onClick = { confirmRemove = false; item.onRemove() }, label = "Remove") },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmRemove = false }, label = "Cancel") },
         )
     }
 }
@@ -345,7 +341,7 @@ internal fun AddVideoDialog(
         text = {
             AddVideoSection(videos = videos, onVideosChange = onVideosChange, defaultLocale = defaultLocale, showExisting = false)
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { ActionButton(ActionKind.Save, onClick = onDismiss, label = "Done") },
     )
 }
 

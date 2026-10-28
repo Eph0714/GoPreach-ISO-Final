@@ -74,8 +74,6 @@ fun ProfileMenuButton(
     // show) — without this, name/username/password changes and "Add Module:
     // Preaching Availability" would be unreachable for a Publisher account.
     onOpenAccountSettings: (() -> Unit)? = null,
-    // Non-null only for an account holding more than one role: re-opens the role selector without signing out.
-    onSwitchRole: (() -> Unit)? = null,
     // Non-null: a small presence dot on the avatar — green while this device is online, grey while offline.
     online: Boolean? = null,
 ) {
@@ -144,13 +142,6 @@ fun ProfileMenuButton(
                     onClick = { expanded = false; onOpenSettings() },
                 )
             }
-            if (onSwitchRole != null) {
-                DropdownMenuItem(
-                    text = { Text("Switch Role") },
-                    leadingIcon = { Icon(Icons.Rounded.Settings, contentDescription = null) },
-                    onClick = { expanded = false; onSwitchRole() },
-                )
-            }
             HorizontalDivider()
             DropdownMenuItem(
                 text = { Text("Log Out") },
@@ -177,7 +168,7 @@ fun ProfileMenuButton(
                     Text("No profile image has been set yet.", style = MaterialTheme.typography.bodyMedium)
                 }
             },
-            confirmButton = { TextButton(onClick = { showViewImage = false }) { Text("Close") } },
+            confirmButton = { ActionButton(ActionKind.Cancel, onClick = { showViewImage = false }, label = "Close") },
         )
     }
 }

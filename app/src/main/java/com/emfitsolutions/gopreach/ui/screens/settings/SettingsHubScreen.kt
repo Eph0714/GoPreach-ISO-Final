@@ -38,6 +38,7 @@ fun SettingsHubScreen(
     currentPersonId: String,
     showDeletedRecordsSettings: Boolean,
     onOpenDeletedRecords: () -> Unit,
+    onOpenSecurity: (() -> Unit)? = null,
 ) {
     var tab by rememberSaveable { mutableIntStateOf(initialTab) }
     Scaffold(
@@ -59,6 +60,7 @@ fun SettingsHubScreen(
                     onSignedOutForPasswordChange = onSignedOutForPasswordChange,
                     isPublisher = isPublisher,
                     onViewPublisherSchedules = onViewPublisherSchedules,
+                    onOpenSecurity = onOpenSecurity,
                     embedded = true,
                 )
             } else {

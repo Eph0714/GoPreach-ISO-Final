@@ -159,18 +159,21 @@ fun FormDialog(
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.End,
+                    horizontalArrangement = Arrangement.spacedBy(ActionSpacing.Gap, Alignment.End),
                 ) {
-                    TextButton(onClick = ::requestDismiss, enabled = !hasConfirmed) { Text(dismissLabel) }
-                    TextButton(
+                    ActionButton(ActionKind.Cancel, onClick = ::requestDismiss, label = dismissLabel, enabled = !hasConfirmed)
+                    ActionButton(
+                        if (confirmLabel.startsWith("Delete", ignoreCase = true) || confirmLabel.startsWith("Remove", ignoreCase = true)) ActionKind.Delete else ActionKind.Save,
                         onClick = {
                             if (!hasConfirmed) {
                                 hasConfirmed = true
                                 onConfirm()
                             }
                         },
+                        label = confirmLabel,
                         enabled = confirmEnabled && !hasConfirmed,
-                    ) { Text(confirmLabel) }
+                        loading = hasConfirmed,
+                    )
                 }
             }
         },
@@ -190,12 +193,10 @@ fun FormDialog(
             title = { Text(stringResource(Res.string.discard_changes_title)) },
             text = { Text(stringResource(Res.string.discard_changes_message)) },
             confirmButton = {
-                TextButton(onClick = { showDiscardConfirm = false; onDismissRequest() }) {
-                    Text(stringResource(Res.string.action_discard))
-                }
+                ActionButton(ActionKind.Delete, onClick = { showDiscardConfirm = false; onDismissRequest() }, label = stringResource(Res.string.action_discard))
             },
             dismissButton = {
-                TextButton(onClick = { showDiscardConfirm = false }) { Text(stringResource(Res.string.action_keep_editing)) }
+                ActionButton(ActionKind.Cancel, onClick = { showDiscardConfirm = false }, label = stringResource(Res.string.action_keep_editing))
             },
         )
     }

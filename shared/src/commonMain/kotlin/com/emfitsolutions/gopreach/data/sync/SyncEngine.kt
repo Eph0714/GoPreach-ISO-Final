@@ -168,6 +168,18 @@ class SyncEngine(
     /** The next pull starts from the beginning (what this account may read changed, so rows skipped earlier must be fetched again). */
     suspend fun resetCursor() = writeCursor(0L)
 
+    /**
+     * Once per person per install: pulls everything again from the start. The very first download after a fresh sign-in can run before the server knows this
+     * person's active congregation, so it skips that congregation's FS Groups and territories - and the cursor then moves past them for good (the Territory Map
+     * showed one group and no boundaries). The marker lives in the cache, so a new install or a cleared app repeats the catch-up once and nothing more.
+     */
+    suspend fun repullOnceFor(personId: String) {
+        val marker = "repull:$personId"
+        if (cacheDao.get(META_COLLECTION, marker) != null) return
+        cacheDao.upsert(CachedDocumentEntity(META_COLLECTION, marker, "1", SyncState.SYNCED.name, nowMillis()))
+        writeCursor(0L)
+    }
+
     private suspend fun writeCursor(cursor: Long) {
         cacheDao.upsert(CachedDocumentEntity(META_COLLECTION, CURSOR_DOC, cursor.toString(), SyncState.SYNCED.name, nowMillis()))
     }

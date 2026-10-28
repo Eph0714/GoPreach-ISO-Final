@@ -59,6 +59,55 @@ object TableReportExporter {
     fun print(context: Context, data: TableReportData) =
         ReportPrinter.printHtml(context, data.title, html(data), PrintOptions(if (data.landscape) OrientationMode.LANDSCAPE else OrientationMode.PORTRAIT))
 
+    /** A Word (.docx) copy of the same report, handed to the share sheet; built with the zip classes already used for Excel (no new library). */
+    fun shareWord(context: Context, data: TableReportData) {
+        fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        fun para(text: String, bold: Boolean = false, size: Int = 20) =
+            "<w:p><w:r><w:rPr>${if (bold) "<w:b/>" else ""}<w:sz w:val=\"$size\"/></w:rPr><w:t xml:space=\"preserve\">${esc(text)}</w:t></w:r></w:p>"
+        val cols = data.table.firstOrNull()?.size?.coerceAtLeast(1) ?: 1
+        val width = 14400 / cols
+        fun cell(text: String, head: Boolean) =
+            "<w:tc><w:tcPr><w:tcW w:w=\"$width\" w:type=\"dxa\"/>${if (head) "<w:shd w:val=\"clear\" w:color=\"auto\" w:fill=\"E2E8F0\"/>" else ""}</w:tcPr>${para(text, head, 18)}</w:tc>"
+        val border = listOf("top", "left", "bottom", "right", "insideH", "insideV").joinToString("") { "<w:$it w:val=\"single\" w:sz=\"4\" w:color=\"999999\"/>" }
+        val table = buildString {
+            append("<w:tbl><w:tblPr><w:tblW w:w=\"0\" w:type=\"auto\"/><w:tblBorders>$border</w:tblBorders></w:tblPr>")
+            data.table.forEachIndexed { i, r ->
+                append("<w:tr>")
+                if (i == 0) append("<w:trPr><w:tblHeader/></w:trPr>")
+                r.forEach { append(cell(it, i == 0)) }
+                append("</w:tr>")
+            }
+            append("</w:tbl>")
+        }
+        val body = buildString {
+            append(para("GoPreach App", true, 24)).append(para(data.title, true, 32))
+            data.details.forEach { (k, v) -> append(para("$k: $v", false, 18)) }
+            append(para("Records Found: ${data.recordsFound}   Generated: ${data.generatedAt}", false, 18)).append(para("", false, 10)).append(table)
+            append(para("", false, 10)).append(para("Summary", true, 22))
+            data.summary.drop(1).forEach { append(para("${it[0]}: ${it[1]}", false, 18)) }
+            append("<w:sectPr><w:pgSz w:w=\"16838\" w:h=\"11906\" w:orient=\"landscape\"/><w:pgMar w:top=\"720\" w:right=\"720\" w:bottom=\"720\" w:left=\"720\" w:header=\"400\" w:footer=\"400\"/></w:sectPr>")
+        }
+        val head = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+        val bytes = ByteArrayOutputStream().also { out ->
+            ZipOutputStream(out).use { zip ->
+                fun put(name: String, content: String) { zip.putNextEntry(ZipEntry(name)); zip.write(content.toByteArray(Charsets.UTF_8)); zip.closeEntry() }
+                put("[Content_Types].xml", head + "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/><Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/></Types>")
+                put("_rels/.rels", head + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/></Relationships>")
+                put("word/document.xml", head + "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>$body</w:body></w:document>")
+            }
+        }.toByteArray()
+        val dir = File(context.cacheDir, "exports").apply { mkdirs() }
+        val label = data.title.replace(Regex("[^A-Za-z0-9]+"), "_").trim('_').ifBlank { "Report" }
+        val file = File(dir, "$label.docx").apply { writeBytes(bytes) }
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Share " + data.title))
+    }
+
     fun shareExcel(context: Context, data: TableReportData) {
         fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
         fun col(i: Int): String { var n = i; var s = ""; do { s = ('A' + n % 26) + s; n = n / 26 - 1 } while (n >= 0); return s }

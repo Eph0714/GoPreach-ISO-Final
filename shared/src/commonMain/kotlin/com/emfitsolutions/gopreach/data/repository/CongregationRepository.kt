@@ -27,7 +27,7 @@ class CongregationRepository(
         observeAll().first().none { it.code.equals(code, ignoreCase = true) && it.id != excludingId }
 
     suspend fun save(congregation: Congregation): Congregation {
-        val id = congregation.id.ifBlank { remote.newId(collection) }
+        val id = congregation.id.ifBlank { RecentCreates.idFor(collection, congregation) { remote.newId(collection) } }
         val withId = congregation.copy(id = id)
         offline.save(collection, id, withId)
         return withId
@@ -38,7 +38,7 @@ class CongregationRepository(
     /** Saves and pushes to the server right now — the Circuit Overseer assignment transaction reads the server copy,
      * so a brand-new congregation must exist there before it can be assigned. */
     suspend fun saveNow(congregation: Congregation): Congregation {
-        val id = congregation.id.ifBlank { remote.newId(collection) }
+        val id = congregation.id.ifBlank { RecentCreates.idFor(collection, congregation) { remote.newId(collection) } }
         val withId = congregation.copy(id = id)
         offline.saveNow(remote, collection, id, withId)
         return withId
@@ -65,7 +65,7 @@ class GroupRepository(
     fun observeAll(): Flow<List<Group>> = offline.observeCollection<Group>(collection).map { list -> list.sortedWith(com.emfitsolutions.gopreach.domain.GroupNameOrder) }
 
     suspend fun save(group: Group): Group {
-        val id = group.id.ifBlank { remote.newId(collection) }
+        val id = group.id.ifBlank { RecentCreates.idFor(collection, group) { remote.newId(collection) } }
         val withId = group.copy(id = id)
         offline.save(collection, id, withId)
         return withId
@@ -90,7 +90,7 @@ class ElderTitleRepository(
     fun observeAll(): Flow<List<ElderTitleEntity>> = offline.observeCollection(collection)
 
     suspend fun save(title: ElderTitleEntity): ElderTitleEntity {
-        val id = title.id.ifBlank { remote.newId(collection) }
+        val id = title.id.ifBlank { RecentCreates.idFor(collection, title) { remote.newId(collection) } }
         val withId = title.copy(id = id)
         offline.save(collection, id, withId)
         return withId
@@ -112,7 +112,7 @@ class TerritoryRepository(
     fun observeAll(): Flow<List<Territory>> = offline.observeCollection(collection)
 
     suspend fun save(territory: Territory): Territory {
-        val id = territory.id.ifBlank { remote.newId(collection) }
+        val id = territory.id.ifBlank { RecentCreates.idFor(collection, territory) { remote.newId(collection) } }
         val withId = territory.copy(id = id)
         offline.save(collection, id, withId)
         return withId

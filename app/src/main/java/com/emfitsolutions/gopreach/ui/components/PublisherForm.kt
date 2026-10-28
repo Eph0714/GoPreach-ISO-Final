@@ -398,7 +398,7 @@ private fun <T> SimpleChoiceDropdown(
         )
         ExposedDropdownMenu(expanded = expanded && enabled, onDismissRequest = { expanded = false; query = "" }) {
             if (searchable && options.size > 8) {
-                OutlinedTextField(value = query, onValueChange = { query = it }, singleLine = true, placeholder = { Text("Search...") }, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
+                StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search...", modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
             }
             val shown = if (searchable && query.isNotBlank()) options.filter { it.first.contains(query.trim(), ignoreCase = true) } else options
             shown.forEach { (text, value) ->

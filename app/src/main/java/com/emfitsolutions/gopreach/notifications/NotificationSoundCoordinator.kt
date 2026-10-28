@@ -245,14 +245,18 @@ class NotificationSoundCoordinator(
 
     private fun monthLabel(millis: Long): String = java.text.SimpleDateFormat("MMMM yyyy", java.util.Locale.getDefault()).format(java.util.Date(millis))
 
-    private fun unifiedItemsFor(s: Scope): Flow<List<NotificationItem>> = when {
-        s.isPublisher && s.personId != null -> itemsProvider.itemsForPublisher(s.personId, s.congregationId)
-        s.adminRole != null && s.adminRole != AdminRole.CIRCUIT_OVERSEER -> {
-            val congregationIds = if (s.adminRole == AdminRole.SUPER_ADMIN) null else setOfNotNull(s.congregationId)
-            itemsProvider.itemsForAdmin(congregationIds, s.adminRole in ADMIN_ROLES_WITH_REPORT_ACCESS)
-        }
-        else -> flowOf(emptyList())
-    }.map { list -> list.filter { it.category in SOUND_WORTHY_CATEGORIES } }
+    // Unified multi-role account: someone who is both a Publisher and holds an Admin-track role hears both sets (de-duplicated by id).
+    private fun unifiedItemsFor(s: Scope): Flow<List<NotificationItem>> {
+        val publisherItems: Flow<List<NotificationItem>> =
+            if (s.isPublisher && s.personId != null) itemsProvider.itemsForPublisher(s.personId, s.congregationId) else flowOf(emptyList())
+        val adminItems: Flow<List<NotificationItem>> =
+            if (s.adminRole != null && s.adminRole != AdminRole.CIRCUIT_OVERSEER) {
+                val congregationIds = if (s.adminRole == AdminRole.SUPER_ADMIN) null else setOfNotNull(s.congregationId)
+                itemsProvider.itemsForAdmin(congregationIds, s.adminRole in ADMIN_ROLES_WITH_REPORT_ACCESS)
+            } else flowOf(emptyList())
+        return kotlinx.coroutines.flow.combine(publisherItems, adminItems) { a, b -> (a + b).distinctBy { it.id } }
+            .map { list -> list.filter { it.category in SOUND_WORTHY_CATEGORIES } }
+    }
 
     /** Fires [onNewItem] once per item whose [NotificationItem.timestamp] is
      * newer than the newest one seen on the *previous* emission — same "skip

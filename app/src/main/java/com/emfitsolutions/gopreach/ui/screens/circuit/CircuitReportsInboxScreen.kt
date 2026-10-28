@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -139,14 +142,7 @@ fun CircuitReportsInboxScreen(
             )
             }
             HideInFullScreen(false) {
-            OutlinedTextField(
-                value = query, onValueChange = { query = it }, singleLine = true,
-                placeholder = { Text("Search congregation, month, year or status") },
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search congregation, month, year or status", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
             }
             HideInFullScreen(true) {
             Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -292,7 +288,7 @@ fun SnapshotActions(
                 }
             },
             confirmButton = {
-                TextButton(enabled = !busy && (!needsReason || reason.isNotBlank()), onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                     busy = true
                     scope.launch {
                         val result = when (action) {
@@ -311,7 +307,7 @@ fun SnapshotActions(
                         busy = false
                         if (problem == null) pending = null
                     }
-                }) { Text("Confirm") }
+                }, label = "Confirm", enabled = !busy && (!needsReason || reason.isNotBlank()))
             },
             dismissButton = { TextButton(enabled = !busy, onClick = { pending = null }) { Text("Back") } },
         )

@@ -119,7 +119,7 @@ fun DualPeriodFilter(
                 modifier = Modifier.height(36.dp),
             ) {
                 Icon(Icons.Rounded.CompareArrows, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(8.dp))
                 Text(applyLabel, fontSize = 13.sp)
             }
             Text(

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -240,7 +242,7 @@ private fun AttendanceSnapshotActions(
                 }
             },
             confirmButton = {
-                TextButton(enabled = !busy && (!needsReason || reason.isNotBlank()), onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                     busy = true
                     scope.launch {
                         val result = when (action) {
@@ -259,7 +261,7 @@ private fun AttendanceSnapshotActions(
                         busy = false
                         if (problem == null) pending = null
                     }
-                }) { Text("Confirm") }
+                }, label = "Confirm", enabled = !busy && (!needsReason || reason.isNotBlank()))
             },
             dismissButton = { TextButton(enabled = !busy, onClick = { pending = null }) { Text("Back") } },
         )
@@ -313,7 +315,7 @@ internal fun AttendanceSnapshotSheet(report: CoAttendanceSnapshot, modifier: Mod
         Text(report.congregationName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Text("Meeting Attendance for " + monthName(report.periodMonth) + (if (showVersion) " · Send ${report.version}" else "") + " · ${stamp(report.submittedAt)}", style = MaterialTheme.typography.bodySmall)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { TableReportExporter.print(context, exportData()) }) { Icon(Icons.Rounded.Print, contentDescription = null); Text("  Print / PDF") }
+            ActionButton(ActionKind.Print, onClick = { TableReportExporter.print(context, exportData()) }, label = "  Print / PDF")
             OutlinedButton(onClick = { TableReportExporter.shareExcel(context, exportData()) }) { Icon(Icons.Rounded.TableChart, contentDescription = null); Text("  Excel") }
         }
         listOf(

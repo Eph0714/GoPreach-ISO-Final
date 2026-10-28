@@ -32,7 +32,7 @@ import com.emfitsolutions.gopreach.ui.components.update.UpdateHost
 import com.emfitsolutions.gopreach.ui.components.update.UpdateViewModel
 import com.emfitsolutions.gopreach.ui.navigation.GoPreachNavGraph
 import com.emfitsolutions.gopreach.ui.screens.settings.InactivityTracker
-import com.emfitsolutions.gopreach.ui.screens.settings.LoginRequestHost
+import com.emfitsolutions.gopreach.ui.screens.security.SecurityNoticeHost
 import com.emfitsolutions.gopreach.ui.screens.settings.SessionTimeoutHost
 import com.emfitsolutions.gopreach.ui.theme.GoPreachTheme
 
@@ -170,8 +170,8 @@ class MainActivity : AppCompatActivity() {
                     // "Session Timeout Setting" — logs the user out after the
                     // configured period of inactivity.
                     SessionTimeoutHost()
-                    // The signed-in phone is asked "Is this you?" when another device tries to sign in to the same account.
-                    LoginRequestHost()
+                    // New-device sign-ins, ended sessions and other security events of this account are shown to the person (Security & Device Management).
+                    SecurityNoticeHost()
                 }
             }
             }

@@ -443,7 +443,7 @@ class PipelineViewModel(
      * role override (spec §8); the calling screen already hides the Edit
      * affordance for anyone this returns false for, but the check is
      * repeated here too — a hidden button is never the real enforcement (the
-     * real enforcement is firestore.rules; this is just the same rule applied
+     * real enforcement is docs/legacy-firebase/firestore.rules; this is just the same rule applied
      * once more before firing the write, not a replacement for it). Silently
      * no-ops on failure, matching every other call site (none of them surface
      * a return value today).

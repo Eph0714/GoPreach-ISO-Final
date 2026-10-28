@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
@@ -528,9 +530,7 @@ fun AcceptedComparativeScreen(
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             fun exportNow() = if (result != null) fieldServiceExport(selected.name, result, sheets, summary, comparisonView, author, noun) else attendanceExport(selected.name, attendanceResult!!, comparisonView, author, noun, dayLabel)
-                            OutlinedButton(onClick = { ComparativeStatisticsExporter.print(context, exportNow()) }) {
-                                Icon(Icons.Rounded.Print, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Print / PDF")
-                            }
+                            ActionButton(ActionKind.Print, onClick = { ComparativeStatisticsExporter.print(context, exportNow()) }, label = "  Print / PDF")
                             OutlinedButton(onClick = { ComparativeStatisticsExporter.shareExcel(context, exportNow()) }) {
                                 Icon(Icons.Rounded.TableChart, contentDescription = null, modifier = Modifier.size(18.dp)); Text("  Excel")
                             }

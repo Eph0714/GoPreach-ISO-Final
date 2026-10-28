@@ -16,7 +16,7 @@ class ScheduleRepository(
     fun observeAll(): Flow<List<Schedule>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(schedule: Schedule): Schedule {
-        val id = schedule.id.ifBlank { remote.newId(COLLECTION) }
+        val id = schedule.id.ifBlank { RecentCreates.idFor(COLLECTION, schedule) { remote.newId(COLLECTION) } }
         val withId = schedule.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId

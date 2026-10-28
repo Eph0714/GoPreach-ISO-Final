@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.accountmanagement
 
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import androidx.compose.material3.HorizontalDivider
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -204,17 +205,7 @@ fun AccountManagementScreen(
 
             }
             HideInFullScreen(false) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search name, username, role, congregation or FS Group", maxLines = 1) },
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                trailingIcon = { if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
-                singleLine = true,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            StandardSearchField(value = searchQuery, onValueChange = { searchQuery = it }, placeholder = "Search name, username, role, congregation or FS Group", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
 
             }
             if (needsCongregation) {

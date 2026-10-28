@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.householdervisithistory
 
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import com.emfitsolutions.gopreach.platform.rememberFileCreator
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -116,7 +117,7 @@ private fun formatGpsDecimal(lat: Double, lng: Double): String = "%.4f, %.4f".fo
  * Visit history, for Super-Admin (every authorized congregation) and
  * Publisher (their own congregation) accounts. Opening a record hands off to
  * the existing [PipelinePersonDetailScreen] unchanged (spec §8-§14's Add/
- * Edit/Delete-own-visit-only rules, and firestore.rules' matching `visits`
+ * Edit/Delete-own-visit-only rules, and docs/legacy-firebase/firestore.rules' matching `visits`
  * enforcement, already live there — see [HouseholderVisitHistoryViewModel]'s
  * own doc comment for why this screen never reimplements any of that).
  * [congregationId] is the actual security boundary — `null` (Super-Admin)
@@ -264,15 +265,7 @@ fun HouseholderVisitHistoryScreen(
                 RecordTypeDropdown(selected = uiState.recordType, onSelected = viewModel::setRecordType)
                 SearchByDropdown(selected = uiState.searchByField, onSelected = viewModel::setSearchByField)
             }
-                OutlinedTextField(
-                    value = uiState.searchQuery,
-                    onValueChange = viewModel::setSearchQuery,
-                    label = { Text("Search") },
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                    singleLine = true,
-                    visualTransformation = VisualTransformation.None,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                StandardSearchField(value = uiState.searchQuery, onValueChange = viewModel::setSearchQuery, placeholder = "Search", modifier = Modifier.fillMaxWidth())
             }
             HorizontalDivider()
             }

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.findlocation
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -168,7 +170,7 @@ fun CoordinateImageCapture(onPicked: (CoordinateCandidate) -> Unit, modifier: Mo
                             }
                         }
                     }
-                    TextButton(onClick = { reading = null }, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+                    ActionButton(ActionKind.Cancel, onClick = { reading = null }, label = "Cancel", modifier = Modifier.fillMaxWidth())
                 }
             },
             confirmButton = {},

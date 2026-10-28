@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.voicenotes
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -385,7 +389,7 @@ private fun LibraryPage(notes: List<VoiceNote>, online: Boolean, viewModel: Voic
     }
     Column(Modifier.fillMaxSize()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Search title, transcript or minutes") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search title, transcript or minutes", modifier = Modifier.fillMaxWidth())
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 listOf("ALL" to "All", "DRAFT" to "Drafts", "PENDING" to "Pending", "DONE" to "Completed", "FAILED" to "Failed").forEach { (k, l) -> FilterChip(selected = statusFilter == k, onClick = { statusFilter = k }, label = { Text(l) }) }
             }
@@ -455,8 +459,8 @@ private fun RenameDialog(n: VoiceNote, onDismiss: () -> Unit, onSave: (String, S
                 OutlinedTextField(value = c, onValueChange = { c = it }, label = { Text("Category or tag (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(t, c) }) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { ActionButton(ActionKind.Save, onClick = { onSave(t, c) }, label = "Save") },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -466,7 +470,7 @@ private fun DeleteDialog(n: VoiceNote, onDismiss: () -> Unit, onConfirm: () -> U
         onDismissRequest = onDismiss, title = { Text("Delete this voice note?") },
         text = { Text("\"${n.title.ifBlank { "Untitled voice note" }}\" - the recording, the transcript and the minutes are permanently deleted from this phone and from the server. This cannot be undone.") },
         confirmButton = { TextButton(onClick = onConfirm) { Text("Delete", color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -490,8 +494,8 @@ private fun DetailPage(note: VoiceNote, online: Boolean, viewModel: VoiceNotesVi
                 Text(stamp.format(Date(note.recordedAt)) + "  -  " + VoiceNoteLogic.clock(note.durationSeconds), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             StatusChip(st)
-            IconButton(onClick = { renaming = true }) { Icon(Icons.Rounded.Edit, contentDescription = "Rename") }
-            IconButton(onClick = { deleting = true }) { Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error) }
+            ActionIconButton(ActionKind.Edit, onClick = { renaming = true }, contentDescription = "Rename")
+            ActionIconButton(ActionKind.Delete, onClick = { deleting = true }, contentDescription = "Delete")
         }
         if (busy || note.lastError.isNotBlank()) {
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -517,7 +521,7 @@ private fun DetailPage(note: VoiceNote, online: Boolean, viewModel: VoiceNotesVi
     }
     if (renaming) RenameDialog(note, onDismiss = { renaming = false }) { t, c -> viewModel.rename(note.id, t); viewModel.setCategory(note.id, c); renaming = false }
     if (deleting) DeleteDialog(note, onDismiss = { deleting = false }) { deleting = false; viewModel.deleteNote(note.id) { msg -> if (msg == null) onDeleted() else deleteMessage = msg } }
-    deleteMessage?.let { m -> AlertDialog(onDismissRequest = { deleteMessage = null }, title = { Text("Not deleted yet") }, text = { Text(m) }, confirmButton = { TextButton(onClick = { deleteMessage = null }) { Text("OK") } }) }
+    deleteMessage?.let { m -> AlertDialog(onDismissRequest = { deleteMessage = null }, title = { Text("Not deleted yet") }, text = { Text(m) }, confirmButton = { ActionButton(ActionKind.Save, onClick = { deleteMessage = null }, label = "OK") }) }
 }
 
 @Composable
@@ -556,8 +560,8 @@ private fun TranscriptTab(note: VoiceNote, busy: Boolean, viewModel: VoiceNotesV
             if (editing) {
                 OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text("Transcript") }, modifier = Modifier.fillMaxWidth().height(320.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { viewModel.saveTranscript(note.id, text); editing = false }) { Text("Save") }
-                    TextButton(onClick = { text = note.transcriptText; editing = false }) { Text("Cancel") }
+                    ActionButton(ActionKind.Save, onClick = { viewModel.saveTranscript(note.id, text); editing = false }, label = "Save")
+                    ActionButton(ActionKind.Cancel, onClick = { text = note.transcriptText; editing = false }, label = "Cancel")
                 }
             } else {
                 OutlinedTextField(value = find, onValueChange = { find = it }, label = { Text("Find in transcript") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -595,8 +599,8 @@ private fun MinutesTab(note: VoiceNote, busy: Boolean, viewModel: VoiceNotesView
         } else if (editing) {
             OutlinedTextField(value = text, onValueChange = { text = it }, label = { Text("Meeting minutes") }, modifier = Modifier.fillMaxWidth().height(360.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { viewModel.saveMinutes(note.id, text); editing = false }) { Text("Save") }
-                TextButton(onClick = { text = note.meetingMinutesText; editing = false }) { Text("Cancel") }
+                ActionButton(ActionKind.Save, onClick = { viewModel.saveMinutes(note.id, text); editing = false }, label = "Save")
+                ActionButton(ActionKind.Cancel, onClick = { text = note.meetingMinutesText; editing = false }, label = "Cancel")
             }
         } else {
             Text("AI-generated summary of your recording. It is not a replacement for the original audio or the transcript.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -615,7 +619,7 @@ private fun MinutesTab(note: VoiceNote, busy: Boolean, viewModel: VoiceNotesView
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 OutlinedButton(onClick = { editing = true }) { Icon(Icons.Rounded.Edit, contentDescription = null); Text("  Edit") }
                 OutlinedButton(onClick = { confirmRegenerate = true }, enabled = !busy) { Icon(Icons.Rounded.Replay, contentDescription = null); Text("  Regenerate") }
-                if (note.previousMinutesText.isNotBlank()) OutlinedButton(onClick = { viewModel.restorePreviousMinutes(note.id) }) { Text("Restore previous version") }
+                if (note.previousMinutesText.isNotBlank()) ActionButton(ActionKind.Refresh, onClick = { viewModel.restorePreviousMinutes(note.id) }, label = "Restore previous version")
             }
             if (note.transcriptText.isNotBlank()) {
                 TextButton(onClick = { showTranscript = !showTranscript }) { Text(if (showTranscript) "Hide original transcript" else "Show original transcript beside the minutes") }
@@ -629,7 +633,7 @@ private fun MinutesTab(note: VoiceNote, busy: Boolean, viewModel: VoiceNotesView
             title = { Text("Regenerate the minutes?") },
             text = { Text("New minutes are written from your current transcript (${if (detail == "short") "short" else "detailed"}). Your current minutes, including any edits, are kept and you can restore them with \"Restore previous version\".") },
             confirmButton = { TextButton(onClick = { confirmRegenerate = false; viewModel.generateMinutes(note.id, detail) }) { Text("Regenerate") } },
-            dismissButton = { TextButton(onClick = { confirmRegenerate = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmRegenerate = false }, label = "Cancel") },
         )
     }
 }

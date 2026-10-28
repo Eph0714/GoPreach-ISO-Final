@@ -17,7 +17,7 @@ class MidweekMeetingScheduleRepository(
     fun observeAll(): Flow<List<MidweekMeetingSchedule>> = offline.observeCollection(MIDWEEK_COLLECTION)
 
     suspend fun save(schedule: MidweekMeetingSchedule): MidweekMeetingSchedule {
-        val id = schedule.id.ifBlank { remote.newId(MIDWEEK_COLLECTION) }
+        val id = schedule.id.ifBlank { RecentCreates.idFor(MIDWEEK_COLLECTION, schedule) { remote.newId(MIDWEEK_COLLECTION) } }
         val withId = schedule.copy(id = id)
         offline.save(MIDWEEK_COLLECTION, id, withId)
         return withId
@@ -38,7 +38,7 @@ class PublicTalkScheduleRepository(
     fun observeAll(): Flow<List<PublicTalkScheduleRow>> = offline.observeCollection(PUBLIC_TALK_COLLECTION)
 
     suspend fun save(row: PublicTalkScheduleRow): PublicTalkScheduleRow {
-        val id = row.id.ifBlank { remote.newId(PUBLIC_TALK_COLLECTION) }
+        val id = row.id.ifBlank { RecentCreates.idFor(PUBLIC_TALK_COLLECTION, row) { remote.newId(PUBLIC_TALK_COLLECTION) } }
         val withId = row.copy(id = id)
         offline.save(PUBLIC_TALK_COLLECTION, id, withId)
         return withId
@@ -64,7 +64,7 @@ class CartAssignmentRepository(
     fun observeAll(): Flow<List<CartAssignmentRow>> = offline.observeCollection(CART_ASSIGNMENT_COLLECTION)
 
     suspend fun save(row: CartAssignmentRow): CartAssignmentRow {
-        val id = row.id.ifBlank { remote.newId(CART_ASSIGNMENT_COLLECTION) }
+        val id = row.id.ifBlank { RecentCreates.idFor(CART_ASSIGNMENT_COLLECTION, row) { remote.newId(CART_ASSIGNMENT_COLLECTION) } }
         val withId = row.copy(id = id)
         offline.save(CART_ASSIGNMENT_COLLECTION, id, withId)
         return withId

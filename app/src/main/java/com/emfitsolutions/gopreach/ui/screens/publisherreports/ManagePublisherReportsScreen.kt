@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.publisherreports
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.platform.rememberFileCreator
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -91,7 +93,7 @@ import androidx.compose.ui.window.DialogProperties
  * [readOnly] hides Edit/Unlock/Mark Posted (and Delete, on top of
  * [canPermanentlyDelete]) — a grant-based Circuit Overseer with a report-view
  * permission reaches this screen but can never edit through it, since
- * firestore.rules blocks every restricted user's `monthlyReports` write
+ * docs/legacy-firebase/firestore.rules blocks every restricted user's `monthlyReports` write
  * regardless of permission (see AdminHomeScreen.canManagePublisherReports's
  * doc comment).
  *
@@ -102,7 +104,7 @@ import androidx.compose.ui.window.DialogProperties
  * Super-Admin (every congregation), Admin/Coordinator Elder/Regular Elder
  * (own congregation only, via [fixedCongregationId]), and Service Overseer.
  * Actual enforcement of "once Posted, the Publisher can no longer edit it"
- * lives in firestore.rules' `monthlyReports` write rule, not this flag —
+ * lives in docs/legacy-firebase/firestore.rules' `monthlyReports` write rule, not this flag —
  * this only governs who in the admin track even sees the "Mark as Posted"/
  * "POST" actions.
  */
@@ -356,9 +358,7 @@ fun ManagePublisherReportsScreen(
                                     Text(row.person.fullName, style = MaterialTheme.typography.titleMedium)
                                     Row {
                                         if (!readOnly) {
-                                            IconButton(onClick = { pendingEdit = row }) {
-                                                Icon(Icons.Rounded.Edit, contentDescription = stringResource(R.string.manage_reports_edit_cd))
-                                            }
+                                            ActionIconButton(ActionKind.Edit, onClick = { pendingEdit = row }, contentDescription = stringResource(R.string.manage_reports_edit_cd))
                                             if (row.isLocked) {
                                                 IconButton(onClick = { viewModel.unlock(row.report, currentPersonId) }) {
                                                     Icon(Icons.Rounded.LockOpen, contentDescription = stringResource(R.string.manage_reports_unlock_cd))
@@ -380,9 +380,7 @@ fun ManagePublisherReportsScreen(
                                             }
                                         }
                                         if (canPermanentlyDelete && !readOnly) {
-                                            IconButton(onClick = { pendingDelete = row }) {
-                                                Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.manage_reports_delete_cd))
-                                            }
+                                            ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = row }, contentDescription = stringResource(R.string.manage_reports_delete_cd))
                                         }
                                     }
                                 }

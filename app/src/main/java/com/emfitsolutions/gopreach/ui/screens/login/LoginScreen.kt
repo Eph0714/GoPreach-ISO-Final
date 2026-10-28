@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.login
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.app_name
 import com.emfitsolutions.gopreach.shared.resources.login_biometric_prompt_subtitle
@@ -285,6 +287,60 @@ fun LoginScreen(
             onDismiss = viewModel::dismissQuickLogin,
         )
     }
+    uiState.twoFactor?.let { tf ->
+        var kind by remember(tf.totp) { mutableStateOf(if (tf.totp) com.emfitsolutions.gopreach.data.repository.SecondFactor.AUTHENTICATOR_APP else com.emfitsolutions.gopreach.data.repository.SecondFactor.RECOVERY_CODE) }
+        var code by remember { mutableStateOf("") }
+        var trust by remember { mutableStateOf(false) }
+        val methods = buildList {
+            if (tf.totp) add(com.emfitsolutions.gopreach.data.repository.SecondFactor.AUTHENTICATOR_APP to "Authenticator app")
+            if (tf.recovery) add(com.emfitsolutions.gopreach.data.repository.SecondFactor.RECOVERY_CODE to "Recovery code")
+            if (tf.emailMasked != null) add(com.emfitsolutions.gopreach.data.repository.SecondFactor.EMAIL_CODE to "E-mail code")
+        }
+        AlertDialog(
+            properties = androidx.compose.ui.window.DialogProperties(dismissOnClickOutside = false),
+            onDismissRequest = viewModel::cancelTwoFactor,
+            title = { Text("Two-step verification") },
+            text = {
+                Column {
+                    Text("Your password is right. Enter a code to finish signing in.")
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 10.dp)) {
+                        methods.forEach { (k, label) ->
+                            androidx.compose.material3.FilterChip(selected = kind == k, onClick = { kind = k; code = "" }, label = { Text(label, style = MaterialTheme.typography.labelSmall) }, enabled = !tf.busy)
+                        }
+                    }
+                    Text(
+                        when (kind) {
+                            com.emfitsolutions.gopreach.data.repository.SecondFactor.AUTHENTICATOR_APP -> "Open your authenticator app and type the 6-digit code for GoPreach."
+                            com.emfitsolutions.gopreach.data.repository.SecondFactor.RECOVERY_CODE -> "Type one of the recovery codes you saved (like ABCDE-FGHJK). Each works only once."
+                            com.emfitsolutions.gopreach.data.repository.SecondFactor.EMAIL_CODE -> if (tf.emailSent) "Type the 6-digit code we e-mailed to ${tf.emailMasked}." else "We can e-mail a code to ${tf.emailMasked}."
+                        },
+                        style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp),
+                    )
+                    OutlinedTextField(
+                        value = code,
+                        onValueChange = { v -> code = if (kind == com.emfitsolutions.gopreach.data.repository.SecondFactor.RECOVERY_CODE) v.uppercase().take(12) else v.filter(Char::isDigit).take(6) },
+                        singleLine = true, label = { Text("Code") }, enabled = !tf.busy,
+                        keyboardOptions = KeyboardOptions(keyboardType = if (kind == com.emfitsolutions.gopreach.data.repository.SecondFactor.RECOVERY_CODE) androidx.compose.ui.text.input.KeyboardType.Ascii else androidx.compose.ui.text.input.KeyboardType.NumberPassword),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                        Checkbox(checked = trust, onCheckedChange = { trust = it }, enabled = !tf.busy)
+                        Text("Trust this device (skips the code for a while)", style = MaterialTheme.typography.bodySmall)
+                    }
+                    tf.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
+                    if (tf.busy) androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
+            },
+            confirmButton = {
+                if (kind == com.emfitsolutions.gopreach.data.repository.SecondFactor.EMAIL_CODE && !tf.emailSent) {
+                    TextButton(enabled = !tf.busy, onClick = viewModel::sendTwoFactorEmail) { Text("E-mail me a code") }
+                } else {
+                    TextButton(enabled = !tf.busy && code.isNotBlank(), onClick = { viewModel.verifyTwoFactor(kind, code, trust) }) { Text("Verify") }
+                }
+            },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = viewModel::cancelTwoFactor, label = "Cancel") },
+        )
+    }
     uiState.approval?.let { ap ->
         var code by remember { mutableStateOf("") }
         AlertDialog(
@@ -318,7 +374,7 @@ fun LoginScreen(
                     else TextButton(enabled = !ap.busy, onClick = viewModel::sendApprovalEmailCode) { Text("E-mail Me a Code") }
                 }
             },
-            dismissButton = { TextButton(onClick = viewModel::cancelApproval) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = viewModel::cancelApproval, label = "Cancel") },
         )
     }
     uiState.activeSession?.let { other ->
@@ -336,7 +392,7 @@ fun LoginScreen(
                 }
             },
             confirmButton = { TextButton(onClick = { viewModel.confirmEndOtherSession(activity) }) { Text("End Other Session and Continue") } },
-            dismissButton = { TextButton(onClick = viewModel::cancelEndOtherSession) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = viewModel::cancelEndOtherSession, label = "Cancel") },
         )
     }
     uiState.notice?.let { (title, message) ->
@@ -344,7 +400,7 @@ fun LoginScreen(
             onDismissRequest = viewModel::dismissNotice,
             title = { Text(title) },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = viewModel::dismissNotice) { Text("OK") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = viewModel::dismissNotice, label = "OK") },
         )
     }
     if (uiState.showBiometricNotSetUp) {
@@ -352,7 +408,7 @@ fun LoginScreen(
             onDismissRequest = viewModel::dismissBiometricNotSetUp,
             title = { Text("Biometric Login Not Set Up") },
             text = { Text("Please log in using your username and password first, then enable biometric login in Account/Security Settings.") },
-            confirmButton = { TextButton(onClick = viewModel::dismissBiometricNotSetUp) { Text("OK") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = viewModel::dismissBiometricNotSetUp, label = "OK") },
         )
     }
 }

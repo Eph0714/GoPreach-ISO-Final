@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.offlinemaps
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -119,7 +121,7 @@ fun OfflineMapsScreen(onBack: () -> Unit) {
                 }
                 OutlinedButton(onClick = { picker.launch("*/*") }, modifier = Modifier.fillMaxWidth()) { Text("Choose a .pmtiles file from this phone") }
                 if (installed) {
-                    OutlinedButton(onClick = { OfflineMaps.delete(); refresh() }, modifier = Modifier.fillMaxWidth()) { Text("Delete offline map") }
+                    ActionButton(ActionKind.Delete, onClick = { OfflineMaps.delete(); refresh() }, label = "Delete offline map", modifier = Modifier.fillMaxWidth())
                 }
             }
             message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }

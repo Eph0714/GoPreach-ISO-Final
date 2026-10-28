@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.settings
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.platform.rememberToaster
 import android.os.SystemClock
 import androidx.compose.foundation.background
@@ -267,21 +269,18 @@ fun SessionTimeoutSettingScreen(
                 modifier = Modifier.fillMaxWidth(),
             )
             message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            Button(
-                onClick = {
+            ActionButton(ActionKind.Save, onClick = {
                     // A disabled timer's minutes field is greyed out, so keep whatever is stored.
                     val toSave = if (enabled) minutes else settings.sessionTimeoutMinutes
                     if (toSave == null || (enabled && !minutesValid)) {
                         message = "Enter a whole number of minutes from ${AppSettings.MIN_SESSION_TIMEOUT_MINUTES} to ${AppSettings.MAX_SESSION_TIMEOUT_MINUTES}."
-                        return@Button
+                        return@ActionButton
                     }
                     viewModel.save(enabled, toSave, currentPersonId) { error ->
                         if (error == null) toast("Saved online. Every phone will use it once it syncs.")
                         else message = error
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Save") }
+                }, label = "Save", modifier = Modifier.fillMaxWidth())
         }
     }
 }

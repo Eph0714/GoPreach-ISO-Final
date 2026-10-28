@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -195,7 +199,7 @@ fun PublisherAssignmentScreen(
                     navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
                     actions = {
                         IconButton(onClick = onSearchCoordinates) { Icon(Icons.Rounded.MyLocation, contentDescription = "Search Coordinates") }
-                        IconButton(onClick = { showVisibility = true }) { Icon(Icons.Rounded.Visibility, contentDescription = "Publisher visibility settings") }
+                        ActionIconButton(ActionKind.View, onClick = { showVisibility = true }, contentDescription = "Publisher visibility settings")
                     },
                 )
                 ScrollableTabRow(selectedTabIndex = stageIndex) {
@@ -222,15 +226,7 @@ fun PublisherAssignmentScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text("Search name, location, barangay, municipality or publisher") },
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                singleLine = true,
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search name, location, barangay, municipality or publisher", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -284,8 +280,8 @@ fun PublisherAssignmentScreen(
                                         Icon(Icons.Rounded.PersonAdd, contentDescription = if (person.publisherPersonId.isBlank()) "Assign Publisher" else "Reassign Publisher", modifier = Modifier.size(22.dp))
                                     }
                                     if (stage != PipelineStage.BIBLE_STUDY) {
-                                        IconButton(onClick = { editing = person }, modifier = Modifier.size(40.dp)) { Icon(Icons.Rounded.Edit, contentDescription = "Edit", modifier = Modifier.size(22.dp)) }
-                                        IconButton(onClick = { deleting = person }, modifier = Modifier.size(40.dp)) { Icon(Icons.Rounded.Delete, contentDescription = "Delete", modifier = Modifier.size(22.dp)) }
+                                        ActionIconButton(ActionKind.Edit, onClick = { editing = person }, contentDescription = "Edit", modifier = Modifier.size(40.dp))
+                                        ActionIconButton(ActionKind.Delete, onClick = { deleting = person }, contentDescription = "Delete", modifier = Modifier.size(40.dp))
                                     }
                                 }
                                 Column(modifier = Modifier.padding(end = 12.dp)) {
@@ -383,16 +379,13 @@ fun PublisherAssignmentScreen(
                 )
             },
             confirmButton = {
-                Button(
-                    onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                         viewModel.permanentlyDelete(person, currentPersonId)
                         showToast("\"${person.name}\" deleted.")
                         deleting = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                ) { Text("Yes, Delete Record") }
+                    }, label = "Yes, Delete Record")
             },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { deleting = null }, label = "Cancel") },
         )
     }
 
@@ -426,8 +419,8 @@ private fun AssignPublisherDialog(person: InterestedPerson, publishers: List<Per
                 if (publishers.isEmpty()) Text("No eligible publishers in this congregation.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
         },
-        confirmButton = { Button(onClick = { onConfirm(selectedId) }, enabled = selectedId != person.publisherPersonId) { Text("Save") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { ActionButton(ActionKind.Save, onClick = { onConfirm(selectedId) }, label = "Save", enabled = selectedId != person.publisherPersonId) },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -471,12 +464,9 @@ private fun VisibilitySettingsDialog(settings: PublisherVisibilitySettings, onSa
             }
         },
         confirmButton = {
-            Button(
-                enabled = followUpValue != null,
-                onClick = { onSave(settings.copy(showOthersSearching = searching, showOthersReturnVisit = returnVisit, showOthersBibleStudy = bibleStudy, followUpValue = followUpValue ?: 7, followUpUnit = followUpUnit.name)) },
-            ) { Text("Save") }
+            ActionButton(ActionKind.Save, onClick = { onSave(settings.copy(showOthersSearching = searching, showOthersReturnVisit = returnVisit, showOthersBibleStudy = bibleStudy, followUpValue = followUpValue ?: 7, followUpUnit = followUpUnit.name)) }, label = "Save", enabled = followUpValue != null)
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 

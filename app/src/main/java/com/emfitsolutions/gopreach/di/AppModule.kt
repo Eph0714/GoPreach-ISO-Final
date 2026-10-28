@@ -213,7 +213,6 @@ import com.emfitsolutions.gopreach.ui.screens.reports.ConsolidatedReportViewMode
 import com.emfitsolutions.gopreach.ui.screens.reports.FieldServiceGroupReportViewModel
 import com.emfitsolutions.gopreach.ui.screens.reports.ReportsViewModel
 import com.emfitsolutions.gopreach.ui.screens.settings.InactivityTracker
-import com.emfitsolutions.gopreach.ui.screens.settings.LoginRequestViewModel
 import com.emfitsolutions.gopreach.ui.screens.settings.SessionTimeoutViewModel
 import com.emfitsolutions.gopreach.ui.screens.settings.SettingsViewModel
 import com.emfitsolutions.gopreach.ui.screens.sharelocation.ShareLocationViewModel
@@ -249,6 +248,10 @@ import com.emfitsolutions.gopreach.platform.KeyValueStores
 import com.emfitsolutions.gopreach.data.sync.NetworkStatus
 import com.emfitsolutions.gopreach.data.sync.DefaultNetworkStatus
 import com.emfitsolutions.gopreach.data.remote.RemoteFiles
+import com.emfitsolutions.gopreach.ui.screens.security.AdminDevicesViewModel
+import com.emfitsolutions.gopreach.ui.screens.security.SecurityLogViewModel
+import com.emfitsolutions.gopreach.ui.screens.security.SecurityNoticeViewModel
+import com.emfitsolutions.gopreach.ui.screens.security.SecurityViewModel
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.tasks.await
@@ -273,7 +276,22 @@ val infraModule = module {
     single<NetworkStatus> { DefaultNetworkStatus(get(), get()) }
     single<RemoteFiles> { com.emfitsolutions.gopreach.data.sync.BackendRemoteFiles(get(), get()) }
     single<KeyValueStores> { AndroidKeyValueStores(get()) }
-    single<AuthService> { com.emfitsolutions.gopreach.data.repository.HttpAuthService(get(), BackendConfig.baseUrl, get(), get(), deviceLabel = "GoPreach Android (${android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${android.os.Build.MODEL})") }
+    single<AuthService> {
+        val context = get<android.content.Context>()
+        val model = android.os.Build.MODEL
+        val maker = android.os.Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+        com.emfitsolutions.gopreach.data.repository.HttpAuthService(
+            get(), BackendConfig.baseUrl, get(), get(), deviceLabel = "GoPreach Android ($maker $model)",
+            deviceInfo = com.emfitsolutions.gopreach.data.repository.DeviceInfo(
+                name = "$maker $model", model = model, type = if (context.resources.configuration.smallestScreenWidthDp >= 600) "tablet" else "phone",
+                os = "Android", osVersion = android.os.Build.VERSION.RELEASE, appVersion = com.emfitsolutions.gopreach.BuildConfig.VERSION_NAME,
+            ),
+        )
+    }
+    single<com.emfitsolutions.gopreach.data.repository.SecurityService> {
+        val auth = get<AuthService>()
+        com.emfitsolutions.gopreach.data.repository.HttpSecurityService(get(), BackendConfig.baseUrl, auth, saveTrustedToken = auth::saveTrustedDeviceToken)
+    }
     single<LocationTracker> { AndroidLocationTracker(get()) }
     single<WriteQueuedListener> { AndroidWriteQueuedListener(get(), get(), get()) }
 
@@ -498,7 +516,10 @@ val appModule = module {
     viewModelOf(::FieldServiceGroupReportViewModel)
     viewModelOf(::ReportsViewModel)
     viewModelOf(::SessionTimeoutViewModel)
-    viewModelOf(::LoginRequestViewModel)
+    viewModelOf(::SecurityViewModel)
+    viewModelOf(::AdminDevicesViewModel)
+    viewModelOf(::SecurityLogViewModel)
+    viewModelOf(::SecurityNoticeViewModel)
     viewModelOf(::SettingsViewModel)
     viewModelOf(::ShareLocationViewModel)
     viewModelOf(::TerritoryMapViewModel)

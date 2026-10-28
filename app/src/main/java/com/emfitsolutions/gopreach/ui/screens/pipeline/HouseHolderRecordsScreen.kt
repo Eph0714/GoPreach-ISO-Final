@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import com.emfitsolutions.gopreach.ui.components.stageColor
 import com.emfitsolutions.gopreach.ui.components.stageWeight
 import androidx.compose.foundation.clickable
@@ -227,15 +230,7 @@ fun HouseHolderRecordsScreen(
             }
             }
             HideInFullScreen {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = { Text("Search by name or place of origin") },
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                singleLine = true,
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search by name or place of origin", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
             androidx.compose.material3.FilterChip(selected = showInactive, onClick = { showInactive = !showInactive }, label = { Text("Include inactive") }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             }
             if (people.isEmpty()) {
@@ -307,7 +302,7 @@ fun HouseHolderRecordsScreen(
 private fun InterestedPersonReadOnlyDialog(person: InterestedPerson, publisherName: String?, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Close") },
         title = { Text(person.name) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {

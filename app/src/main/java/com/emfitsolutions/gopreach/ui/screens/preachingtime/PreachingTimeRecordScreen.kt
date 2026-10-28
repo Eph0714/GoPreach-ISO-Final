@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.preachingtime
 
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -118,14 +121,7 @@ fun PreachingTimeRecordScreen(
             DateRangeFilterBar(range = dateRange, onRangeChange = viewModel::setDateRange, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
             HideInFullScreen(false) {
-            OutlinedTextField(
-                value = searchText,
-                onValueChange = { searchText = it },
-                label = { Text("Search remarks") },
-                singleLine = true,
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            )
+            StandardSearchField(value = searchText, onValueChange = { searchText = it }, placeholder = "Search remarks", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             androidx.compose.material3.FilterChip(selected = showInactive, onClick = { showInactive = !showInactive }, label = { Text("Include inactive") }, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             Text(
                 "Total: ${"%.2f".format(totalHours)} hours",
@@ -177,13 +173,9 @@ fun PreachingTimeRecordScreen(
                                     }
                                 }
                                 Row {
-                                    IconButton(onClick = { pendingEdit = record }) {
-                                        Icon(Icons.Rounded.Edit, contentDescription = "Edit")
-                                    }
+                                    ActionIconButton(ActionKind.Edit, onClick = { pendingEdit = record }, contentDescription = "Edit")
                                     if (record.status == RecordStatus.ACTIVE) {
-                                        IconButton(onClick = { pendingDelete = record }) {
-                                            Icon(Icons.Rounded.Delete, contentDescription = "Delete")
-                                        }
+                                        ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = record }, contentDescription = "Delete")
                                     } else {
                                         IconButton(onClick = { viewModel.setStatus(record, RecordStatus.ACTIVE); showToast("Record reactivated.") }) {
                                             Icon(Icons.Rounded.RestoreFromTrash, contentDescription = "Reactivate")

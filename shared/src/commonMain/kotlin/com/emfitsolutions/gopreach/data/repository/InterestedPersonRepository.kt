@@ -18,6 +18,8 @@ class InterestedPersonRepository(
     private val remote: RemoteCollections,
     private val monthLock: MonthLockGuard,
 ) {
+    private val recentCreates = RecentCreateGuard()
+
     fun observeAll(): Flow<List<InterestedPerson>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(person: InterestedPerson): InterestedPerson {
@@ -27,7 +29,10 @@ class InterestedPersonRepository(
             val before = if (person.id.isBlank()) null else offline.get<InterestedPerson>(COLLECTION, person.id)
             if (before == null || before.pipelineStage != person.pipelineStage) monthLock.requireOpen(person.congregationId, nowMillis())
         }
-        val id = person.id.ifBlank { remote.newId(COLLECTION) }
+        // The same new record arriving again within seconds (a repeated tap) is the same record: it overwrites, never adds a copy.
+        val id = person.id.ifBlank {
+            recentCreates.idFor(listOf(person.createdByPersonId, person.pipelineStage, person.congregationId, person.publisherPersonId, person.name.trim().lowercase(), person.address.trim().lowercase(), person.barangay, person.gpsLat, person.gpsLng).joinToString("|")) { remote.newId(COLLECTION) }
+        }
         val withId = person.copy(id = id, updatedAt = nowMillis())
         offline.save(COLLECTION, id, withId)
         return withId

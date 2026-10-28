@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -151,24 +153,20 @@ fun PublisherForwardRequestsScreen(
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                         viewModel.accept(request, currentPersonId)
                         showToast("Accepted — added to your own record.")
                         selected = null
-                    },
-                ) { Text("Accept") }
+                    }, label = "Accept")
             },
             dismissButton = {
                 Row {
-                    TextButton(
-                        onClick = {
+                    ActionButton(ActionKind.Delete, onClick = {
                             viewModel.decline(request, currentPersonId)
                             showToast("Forward request declined.")
                             selected = null
-                        },
-                    ) { Text("Decline") }
-                    TextButton(onClick = { selected = null }) { Text("Close") }
+                        }, label = "Decline")
+                    ActionButton(ActionKind.Cancel, onClick = { selected = null }, label = "Close")
                 }
             },
         )

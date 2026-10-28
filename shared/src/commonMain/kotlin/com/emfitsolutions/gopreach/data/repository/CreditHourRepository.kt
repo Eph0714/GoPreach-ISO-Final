@@ -29,7 +29,7 @@ class CreditHourCategoryRepository(
         offline.observeCollection<CreditHourCategory>(CATEGORIES_COLLECTION).map { list -> list.sortedBy { it.name.lowercase() } }
 
     suspend fun save(category: CreditHourCategory): CreditHourCategory {
-        val id = category.id.ifBlank { remote.newId(CATEGORIES_COLLECTION) }
+        val id = category.id.ifBlank { RecentCreates.idFor(CATEGORIES_COLLECTION, category) { remote.newId(CATEGORIES_COLLECTION) } }
         val now = nowMillis()
         val withId = category.copy(id = id, createdAt = category.createdAt.takeIf { it > 0L } ?: now, updatedAt = now)
         offline.save(CATEGORIES_COLLECTION, id, withId)
@@ -104,7 +104,7 @@ class CreditHourRecordRepository(
 
     suspend fun save(record: CreditHourRecord): CreditHourRecord {
         monthLock.requireOpenForPublisher(record.publisherPersonId, record.dayStart) // a month submitted to the Circuit Overseer is locked
-        val id = record.id.ifBlank { remote.newId(RECORDS_COLLECTION) }
+        val id = record.id.ifBlank { RecentCreates.idFor(RECORDS_COLLECTION, record) { remote.newId(RECORDS_COLLECTION) } }
         val withId = record.copy(id = id)
         offline.save(RECORDS_COLLECTION, id, withId)
         return withId

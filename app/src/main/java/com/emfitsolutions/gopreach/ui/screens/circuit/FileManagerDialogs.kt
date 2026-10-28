@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -71,7 +73,7 @@ internal fun NameDialog(title: String, initial: String, confirmLabel: String, on
             }
         },
         confirmButton = { TextButton(onClick = { onConfirm(text.trim()) }, enabled = text.isNotBlank()) { Text(confirmLabel) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -82,7 +84,7 @@ internal fun ConfirmDialog(title: String, message: String, confirmLabel: String,
         title = { Text(title) },
         text = { Text(message) },
         confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel, color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -121,7 +123,7 @@ internal fun MoveDialog(tree: CoTree?, current: String?, exclude: String?, onDis
             }
         },
         confirmButton = { TextButton(onClick = { onPick(if (picked) chosen else current) }, enabled = picked) { Text("Move here") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -156,7 +158,7 @@ internal fun FileDetailsDialog(file: CoFile, load: suspend () -> CoFile, onDismi
                 failed?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall) }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Close") },
     )
 }
 
@@ -183,7 +185,7 @@ internal fun PreviewDialog(file: CoFile, load: suspend () -> ByteArray, onDownlo
                         Text(file.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("${file.ext.uppercase()} · ${sizeLabel(file.size)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    TextButton(onClick = onDownload) { Text("Download") }
+                    ActionButton(ActionKind.Export, onClick = onDownload, label = "Download")
                     IconButton(onClick = onDismiss) { Icon(Icons.Rounded.Close, "Close") }
                 }
                 HorizontalDivider()
@@ -286,13 +288,13 @@ internal fun TrashDialog(items: List<CoTrashItem>, onRestore: (CoTrashItem) -> U
                                 )
                             }
                         }
-                        Row { TextButton(onClick = { onRestore(item) }) { Text("Restore") }; TextButton(onClick = { forever = item }) { Text("Delete forever", color = MaterialTheme.colorScheme.error) } }
+                        Row { ActionButton(ActionKind.Refresh, onClick = { onRestore(item) }, label = "Restore"); TextButton(onClick = { forever = item }) { Text("Delete forever", color = MaterialTheme.colorScheme.error) } }
                     }
                     HorizontalDivider()
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Close") },
         dismissButton = { if (items.isNotEmpty()) TextButton(onClick = { emptying = true }) { Text("Empty recycle bin", color = MaterialTheme.colorScheme.error) } },
     )
     forever?.let { i -> ConfirmDialog("Delete forever?", "\"${i.name}\" and its stored file will be removed for good. This can't be undone.", "Delete forever", onDismiss = { forever = null }, onConfirm = { onDeleteForever(i); forever = null }) }

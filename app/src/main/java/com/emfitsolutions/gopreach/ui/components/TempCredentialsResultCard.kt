@@ -39,7 +39,7 @@ fun TempCredentialsResultCard(
             Text("Username: ${credentials.username}", style = MaterialTheme.typography.bodyLarge)
             Text("Temporary Password: ${credentials.temporaryPassword}", style = MaterialTheme.typography.bodyLarge)
             ShareableSetupLink(credentials.username, credentials.temporaryPassword, credentials.shareableLink)
-            Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("Done") }
+            ActionButton(ActionKind.Save, onClick = onDone, label = "Done", modifier = Modifier.fillMaxWidth())
         }
     }
 }

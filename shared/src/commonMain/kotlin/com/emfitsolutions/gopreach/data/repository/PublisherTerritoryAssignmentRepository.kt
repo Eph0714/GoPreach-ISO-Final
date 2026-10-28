@@ -19,7 +19,7 @@ class PublisherTerritoryAssignmentRepository(
 
     suspend fun save(assignment: PublisherTerritoryAssignment): PublisherTerritoryAssignment {
         val now = nowMillis()
-        val id = assignment.id.ifBlank { remote.newId(COLLECTION) }
+        val id = assignment.id.ifBlank { RecentCreates.idFor(COLLECTION, assignment) { remote.newId(COLLECTION) } }
         val withId = assignment.copy(
             id = id,
             createdAt = if (assignment.createdAt == 0L) now else assignment.createdAt,

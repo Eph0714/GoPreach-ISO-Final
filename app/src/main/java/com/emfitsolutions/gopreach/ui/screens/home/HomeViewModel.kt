@@ -34,8 +34,6 @@ class HomeViewModel(
 
     fun signOut() = authRepository.signOut()
 
-    /** "Switch Role": back to the role selector (no sign-out); permissions and data are re-derived from the role chosen next. */
-    fun switchRole() = userSession.switchRole()
 
     /** "Update Profile Image" — the top-right profile menu, every role. Reads
      * the signed-in session's own current [state] rather than taking a

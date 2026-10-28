@@ -30,7 +30,7 @@ class PublisherCategoryHistoryRepository(
     fun observeAll(): Flow<List<PublisherCategoryChange>> = offline.observeCollection(COLLECTION)
 
     private suspend fun add(entry: PublisherCategoryChange) {
-        val id = entry.id.ifBlank { remote.newId(COLLECTION) }
+        val id = entry.id.ifBlank { RecentCreates.idFor(COLLECTION, entry) { remote.newId(COLLECTION) } }
         offline.save(COLLECTION, id, entry.copy(id = id))
     }
 

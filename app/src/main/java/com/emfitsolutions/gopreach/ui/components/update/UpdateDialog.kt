@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.components.update
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -121,7 +123,7 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                     }
                 },
                 confirmButton = {
-                    Button(onClick = viewModel::updateNow) { Text("UPDATE NOW") }
+                    ActionButton(ActionKind.Edit, onClick = viewModel::updateNow, label = "UPDATE NOW")
                 },
                 dismissButton = {
                     // "Remind Me Later" — optional updates only (see above).
@@ -188,11 +190,11 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                     )
                 },
                 confirmButton = {
-                    Button(onClick = viewModel::retry) { Text("TRY AGAIN") }
+                    ActionButton(ActionKind.Refresh, onClick = viewModel::retry, label = "TRY AGAIN")
                 },
                 dismissButton = {
                     if (s.info?.isCritical != true) {
-                        TextButton(onClick = viewModel::dismiss) { Text("Close") }
+                        ActionButton(ActionKind.Cancel, onClick = viewModel::dismiss, label = "Close")
                     }
                 },
             )
@@ -205,7 +207,7 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                 title = { Text("GoPreach is up to date.") },
                 text = { Text("Version ${s.version}") },
                 confirmButton = {
-                    TextButton(onClick = viewModel::dismiss) { Text("OK") }
+                    ActionButton(ActionKind.Save, onClick = viewModel::dismiss, label = "OK")
                 },
             )
         }

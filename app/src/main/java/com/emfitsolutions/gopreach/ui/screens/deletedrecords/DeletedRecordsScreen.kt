@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.deletedrecords
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -134,14 +137,7 @@ fun DeletedRecordsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    OutlinedTextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        label = { Text("Search") },
-                        singleLine = true,
-                        visualTransformation = VisualTransformation.None,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search", modifier = Modifier.fillMaxWidth())
                     FilterDropdown("Record Type", listOf(ALL) + records.map { it.recordType }.distinct().sorted(), typeFilter) { typeFilter = it }
                     FilterDropdown("Module", listOf(ALL) + records.map { it.module }.distinct().sorted(), moduleFilter) { moduleFilter = it }
                     FilterDropdown("Deleted By", listOf(ALL) + records.map { it.deletedByName }.filter { it.isNotBlank() }.distinct().sorted(), byFilter) { byFilter = it }
@@ -193,7 +189,7 @@ fun DeletedRecordsScreen(
             title = { Text("Restore this record?") },
             text = { Text("\"${record.label}\" will go back to ${record.module}, with its original information and relationships.") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Refresh, onClick = {
                     restoreTarget = null
                     scope.launch {
                         when (val result = viewModel.restore(record, access)) {
@@ -202,9 +198,9 @@ fun DeletedRecordsScreen(
                             is RestoreResult.Failed -> toast(result.message)
                         }
                     }
-                }) { Text("Restore") }
+                }, label = "Restore")
             },
-            dismissButton = { TextButton(onClick = { restoreTarget = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { restoreTarget = null }, label = "Cancel") },
         )
     }
 
@@ -214,16 +210,13 @@ fun DeletedRecordsScreen(
             title = { Text("Delete Permanently") },
             text = { Text("This action will permanently delete this record and cannot be undone. Continue?\n\n\"${record.label}\" (${record.recordType})") },
             confirmButton = {
-                TextButton(
-                    onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                         viewModel.permanentlyDelete(record, access)
                         deleteTarget = null
                         toast("\"${record.label}\" was permanently deleted.")
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) { Text("Delete Permanently") }
+                    }, label = "Delete Permanently")
             },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { deleteTarget = null }, label = "Cancel") },
         )
     }
 
@@ -232,7 +225,7 @@ fun DeletedRecordsScreen(
             onDismissRequest = { conflictMessage = null },
             title = { Text("Can't Restore Yet") },
             text = { Text(message) },
-            confirmButton = { TextButton(onClick = { conflictMessage = null }) { Text("OK") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = { conflictMessage = null }, label = "OK") },
         )
     }
 }
@@ -277,10 +270,8 @@ private fun DeletedRecordCard(
             }
             Detail("Status", "Deleted")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                Button(onClick = onRestore) { Text("Restore") }
-                OutlinedButton(onClick = onDeletePermanently, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                    Text("Delete Permanently")
-                }
+                ActionButton(ActionKind.Refresh, onClick = onRestore, label = "Restore")
+                ActionButton(ActionKind.Delete, onClick = onDeletePermanently, label = "Delete Permanently")
             }
         }
     }

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -208,6 +210,6 @@ internal fun PlannerSectionsDialog(
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        confirmButton = { ActionButton(ActionKind.Save, onClick = onDismiss, label = "Done") },
     )
 }

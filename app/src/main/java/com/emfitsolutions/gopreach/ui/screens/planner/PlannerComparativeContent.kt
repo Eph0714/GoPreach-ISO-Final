@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.domain.PlannerNarration
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -123,15 +125,7 @@ internal fun PlannerComparativeContent(currentPersonId: String, viewModel: Plann
             }
             PlannerVoice(summary, "Listen to my planner")
 
-            Button(
-                onClick = { ComparativeReportPdfExporter.export(context, state.rows) },
-                colors = ButtonDefaults.buttonColors(containerColor = PlannerAccent.Hours),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Icon(Icons.Rounded.PictureAsPdf, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Export as PDF")
-            }
+            ActionButton(ActionKind.Export, onClick = { ComparativeReportPdfExporter.export(context, state.rows) }, label = "Export as PDF", modifier = Modifier.fillMaxWidth())
         }
     }
 

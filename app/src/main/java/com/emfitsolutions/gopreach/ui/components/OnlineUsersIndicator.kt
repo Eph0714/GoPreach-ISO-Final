@@ -256,6 +256,6 @@ private fun OnlineUsersDialog(rows: List<OnlineUserRow>, onDismiss: () -> Unit) 
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Close") },
     )
 }

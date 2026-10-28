@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.territoryassignments
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.compose.foundation.background
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.clickable
@@ -193,7 +197,7 @@ fun TerritoryAssignmentsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { printList() }) { Icon(Icons.Rounded.Print, contentDescription = "Print or save as PDF") }
+                    ActionIconButton(ActionKind.Print, onClick = { printList() }, contentDescription = "Print or save as PDF")
                     IconButton(onClick = { fullScreen = true }) { Icon(Icons.Rounded.Fullscreen, contentDescription = "Full screen") }
                 },
             )
@@ -208,7 +212,7 @@ fun TerritoryAssignmentsScreen(
             item(key = "header") { Column(modifier = Modifier.fillMaxWidth()) {
             if (fullScreen) {
                 Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
-                    IconButton(onClick = { printList() }) { Icon(Icons.Rounded.Print, contentDescription = "Print or save as PDF") }
+                    ActionIconButton(ActionKind.Print, onClick = { printList() }, contentDescription = "Print or save as PDF")
                     IconButton(onClick = { fullScreen = false }) { Icon(Icons.Rounded.FullscreenExit, contentDescription = "Exit full screen") }
                 }
             }
@@ -220,15 +224,7 @@ fun TerritoryAssignmentsScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                label = { Text("Search: FS Group, Municipality, Barangay") },
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            )
+            StandardSearchField(value = searchQuery, onValueChange = { searchQuery = it }, placeholder = "Search: FS Group, Municipality, Barangay", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
                 LabeledDropdown(
                     label = "Province",
@@ -254,14 +250,7 @@ fun TerritoryAssignmentsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
-            OutlinedButton(
-                onClick = { showAllTerritories = true },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-            ) {
-                Icon(Icons.Rounded.Map, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Show All Territories (Map View, List View)")
-            }
+            ActionButton(ActionKind.Map, onClick = { showAllTerritories = true }, label = "Show All Territories (Map View, List View)", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
 
             } }
             if (needsCongregation) {
@@ -312,12 +301,8 @@ fun TerritoryAssignmentsScreen(
                                     }
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         if (!readOnly) {
-                                            IconButton(onClick = { onEdit(row.congregationId, row.groupId, row.provinceId) }) {
-                                                Icon(Icons.Rounded.Edit, contentDescription = "Edit")
-                                            }
-                                            IconButton(onClick = { pendingRemoveGroup = row }) {
-                                                Icon(Icons.Rounded.Delete, contentDescription = "Remove", tint = MaterialTheme.colorScheme.error)
-                                            }
+                                            ActionIconButton(ActionKind.Edit, onClick = { onEdit(row.congregationId, row.groupId, row.provinceId) }, contentDescription = "Edit")
+                                            ActionIconButton(ActionKind.Delete, onClick = { pendingRemoveGroup = row }, contentDescription = "Remove")
                                         }
                                         Icon(
                                             if (isExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
@@ -376,17 +361,7 @@ fun TerritoryAssignmentsScreen(
                                                 color = MaterialTheme.colorScheme.primary,
                                             )
                                             if (!readOnly) {
-                                                IconButton(
-                                                    modifier = Modifier.size(28.dp),
-                                                    onClick = { pendingRemoveMunicipality = row to municipality },
-                                                ) {
-                                                    Icon(
-                                                        Icons.Rounded.Delete,
-                                                        contentDescription = "Remove ${municipality.assignment.muncityName}",
-                                                        tint = MaterialTheme.colorScheme.error,
-                                                        modifier = Modifier.size(16.dp),
-                                                    )
-                                                }
+                                                ActionIconButton(ActionKind.Delete, onClick = { pendingRemoveMunicipality = row to municipality }, contentDescription = "Remove ${municipality.assignment.muncityName}", modifier = Modifier.size(28.dp))
                                             }
                                         }
                                         municipality.barangays.forEach { barangay ->
@@ -441,12 +416,12 @@ fun TerritoryAssignmentsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.remove(municipality.assignment.id, municipality.assignment.congregationId, currentPersonId)
                     pendingRemoveMunicipality = null
-                }) { Text("Remove") }
+                }, label = "Remove")
             },
-            dismissButton = { TextButton(onClick = { pendingRemoveMunicipality = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingRemoveMunicipality = null }, label = "Cancel") },
         )
     }
 
@@ -462,12 +437,12 @@ fun TerritoryAssignmentsScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.removeGroup(row.congregationId, row.groupId, row.provinceId, currentPersonId)
                     pendingRemoveGroup = null
-                }) { Text("Remove") }
+                }, label = "Remove")
             },
-            dismissButton = { TextButton(onClick = { pendingRemoveGroup = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingRemoveGroup = null }, label = "Cancel") },
         )
     }
 

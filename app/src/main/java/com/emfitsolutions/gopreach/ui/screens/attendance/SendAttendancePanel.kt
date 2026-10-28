@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.attendance
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.ui.theme.glass
 import com.emfitsolutions.gopreach.ui.components.ViewSegments
 import androidx.compose.foundation.BorderStroke
@@ -253,9 +255,9 @@ fun SendAttendancePanel(
                 }
             },
             confirmButton = {
-                TextButton(enabled = checked != null && sendable.isNotEmpty() && !busy, onClick = { confirmSend = false; results = null; runSend(sendable.map { it.month }) }) { Text("Send") }
+                ActionButton(ActionKind.Save, onClick = { confirmSend = false; results = null; runSend(sendable.map { it.month }) }, label = "Send", enabled = checked != null && sendable.isNotEmpty() && !busy)
             },
-            dismissButton = { TextButton(enabled = !busy, onClick = { confirmSend = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmSend = false }, label = "Cancel", enabled = !busy) },
         )
     }
 
@@ -283,9 +285,9 @@ fun SendAttendancePanel(
             },
             confirmButton = {
                 if (failed.isNotEmpty()) TextButton(enabled = !busy, onClick = { runSend(failed.map { it.month }) }) { Text("Retry " + failed.size + " failed") }
-                else TextButton(onClick = { results = null; picked = emptySet(); message = if (sent > 0) sent.toString() + " month" + (if (sent == 1) "" else "s") + " sent." else null }) { Text("Done") }
+                else ActionButton(ActionKind.Save, onClick = { results = null; picked = emptySet(); message = if (sent > 0) sent.toString() + " month" + (if (sent == 1) "" else "s") + " sent." else null }, label = "Done")
             },
-            dismissButton = { if (failed.isNotEmpty()) TextButton(enabled = !busy, onClick = { results = null }) { Text("Close") } },
+            dismissButton = { if (failed.isNotEmpty()) ActionButton(ActionKind.Cancel, onClick = { results = null }, label = "Close", enabled = !busy) },
         )
     }
 
@@ -305,7 +307,7 @@ fun SendAttendancePanel(
                     }
                 }) { Text("Undo sending") }
             },
-            dismissButton = { TextButton(onClick = { confirmUndo = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmUndo = false }, label = "Cancel") },
         )
     }
     if (confirmDelete && soleMonth != null) {
@@ -330,10 +332,10 @@ fun SendAttendancePanel(
                     }
                 }) { Text("Delete submission", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmDelete = false }, label = "Cancel") },
         )
     }
     failure?.let { text ->
-        AlertDialog(onDismissRequest = { failure = null }, title = { Text("Couldn't complete that") }, text = { Text(text) }, confirmButton = { TextButton(onClick = { failure = null }) { Text("OK") } })
+        AlertDialog(onDismissRequest = { failure = null }, title = { Text("Couldn't complete that") }, text = { Text(text) }, confirmButton = { ActionButton(ActionKind.Save, onClick = { failure = null }, label = "OK") })
     }
 }

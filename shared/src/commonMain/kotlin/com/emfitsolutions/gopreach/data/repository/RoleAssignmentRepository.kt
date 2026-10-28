@@ -29,7 +29,7 @@ class RoleAssignmentRepository(
         observeAll().map { list -> list.filter { it.personId == personId } }
 
     suspend fun save(assignment: RoleAssignment) {
-        val id = assignment.id.ifBlank { remote.newId(COLLECTION) }
+        val id = assignment.id.ifBlank { RecentCreates.idFor(COLLECTION, assignment) { remote.newId(COLLECTION) } }
         val before = if (assignment.id.isBlank()) null else offline.get<RoleAssignment>(COLLECTION, id)
         offline.save(COLLECTION, id, assignment.copy(id = id))
         // A publisher enrolled or moved to another service category is added to the category history (never blocks the save).
@@ -43,7 +43,7 @@ class RoleAssignmentRepository(
      * resolved assignment (with its generated id, if it didn't already have
      * one) since the caller needs it right away, unlike [save]'s callers. */
     suspend fun saveNow(assignment: RoleAssignment): RoleAssignment {
-        val id = assignment.id.ifBlank { remote.newId(COLLECTION) }
+        val id = assignment.id.ifBlank { RecentCreates.idFor(COLLECTION, assignment) { remote.newId(COLLECTION) } }
         val withId = assignment.copy(id = id)
         val before = if (assignment.id.isBlank()) null else offline.get<RoleAssignment>(COLLECTION, id)
         offline.saveNow(remote, COLLECTION, id, withId)

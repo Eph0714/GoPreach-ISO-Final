@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.announcements
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -191,10 +193,10 @@ fun AttachmentActionRow(announcementId: String, attachment: AnnouncementAttachme
             }
             if (busy) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
             else {
-                if (attachment.isImage || attachment.isPdf) IconButton(onClick = {
+                if (attachment.isImage || attachment.isPdf) ActionIconButton(ActionKind.View, onClick = {
                     run { bytes -> if (attachment.isImage) imageBytes = bytes else viewModel.openExternally(context, attachment, bytes) }
-                }) { Icon(Icons.Rounded.Visibility, contentDescription = "Preview") }
-                IconButton(onClick = { run { bytes -> showToast(viewModel.saveToDownloads(attachment, bytes)) } }) { Icon(Icons.Rounded.Download, contentDescription = "Download") }
+                }, contentDescription = "Preview")
+                ActionIconButton(ActionKind.Export, onClick = { run { bytes -> showToast(viewModel.saveToDownloads(attachment, bytes)) } }, contentDescription = "Download")
             }
         }
     }

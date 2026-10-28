@@ -62,14 +62,10 @@ fun RecordLocationActions(lat: Double, lng: Double, name: String?, modifier: Mod
             }
             androidx.compose.foundation.layout.BoxWithConstraints(Modifier.padding(end = 8.dp)) {
                 val streetView: @Composable (Modifier) -> Unit = { m ->
-                    FilledTonalButton(onClick = { openStreetViewExternally(context, lat, lng) }, modifier = m.height(42.dp)) {
-                        Icon(Icons.Rounded.Streetview, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Street View", maxLines = 1)
-                    }
+                    ActionButton(ActionKind.Map, onClick = { openStreetViewExternally(context, lat, lng) }, label = "Street View", modifier = m)
                 }
                 val maps: @Composable (Modifier) -> Unit = { m ->
-                    FilledTonalButton(onClick = { openCoordinatesInMaps(context, lat, lng, name?.ifBlank { null }) }, modifier = m.height(42.dp)) {
-                        Icon(Icons.Rounded.Map, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Open in Maps", maxLines = 1)
-                    }
+                    ActionButton(ActionKind.Map, onClick = { openCoordinatesInMaps(context, lat, lng, name?.ifBlank { null }) }, label = "Open in Maps", modifier = m)
                 }
                 // Side by side when there is room, stacked (each full width) in a narrow dialog so no label is squeezed.
                 if (maxWidth >= 300.dp) {
@@ -99,7 +95,7 @@ fun RecordLocationCompact(lat: Double, lng: Double, name: String?, modifier: Mod
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Rounded.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(4.dp))
+            Spacer(Modifier.width(8.dp))
             Text(
                 coordinateText(lat, lng), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium,
                 modifier = Modifier.semantics { contentDescription = "Coordinates: latitude ${"%.6f".format(lat)}, longitude ${"%.6f".format(lng)}" },
@@ -108,12 +104,8 @@ fun RecordLocationCompact(lat: Double, lng: Double, name: String?, modifier: Mod
                 Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy coordinates", modifier = Modifier.size(16.dp))
             }
         }
-        androidx.compose.material3.TextButton(onClick = { openStreetViewExternally(context, lat, lng) }, contentPadding = tight, modifier = Modifier.height(32.dp)) {
-            Icon(Icons.Rounded.Streetview, contentDescription = null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Street View", style = MaterialTheme.typography.labelMedium, maxLines = 1)
-        }
-        androidx.compose.material3.TextButton(onClick = { openCoordinatesInMaps(context, lat, lng, name?.ifBlank { null }) }, contentPadding = tight, modifier = Modifier.height(32.dp)) {
-            Icon(Icons.Rounded.Map, contentDescription = null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)); Text("Maps", style = MaterialTheme.typography.labelMedium, maxLines = 1)
-        }
+        ActionIconButton(ActionKind.Map, onClick = { openStreetViewExternally(context, lat, lng) }, contentDescription = "Street View")
+        ActionIconButton(ActionKind.Map, onClick = { openCoordinatesInMaps(context, lat, lng, name?.ifBlank { null }) }, contentDescription = "Open in Maps")
     }
 }
 

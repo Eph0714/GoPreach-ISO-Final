@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.attendance
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.PictureAsPdf
@@ -265,7 +268,7 @@ fun ComparativeReportsScreen(
                 Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 12.dp)) {
                         Text(n, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { notice = null }) { Text("OK") }
+                        ActionButton(ActionKind.Save, onClick = { notice = null }, label = "OK")
                     }
                 }
             }
@@ -401,10 +404,7 @@ fun ComparativeReportsScreen(
                                 FilterChip(selected = sort == k, onClick = { sort = k }, label = { Text(l) })
                             }
                         }
-                        OutlinedTextField(
-                            value = query, onValueChange = { query = it }, singleLine = true, label = { Text("Search reports...") }, modifier = Modifier.fillMaxWidth(),
-                            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(androidx.compose.material.icons.Icons.Rounded.Close, contentDescription = "Clear search") } },
-                        )
+                        StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search reports...", modifier = Modifier.fillMaxWidth())
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.Center) {
                             if (filter != "ALL") FilterChip(selected = true, onClick = { filter = "ALL" }, label = { Text("${filter.lowercase().replaceFirstChar { it.uppercase() }} ×") })
                             if (filter != "ALL" || query.isNotBlank()) CoButton("Clear All", { filter = "ALL"; query = "" }, kind = CoKind.Neutral, icon = Icons.Rounded.Close)
@@ -469,19 +469,19 @@ fun ComparativeReportsScreen(
                                             ComparativeStatus.DRAFT -> {
                                                 OutlinedButton(onClick = { openId = r.id }) { Text("Open") }
                                                 if (editable) {
-                                                    OutlinedButton(onClick = { openId = r.id; editPeriods = true }) { Text("Edit") }
-                                                    OutlinedButton(onClick = { openId = r.id; confirm = "delete" }) { Text("Delete") }
-                                                    Button(onClick = { openId = r.id; confirm = "submit" }) { Text("Submit") }
+                                                    ActionButton(ActionKind.Edit, onClick = { openId = r.id; editPeriods = true }, label = "Edit")
+                                                    ActionButton(ActionKind.Delete, onClick = { openId = r.id; confirm = "delete" }, label = "Delete")
+                                                    ActionButton(ActionKind.Save, onClick = { openId = r.id; confirm = "submit" }, label = "Submit")
                                                 }
                                             }
                                             ComparativeStatus.SUBMITTED -> OutlinedButton(onClick = { openId = r.id }) { Text(if (isCo) "Review" else "View") }
                                             ComparativeStatus.RETURNED -> {
                                                 OutlinedButton(onClick = { openId = r.id }) { Text(if (isCo) "View" else "Open") }
-                                                if (editable) Button(onClick = { openId = r.id; confirm = "submit" }) { Text("Resubmit") }
+                                                if (editable) ActionButton(ActionKind.Save, onClick = { openId = r.id; confirm = "submit" }, label = "Resubmit")
                                             }
                                             ComparativeStatus.RECEIVED -> {
-                                                OutlinedButton(onClick = { openId = r.id }) { Text("View") }
-                                                OutlinedButton(onClick = { doExport(r, "Print") }) { Text("Print") }
+                                                ActionButton(ActionKind.View, onClick = { openId = r.id }, label = "View")
+                                                ActionButton(ActionKind.Print, onClick = { doExport(r, "Print") }, label = "Print")
                                                 OutlinedButton(onClick = { doExport(r, "PDF") }) { Text("PDF") }
                                                 CoButton("Excel", { doExport(r, "Excel") }, kind = CoKind.Secondary, icon = Icons.Rounded.TableChart)
                                             }
@@ -512,7 +512,7 @@ fun ComparativeReportsScreen(
             title = { Text("Report already exists") },
             text = { Text("$COMPARATIVE_DUPLICATE_MESSAGE\n\n${existing.reportNumber} · ${existing.status.label}") },
             confirmButton = { TextButton(onClick = { openId = existing.id; creating = false; editPeriods = false; duplicate = null }) { Text("Open Existing Report") } },
-            dismissButton = { TextButton(onClick = { duplicate = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { duplicate = null }, label = "Cancel") },
         )
     }
 
@@ -543,7 +543,7 @@ fun ComparativeReportsScreen(
                     }
                 }) { Text(when (kind) { "submit" -> "Submit"; "receive" -> "Receive"; else -> "Delete" }) }
             },
-            dismissButton = { TextButton(onClick = { confirm = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirm = null }, label = "Cancel") },
         )
     }
 
@@ -569,7 +569,7 @@ fun ComparativeReportsScreen(
                     }
                 }) { Text(if (kind == "return") "Return" else "Save Remarks") }
             },
-            dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { dialog = null }, label = "Cancel") },
         )
     }
 }
@@ -615,8 +615,8 @@ private fun PeriodEditor(
         if (problem != null) Text(problem, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         else if (missing.isNotEmpty()) Text("Missing data (no saved statistics): ${missing.joinToString(", ") { monthLabel(it) }}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(enabled = problem == null, onClick = { onSaveDraft(periods) }) { Text("Save Draft") }
-            Button(enabled = problem == null, onClick = { onSubmit(periods) }) { Text("Submit to CO") }
+            ActionButton(ActionKind.Save, onClick = { onSaveDraft(periods) }, label = "Save Draft", enabled = problem == null)
+            ActionButton(ActionKind.Save, onClick = { onSubmit(periods) }, label = "Submit to CO", enabled = problem == null)
         }
         if (preview != null) {
             Text("Preview", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)

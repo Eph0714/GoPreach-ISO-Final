@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.announcements
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import android.net.Uri
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -204,12 +207,8 @@ fun AnnouncementsScreen(
                                 Text(announcement.title, style = MaterialTheme.typography.titleMedium)
                                 if (!readOnly) {
                                     Row {
-                                        IconButton(onClick = { pendingEdit = announcement }) {
-                                            Icon(Icons.Rounded.Edit, contentDescription = "Edit announcement")
-                                        }
-                                        IconButton(onClick = { pendingDelete = announcement }) {
-                                            Icon(Icons.Rounded.Delete, contentDescription = "Delete announcement")
-                                        }
+                                        ActionIconButton(ActionKind.Edit, onClick = { pendingEdit = announcement }, contentDescription = "Edit announcement")
+                                        ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = announcement }, contentDescription = "Delete announcement")
                                     }
                                 }
                             }
@@ -275,11 +274,9 @@ fun AnnouncementsScreen(
             title = { Text("Delete Announcement?") },
             text = { Text("\"${toDelete.title}\" will be permanently deleted. This cannot be undone.") },
             confirmButton = {
-                TextButton(onClick = { viewModel.delete(toDelete, currentPersonId); showToast("\"${toDelete.title}\" deleted."); pendingDelete = null }) {
-                    Text("Delete")
-                }
+                ActionButton(ActionKind.Delete, onClick = { viewModel.delete(toDelete, currentPersonId); showToast("\"${toDelete.title}\" deleted."); pendingDelete = null }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDelete = null }, label = "Cancel") },
         )
     }
     val toView = viewingDetail
@@ -312,7 +309,7 @@ fun AnnouncementsScreen(
                     )
                 }
             },
-            confirmButton = { TextButton(onClick = { viewingDetail = null }) { Text("Close") } },
+            confirmButton = { ActionButton(ActionKind.Cancel, onClick = { viewingDetail = null }, label = "Close") },
         )
     }
 }
@@ -459,10 +456,7 @@ private fun AnnouncementDialog(
                         Text(if (hasImageToShow) "Replace Image" else "Add Image")
                     }
                     if (hasImageToShow) {
-                        OutlinedButton(
-                            onClick = { pickedImageUri = null; removeImage = true },
-                            modifier = Modifier.weight(1f),
-                        ) { Text("Remove Image") }
+                        ActionButton(ActionKind.Delete, onClick = { pickedImageUri = null; removeImage = true }, label = "Remove Image", modifier = Modifier.weight(1f))
                     }
                 }
 
@@ -479,10 +473,7 @@ private fun AnnouncementDialog(
                         modifier = Modifier.weight(1f),
                     ) { Text(if (attachmentNameToShow != null) "Replace File" else "Attach File") }
                     if (attachmentNameToShow != null) {
-                        OutlinedButton(
-                            onClick = { pickedAttachmentUri = null; pickedAttachmentFileName = null; removeAttachment = true },
-                            modifier = Modifier.weight(1f),
-                        ) { Text("Remove File") }
+                        ActionButton(ActionKind.Delete, onClick = { pickedAttachmentUri = null; pickedAttachmentFileName = null; removeAttachment = true }, label = "Remove File", modifier = Modifier.weight(1f))
                     }
                 }
     }

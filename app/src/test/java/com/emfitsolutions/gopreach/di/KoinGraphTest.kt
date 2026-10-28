@@ -18,7 +18,7 @@ class KoinGraphTest {
         appModule.verify(
             extraTypes = listOf(
                 Context::class, WorkerParameters::class, Gson::class, CoroutineScope::class,
-                CacheDao::class, SyncQueueDao::class, PsgcDao::class, com.emfitsolutions.gopreach.data.sync.SyncEngine::class, com.emfitsolutions.gopreach.data.sync.WriteQueuedListener::class, com.emfitsolutions.gopreach.data.sync.RemoteCollections::class, com.emfitsolutions.gopreach.data.location.LocationTracker::class, com.emfitsolutions.gopreach.data.repository.AuthService::class, com.emfitsolutions.gopreach.platform.KeyValueStores::class, com.emfitsolutions.gopreach.data.sync.NetworkStatus::class, com.emfitsolutions.gopreach.data.remote.RemoteFiles::class, com.emfitsolutions.gopreach.data.remote.SyncApi::class,
+                CacheDao::class, SyncQueueDao::class, PsgcDao::class, com.emfitsolutions.gopreach.data.sync.SyncEngine::class, com.emfitsolutions.gopreach.data.sync.WriteQueuedListener::class, com.emfitsolutions.gopreach.data.sync.RemoteCollections::class, com.emfitsolutions.gopreach.data.location.LocationTracker::class, com.emfitsolutions.gopreach.data.repository.AuthService::class, com.emfitsolutions.gopreach.data.repository.SecurityService::class, com.emfitsolutions.gopreach.platform.KeyValueStores::class, com.emfitsolutions.gopreach.data.sync.NetworkStatus::class, com.emfitsolutions.gopreach.data.remote.RemoteFiles::class, com.emfitsolutions.gopreach.data.remote.SyncApi::class,
             ),
         )
     }

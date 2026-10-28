@@ -294,7 +294,7 @@ fun AboutServerButton(tint: Color = Color.White) {
                     Text("GoPreach v" + com.emfitsolutions.gopreach.BuildConfig.VERSION_NAME, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             },
-            confirmButton = { TextButton(onClick = { showAbout = false }) { Text("OK") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = { showAbout = false }, label = "OK") },
         )
     }
 }
@@ -315,7 +315,7 @@ private fun SyncFeedbackDialogs(state: ManualSyncState, pendingCount: Int, onDis
                         "will sync automatically once you're back online.",
                 )
             },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = onDismiss, label = "OK") },
         )
         is ManualSyncState.Syncing -> Unit // reflected in the button/status line above, no blocking dialog
         ManualSyncState.Failed -> Unit // reflected in the status line above
@@ -340,9 +340,9 @@ private fun SyncFeedbackDialogs(state: ManualSyncState, pendingCount: Int, onDis
                     color = if (s.failed > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
                 )
             },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = onDismiss, label = "OK") },
             dismissButton = if (s.failed > 0) {
-                { TextButton(onClick = { onDismiss(); onRetry() }) { Text("Retry") } }
+                { ActionButton(ActionKind.Refresh, onClick = { onDismiss(); onRetry() }, label = "Retry") }
             } else null,
         )
         ManualSyncState.Idle -> Unit

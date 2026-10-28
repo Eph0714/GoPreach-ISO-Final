@@ -86,7 +86,7 @@ class MapDrawingViewModel(
 
     /**
      * Congregation-wide roles publish each loaded territory's bounding box so the server can enforce
-     * the group-level boundary rule (see firestore.rules `territoryBounds`). A no-op for everyone else —
+     * the group-level boundary rule (see docs/legacy-firebase/firestore.rules `territoryBounds`). A no-op for everyone else —
      * group-level users must never be able to write their own limits.
      */
     suspend fun publishBounds(access: DrawingAccess, territories: List<TerritoryBoundary>) {

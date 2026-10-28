@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.territories
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.ui.components.keyboardPadding
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
 import com.emfitsolutions.gopreach.platform.AppPermission
@@ -107,6 +111,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.rounded.NearMe
 import androidx.compose.material.icons.rounded.DirectionsWalk
 import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.FilterList
+import androidx.compose.material.icons.rounded.FilterListOff
 import androidx.compose.material.icons.rounded.GpsFixed
 import androidx.compose.material.icons.rounded.GpsNotFixed
 import androidx.compose.material.icons.rounded.GpsOff
@@ -203,7 +209,7 @@ private fun markerColor(type: RecordType): Color = Color(android.graphics.Color.
  * load only when explicitly chosen. Scope is always limited to the
  * server-resolved [fixedCongregationId] (null = Super-Admin, who picks one).
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun TerritoryMapScreen(
     fixedCongregationId: String?,
@@ -557,6 +563,11 @@ fun TerritoryMapScreen(
     var fullScreen by rememberSaveable { mutableStateOf(true) }
     // The map opens clean (Filters, Hide Icons, Style, Drive only). Filters opens the filter panel; every other tool is in the long-press menu.
     var showFilterPanel by rememberSaveable { mutableStateOf(false) }
+    var showMoreFilters by rememberSaveable { mutableStateOf(false) }
+    // Show / Hide Filters: the search box, the category chips and Nearest / Farthest.
+    var showFilterBar by rememberSaveable { mutableStateOf(true) }
+    // The barangay summary shows every time a single barangay is opened; closing it never closes the barangay.
+    var summaryClosedFor by rememberSaveable { mutableStateOf<String?>(null) }
     val fullScreenActive = fullScreen && viewMode == ViewMode.MAP
     BackHandler(enabled = fullScreenActive) { fullScreen = false }
     // The full-screen map covers the whole window, so the app's Back to Homepage bar steps aside and the map draws its own Home control (below).
@@ -689,7 +700,7 @@ fun TerritoryMapScreen(
                     else "Turn on your device's location to use Re-center and see where you are on the map.",
                 )
             },
-            dismissButton = { TextButton(onClick = { locationHelp = null }) { Text("Not now") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { locationHelp = null }, label = "Not now") },
             confirmButton = {
                 TextButton(onClick = {
                     locationHelp = null
@@ -710,7 +721,8 @@ fun TerritoryMapScreen(
             (territoryFilter == null || a.id == territoryFilter)
     }
     val visibleRecords = recordsState.orEmpty().filter { r ->
-        (typeFilter.type == null || r.type == typeFilter.type) &&
+        // Nothing is listed until Searching, Return Visit or Bible Study is chosen (the territory scope of the role shows first); a focused record or an open barangay still shows its records.
+        (if (typeFilter.type == null) (focusLat != null || territoryFilter != null) else r.type == typeFilter.type) &&
             (!embedded || (congregationRecords && !mineOnly) || r.person.publisherPersonId == currentPersonId) &&
             (municipalityFilter == null || normalizePlaceName(r.municipality) == normalizePlaceName(municipalityFilter)) &&
             (territoryFilter == null || (r.areaId == territoryFilter && (barangayGroupFilter == null || r.groupId == barangayGroupFilter)))
@@ -785,6 +797,7 @@ fun TerritoryMapScreen(
     var searchOpen by remember { mutableStateOf(false) }
     var openedFromSearch by rememberSaveable(congregationId) { mutableStateOf(false) }
     fun selectBarangay(id: String) {
+        summaryClosedFor = null
         if (territoryFilter == null) scopeBeforeBarangay = scope
         territoryFilter = id
         selectedAreaId = id
@@ -809,27 +822,104 @@ fun TerritoryMapScreen(
     // Re-fit when a boundary finishes loading too, so a selected Barangay is always framed whole (fit-to-screen).
     val fitKey = "$datasetKey|${typeFilter.name}|$municipalityFilter|$territoryFilter|${barangayGroupFilter}|b${visibleAreas.count { it.id in boundaryJson }}"
     val fitReady = !isLoading && datasetKey != null && visibleAreas.all { it.id in attemptedAreaIds }
-    val focus = if (focusLat != null && focusLng != null) Triple(focusLat, focusLng, focusName.orEmpty()) else null
+    // Opening a record's saved location (from Ministry) is viewing only: the record's OWN marker is found by its saved coordinates and selected,
+    // and no extra pin is drawn on top of it. Only a point that belongs to no record (a shared location) still gets its temporary pin.
+    val focusedRecord = if (focusLat != null && focusLng != null) {
+        recordsState.orEmpty().let { all ->
+            all.firstOrNull { kotlin.math.abs(it.lat - focusLat) < 1e-6 && kotlin.math.abs(it.lng - focusLng) < 1e-6 && (focusName.isNullOrBlank() || it.name == focusName) }
+                ?: all.firstOrNull { kotlin.math.abs(it.lat - focusLat) < 1e-6 && kotlin.math.abs(it.lng - focusLng) < 1e-6 }
+        }
+    } else null
+    val focus = if (focusLat != null && focusLng != null && focusedRecord == null && recordsState != null) Triple(focusLat, focusLng, focusName.orEmpty()) else null
+    LaunchedEffect(focusedRecord?.id) {
+        val r = focusedRecord ?: return@LaunchedEffect
+        typeFilter = TypeFilter.entries.firstOrNull { it.type == r.type } ?: TypeFilter.ALL
+        if (embedded && r.person.publisherPersonId != currentPersonId) { mineOnly = false; congregationRecords = true }
+        kotlinx.coroutines.delay(450)   // after the filter change has settled (it clears the selection)
+        selectedRecordId = r.id; sheetOpen = true; flyToRecord = r
+    }
 
-    Scaffold(
-        topBar = {
-            if (!fullScreenActive && !embedded) Column {
-                TopAppBar(
-                    title = { Text("Territory Map") },
-                    navigationIcon = {
-                        IconButton(onClick = { if (territoryFilter != null && !drawingState.active) backFromBarangay() else if (fixedCongregationId == null && congregationId != null) backToPicker() else onBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
-                    },
-                )
-                if (!restricted) com.emfitsolutions.gopreach.ui.components.AdminMainTabs(com.emfitsolutions.gopreach.ui.components.AdminTab.TERRITORY)
+    // Search Barangay, shared by the top bar and the full-screen map (the same state, so what is typed in one shows in the other).
+    val barangaySearch: @Composable () -> Unit = {
+                    val q = normalizePlaceName(barangayQuery.trim())
+                    val congName = allCongregations.firstOrNull { it.id == congregationId }?.name.orEmpty()
+                    val found = if (q.isEmpty()) emptyList() else allAreas.map { a ->
+                        val b = normalizePlaceName(a.barangay)
+                        a to when {
+                            b == q -> 0
+                            b.startsWith(q) -> 1
+                            b.contains(q) -> 2
+                            normalizePlaceName(a.barangay + " " + a.municipality + " " + a.provinceName + " " + a.groupName).contains(q) -> 3
+                            else -> 9
+                        }
+                    }.filter { it.second < 9 }.sortedWith(compareBy({ it.second }, { it.first.barangay.lowercase() }, { it.first.municipality.lowercase() })).map { it.first }
+                    Column(Modifier.fillMaxWidth()) {
+                        StandardSearchField(value = barangayQuery, onValueChange = { barangayQuery = it; searchOpen = it.isNotBlank(); if (it.isBlank() && openedFromSearch && territoryFilter != null) backFromBarangay() }, placeholder = "Search Barangay", modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { searchOpen = barangayQuery.isNotBlank() }))
+                        if (searchOpen && q.isNotEmpty()) {
+                            Surface(shape = RoundedCornerShape(14.dp), tonalElevation = 3.dp, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                                Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
+                                    if (found.isEmpty()) {
+                                        Text("No barangay matches \"${barangayQuery.trim()}\". Check the spelling or try a shorter name.", Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    found.take(40).forEach { a ->
+                                        Row(
+                                            Modifier.fillMaxWidth().clickable {
+                                                searchOpen = false; openedFromSearch = true
+                                                provinceFilter = null; municipalityFilter = null   // so the barangay is never hidden by an earlier choice
+                                                selectBarangay(a.id)
+                                            }.padding(horizontal = 14.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            androidx.compose.foundation.layout.Box(Modifier.size(12.dp).background(groupColors[a.groupId]?.let { hex -> runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(hex)) }.getOrNull() } ?: MaterialTheme.colorScheme.outline, CircleShape))
+                                            Column(Modifier.padding(start = 12.dp)) {
+                                                Text(a.barangay, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                Text(
+                                                    listOf(a.municipality, a.provinceName, congName, a.groupName).filter { it.isNotBlank() }.joinToString(" · "),
+                                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+    // THE Territory Map filters. What stays on the map: search, the category (Searching / Return Visit / Bible Study) and Nearest / Farthest.
+    // Every other filter lives in the long-press menu (territoryExtraFilters below), so nothing is repeated.
+    val territoryFilters: @Composable () -> Unit = {
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            barangaySearch()
+            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f), shadowElevation = 2.dp) {
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    TypeFilter.entries.filter { it != TypeFilter.ALL }.forEach { f ->
+                        FilterChip(selected = typeFilter == f, onClick = { typeFilter = if (typeFilter == f) TypeFilter.ALL else f }, label = { Text(f.label, style = MaterialTheme.typography.labelLarge) })
+                    }
+                    // Nearest / Farthest appear only once a category is chosen: they sort that category by distance from the current location (sorting only: it never changes a record)
+                    if (typeFilter != TypeFilter.ALL) SegmentedPair(
+                        labels = listOf("Nearest", "Farthest"),
+                        icons = listOf(Icons.Rounded.NearMe, Icons.Rounded.Explore),
+                        selected = when (stepOrder) { SortOrder.NEAREST -> 0; SortOrder.FARTHEST -> 1; else -> -1 },
+                        onSelect = { stepTo(if (it == 0) SortOrder.NEAREST else SortOrder.FARTHEST) },
+                    )
+                }
             }
-        },
-    ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            // Congregation (Super-Admin only), then My FS Group / Other FS Groups.
-            if (!fullScreenActive) Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            if (typeFilter != TypeFilter.ALL && stepOrder != null) Text(
+                if (myLocation != null) "Sorted by distance from your current location" else "Turn on location to sort by distance",
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
+    }
+
+    // The long-press menu's filters: congregation, FS Group, province / municipality / barangay, my records, territory status, active filters and Reset.
+    val territoryExtraFilters: @Composable () -> Unit = {
+        Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isSuperAdmin) {
                     DropdownChip(
                         label = "Congregation",
@@ -888,143 +978,99 @@ fun TerritoryMapScreen(
                         TextButton(onClick = { showGroupPicker = true }) { Text(if (selectedGroup == null) "Choose FS Group" else "Change") }
                     }
                 }
-                // Search Barangay: partial names, any case; results show the municipality, province, congregation and FS Group. Only barangays this role may already see are searched.
-                run {
-                    val q = normalizePlaceName(barangayQuery.trim())
-                    val congName = allCongregations.firstOrNull { it.id == congregationId }?.name.orEmpty()
-                    val found = if (q.isEmpty()) emptyList() else allAreas.map { a ->
-                        val b = normalizePlaceName(a.barangay)
-                        a to when {
-                            b == q -> 0
-                            b.startsWith(q) -> 1
-                            b.contains(q) -> 2
-                            normalizePlaceName(a.barangay + " " + a.municipality + " " + a.provinceName + " " + a.groupName).contains(q) -> 3
-                            else -> 9
-                        }
-                    }.filter { it.second < 9 }.sortedWith(compareBy({ it.second }, { it.first.barangay.lowercase() }, { it.first.municipality.lowercase() })).map { it.first }
-                    Column(Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = barangayQuery,
-                            onValueChange = { barangayQuery = it; searchOpen = it.isNotBlank() },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            placeholder = { Text("Search Barangay") },
-                            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                            trailingIcon = {
-                                if (barangayQuery.isNotEmpty()) IconButton(onClick = { barangayQuery = ""; searchOpen = false }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") }
-                            },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(onSearch = { searchOpen = barangayQuery.isNotBlank() }),
+            // Territory Status (All, Finished, To Continue, To Do)
+                    if (!drawingState.active) {
+                        StatusBar(
+                            counts = statusCounts,
+                            filter = drawingState.statusFilter,
+                            onFilter = { drawingState.statusFilter = it },
+                            showStatus = drawingAccess.canUseDrawingTools || statusCounts.values.any { it > 0 },
+                            leading = {},
                         )
-                        if (searchOpen && q.isNotEmpty()) {
-                            Surface(shape = RoundedCornerShape(14.dp), tonalElevation = 3.dp, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                                Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
-                                    if (found.isEmpty()) {
-                                        Text("No barangay matches \"${barangayQuery.trim()}\". Check the spelling or try a shorter name.", Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    found.take(40).forEach { a ->
-                                        Row(
-                                            Modifier.fillMaxWidth().clickable {
-                                                searchOpen = false; openedFromSearch = true
-                                                provinceFilter = null; municipalityFilter = null   // so the barangay is never hidden by an earlier choice
-                                                selectBarangay(a.id)
-                                            }.padding(horizontal = 14.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
-                                            androidx.compose.foundation.layout.Box(Modifier.size(12.dp).background(groupColors[a.groupId]?.let { hex -> runCatching { androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(hex)) }.getOrNull() } ?: MaterialTheme.colorScheme.outline, CircleShape))
-                                            Column(Modifier.padding(start = 12.dp)) {
-                                                Text(a.barangay, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                                Text(
-                                                    listOf(a.municipality, a.provinceName, congName, a.groupName).filter { it.isNotBlank() }.joinToString(" · "),
-                                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                )
-                                            }
-                                        }
-                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                                    }
-                                }
-                            }
-                        }
                     }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+
+            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f), shadowElevation = 2.dp) {
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.padding(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    if (embedded) {
-                        val types = listOf(TypeFilter.SEARCHING, TypeFilter.RETURN_VISIT, TypeFilter.BIBLE_STUDY)
-                        Row(
-                            modifier = Modifier.clickable { mineOnly = !mineOnly; if (mineOnly) congregationRecords = false },
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            androidx.compose.material3.Checkbox(checked = mineOnly, onCheckedChange = { mineOnly = it; if (it) congregationRecords = false })
-                            Text("Show my Ministry Record Only", style = MaterialTheme.typography.labelLarge, maxLines = 1)
-                        }
-                        com.emfitsolutions.gopreach.ui.components.MinistryPicker(
-                            "My Records", "My", types.indexOf(typeFilter).takeIf { it >= 0 && !congregationRecords },
-                            { k -> congregationRecords = false; typeFilter = k?.let { types[it] } ?: TypeFilter.ALL }, Modifier.width(210.dp), allowAll = true,
-                        )
-                        if (!mineOnly) com.emfitsolutions.gopreach.ui.components.MinistryPicker(
-                            "Congregation Records", "Congregation", types.indexOf(typeFilter).takeIf { it >= 0 && congregationRecords },
-                            { k -> congregationRecords = true; typeFilter = k?.let { types[it] } ?: TypeFilter.ALL }, Modifier.width(230.dp), allowAll = true,
-                        )
-                    } else TypeFilter.entries.forEach { f ->
-                        FilterChip(selected = typeFilter == f, onClick = { typeFilter = f }, label = { Text(f.label) })
+                    // A publisher's own-or-congregation records (the one scope choice that is not a category)
+                    if (embedded) Row(
+                        modifier = Modifier.clickable { mineOnly = !mineOnly; congregationRecords = !mineOnly },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.Checkbox(checked = mineOnly, onCheckedChange = { mineOnly = it; congregationRecords = !it })
+                        Text("Show my Ministry Record Only", style = MaterialTheme.typography.labelLarge)
                     }
-                    // Province -> Municipality -> Barangay, over every claimed Barangay of the congregation. Picking a
-                    // Barangay zooms to it and shows everything in it (all FS Groups), subject to the same viewing rules.
                     val provinces = allAreas.map { it.provinceName }.filter { it.isNotBlank() }.distinct()
-                    if (provinces.size > 1) {
-                        DropdownChip(
-                            label = "Province",
-                            value = provinceFilter,
-                            placeholder = "Province",
-                            options = listOf<Pair<String?, String>>(null to "All provinces") + provinces.map { it to it },
-                            onSelect = { provinceFilter = it; municipalityFilter = null; territoryFilter = null; barangayGroupFilter = null; selectedAreaId = null },
-                        )
-                    }
-                    val inProvince = allAreas.filter { provinceFilter == null || normalizePlaceName(it.provinceName) == normalizePlaceName(provinceFilter) }
-                    val municipalities = inProvince.map { it.municipality }.distinct()
-                    if (municipalities.size > 1) {
-                        DropdownChip(
-                            label = "Municipality",
-                            value = municipalityFilter,
-                            placeholder = "Municipality",
-                            options = listOf<Pair<String?, String>>(null to "All municipalities") + municipalities.map { it to it },
-                            onSelect = { municipalityFilter = it; territoryFilter = null; barangayGroupFilter = null; selectedAreaId = null },
-                        )
-                    }
-                    val barangayChoices = inProvince.filter { municipalityFilter == null || normalizePlaceName(it.municipality) == normalizePlaceName(municipalityFilter) }
-                    if (barangayChoices.isNotEmpty()) {
-                        DropdownChip(
-                            label = "Barangay",
-                            value = barangayChoices.firstOrNull { it.id == territoryFilter }?.barangay,
-                            placeholder = "Barangay",
-                            options = listOf<Pair<String?, String>>(null to "All barangays") +
-                                barangayChoices.sortedWith(compareBy({ it.municipality.lowercase() }, { it.barangay.lowercase() }))
-                                    .map { it.id to (if (municipalityFilter == null) "${it.barangay} · ${it.municipality}" else it.barangay) },
-                            onSelect = { if (it == null) backFromBarangay() else selectBarangay(it) },
-                        )
-                    }
-                    // FS Group filter for the selected Barangay: all permitted FS Groups, or one.
-                    if (territoryFilter != null && groups.isNotEmpty()) {
-                        DropdownChip(
-                            label = "FS Group",
-                            value = groups.firstOrNull { it.id == barangayGroupFilter }?.name,
-                            placeholder = "All FS Groups",
-                            options = listOf<Pair<String?, String>>(null to "All FS Groups") + groups.map { it.id to it.name },
-                            onSelect = { barangayGroupFilter = it },
-                        )
-                    }
+                    if (provinces.size > 1) DropdownChip(
+                        label = "Province", value = provinceFilter, placeholder = "Province",
+                        options = listOf<Pair<String?, String>>(null to "All provinces") + provinces.map { it to it },
+                        onSelect = { provinceFilter = it; municipalityFilter = null; territoryFilter = null; barangayGroupFilter = null; selectedAreaId = null },
+                    )
+                    val inProv = allAreas.filter { provinceFilter == null || normalizePlaceName(it.provinceName) == normalizePlaceName(provinceFilter) }
+                    val munis = inProv.map { it.municipality }.distinct()
+                    if (munis.size > 1) DropdownChip(
+                        label = "Municipality", value = municipalityFilter, placeholder = "Municipality",
+                        options = listOf<Pair<String?, String>>(null to "All municipalities") + munis.map { it to it },
+                        onSelect = { municipalityFilter = it; territoryFilter = null; barangayGroupFilter = null; selectedAreaId = null },
+                    )
+                    val brgys = inProv.filter { municipalityFilter == null || normalizePlaceName(it.municipality) == normalizePlaceName(municipalityFilter) }
+                    if (brgys.isNotEmpty()) DropdownChip(
+                        label = "Barangay", value = brgys.firstOrNull { it.id == territoryFilter }?.barangay, placeholder = "Barangay",
+                        options = listOf<Pair<String?, String>>(null to "All barangays") + brgys.sortedWith(compareBy({ it.municipality.lowercase() }, { it.barangay.lowercase() }))
+                            .map { it.id to (if (municipalityFilter == null) "${it.barangay} · ${it.municipality}" else it.barangay) },
+                        onSelect = { if (it == null) backFromBarangay() else selectBarangay(it) },
+                    )
+                    if (territoryFilter != null && groups.isNotEmpty()) DropdownChip(
+                        label = "FS Group", value = groups.firstOrNull { it.id == barangayGroupFilter }?.name, placeholder = "All FS Groups",
+                        options = listOf<Pair<String?, String>>(null to "All FS Groups") + groups.map { it.id to it.name },
+                        onSelect = { barangayGroupFilter = it },
+                    )
                 }
-                // Selected Barangay summary (counts follow the FS Group filter; they are what this user can see).
-                if (territoryFilter != null) {
+            }
+            val activeFilters = buildList<Pair<String, () -> Unit>> {
+                if (typeFilter != TypeFilter.ALL) add(typeFilter.label to { typeFilter = TypeFilter.ALL })
+                municipalityFilter?.let { m -> add(m to { municipalityFilter = null; territoryFilter = null; selectedAreaId = null }) }
+                allAreas.firstOrNull { it.id == territoryFilter }?.let { a -> add(a.barangay to { backFromBarangay() }) }
+                groups.firstOrNull { it.id == barangayGroupFilter }?.let { g -> add(g.name to { barangayGroupFilter = null }) }
+                if (stepOrder != null) add((if (stepOrder == SortOrder.NEAREST) "Nearest" else "Farthest") to { stepOrder = null })
+            }
+            androidx.compose.foundation.layout.FlowRow(
+                modifier = Modifier.padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                activeFilters.forEach { (label, remove) ->
+                    FilterChip(
+                        selected = true, onClick = remove, label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        trailingIcon = { Icon(Icons.Rounded.Close, contentDescription = "Remove filter $label", modifier = Modifier.size(16.dp)) },
+                    )
+                }
+                TextButton(onClick = {
+                    // Back to how the map first opened for this role: its own territory scope, no category, no place filters, nothing selected.
+                    typeFilter = TypeFilter.ALL; provinceFilter = null; municipalityFilter = null; barangayGroupFilter = null
+                    stepOrder = null; barangayQuery = ""; searchOpen = false; mineOnly = true; congregationRecords = false
+                    otherGroupId = null; selectedRecordId = null
+                    if (territoryFilter != null) backFromBarangay() else selectedAreaId = null
+                    scope = if (readOnly || fixedCongregationId == null) GroupScope.ALL else GroupScope.MINE
+                }) { Text("Reset Filters") }
+            }
+        }
+    }
+
+    // Summary of the open barangay (counts follow the FS Group filter; they are what this user can see). Its close button hides only the summary.
+    val barangaySummary: @Composable () -> Unit = {
+
                     val inBarangay = recordsState.orEmpty().filter { r -> r.areaId == territoryFilter && (barangayGroupFilter == null || r.groupId == barangayGroupFilter) }
                     val byType = inBarangay.groupingBy { it.type }.eachCount()
                     Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)) {
                         Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
-                            Text("Barangay: " + (allAreas.firstOrNull { it.id == territoryFilter }?.barangay ?: ""), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Barangay: " + (allAreas.firstOrNull { it.id == territoryFilter }?.barangay ?: ""), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                IconButton(onClick = { summaryClosedFor = territoryFilter }, modifier = Modifier.size(36.dp)) { Icon(Icons.Rounded.Close, contentDescription = "Close summary") }
+                            }
                             Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                                 Text("Territory Drawings: ${visibleDrawings.size}", style = MaterialTheme.typography.bodySmall)
                                 Text("Search Records: ${byType[RecordType.SEARCHING] ?: 0}", style = MaterialTheme.typography.bodySmall)
@@ -1033,26 +1079,30 @@ fun TerritoryMapScreen(
                             }
                         }
                     }
-                }
-                // ONE control bar above the map: Next Nearest / Next Farthest, then the Territory Status filter (All, Finished, To Continue, To Do).
-                // The status chips follow the same rule as before (shown to whoever can draw, or when there are drawings to filter).
-                if (!drawingState.active) {
-                    StatusBar(
-                        counts = statusCounts,
-                        filter = drawingState.statusFilter,
-                        onFilter = { drawingState.statusFilter = it },
-                        showStatus = drawingAccess.canUseDrawingTools || statusCounts.values.any { it > 0 },
-                        leading = {
-                            SegmentedPair(
-                                labels = listOf("Next Nearest", "Next Farthest"),
-                                icons = listOf(Icons.Rounded.NearMe, Icons.Rounded.Explore),
-                                selected = when (stepOrder) { SortOrder.NEAREST -> 0; SortOrder.FARTHEST -> 1; else -> -1 },
-                                onSelect = { stepTo(if (it == 0) SortOrder.NEAREST else SortOrder.FARTHEST) },
-                            )
-                            androidx.compose.foundation.layout.Spacer(Modifier.width(4.dp))
-                        },
-                    )
-                }
+                    }
+
+    Scaffold(
+        topBar = {
+            if (!fullScreenActive && !embedded) Column {
+                TopAppBar(
+                    title = { Text("Territory Map") },
+                    navigationIcon = {
+                        IconButton(onClick = { if (territoryFilter != null && !drawingState.active) backFromBarangay() else if (fixedCongregationId == null && congregationId != null) backToPicker() else onBack() }) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") }
+                    },
+                )
+                if (!restricted) com.emfitsolutions.gopreach.ui.components.AdminMainTabs(com.emfitsolutions.gopreach.ui.components.AdminTab.TERRITORY)
+            }
+        },
+    ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // Congregation (Super-Admin only), then My FS Group / Other FS Groups.
+            if (!fullScreenActive) Column(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                // Search Barangay: partial names, any case; results show the municipality, province, congregation and FS Group. Only barangays this role may already see are searched.
+                if (showFilterBar) territoryFilters()
+                if (territoryFilter != null && summaryClosedFor != territoryFilter) barangaySummary()
                 locationIssue?.let { issue ->
                     LocationBanner(
                         issue = issue,
@@ -1131,11 +1181,17 @@ fun TerritoryMapScreen(
                     ) {
                         // In the Main Form tab the map is never really full screen (the header and tabs stay), so the toggle is
                         // "Filters" (show the FS Group and record-type controls above the map) / "Map" (hide them again).
-                        MapToolButton(
+                        if (!fullScreenActive) MapToolButton(
                             icon = if (fullScreenActive) Icons.Rounded.Tune else Icons.Rounded.Fullscreen,
                             label = if (fullScreenActive) "Filters" else if (embedded) "Map" else "Full screen",
                             active = fullScreenActive && showFilterPanel,
                             onClick = { if (fullScreenActive) showFilterPanel = !showFilterPanel else fullScreen = true },
+                        )
+                        MapToolButton(
+                            icon = if (showFilterBar) Icons.Rounded.FilterListOff else Icons.Rounded.FilterList,
+                            label = if (showFilterBar) "Hide Filters" else "Show Filters",
+                            active = !showFilterBar,
+                            onClick = { showFilterBar = !showFilterBar; if (!showFilterBar) searchOpen = false },
                         )
                         // Hide / Show Icons: one setting for every Territory Map view (all groups, a group, a municipality, a Barangay).
                         MapToolButton(
@@ -1296,23 +1352,32 @@ fun TerritoryMapScreen(
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
                         )
                     }
-                    // Territory Map is a main form: in full screen its Back to Homepage floats on the map (the filter panel has its own Exit in the same corner).
+                    // Full screen: the one standard back arrow floats on the map (the same icon as every other screen); it leaves the open barangay first, then the map.
                     if (fullScreenActive && !embedded && !showFilterPanel && !guidance.active && !driving.active) {
-                        val goHome = com.emfitsolutions.gopreach.ui.components.LocalGoHome.current
-                        if (goHome != null) Surface(
-                            onClick = goHome,
-                            shape = RoundedCornerShape(24.dp),
-                            color = androidx.compose.ui.graphics.Color(0xFFE9B83B),
-                            contentColor = androidx.compose.ui.graphics.Color(0xFF231B05),
+                        Surface(
+                            onClick = { if (territoryFilter != null && !drawingState.active) backFromBarangay() else onBack() },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
                             shadowElevation = 3.dp,
                             modifier = Modifier.align(Alignment.TopStart)
                                 .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top))
                                 .padding(10.dp),
                         ) {
-                            Row(modifier = Modifier.height(40.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Rounded.Home, contentDescription = null, modifier = Modifier.size(20.dp))
-                                Text("Back to Homepage", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                             }
+                        }
+                    }
+                    // Full screen: the same filters (the single component above) float on the map.
+                    if (fullScreenActive && !showFilterPanel && !guidance.active && !driving.active && !drawingState.active && (showFilterBar || (territoryFilter != null && summaryClosedFor != territoryFilter))) {
+                        Column(
+                            modifier = Modifier.align(Alignment.TopStart)
+                                .then(if (embedded) Modifier else Modifier.windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.Companion.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Top)))
+                                .padding(start = 10.dp, end = 78.dp, top = if (embedded) 10.dp else 60.dp)
+                                .fillMaxWidth(),
+                        ) {
+                            if (showFilterBar) territoryFilters()
+                            if (territoryFilter != null && summaryClosedFor != territoryFilter) barangaySummary()
                         }
                     }
                     // Full screen: the controls above the map are hidden, so keep the
@@ -1342,37 +1407,8 @@ fun TerritoryMapScreen(
                                     }
                                 } else viewOnlyNote?.let { ViewOnlyTag(it) }
                             }
-                            if (embedded) {
-                                // Same as the Ministry tab: "Show my Ministry Record Only" (ticked at first), the My drop-down and, once unticked, the Congregation one.
-                                val types = listOf(TypeFilter.SEARCHING, TypeFilter.RETURN_VISIT, TypeFilter.BIBLE_STUDY)
-                                Row(
-                                    modifier = Modifier.clickable { mineOnly = !mineOnly; if (mineOnly) congregationRecords = false },
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    androidx.compose.material3.Checkbox(checked = mineOnly, onCheckedChange = { mineOnly = it; if (it) congregationRecords = false })
-                                    Text("Show my Ministry Record Only", style = MaterialTheme.typography.labelLarge, maxLines = 1)
-                                }
-                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    com.emfitsolutions.gopreach.ui.components.MinistryPicker(
-                                        "My Records", "My", types.indexOf(typeFilter).takeIf { it >= 0 && !congregationRecords },
-                                        { k -> congregationRecords = false; typeFilter = k?.let { types[it] } ?: TypeFilter.ALL }, Modifier.fillMaxWidth(), allowAll = true,
-                                    )
-                                    if (!mineOnly) com.emfitsolutions.gopreach.ui.components.MinistryPicker(
-                                        "Congregation Records", "Congregation", types.indexOf(typeFilter).takeIf { it >= 0 && congregationRecords },
-                                        { k -> congregationRecords = true; typeFilter = k?.let { types[it] } ?: TypeFilter.ALL }, Modifier.fillMaxWidth(), allowAll = true,
-                                    )
-                                }
-                            } else Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TypeFilter.entries.forEach { f ->
-
-                                    FilterChip(selected = typeFilter == f, onClick = { typeFilter = f }, label = { Text(f.label, style = if (embedded) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge) })
-                                }
-                            }
-                            // Province / Municipality / Barangay, the status chips and Next Nearest / Farthest are in the full filter view.
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextButton(onClick = { showFilterPanel = false; fullScreen = false }) { Text("More filters") }
-                                TextButton(onClick = { showFilterPanel = false }) { Text("Close") }
-                            }
+                            territoryFilters()
+                            ActionButton(ActionKind.Cancel, onClick = { showFilterPanel = false }, label = "Close")
                         }
                     }
                     if (bottomStripShown) {
@@ -1415,7 +1451,7 @@ fun TerritoryMapScreen(
                         ) { CircularProgressIndicator() }
                         mapLoadState == MapLoadState.FAILED -> CenterState {
                             Text("The map couldn't be loaded. Check your internet connection and try again.", style = MaterialTheme.typography.bodyLarge)
-                            Button(onClick = { reloadToken++ }) { Text("Retry") }
+                            ActionButton(ActionKind.Refresh, onClick = { reloadToken++ }, label = "Retry")
                         }
                     }
                 } else {
@@ -1466,7 +1502,12 @@ fun TerritoryMapScreen(
         LaunchedEffect(lat, lng) { kotlinx.coroutines.delay(600); armed = true }
         AlertDialog(
             onDismissRequest = { if (armed) longPressPoint = null },
-            title = { Text("What would you like to do?") },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("What would you like to do?", modifier = Modifier.weight(1f))
+                    IconButton(onClick = { longPressPoint = null }) { Icon(Icons.Rounded.Close, contentDescription = "Close") }
+                }
+            },
             text = {
               Box {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1475,10 +1516,7 @@ fun TerritoryMapScreen(
                     val canDraw = !readOnly && congregationId != null && !isLoading && drawingAccess.canDrawAt(here, drawingTerritories, congregationId)
                     // Map tools: everything that is not on the clean map (Recenter, Nearest, Farthest, Filters, Full screen, GPS status).
                     val tools = buildList<Triple<androidx.compose.ui.graphics.vector.ImageVector, String, () -> Unit>> {
-                        add(Triple(Icons.Rounded.Tune, "Filters", { longPressPoint = null; fullScreen = true; showFilterPanel = true }))
                         add(Triple(Icons.Rounded.MyLocation, "Recenter", { longPressPoint = null; onRecenterButton() }))
-                        add(Triple(Icons.Rounded.NearMe, "Nearest", { longPressPoint = null; stepTo(SortOrder.NEAREST) }))
-                        add(Triple(Icons.Rounded.Explore, "Farthest", { longPressPoint = null; stepTo(SortOrder.FARTHEST) }))
                         add(Triple(Icons.Rounded.Navigation, if (driving.active && !driving.walking) "Stop driving" else "Drive", { longPressPoint = null; toggleDriving() }))
                         add(Triple(Icons.Rounded.DirectionsWalk, if (driving.active && driving.walking) "Stop walking" else "Walk", { longPressPoint = null; toggleDriving(walking = true) }))
                         if (!embedded) add(Triple(if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, if (fullScreenActive) "Exit full screen" else "Full screen", { longPressPoint = null; fullScreen = !fullScreen }))
@@ -1493,21 +1531,27 @@ fun TerritoryMapScreen(
                     }
                     // Draw is offered only where this role may draw (inside the assigned territory for group-level users,
                     // anywhere on their congregation's map for the wider roles); the map links are always available.
-                    if (canDraw) {
-                        Button(
-                            onClick = { longPressPoint = null; drawingState.enter(here) },
-                            modifier = Modifier.fillMaxWidth().height(48.dp),
-                        ) { Text("Draw") }
+                    Text("Actions", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    // Actions in two columns: Draw (only where this role may), Start navigation, Walk there.
+                    val actionButtons = buildList<@Composable (Modifier) -> Unit> {
+                        if (canDraw) add { m -> Button(onClick = { longPressPoint = null; drawingState.enter(here) }, modifier = m.height(48.dp)) { Text("Draw") } }
+                        add { m -> Button(onClick = { longPressPoint = null; startNavigation("Selected place", lat, lng) }, modifier = m.height(48.dp)) { Text("Start navigation", maxLines = 1) } }
+                        add { m -> OutlinedButton(onClick = { longPressPoint = null; startNavigation("Selected place", lat, lng, walking = true) }, modifier = m.height(48.dp)) { Text("Walk there", maxLines = 1) } }
                     }
-                    Button(
-                        onClick = { longPressPoint = null; startNavigation("Selected place", lat, lng) },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                    ) { Text("Start navigation") }
-                    OutlinedButton(
-                        onClick = { longPressPoint = null; startNavigation("Selected place", lat, lng, walking = true) },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                    ) { Text("Walk there") }
-                    TextButton(onClick = { longPressPoint = null }, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+                    actionButtons.chunked(2).forEach { pair ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            pair.forEach { b -> b(Modifier.weight(1f)) }
+                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                    ActionButton(ActionKind.Cancel, onClick = { longPressPoint = null }, label = "Cancel", modifier = Modifier.fillMaxWidth())
+                    // The other filters: after the action buttons (Draw, navigation) so those are always in view, and shown only when asked for.
+                    var showExtras by remember { mutableStateOf(false) }
+                    TextButton(onClick = { showExtras = !showExtras }, modifier = Modifier.fillMaxWidth()) { Text(if (showExtras) "Hide filters" else "Show filters") }
+                    if (showExtras) {
+                        territoryExtraFilters()
+                        ActionButton(ActionKind.Cancel, onClick = { showExtras = false }, label = "Close filters", modifier = Modifier.fillMaxWidth())
+                    }
                 }
                 if (!armed) Box(
                     Modifier.matchParentSize().pointerInput(Unit) {
@@ -1567,7 +1611,7 @@ fun TerritoryMapScreen(
                     else Text("Save Pin")
                 }
             },
-            dismissButton = { TextButton(enabled = !isSavingPin, onClick = { pinDraftPoint = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pinDraftPoint = null }, label = "Cancel", enabled = !isSavingPin) },
         )
     }
 
@@ -1609,7 +1653,7 @@ fun TerritoryMapScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { selectedPinId = null }) { Text("Close") } },
+            confirmButton = { ActionButton(ActionKind.Cancel, onClick = { selectedPinId = null }, label = "Close") },
         )
     }
 
@@ -2047,7 +2091,7 @@ private fun RecordListView(
                         Text("Distances unavailable — location not determined", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                IconButton(onClick = onPrint) { Icon(Icons.Rounded.Print, contentDescription = "Print or save as PDF") }
+                ActionIconButton(ActionKind.Print, onClick = onPrint, contentDescription = "Print or save as PDF")
             }
         }
         items(entries, key = { it.key }) { entry ->
@@ -2151,8 +2195,8 @@ private fun GroupPickerDialog(
                 }
             }
         },
-        confirmButton = { Button(enabled = choice != null, onClick = { choice?.let(onConfirm) }) { Text("View Selected Group") } },
-        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Cancel") } },
+        confirmButton = { ActionButton(ActionKind.View, onClick = { choice?.let(onConfirm) }, label = "View Selected Group", enabled = choice != null) },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -2194,9 +2238,7 @@ private fun RecordSheet(item: RecordWithDistance, onDismiss: () -> Unit, onViewD
             Button(onClick = onGuide, modifier = Modifier.fillMaxWidth().height(50.dp)) {
                 Icon(Icons.Rounded.Directions, contentDescription = null, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Start navigation")
             }
-            OutlinedButton(onClick = onViewDetails, modifier = Modifier.fillMaxWidth().height(46.dp)) {
-                Icon(Icons.Rounded.Info, contentDescription = null, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("View full details")
-            }
+            ActionButton(ActionKind.View, onClick = onViewDetails, label = "View full details", modifier = Modifier.fillMaxWidth().height(46.dp))
         }
     }
 }

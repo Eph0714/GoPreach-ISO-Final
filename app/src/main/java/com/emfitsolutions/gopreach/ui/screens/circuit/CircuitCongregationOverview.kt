@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -149,7 +151,7 @@ fun CongregationOverviewDashboard(
                     Text("Submitted: ${v(reports)}", style = MaterialTheme.typography.bodyMedium)
                     Text("Missing: ${if (reports != null && pubs != null) (pubs - reports).coerceAtLeast(0).toString() else "—"}", style = MaterialTheme.typography.bodyMedium)
                     card?.returnReason?.takeIf { st == ReportStanding.RETURNED }?.let { Text("Reason: $it", style = MaterialTheme.typography.bodySmall, color = Color(0xFFEF6C00)) }
-                    Button(onClick = onOpenFieldService, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("View Field Service Report →") }
+                    ActionButton(ActionKind.View, onClick = onOpenFieldService, label = "View Field Service Report →", modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
             }
 
@@ -164,7 +166,7 @@ fun CongregationOverviewDashboard(
                     Text("Weekend", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
                     Text("Average: ${avg(a?.weekendAverage)}   ·   Recorded: ${a?.weekendRecorded ?: 0} / ${a?.weekendExpected ?: 0}", style = MaterialTheme.typography.bodyMedium)
                     if ((a?.missing ?: 0) > 0) Text("⚠ ${a!!.missing} meetings missing", color = Color(0xFFEF6C00), fontWeight = FontWeight.SemiBold)
-                    Button(onClick = onOpenAttendance, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) { Text("View Attendance →") }
+                    ActionButton(ActionKind.View, onClick = onOpenAttendance, label = "View Attendance →", modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
                 }
             }
 

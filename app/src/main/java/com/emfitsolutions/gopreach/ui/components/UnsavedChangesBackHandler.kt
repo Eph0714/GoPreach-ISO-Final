@@ -62,10 +62,10 @@ fun rememberUnsavedChangesBackHandler(
             text = { Text("You have changes that have not been saved.") },
             confirmButton = {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { showDialog = false }) { Text("CANCEL") }
-                    TextButton(onClick = { showDialog = false; onDiscard() }) { Text("DISCARD") }
+                    ActionButton(ActionKind.Cancel, onClick = { showDialog = false }, label = "CANCEL")
+                    ActionButton(ActionKind.Delete, onClick = { showDialog = false; onDiscard() }, label = "DISCARD")
                     if (onSave != null) {
-                        Button(onClick = { showDialog = false; onSave() }) { Text("SAVE") }
+                        ActionButton(ActionKind.Save, onClick = { showDialog = false; onSave() }, label = "SAVE")
                     }
                 }
             },

@@ -25,11 +25,6 @@ object Destinations {
     const val FORCED_PASSWORD_CHANGE = "forced_password_change"
     const val FORGOT_PASSWORD = "forgot_password"
 
-    // "Multiple Role Login Detection & Role Selection" — shown after
-    // credentials are verified, only for an account with more than one
-    // active role (see SessionState.needsRoleSelection).
-    const val SELECT_ROLE = "select_role"
-
     // Role-based landing points (real dashboards land in Phase 3-5; placeholders for now)
     const val ADMIN_HOME = "admin_home"
     const val PUBLISHER_HOME = "publisher_home"
@@ -155,6 +150,11 @@ object Destinations {
     // ThemePreferenceRepository unchanged — no new storage, no new
     // permission gate (spec §24: preserve exactly who already had access).
     const val THEME_COLOR_SETTINGS = "theme_color_settings"
+
+    // Security & Device Management: two-factor sign-in, the person's devices, trusted devices; and the Super Admin's / congregation Admin's device monitoring and the audit log.
+    const val SECURITY = "security"
+    const val ADMIN_DEVICES = "admin_devices"
+    const val ADMIN_SECURITY_LOG = "admin_security_log"
     const val SESSION_TIMEOUT_SETTING = "session_timeout_setting"
 
     // Phase 4
@@ -348,4 +348,5 @@ private val motherForms: Set<String> = setOf(
     Destinations.RECEIVED_SNAPSHOTS, Destinations.CIRCUIT_PUBLISHERS, Destinations.CIRCUIT_LEADERS, Destinations.CIRCUIT_ATTENDANCE_COMPARISON,
     Destinations.CIRCUIT_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.MEETING_ATTENDANCE, Destinations.REPORT_SUBMISSION, Destinations.CONGREGATION_COMPARATIVE,
     Destinations.CONGREGATION_COMPARATIVE_SUBMITTED, Destinations.CIRCUIT_CONGREGATIONS, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_USERS,
+    Destinations.SECURITY, Destinations.ADMIN_DEVICES, Destinations.ADMIN_SECURITY_LOG,
 )

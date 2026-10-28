@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.users
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.NameFieldsInOrder
 import androidx.compose.foundation.layout.Column
@@ -299,7 +301,7 @@ private fun NewUserCredentialsCard(credentials: TempCredentials, onDone: () -> U
             Text("Username: ${credentials.username}", fontWeight = FontWeight.Bold)
             Text("Temporary password: ${credentials.temporaryPassword}", fontWeight = FontWeight.Bold)
             ShareableSetupLink(credentials.username, credentials.temporaryPassword, credentials.shareableLink)
-            TextButton(onClick = onDone) { Text("Done") }
+            ActionButton(ActionKind.Save, onClick = onDone, label = "Done")
         }
     }
 }

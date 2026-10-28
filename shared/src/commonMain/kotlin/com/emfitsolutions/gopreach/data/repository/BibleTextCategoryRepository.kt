@@ -24,7 +24,7 @@ class BibleTextCategoryRepository(
             .map { list -> list.filter { it.publisherPersonId == publisherPersonId }.sortedBy { it.name } }
 
     suspend fun save(category: BibleTextCategory): BibleTextCategory {
-        val id = category.id.ifBlank { remote.newId(COLLECTION) }
+        val id = category.id.ifBlank { RecentCreates.idFor(COLLECTION, category) { remote.newId(COLLECTION) } }
         val withId = category.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId

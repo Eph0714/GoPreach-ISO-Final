@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.calendar
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -174,12 +177,8 @@ fun CalendarScreen(
                             }
                             if (editable) {
                                 Row {
-                                    IconButton(onClick = { pendingEdit = event }) {
-                                        Icon(Icons.Rounded.Edit, contentDescription = "Edit")
-                                    }
-                                    IconButton(onClick = { pendingDelete = event }) {
-                                        Icon(Icons.Rounded.Delete, contentDescription = "Delete")
-                                    }
+                                    ActionIconButton(ActionKind.Edit, onClick = { pendingEdit = event }, contentDescription = "Edit")
+                                    ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = event }, contentDescription = "Delete")
                                 }
                             }
                         }
@@ -219,13 +218,13 @@ fun CalendarScreen(
             title = { Text("Delete \"${toDelete.title}\"?") },
             text = { Text("This removes the calendar entry.") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.delete(toDelete, currentPersonId)
                     showToast("\"${toDelete.title}\" moved to Deleted Records.")
                     pendingDelete = null
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDelete = null }, label = "Cancel") },
         )
     }
 }

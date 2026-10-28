@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.planner
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.ui.theme.readableAccent
 import androidx.compose.foundation.layout.statusBarsPadding
 import com.emfitsolutions.gopreach.ui.components.keyboardPadding
@@ -613,12 +615,8 @@ private fun SendReportChooserDialog(
             colors = ButtonDefaults.buttonColors(containerColor = PlannerAccent.Hours),
             modifier = Modifier.fillMaxWidth(),
         ) { Text("Open My Report") }
-        OutlinedButton(onClick = onPreview, modifier = Modifier.fillMaxWidth()) { Text("Preview as Text") }
-        Button(
-            onClick = onSendAsText,
-            colors = ButtonDefaults.buttonColors(containerColor = PlannerAccent.ReturnVisits),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Send as Text") }
+        ActionButton(ActionKind.View, onClick = onPreview, label = "Preview as Text", modifier = Modifier.fillMaxWidth())
+        ActionButton(ActionKind.Save, onClick = onSendAsText, label = "Send as Text", modifier = Modifier.fillMaxWidth())
         TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Cancel", color = readableAccent(PlannerAccent.Neutral)) }
     }
 }
@@ -645,11 +643,7 @@ private fun SendReportPreviewDialog(text: String, onDismiss: () -> Unit, onSend:
         androidx.compose.animation.AnimatedVisibility(visible = showCopiedConfirmation) {
             Text("Copied to clipboard", style = MaterialTheme.typography.labelMedium, color = readableAccent(PlannerAccent.ReturnVisits))
         }
-        Button(
-            onClick = onSend,
-            colors = ButtonDefaults.buttonColors(containerColor = PlannerAccent.ReturnVisits),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Send as Text") }
+        ActionButton(ActionKind.Save, onClick = onSend, label = "Send as Text", modifier = Modifier.fillMaxWidth())
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
                 onClick = {

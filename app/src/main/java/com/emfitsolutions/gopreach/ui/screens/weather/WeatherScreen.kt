@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.weather
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.ui.theme.glass
 import androidx.compose.runtime.DisposableEffect
 import com.emfitsolutions.gopreach.ui.screens.circuit.ReportNarrator
@@ -179,7 +183,7 @@ fun WeatherScreen(
                 actions = {
                     if (state.place != null) {
                         if (state.loading) CircularProgressIndicator(Modifier.size(22.dp).padding(end = 0.dp), strokeWidth = 2.dp)
-                        IconButton(onClick = viewModel::refresh, enabled = !state.loading) { Icon(Icons.Rounded.Refresh, contentDescription = "Refresh weather") }
+                        ActionIconButton(ActionKind.Refresh, onClick = viewModel::refresh, contentDescription = "Refresh weather", enabled = !state.loading)
                     }
                 },
             )
@@ -193,7 +197,7 @@ fun WeatherScreen(
             if (embedded && state.place != null) item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
                     if (state.loading) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                    IconButton(onClick = viewModel::refresh, enabled = !state.loading) { Icon(Icons.Rounded.Refresh, contentDescription = "Refresh weather") }
+                    ActionIconButton(ActionKind.Refresh, onClick = viewModel::refresh, contentDescription = "Refresh weather", enabled = !state.loading)
                 }
             }
             item { LocationHeader(state, showPicker) { picker = !showPicker } }
@@ -281,7 +285,7 @@ private fun Banner(message: String, icon: ImageVector, tint: Color) {
     Surface(shape = RoundedCornerShape(12.dp), color = tint.copy(alpha = 0.12f), border = BorderStroke(1.dp, tint.copy(alpha = 0.5f))) {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.Top) {
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(8.dp))
             Text(message, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -389,7 +393,7 @@ private fun AdvisorySection(advisory: Advisory, saved: Boolean) {
                     val tint = when (item.level) { AdvisoryLevel.WARNING -> Warning; AdvisoryLevel.CAUTION -> Caution; AdvisoryLevel.INFO -> MaterialTheme.colorScheme.onSurfaceVariant }
                     Row(verticalAlignment = Alignment.Top) {
                         Icon(if (item.level == AdvisoryLevel.INFO) Icons.Rounded.Info else Icons.Rounded.Warning, contentDescription = when (item.level) { AdvisoryLevel.WARNING -> "Important"; AdvisoryLevel.CAUTION -> "Caution"; else -> "Note" }, tint = tint, modifier = Modifier.size(20.dp))
-                        Spacer(Modifier.width(10.dp))
+                        Spacer(Modifier.width(8.dp))
                         Text(item.text, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
@@ -584,15 +588,7 @@ private fun LocationPicker(
                 Text(if (state.locating) "Finding your location..." else "Use my current location")
             }
             state.locationMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-            OutlinedTextField(
-                value = state.query,
-                onValueChange = onQuery,
-                label = { Text("Search municipality, city or barangay") },
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                modifier = Modifier.fillMaxWidth(),
-            )
+            StandardSearchField(value = state.query, onValueChange = onQuery, placeholder = "Search municipality, city or barangay", modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search))
             if (state.searching) Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("Searching...", style = MaterialTheme.typography.bodySmall) }
             state.searchMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             state.results.forEach { place -> PlaceRow(place, Icons.Rounded.Place, onSelect = { onSelect(place) }, actions = { IconButton(onClick = { onSave(place) }) { Icon(Icons.Rounded.Star, contentDescription = "Save ${place.name}") } }) }
@@ -601,8 +597,8 @@ private fun LocationPicker(
                 Text("Saved places", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, modifier = Modifier.semantics { heading() })
                 state.saved.forEach { place ->
                     PlaceRow(place, Icons.Rounded.Star, onSelect = { onSelect(place) }, actions = {
-                        IconButton(onClick = { onRename(place) }) { Icon(Icons.Rounded.Edit, contentDescription = "Rename ${place.name}") }
-                        IconButton(onClick = { onRemove(place) }) { Icon(Icons.Rounded.Delete, contentDescription = "Remove ${place.name}") }
+                        ActionIconButton(ActionKind.Edit, onClick = { onRename(place) }, contentDescription = "Rename ${place.name}")
+                        ActionIconButton(ActionKind.Delete, onClick = { onRemove(place) }, contentDescription = "Remove ${place.name}")
                     })
                 }
             }
@@ -641,6 +637,6 @@ private fun NameDialog(title: String, initial: String, confirm: String, onDismis
         title = { Text(title) },
         text = { OutlinedTextField(value = text, onValueChange = { text = it.take(60) }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
         confirmButton = { TextButton(onClick = { onConfirm(text) }, enabled = text.isNotBlank()) { Text(confirm) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }

@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.territoryassignments
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.compose.foundation.clickable
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Arrangement
@@ -243,7 +246,7 @@ fun PublisherTerritoryAssignmentsScreen(
                 },
                 actions = {
                     // "Print / PDF" of the list as shown (system print dialog, Save as PDF).
-                    IconButton(onClick = {
+                    ActionIconButton(ActionKind.Print, onClick = {
                         ReportPrinter.print(
                             context,
                             ReportTable(
@@ -255,7 +258,7 @@ fun PublisherTerritoryAssignmentsScreen(
                                 totals = listOf("Assignments" to rows.size.toString()),
                             ),
                         )
-                    }) { Icon(Icons.Rounded.Print, contentDescription = "Print or save as PDF") }
+                    }, contentDescription = "Print or save as PDF")
                 },
             )
         },
@@ -306,9 +309,7 @@ fun PublisherTerritoryAssignmentsScreen(
                                     )
                                 }
                             }
-                            IconButton(onClick = { pendingDelete = row }) {
-                                Icon(Icons.Rounded.Delete, contentDescription = "Delete assignment")
-                            }
+                            ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = row }, contentDescription = "Delete assignment")
                         }
                     }
                 }
@@ -323,12 +324,12 @@ fun PublisherTerritoryAssignmentsScreen(
             title = { Text("Remove assignment?") },
             text = { Text("${target.publisherName} will no longer be assigned to ${target.barangayName}, ${target.muncityName}.") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.delete(target.id, currentPersonId) { showToast(PermissionChecker.NO_ACCESS_MESSAGE) }
                     pendingDelete = null
-                }) { Text("Remove") }
+                }, label = "Remove")
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDelete = null }, label = "Cancel") },
         )
     }
 }
@@ -489,7 +490,7 @@ fun PublisherTerritoryAssignmentFormScreen(
                 Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(onClick = onDone, enabled = !formState.isSaving, modifier = Modifier.weight(1f)) { Text("Cancel") }
+                ActionButton(ActionKind.Cancel, onClick = onDone, label = "Cancel", enabled = !formState.isSaving, modifier = Modifier.weight(1f))
                 Button(
                     enabled = !formState.isSaving,
                     modifier = Modifier.weight(1f),

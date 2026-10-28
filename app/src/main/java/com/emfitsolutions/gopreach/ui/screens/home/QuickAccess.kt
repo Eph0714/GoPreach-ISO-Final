@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -457,7 +459,7 @@ fun QuickAccessSection(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             TextButton(onClick = { showReset = true }) {
                 Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(8.dp))
                 Text("Reset Quick Access Layout", style = MaterialTheme.typography.labelMedium)
             }
         }
@@ -475,7 +477,7 @@ fun QuickAccessSection(
                     showReset = false
                 }) { Text("Reset") }
             },
-            dismissButton = { TextButton(onClick = { showReset = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { showReset = false }, label = "Cancel") },
         )
     }
 }

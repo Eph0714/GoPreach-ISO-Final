@@ -15,8 +15,23 @@ sealed class AuthFailure(message: String?, cause: Throwable? = null) : Exception
     class SessionActive(val session: ActiveSessionInfo, cause: Throwable? = null) : AuthFailure("Account already active", cause)
     /** The server revoked this device's session because the account signed in somewhere else. */
     class SessionEnded(cause: Throwable? = null) : AuthFailure("Session ended", cause)
+    /** The password was right but the account has two-factor sign-in: nothing is signed in until [challenge] is answered (see [AuthService.verifyTwoFactor]). */
+    class TwoFactorRequired(val challenge: TwoFactorChallenge) : AuthFailure("Two-factor verification required")
+    /** A verification code was wrong. [triesLeft] is how many more the server allows for this sign-in. */
+    class InvalidCode(val triesLeft: Int?, cause: Throwable? = null) : AuthFailure("That code is not right", cause)
+    /** The sign-in challenge expired or was used up: the person signs in again. */
+    class ChallengeExpired(cause: Throwable? = null) : AuthFailure("Sign-in expired", cause)
     class Other(message: String?, cause: Throwable? = null) : AuthFailure(message, cause)
 }
+
+/** What the server hands a device that proved the password but still owes the second factor. [emailMasked] is set only when a code can be e-mailed. */
+data class TwoFactorChallenge(val challengeId: String, val challengeToken: String, val expiresAtMillis: Long, val totp: Boolean, val recovery: Boolean, val emailMasked: String?)
+
+/** Which kind of code answers a [TwoFactorChallenge]. */
+enum class SecondFactor { AUTHENTICATOR_APP, RECOVERY_CODE, EMAIL_CODE }
+
+/** What this device says about itself to the server (the device list shows it). [id] only tells devices apart and is never trusted by itself. */
+data class DeviceInfo(val name: String, val model: String?, val type: String, val os: String?, val osVersion: String?, val appVersion: String?)
 
 /** The other session of an account, as the server reported it: [device] and [lastActiveAtMillis] are null unless the server knows them. */
 data class ActiveSessionInfo(val device: String?, val lastActiveAtMillis: Long?, val request: LoginRequestTicket? = null)
@@ -52,6 +67,16 @@ interface AuthService {
     /** [endOtherSession] true takes over an account that is signed in elsewhere (the server revokes the other session first); otherwise [AuthFailure.SessionActive] is thrown. */
     suspend fun signIn(email: String, password: String, endOtherSession: Boolean = false, approval: LoginRequestTicket? = null)
     fun signOut()
+
+    // ---- Two-factor sign-in ----
+    /** Answers the challenge a password sign-in left ([AuthFailure.TwoFactorRequired]); on success the person is signed in. [trustDevice] asks the server to trust this device afterwards. */
+    suspend fun verifyTwoFactor(challenge: TwoFactorChallenge, kind: SecondFactor, code: String, trustDevice: Boolean): Unit = throw AuthFailure.Other("Not available on this device.")
+    /** E-mails a verification code to the confirmed recovery address; returns the masked address. */
+    suspend fun sendTwoFactorEmailCode(challenge: TwoFactorChallenge): String = throw AuthFailure.Other("Not available on this device.")
+    /** Keeps the credential the server issued when this device was marked trusted: it is sent with the next password sign-in so the code can be skipped. */
+    fun saveTrustedDeviceToken(token: String) {}
+    /** Forgets the trusted-device credential (the server already ended the trust). */
+    fun clearTrustedDeviceToken() {}
 
     // ---- Protecting the signed-in device: the new device waits for approval, the signed-in one answers "Is this you?" ----
     suspend fun loginRequestStatus(ticket: LoginRequestTicket): LoginRequestStatus = throw AuthFailure.Other("Not available on this device.")

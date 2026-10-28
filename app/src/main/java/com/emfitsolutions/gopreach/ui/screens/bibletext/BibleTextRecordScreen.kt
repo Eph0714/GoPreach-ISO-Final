@@ -1,5 +1,9 @@
 package com.emfitsolutions.gopreach.ui.screens.bibletext
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.domain.BibleTextNarration
 import com.emfitsolutions.gopreach.ui.components.ListenPanel
 import androidx.compose.material3.OutlinedButton
@@ -317,9 +321,7 @@ private fun EventListScreen(
                     // Record list, make it smaller" — a compact icon button
                     // here instead of the previous full-width button below
                     // the list.
-                    IconButton(onClick = { showAddEvent = true }) {
-                        Icon(Icons.Rounded.Add, contentDescription = "Add Record")
-                    }
+                    ActionIconButton(ActionKind.Add, onClick = { showAddEvent = true }, contentDescription = "Add Record")
                     IconButton(onClick = { showFilters = !showFilters }) {
                         Icon(Icons.Rounded.FilterList, contentDescription = "Filters")
                     }
@@ -357,15 +359,7 @@ private fun EventListScreen(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             HideInFullScreen(false) {
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    label = { Text("Search Event, Theme, Speaker, Remarks...") },
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                    singleLine = true,
-                    visualTransformation = VisualTransformation.None,
-                    modifier = Modifier.weight(1f),
-                )
+                StandardSearchField(value = searchText, onValueChange = { searchText = it }, placeholder = "Search Event, Theme, Speaker, Remarks...", modifier = Modifier.weight(1f))
             }
 
             }
@@ -470,13 +464,13 @@ private fun EventListScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.deleteEventCascade(publisherPersonId, toDelete.event.id)
                     showToast("Event deleted successfully.")
                     pendingDeleteEvent = null
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { pendingDeleteEvent = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDeleteEvent = null }, label = "Cancel") },
         )
     }
 }
@@ -578,9 +572,7 @@ private fun EventCard(item: EventWithTexts, onClick: () -> Unit, onDelete: () ->
                         tint = MaterialTheme.colorScheme.primary,
                     )
                 }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Rounded.Delete, contentDescription = "Delete event", tint = MaterialTheme.colorScheme.error)
-                }
+                ActionIconButton(ActionKind.Delete, onClick = onDelete, contentDescription = "Delete event")
             }
         }
     }
@@ -677,12 +669,8 @@ private fun EventDetailScreen(
                 title = { Text(event.name.ifBlank { event.eventLabel }.uppercase()) },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
                 actions = {
-                    IconButton(onClick = { showEditEvent = true }) {
-                        Icon(Icons.Rounded.Edit, contentDescription = "Edit event", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    IconButton(onClick = { pendingDeleteEvent = true }) {
-                        Icon(Icons.Rounded.Delete, contentDescription = "Delete event", tint = MaterialTheme.colorScheme.error)
-                    }
+                    ActionIconButton(ActionKind.Edit, onClick = { showEditEvent = true }, contentDescription = "Edit event")
+                    ActionIconButton(ActionKind.Delete, onClick = { pendingDeleteEvent = true }, contentDescription = "Delete event")
                 },
             )
         },
@@ -745,7 +733,7 @@ private fun EventDetailScreen(
                                 IconButton(onClick = { showMoveToSubtopic = true }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "Move to Sub Topic", modifier = Modifier.size(20.dp))
                                 }
-                                TextButton(onClick = { selectedTextIds = emptySet() }) { Text("Cancel") }
+                                ActionButton(ActionKind.Cancel, onClick = { selectedTextIds = emptySet() }, label = "Cancel")
                             }
                         } else {
                             SectionHeader(icon = Icons.AutoMirrored.Rounded.MenuBook, title = "Bible Texts & Notes", count = eventWithTexts.texts.size) {
@@ -755,9 +743,7 @@ private fun EventDetailScreen(
                                 IconButton(onClick = { addNoteSubtopicId = null; showAddNote = true }, modifier = Modifier.size(32.dp)) {
                                     Icon(Icons.Rounded.StickyNote2, contentDescription = "Add Note", modifier = Modifier.size(20.dp))
                                 }
-                                IconButton(onClick = { addTextSubtopicId = null; showAddText = true }, modifier = Modifier.size(32.dp)) {
-                                    Icon(Icons.Rounded.Add, contentDescription = "Add Bible Text", modifier = Modifier.size(20.dp))
-                                }
+                                ActionIconButton(ActionKind.Add, onClick = { addTextSubtopicId = null; showAddText = true }, contentDescription = "Add Bible Text", modifier = Modifier.size(32.dp))
                             }
                         }
                         if (eventWithTexts.texts.isEmpty() && event.subtopics.isEmpty()) {
@@ -886,13 +872,13 @@ private fun EventDetailScreen(
             title = { Text("Delete Bible Text?") },
             text = { Text("Are you sure you want to delete this Bible text (${toDeleteText.referenceLabel()})?") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.deleteRecord(toDeleteText, toDeleteText.referenceLabel(), publisherPersonId)
                     showToast("Bible text moved to Deleted Records.")
                     pendingDeleteText = null
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { pendingDeleteText = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDeleteText = null }, label = "Cancel") },
         )
     }
     if (pendingDeleteEvent) {
@@ -911,14 +897,14 @@ private fun EventDetailScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.deleteEventCascade(publisherPersonId, event.id)
                     showToast("Event deleted successfully.")
                     pendingDeleteEvent = false
                     onDeleted()
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { pendingDeleteEvent = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDeleteEvent = false }, label = "Cancel") },
         )
     }
 
@@ -974,7 +960,7 @@ private fun EventDetailScreen(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     val now = System.currentTimeMillis()
                     // "Never accidentally destroy saved Bible Text" — every
                     // affected text (from this subtopic and any nested under
@@ -986,9 +972,9 @@ private fun EventDetailScreen(
                     viewModel.saveEvent(event.copy(subtopics = event.subtopics.filterNot { it.id in affectedIds }, updatedAt = now))
                     showToast("Sub Topic deleted successfully.")
                     pendingDeleteSubtopic = null
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { pendingDeleteSubtopic = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDeleteSubtopic = null }, label = "Cancel") },
         )
     }
 
@@ -1059,7 +1045,7 @@ private fun MoveToSubtopicDialog(subtopics: List<BibleTextSubtopic>, onMove: (St
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -1167,18 +1153,12 @@ private fun SubtopicGroup(
             IconButton(onClick = { onAddNote(subtopic.id) }, modifier = Modifier.size(30.dp)) {
                 Icon(Icons.Rounded.StickyNote2, contentDescription = "Add Note to ${subtopic.name}", modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = { onAddText(subtopic.id) }, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Rounded.Add, contentDescription = "Add Bible Text to ${subtopic.name}", modifier = Modifier.size(18.dp))
-            }
+            ActionIconButton(ActionKind.Add, onClick = { onAddText(subtopic.id) }, contentDescription = "Add Bible Text to ${subtopic.name}", modifier = Modifier.size(30.dp))
             IconButton(onClick = { onAddChildSubtopic(subtopic.id) }, modifier = Modifier.size(30.dp)) {
                 Icon(Icons.Rounded.CreateNewFolder, contentDescription = "Add Sub Topic Inside ${subtopic.name}", modifier = Modifier.size(18.dp))
             }
-            IconButton(onClick = { onRename(subtopic) }, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Rounded.Edit, contentDescription = "Rename ${subtopic.name}", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-            }
-            IconButton(onClick = { onDelete(subtopic) }, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Rounded.Delete, contentDescription = "Delete ${subtopic.name}", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-            }
+            ActionIconButton(ActionKind.Edit, onClick = { onRename(subtopic) }, contentDescription = "Rename ${subtopic.name}", modifier = Modifier.size(30.dp))
+            ActionIconButton(ActionKind.Delete, onClick = { onDelete(subtopic) }, contentDescription = "Delete ${subtopic.name}", modifier = Modifier.size(30.dp))
             if (canMoveUp || canMoveDown) {
                 Box {
                     IconButton(onClick = { showMenu = true }, modifier = Modifier.size(30.dp)) {
@@ -1287,12 +1267,8 @@ private fun BibleTextCard(
                         Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = "Open verse in JW Library", modifier = Modifier.size(18.dp))
                     }
                 }
-                IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Rounded.Edit, contentDescription = "Edit Bible text", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
-                }
-                IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Rounded.Delete, contentDescription = "Delete Bible text", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(18.dp))
-                }
+                ActionIconButton(ActionKind.Edit, onClick = onEdit, contentDescription = "Edit Bible text", modifier = Modifier.size(36.dp))
+                ActionIconButton(ActionKind.Delete, onClick = onDelete, contentDescription = "Delete Bible text", modifier = Modifier.size(36.dp))
             }
         }
     }
@@ -1307,7 +1283,7 @@ private fun BibleTextCard(
                     language = remember(text.languageId) { NwtBibleReferenceData.language(text.languageId)?.code }.takeIf { !isNote },
                 )
             },
-            confirmButton = { TextButton(onClick = { listening = false }) { Text("Close") } },
+            confirmButton = { ActionButton(ActionKind.Cancel, onClick = { listening = false }, label = "Close") },
         )
     }
 }
@@ -1882,7 +1858,7 @@ private fun BibleTextRecordDialog(
                             style = MaterialTheme.typography.bodySmall, color = failedColor,
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(onClick = ::startJwOrgImport) { Text("Retry") }
+                            ActionButton(ActionKind.Refresh, onClick = ::startJwOrgImport, label = "Retry")
                             TextButton(onClick = { importState = VerseImportState.IDLE; runCatching { verseFocus.requestFocus() } }) { Text("Enter it manually") }
                         }
                     }
@@ -1895,13 +1871,13 @@ private fun BibleTextRecordDialog(
                             "JW Library can't send its Bible text to GoPreach by itself. Easiest: select the verse there, tap Share and choose GoPreach - GoPreach reads the verse from the shared link and imports it. (Or tap Copy and come back.)",
                             style = MaterialTheme.typography.bodySmall,
                         )
-                        TextButton(enabled = canLookUpVerses, onClick = ::requestJwOrgImport) { Text("Import from JW.org instead") }
+                        ActionButton(ActionKind.Import, onClick = ::requestJwOrgImport, label = "Import from JW.org instead", enabled = canLookUpVerses)
                     }
                     VerseImportState.LIBRARY_NOTHING_COPIED -> {
                         Text("Nothing new was copied, so nothing was imported.", style = MaterialTheme.typography.bodySmall, color = failedColor)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TextButton(onClick = ::tryJwLibraryImport) { Text("Try again") }
-                            TextButton(enabled = canLookUpVerses, onClick = ::requestJwOrgImport) { Text("Import from JW.org") }
+                            ActionButton(ActionKind.Refresh, onClick = ::tryJwLibraryImport, label = "Try again")
+                            ActionButton(ActionKind.Import, onClick = ::requestJwOrgImport, label = "Import from JW.org", enabled = canLookUpVerses)
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             TextButton(onClick = ::pasteCopiedText) { Text("Use copied text") }
@@ -1911,7 +1887,7 @@ private fun BibleTextRecordDialog(
                     VerseImportState.LIBRARY_FAILED -> {
                         Text("JW Library isn't installed on this phone (or couldn't be reached), so there is nothing to import from it. Nothing was imported. You can import from JW.org instead, or enter the verse text yourself.", style = MaterialTheme.typography.bodySmall, color = failedColor)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(enabled = canLookUpVerses, onClick = ::requestJwOrgImport) { Text("Import from JW.org") }
+                            ActionButton(ActionKind.Import, onClick = ::requestJwOrgImport, label = "Import from JW.org", enabled = canLookUpVerses)
                             TextButton(onClick = { importState = VerseImportState.IDLE; runCatching { verseFocus.requestFocus() } }) { Text("Enter it manually") }
                         }
                     }
@@ -1979,8 +1955,8 @@ private fun BibleTextRecordDialog(
                 },
                 dismissButton = {
                     Row {
-                        TextButton(onClick = { pendingPaste = null }) { Text("Cancel") }
-                        if (hasText) TextButton(onClick = { verseText = verseText.trimEnd() + "\n" + copied; importedText = null; importedFor = null; importState = VerseImportState.IMPORTED; pendingPaste = null }) { Text("Add below") }
+                        ActionButton(ActionKind.Cancel, onClick = { pendingPaste = null }, label = "Cancel")
+                        if (hasText) ActionButton(ActionKind.Add, onClick = { verseText = verseText.trimEnd() + "\n" + copied; importedText = null; importedFor = null; importState = VerseImportState.IMPORTED; pendingPaste = null }, label = "Add below")
                     }
                 },
             )

@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -149,7 +152,7 @@ fun PreviousManualRecordScreen(currentPersonId: String, onBack: () -> Unit, view
             title = { Text("Remove this saved file?") },
             text = { Text("${info.fileName} (${info.sheets.size} worksheet${if (info.sheets.size == 1) "" else "s"}) for ${info.congregationName} will be removed from your saved records. The original Excel file is not touched.") },
             confirmButton = { TextButton(onClick = { viewModel.removeFile(info); removing = null }) { Text("Remove", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { removing = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { removing = null }, label = "Cancel") },
         )
     }
     if (leaving) {
@@ -205,7 +208,7 @@ private fun Library(viewModel: PreviousManualRecordViewModel, congregations: Lis
                         congregations.forEach { (id, name) -> DropdownMenuItem(text = { Text(name) }, onClick = { filterMenu = false; viewModel.setCongregationFilter(id) }) }
                     }
                 }
-                Button(onClick = { viewModel.startImport() }) { Icon(Icons.Rounded.Upload, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Import Excel") }
+                ActionButton(ActionKind.Import, onClick = { viewModel.startImport() }, label = "Import Excel")
             }
             Text(
                 if (loading && imports.isEmpty()) "Loading..." else "${imports.size} saved file${if (imports.size == 1) "" else "s"}" + if (searched.isNotBlank()) " contain \"$searched\"" else "",
@@ -215,7 +218,7 @@ private fun Library(viewModel: PreviousManualRecordViewModel, congregations: Lis
             when {
                 error != null && imports.isEmpty() -> Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
-                    TextButton(onClick = { viewModel.reload() }) { Text("Try again") }
+                    ActionButton(ActionKind.Refresh, onClick = { viewModel.reload() }, label = "Try again")
                 }
                 !loading && imports.isEmpty() -> Column(Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     val noFilter = searched.isBlank() && congregationFilter == null
@@ -274,7 +277,7 @@ private fun FileCard(info: ManualImportInfo, searching: Boolean, onOpen: (Int) -
             Row {
                 Button(onClick = { onOpen(info.sheets.firstOrNull { it.hit }?.index ?: 0) }) { Text("Open") }
                 Spacer(Modifier.width(8.dp))
-                OutlinedButton(onClick = onDownload) { Text("Download") }
+                ActionButton(ActionKind.Export, onClick = onDownload, label = "Download")
                 Spacer(Modifier.width(8.dp))
                 TextButton(onClick = onRemove) { Text("Remove", color = MaterialTheme.colorScheme.error) }
             }
@@ -313,7 +316,7 @@ private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onB
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
                 actions = {
                     TextButton(onClick = { summaryOpen = true }) { Text("Σ Summary") }
-                    if (!v.draft) IconButton(onClick = { viewModel.setEditing(!v.editing) }) { Icon(Icons.Rounded.Edit, if (v.editing) "Stop editing" else "Edit cells", tint = if (v.editing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
+                    if (!v.draft) ActionIconButton(ActionKind.Edit, onClick = { viewModel.setEditing(!v.editing) }, contentDescription = if (v.editing) "Stop editing" else "Edit cells")
                 },
             )
         },
@@ -334,8 +337,8 @@ private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onB
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(info.congregationName, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("  Remarks: ${info.remarks.ifBlank { "none" }}", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        TextButton(onClick = { onEditRemarks(info) }) { Text("Edit") }
-                        TextButton(onClick = { viewModel.downloadOriginal(info) }) { Text("Download") }
+                        ActionButton(ActionKind.Edit, onClick = { onEditRemarks(info) }, label = "Edit")
+                        ActionButton(ActionKind.Export, onClick = { viewModel.downloadOriginal(info) }, label = "Download")
                         TextButton(onClick = { onRemove(info) }) { Text("Remove", color = MaterialTheme.colorScheme.error) }
                     }
                 }
@@ -357,11 +360,11 @@ private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onB
                         if (words.isEmpty()) (if (v.editing) "Tap a cell to change it." else "") else if (hits.isEmpty()) "No match in this sheet" else "${pos + 1} of ${hits.size}",
                         style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f),
                     )
-                    TextButton(onClick = { fullScreen = !fullScreen }) { Icon(if (fullScreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, null, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text(if (fullScreen) "Exit full screen" else "Full screen") }
-                    if (v.draft) Button(onClick = { viewModel.askSave() }) { Icon(Icons.Rounded.Save, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Save to my records") }
+                    TextButton(onClick = { fullScreen = !fullScreen }) { Icon(if (fullScreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text(if (fullScreen) "Exit full screen" else "Full screen") }
+                    if (v.draft) ActionButton(ActionKind.Save, onClick = { viewModel.askSave() }, label = "Save to my records")
                     else if (v.dirty) {
-                        TextButton(onClick = { viewModel.discardEdits() }) { Text("Discard") }
-                        Button(onClick = { viewModel.saveEdits() }, enabled = !v.busy) { Icon(Icons.Rounded.Save, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Save changes (${v.edits.size})") }
+                        ActionButton(ActionKind.Delete, onClick = { viewModel.discardEdits() }, label = "Discard")
+                        Button(onClick = { viewModel.saveEdits() }, enabled = !v.busy) { Icon(Icons.Rounded.Save, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Save changes (${v.edits.size})") }
                     }
                 }
             }
@@ -370,7 +373,7 @@ private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onB
                     v.snapshot, texts, v.edits.keys, hits.toSet(), hits.getOrNull(pos), v.editing && !v.draft,
                     onTapCell = { r, c -> editCell = r to c }, modifier = Modifier.fillMaxSize(),
                 )
-                if (fullScreen) Button(onClick = { fullScreen = false }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) { Icon(Icons.Rounded.FullscreenExit, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Exit Full Screen") }
+                if (fullScreen) Button(onClick = { fullScreen = false }, modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)) { Icon(Icons.Rounded.FullscreenExit, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Exit Full Screen") }
             }
         }
         }
@@ -383,8 +386,8 @@ private fun SheetScreen(v: Viewer, viewModel: PreviousManualRecordViewModel, onB
             onDismissRequest = { editCell = null },
             title = { Text("Cell ${columnName(c)}${r + 1}") },
             text = { OutlinedTextField(value = text, onValueChange = { text = it.take(1000) }, modifier = Modifier.fillMaxWidth()) },
-            confirmButton = { TextButton(onClick = { viewModel.editCell(r, c, text); editCell = null }) { Text("OK") } },
-            dismissButton = { TextButton(onClick = { editCell = null }) { Text("Cancel") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = { viewModel.editCell(r, c, text); editCell = null }, label = "OK") },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { editCell = null }, label = "Cancel") },
         )
     }
 }
@@ -593,7 +596,7 @@ private fun ZoomPill(percent: Int, atFit: Boolean, onOut: () -> Unit, onIn: () -
                     Text("$percent%", Modifier.widthIn(min = 44.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     IconButton(onClick = onIn) { Icon(androidx.compose.material.icons.Icons.Rounded.Add, "Zoom in") }
                     androidx.compose.material3.FilledTonalButton(onClick = onFit, contentPadding = PaddingValues(horizontal = 12.dp), colors = if (atFit) androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary) else androidx.compose.material3.ButtonDefaults.filledTonalButtonColors()) {
-                        Icon(androidx.compose.material.icons.Icons.Rounded.FitScreen, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Fit")
+                        Icon(androidx.compose.material.icons.Icons.Rounded.FitScreen, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Fit")
                     }
                 }
             }
@@ -698,7 +701,7 @@ private fun EditRemarksDialog(info: ManualImportInfo, viewModel: PreviousManualR
         title = { Text("Remarks") },
         text = { OutlinedTextField(value = text, onValueChange = { text = it.take(500) }, label = { Text("Remarks about ${info.fileName}") }, modifier = Modifier.fillMaxWidth()) },
         confirmButton = { TextButton(onClick = { viewModel.editRemarks(info, text.trim(), onDone) }, enabled = !saving) { Text(if (saving) "Saving..." else "Save") } },
-        dismissButton = { TextButton(onClick = onDone, enabled = !saving) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDone, label = "Cancel", enabled = !saving) },
     )
 }
 
@@ -715,14 +718,14 @@ private fun ImportDialog(viewModel: PreviousManualRecordViewModel) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Choose the Excel file. It opens right away, looking as it does in Excel. It is only kept when you tap Save.", style = MaterialTheme.typography.bodySmall)
                 FilledTonalButton(onClick = { picker.launch(arrayOf("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel", "text/csv", "text/comma-separated-values", "application/octet-stream")) }, enabled = !reading) { Text("From this phone") }
-                OutlinedButton(onClick = { viewModel.browseStored(null) }, enabled = !reading) { Icon(Icons.Rounded.Folder, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("From File Manager") }
+                OutlinedButton(onClick = { viewModel.browseStored(null) }, enabled = !reading) { Icon(Icons.Rounded.Folder, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("From File Manager") }
                 Text(".xlsx, .xls or .csv, up to 10 MB.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (reading) Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Text("  Reading the file...") }
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = { viewModel.cancelImport() }, enabled = !reading) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = { viewModel.cancelImport() }, label = "Cancel", enabled = !reading) },
     )
 }
 
@@ -752,15 +755,15 @@ private fun SaveDialog(form: SaveForm, viewModel: PreviousManualRecordViewModel,
             }
         },
         confirmButton = { TextButton(onClick = { viewModel.confirmSave() }, enabled = !form.saving && form.congregationId != null) { Text(if (form.saving) "Saving..." else "Save") } },
-        dismissButton = { TextButton(onClick = { viewModel.cancelSave() }, enabled = !form.saving) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = { viewModel.cancelSave() }, label = "Cancel", enabled = !form.saving) },
     )
     if (form.duplicate) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissDuplicate() },
             title = { Text("Already saved") },
             text = { Text("This file was already saved for this congregation. Saving it again would keep a second copy.") },
-            confirmButton = { TextButton(onClick = { viewModel.confirmSave(allowDuplicate = true) }) { Text("Save anyway") } },
-            dismissButton = { TextButton(onClick = { viewModel.dismissDuplicate() }) { Text("Cancel") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = { viewModel.confirmSave(allowDuplicate = true) }, label = "Save anyway") },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { viewModel.dismissDuplicate() }, label = "Cancel") },
         )
     }
 }
@@ -782,7 +785,7 @@ private fun StoredPicker(path: List<Pair<String, String>>, folders: List<Pair<St
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        confirmButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Close") },
     )
 }
 

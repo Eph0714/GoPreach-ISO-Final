@@ -17,13 +17,12 @@ class RecordScopeTest {
     private fun admin(role: AdminRole, id: String = "ra-$role", congregationId: String? = "solano", groupId: String? = null, slot: RegularElderRole? = null) =
         RoleAssignment(id = id, personId = "juan", roleType = RoleType.serialize(RoleType.Admin(role)), congregationId = congregationId, groupId = groupId, regularElderRole = slot)
 
-    private fun session(vararg roles: RoleAssignment, selected: String? = null, groups: List<Group> = emptyList(), superAdmin: Boolean = false) =
+    private fun session(vararg roles: RoleAssignment, groups: List<Group> = emptyList(), superAdmin: Boolean = false) =
         SessionState(
             isLoading = false,
             person = Person(id = "juan", isSuperAdmin = superAdmin),
             roleAssignments = roles.toList(),
             groups = groups,
-            selectedRoleAssignmentId = selected,
         )
 
     @Test
@@ -51,18 +50,16 @@ class RecordScopeTest {
     }
 
     @Test
-    fun `the selected role decides the scope - roles are never merged`() {
+    fun `a congregation-wide role covers the group role held with it - one session, no choice`() {
         val ce = admin(AdminRole.COORDINATOR_ELDER, "ra-ce")
         val group = admin(AdminRole.REGULAR_ELDER, "ra-group", groupId = "g5", slot = RegularElderRole.GROUP_OVERSEER)
-        val asCe = recordScopeOf(session(ce, group, selected = "ra-ce"))
-        val asGroup = recordScopeOf(session(ce, group, selected = "ra-group"))
-        assertNotNull(asCe); assertNotNull(asGroup)
-        assertNull(asCe.groupId, "Coordinator Elder: congregation-wide")
-        assertEquals("g5", asGroup.groupId, "Group Coordinator: FS Group only — the Coordinator Elder role is not silently added")
-        assertFalse(asGroup.allowsPublisher("solano", "g6"))
-        assertNull(recordScopeOf(session(ce, group)), "until a role is chosen there is no scope")
+        val scope = recordScopeOf(session(ce, group))
+        assertNotNull(scope)
+        assertNull(scope.groupId, "Coordinator Elder: congregation-wide, whatever order the roles were assigned in")
+        assertNull(recordScopeOf(session(group, ce))!!.groupId)
+        assertTrue(scope.allowsPublisher("solano", "g6"))
+        assertFalse(scope.allowsPublisher("bambang", "g5"), "never another congregation")
     }
-
     @Test
     fun `a Regular Elder without a group slot, a publisher and a circuit overseer have no scope`() {
         assertNull(recordScopeOf(session(admin(AdminRole.REGULAR_ELDER, "ra-re"))))
@@ -85,8 +82,9 @@ class RecordScopeTest {
         assertEquals("Group Coordinator — FS Group 5", roleLabelFor(coordinator, AdminRole.REGULAR_ELDER, groups))
         assertEquals("Group Servant — FS Group 5", roleLabelFor(admin(AdminRole.REGULAR_ELDER, groupId = "g5", slot = RegularElderRole.GROUP_SERVANT), AdminRole.REGULAR_ELDER, groups))
         assertEquals("Coordinator Elder", roleLabelFor(admin(AdminRole.COORDINATOR_ELDER), AdminRole.COORDINATOR_ELDER, groups))
-        val state = session(admin(AdminRole.COORDINATOR_ELDER, "ra-ce"), coordinator.copy(id = "ra-g"), groups = groups, selected = "ra-g")
-        assertEquals("Group Coordinator — FS Group 5", state.activeRoleLabel)
-        assertEquals("g5", state.activeGroupId)
+        val onlyGroup = session(coordinator.copy(id = "ra-g"), groups = groups)
+        assertEquals("Group Coordinator — FS Group 5", onlyGroup.activeRoleLabel)
+        assertEquals("g5", onlyGroup.activeGroupId)
+        assertEquals("Coordinator Elder + Group Coordinator — FS Group 5", session(admin(AdminRole.COORDINATOR_ELDER, "ra-ce"), coordinator.copy(id = "ra-g"), groups = groups).activeRoleLabel)
     }
 }

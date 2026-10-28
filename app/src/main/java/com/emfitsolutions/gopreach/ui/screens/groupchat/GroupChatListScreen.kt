@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.compose.material.icons.rounded.Delete
 import com.emfitsolutions.gopreach.shared.resources.action_cancel
 import com.emfitsolutions.gopreach.shared.resources.chat_delete_group_chat_title
@@ -124,10 +126,11 @@ fun GroupChatListScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
-        mySlotGroup?.takeIf { !canManage }?.let { g ->
+        // Two scopes for someone who holds both kinds of role: this card is "My FS Group", the + button creates a chat of the Entire Congregation.
+        mySlotGroup?.let { g ->
             androidx.compose.material3.Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("FS Group chat", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text(if (canManage) "Scope: My FS Group" else "FS Group chat", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Text(g.name, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                     Text("You are the Overseer, Servant or Assistant of this group, so you manage its chat and who is in it.", style = MaterialTheme.typography.bodySmall)
                     androidx.compose.material3.Button(onClick = { viewModel.openFsGroupChat(g, currentPersonId, onOpenGroupChat) }, modifier = Modifier.fillMaxWidth()) { Text("Open the chat and manage participants") }
@@ -230,9 +233,7 @@ private fun GroupChatRow(chat: GroupChat, congregationName: String?, unreadCount
                 }
             }
             if (onDelete != null) {
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Rounded.Delete, contentDescription = stringResource(Res.string.chat_delete_group_chat), tint = MaterialTheme.colorScheme.error)
-                }
+                ActionIconButton(ActionKind.Delete, onClick = onDelete, contentDescription = stringResource(Res.string.chat_delete_group_chat))
             }
         }
     }

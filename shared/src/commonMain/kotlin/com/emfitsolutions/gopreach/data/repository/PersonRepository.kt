@@ -24,7 +24,7 @@ class PersonRepository(
     suspend fun get(personId: String): Person? = offline.get(COLLECTION, personId)
 
     suspend fun save(person: Person): Person {
-        val id = person.id.ifBlank { remote.newId(COLLECTION) }
+        val id = person.id.ifBlank { RecentCreates.idFor(COLLECTION, person) { remote.newId(COLLECTION) } }
         val withId = person.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId
@@ -34,7 +34,7 @@ class PersonRepository(
      * see [OfflineFirestoreRepository.saveNow] for why this exists
      * ([AuthRepository.createAccountWithTempCredentials] is its only caller). */
     suspend fun saveNow(person: Person): Person {
-        val id = person.id.ifBlank { remote.newId(COLLECTION) }
+        val id = person.id.ifBlank { RecentCreates.idFor(COLLECTION, person) { remote.newId(COLLECTION) } }
         val withId = person.copy(id = id)
         offline.saveNow(remote, COLLECTION, id, withId)
         return withId

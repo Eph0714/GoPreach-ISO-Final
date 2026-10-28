@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.components.map
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.platform.rememberToaster
 import android.content.Context
 import android.content.ContextWrapper
@@ -289,7 +291,7 @@ fun BoxScope.MapDrawingOverlay(
             onDismissRequest = { rejection = null },
             title = { Text(title) },
             text = { Text(body) },
-            dismissButton = { TextButton(onClick = { rejection = null; state.exit() }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { rejection = null; state.exit() }, label = "Cancel") },
             // Adjust: the offending parts stay highlighted in red; the corners can be dragged to fix them.
             confirmButton = { TextButton(onClick = { rejection = null; state.tool = DrawingTool.POINTS }) { Text("Adjust Drawing") } },
         )
@@ -300,7 +302,7 @@ fun BoxScope.MapDrawingOverlay(
             title = { Text("Discard drawing?") },
             text = { Text("What you drew hasn't been saved.") },
             dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Keep Drawing") } },
-            confirmButton = { TextButton(onClick = { confirmDiscard = false; state.exit() }) { Text("Discard") } },
+            confirmButton = { ActionButton(ActionKind.Delete, onClick = { confirmDiscard = false; state.exit() }, label = "Discard") },
         )
     }
     confirmDelete?.let { d ->
@@ -308,7 +310,7 @@ fun BoxScope.MapDrawingOverlay(
             onDismissRequest = { confirmDelete = null },
             title = { Text(if (d.status == DrawingStatus.FINISHED) "Delete Completed Territory?" else "Delete Territory Drawing?") },
             text = { Text("This drawing will be permanently removed from the map.") },
-            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmDelete = null }, label = "Cancel") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = null

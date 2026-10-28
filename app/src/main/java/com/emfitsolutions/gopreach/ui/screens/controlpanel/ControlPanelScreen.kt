@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.controlpanel
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -168,17 +170,13 @@ fun ControlPanelScreen(
                         }
                     }
                 }
-                Button(
-                    onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                         savingCapture = true
                         viewModel.saveAllowCaptureImage(allowCapture, currentPersonId) { error ->
                             savingCapture = false
                             showToast(error ?: "Capture Image setting saved.")
                         }
-                    },
-                    enabled = !savingCapture && allowCapture != settings.allowCaptureImage,
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("Save") }
+                    }, label = "Save", enabled = !savingCapture && allowCapture != settings.allowCaptureImage, modifier = Modifier.fillMaxWidth())
 
                 Text("Data Maintenance", style = MaterialTheme.typography.titleMedium)
                 Text(

@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.sharelocation
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.StandardSearchField
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
 import com.emfitsolutions.gopreach.platform.AppPermission
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
@@ -417,15 +420,7 @@ fun ShareLocationScreen(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     )
                 }
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text("Search: Name, Status, Group") },
-                    singleLine = true,
-                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                    visualTransformation = VisualTransformation.None,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                )
+                StandardSearchField(value = searchQuery, onValueChange = { searchQuery = it }, placeholder = "Search: Name, Status, Group", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp))
 
                 if (needsCongregation) {
                     SelectCongregationPrompt()
@@ -515,7 +510,7 @@ fun ShareLocationScreen(
                     },
                 ) { Text("Allow") }
             },
-            dismissButton = { TextButton(onClick = { showConsentDialog = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { showConsentDialog = false }, label = "Cancel") },
         )
     }
 

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.action_cancel
 import com.emfitsolutions.gopreach.shared.resources.action_save
@@ -357,12 +359,12 @@ fun GroupChatScreen(
             title = { Text(stringResource(Res.string.chat_delete_for_everyone_title)) },
             text = { Text(stringResource(Res.string.chat_delete_for_everyone_message)) },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.deleteForEveryone(groupChatId, toDeleteForEveryone)
                     pendingDeleteForEveryone = null
-                }) { Text(stringResource(Res.string.chat_delete_for_everyone_confirm)) }
+                }, label = stringResource(Res.string.chat_delete_for_everyone_confirm))
             },
-            dismissButton = { TextButton(onClick = { pendingDeleteForEveryone = null }) { Text(stringResource(Res.string.action_cancel)) } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDeleteForEveryone = null }, label = stringResource(Res.string.action_cancel)) },
         )
     }
 }
@@ -418,9 +420,9 @@ private fun EditMessageDialog(message: GroupChatMessage, onDismiss: () -> Unit, 
             )
         },
         confirmButton = {
-            TextButton(onClick = { if (text.isNotBlank()) onSave(text) }, enabled = text.isNotBlank()) { Text(stringResource(Res.string.action_save)) }
+            ActionButton(ActionKind.Save, onClick = { if (text.isNotBlank()) onSave(text) }, label = stringResource(Res.string.action_save), enabled = text.isNotBlank())
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.action_cancel)) } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = stringResource(Res.string.action_cancel)) },
     )
 }
 

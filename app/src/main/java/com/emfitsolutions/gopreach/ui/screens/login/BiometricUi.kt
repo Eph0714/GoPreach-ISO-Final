@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.login
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -64,7 +66,7 @@ fun BiometricEnrollmentOfferHost(signedIn: Boolean) {
                     )
                 }) { Text("Enable") }
             },
-            dismissButton = { TextButton(onClick = viewModel.offer::decline) { Text("Not now") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = viewModel.offer::decline, label = "Not now") },
         )
     }
 }
@@ -161,7 +163,7 @@ fun BiometricLoginSettingsSection(showTitle: Boolean = true, viewModel: Biometri
                     Text("Continue")
                 }
             },
-            dismissButton = { TextButton(enabled = !checking, onClick = { showPasswordDialog = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { showPasswordDialog = false }, label = "Cancel", enabled = !checking) },
         )
     }
 
@@ -170,7 +172,7 @@ fun BiometricLoginSettingsSection(showTitle: Boolean = true, viewModel: Biometri
             onDismissRequest = { message = null },
             title = { Text("Biometric Login") },
             text = { Text(text) },
-            confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = { message = null }, label = "OK") },
         )
     }
 }

@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.circuit
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -198,7 +200,7 @@ private fun NewOverseerCredentials(credentials: com.emfitsolutions.gopreach.data
             Text("Temporary username: ${credentials.username}", style = MaterialTheme.typography.titleMedium)
             Text("Temporary password: ${credentials.temporaryPassword}", style = MaterialTheme.typography.titleMedium)
             com.emfitsolutions.gopreach.ui.components.ShareableSetupLink(credentials.username, credentials.temporaryPassword, credentials.shareableLink)
-            Button(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("Done") }
+            ActionButton(ActionKind.Save, onClick = onDone, label = "Done", modifier = Modifier.fillMaxWidth())
         }
     }
 }

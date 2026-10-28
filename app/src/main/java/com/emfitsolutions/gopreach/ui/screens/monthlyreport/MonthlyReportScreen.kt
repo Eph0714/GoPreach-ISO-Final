@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.monthlyreport
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.shared.resources.monthly_report_bible_studies_label
 import com.emfitsolutions.gopreach.shared.resources.monthly_report_calculation_failed
@@ -239,7 +241,7 @@ fun MonthlyReportScreen(
             icon = { Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = SolidGreen) },
             title = { Text(stringResource(Res.string.monthly_report_success_title)) },
             text = { Text(stringResource(Res.string.monthly_report_success_message, selectedMonthLabel)) },
-            confirmButton = { TextButton(onClick = onBack) { Text("Done") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = onBack, label = "Done") },
         )
     }
 }
@@ -383,9 +385,7 @@ private fun MonthlyReportForm(
                         color = SolidRed,
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    TextButton(onClick = { viewModel.onMonthSelected(uiState.selectedPeriodMonth) }) {
-                        Text(stringResource(Res.string.monthly_report_calculation_retry))
-                    }
+                    ActionButton(ActionKind.Refresh, onClick = { viewModel.onMonthSelected(uiState.selectedPeriodMonth) }, label = stringResource(Res.string.monthly_report_calculation_retry))
                 }
             }
         }
@@ -516,11 +516,7 @@ private fun MonthlyReportForm(
         // A Draft (never submitted, not yet received) can be edited above and deleted here.
         var confirmingDelete by remember { mutableStateOf(false) }
         if (!allowEditWhenLocked && !uiState.monthApproved && uiState.existingReport?.status == ReportStatus.DRAFT) {
-            OutlinedButton(
-                onClick = { confirmingDelete = true },
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Delete Draft Report") }
+            ActionButton(ActionKind.Delete, onClick = { confirmingDelete = true }, label = "Delete Draft Report", modifier = Modifier.fillMaxWidth())
         }
         if (confirmingDelete) {
             com.emfitsolutions.gopreach.ui.components.AlertDialog(
@@ -606,11 +602,7 @@ private fun MonthlyReportPreview(
         ) { Text(stringResource(Res.string.monthly_report_preview_copy_button)) }
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = onEdit,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = SolidBlue),
-                modifier = Modifier.weight(1f),
-            ) { Text(stringResource(Res.string.monthly_report_preview_edit_button)) }
+            ActionButton(ActionKind.Edit, onClick = onEdit, label = stringResource(Res.string.monthly_report_preview_edit_button), modifier = Modifier.weight(1f))
             Button(
                 onClick = {
                     // "Not a system message on the form, a separate message
@@ -660,14 +652,10 @@ private fun MonthlyReportPreview(
             title = { Text(stringResource(Res.string.monthly_report_hours_confirm_dialog_title)) },
             text = { Text(stringResource(Res.string.monthly_report_hours_confirm_dialog_message, selectedMonthLabel)) },
             confirmButton = {
-                TextButton(onClick = { showHoursConfirmDialog = false; onSubmit() }) {
-                    Text(stringResource(Res.string.monthly_report_hours_confirm_dialog_confirm))
-                }
+                ActionButton(ActionKind.Save, onClick = { showHoursConfirmDialog = false; onSubmit() }, label = stringResource(Res.string.monthly_report_hours_confirm_dialog_confirm))
             },
             dismissButton = {
-                TextButton(onClick = { showHoursConfirmDialog = false }) {
-                    Text(stringResource(Res.string.monthly_report_hours_confirm_dialog_cancel))
-                }
+                ActionButton(ActionKind.Cancel, onClick = { showHoursConfirmDialog = false }, label = stringResource(Res.string.monthly_report_hours_confirm_dialog_cancel))
             },
         )
     }

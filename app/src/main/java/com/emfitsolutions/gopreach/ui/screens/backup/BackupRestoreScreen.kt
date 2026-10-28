@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.backup
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.platform.Locale
 import com.emfitsolutions.gopreach.platform.Date
@@ -67,13 +69,13 @@ fun BackupRestoreScreen(
             title = { Text("Restore from backup?") },
             text = { Text("This overwrites the current congregation data with whatever this file contains. This cannot be undone unless you have another backup. Continue?") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Refresh, onClick = {
                     viewModel.restoreFrom(pendingRestoreUri!!, currentPersonId)
                     pendingRestoreUri = null
-                }) { Text("Restore") }
+                }, label = "Restore")
             },
             dismissButton = {
-                TextButton(onClick = { pendingRestoreUri = null }) { Text("Cancel") }
+                ActionButton(ActionKind.Cancel, onClick = { pendingRestoreUri = null }, label = "Cancel")
             },
         )
     }
@@ -124,13 +126,7 @@ fun BackupRestoreScreen(
                 Text("Export Backup")
             }
 
-            OutlinedButton(
-                onClick = { restoreLauncher.launch(arrayOf("application/json")) },
-                enabled = !uiState.isBusy,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text("Restore From File")
-            }
+            ActionButton(ActionKind.Refresh, onClick = { restoreLauncher.launch(arrayOf("application/json")) }, label = "Restore From File", enabled = !uiState.isBusy, modifier = Modifier.fillMaxWidth())
         }
     }
 }

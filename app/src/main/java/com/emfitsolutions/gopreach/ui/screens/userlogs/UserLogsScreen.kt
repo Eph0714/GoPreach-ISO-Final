@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.userlogs
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.platform.SimpleDateFormat
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -184,9 +187,7 @@ fun UserLogsScreen(
                                 }
                             }
                             if (canDelete) {
-                                IconButton(onClick = { viewModel.delete(row.entry.id) }) {
-                                    Icon(Icons.Rounded.Delete, contentDescription = "Delete entry")
-                                }
+                                ActionIconButton(ActionKind.Delete, onClick = { viewModel.delete(row.entry.id) }, contentDescription = "Delete entry")
                             }
                         }
                     }
@@ -204,16 +205,14 @@ fun UserLogsScreen(
             title = { Text("Delete $count Log ${if (count == 1) "Entry" else "Entries"}?") },
             text = { Text("This will permanently delete $count selected log ${if (count == 1) "entry" else "entries"}. This cannot be undone.") },
             confirmButton = {
-                TextButton(
-                    onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                         viewModel.deleteAll(selectedIds)
                         showToast("$count log ${if (count == 1) "entry" else "entries"} deleted.")
                         selectedIds = emptySet()
                         showBulkDeleteConfirm = false
-                    },
-                ) { Text("Delete") }
+                    }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { showBulkDeleteConfirm = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { showBulkDeleteConfirm = false }, label = "Cancel") },
         )
     }
 }

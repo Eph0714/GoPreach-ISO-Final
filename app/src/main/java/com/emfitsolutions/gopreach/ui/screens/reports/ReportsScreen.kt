@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.reports
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import com.emfitsolutions.gopreach.ui.components.recordTableItems
 import com.emfitsolutions.gopreach.shared.resources.Res
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
@@ -560,9 +562,7 @@ private fun GroupReportCard(
                         )
                     }
                     if (canEditReports) {
-                        IconButton(onClick = { onEditPublisher(row.person.id) }) {
-                            Icon(Icons.Rounded.Edit, contentDescription = stringResource(Res.string.reports_edit_this_month_cd))
-                        }
+                        ActionIconButton(ActionKind.Edit, onClick = { onEditPublisher(row.person.id) }, contentDescription = stringResource(Res.string.reports_edit_this_month_cd))
                     }
                 }
             }

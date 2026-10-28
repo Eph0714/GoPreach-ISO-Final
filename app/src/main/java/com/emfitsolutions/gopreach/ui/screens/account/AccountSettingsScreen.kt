@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.account
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.platform.rememberPermissionRequester
 import com.emfitsolutions.gopreach.platform.AppPermission
 import androidx.compose.foundation.layout.Arrangement
@@ -94,6 +96,7 @@ fun AccountSettingsScreen(
     // same pattern as isPublisher gating the section above it.
     onViewPublisherSchedules: (() -> Unit)? = null,
     /** Shown as a tab inside the combined Settings screen: no top bar of its own. */
+    onOpenSecurity: (() -> Unit)? = null,
     embedded: Boolean = false,
     viewModel: AccountSettingsViewModel = koinViewModel(),
 ) {
@@ -134,6 +137,17 @@ fun AccountSettingsScreen(
                 Text("Save My Information")
             }
 
+            if (onOpenSecurity != null) {
+                androidx.compose.material3.HorizontalDivider()
+                Text("Security", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Two-factor sign-in, the devices signed in to your account, trusted devices and recovery codes.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(onClick = onOpenSecurity, modifier = Modifier.fillMaxWidth()) { Text("Security & Device Management") }
+                androidx.compose.material3.OutlinedButton(onClick = onOpenSecurity, modifier = Modifier.fillMaxWidth()) { Text("Two-Factor Authentication") }
+                androidx.compose.material3.OutlinedButton(onClick = onOpenSecurity, modifier = Modifier.fillMaxWidth()) { Text("Trusted Devices") }
+            }
             // "Add Module: Preaching Availability" — Publisher-only. Saved
             // straight onto this account's own shared Person record (see
             // that field's own doc comment on why that already satisfies
@@ -168,9 +182,7 @@ fun AccountSettingsScreen(
                     Text("Save Availability")
                 }
                 if (onViewPublisherSchedules != null) {
-                    OutlinedButton(onClick = onViewPublisherSchedules, modifier = Modifier.fillMaxWidth()) {
-                        Text("View Other Publishers' Schedules")
-                    }
+                    ActionButton(ActionKind.View, onClick = onViewPublisherSchedules, label = "View Other Publishers' Schedules", modifier = Modifier.fillMaxWidth())
                 }
             }
 

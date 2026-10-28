@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.ui.theme.glass
 import com.emfitsolutions.gopreach.data.model.displayName
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
@@ -383,13 +385,13 @@ fun SendToCircuitPanel(
                 }
             },
             confirmButton = {
-                TextButton(enabled = checked != null && sendable.isNotEmpty() && allConfirmed && !busy, onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                     confirmSend = false
                     results = null
                     runSend(sendable.map { it.month })
-                }) { Text("Send") }
+                }, label = "Send", enabled = checked != null && sendable.isNotEmpty() && allConfirmed && !busy)
             },
-            dismissButton = { TextButton(enabled = !busy, onClick = { confirmSend = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmSend = false }, label = "Cancel", enabled = !busy) },
         )
     }
 
@@ -425,9 +427,9 @@ fun SendToCircuitPanel(
             },
             confirmButton = {
                 if (failed.isNotEmpty()) TextButton(enabled = !busy, onClick = { runSend(failed.map { it.month }) }) { Text("Retry " + failed.size + " failed") }
-                else TextButton(onClick = { results = null; picked = emptySet(); message = if (sent > 0) sent.toString() + " report" + (if (sent == 1) "" else "s") + " sent to the Circuit Overseer." else null }) { Text("Done") }
+                else ActionButton(ActionKind.Save, onClick = { results = null; picked = emptySet(); message = if (sent > 0) sent.toString() + " report" + (if (sent == 1) "" else "s") + " sent to the Circuit Overseer." else null }, label = "Done")
             },
-            dismissButton = { if (failed.isNotEmpty()) TextButton(enabled = !busy, onClick = { results = null }) { Text("Close") } },
+            dismissButton = { if (failed.isNotEmpty()) ActionButton(ActionKind.Cancel, onClick = { results = null }, label = "Close", enabled = !busy) },
         )
     }
 
@@ -452,7 +454,7 @@ fun SendToCircuitPanel(
                     }
                 }) { Text("Delete submission", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmDelete = false }, label = "Cancel") },
         )
     }
 
@@ -469,7 +471,7 @@ fun SendToCircuitPanel(
             confirmButton = {
                 TextButton(onClick = { confirmUndo = false; runUndo(soleMonth) }) { Text("Undo Sending") }
             },
-            dismissButton = { TextButton(onClick = { confirmUndo = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmUndo = false }, label = "Cancel") },
         )
     }
     failure?.let { (title, text) ->
@@ -477,7 +479,7 @@ fun SendToCircuitPanel(
             onDismissRequest = { failure = null },
             title = { Text(title) },
             text = { Text(text) },
-            confirmButton = { TextButton(onClick = { failure = null }) { Text("OK") } },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = { failure = null }, label = "OK") },
         )
     }
 }
@@ -585,7 +587,7 @@ fun CoReviewPanel(
             confirmButton = {
                 TextButton(enabled = remarks.isNotBlank(), onClick = { returning = false; run { viewModel.returnMonth(status.id, remarks, actorPersonId) } }) { Text("Return") }
             },
-            dismissButton = { TextButton(onClick = { returning = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { returning = false }, label = "Cancel") },
         )
     }
 }

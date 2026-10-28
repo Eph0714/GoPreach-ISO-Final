@@ -38,7 +38,7 @@ private fun friendlyAuthErrorMessage(e: Throwable): String = when (e) {
 sealed class AuthResult {
     data class Success(val person: Person, val requiresPasswordChange: Boolean) : AuthResult()
     /** [activeSession] is set only when the server confirmed that the account is signed in on another device: the screen then asks before ending it. */
-    data class Error(val message: String, val activeSession: ActiveSessionInfo? = null) : AuthResult()
+    data class Error(val message: String, val activeSession: ActiveSessionInfo? = null, val twoFactor: TwoFactorChallenge? = null) : AuthResult()
 }
 
 data class TempCredentials(
@@ -93,6 +93,9 @@ class AuthRepository(
         Log.d(TAG, "Login request started")
         return try {
             withTimeout(SIGN_IN_TIMEOUT_MS) { signInInternal(username, password, endOtherSession, approval) }
+        } catch (e: AuthFailure.TwoFactorRequired) {
+            // The password was right; the second factor decides. Nothing is signed in yet.
+            AuthResult.Error("Enter your verification code to finish signing in.", twoFactor = e.challenge)
         } catch (e: AuthFailure.SessionActive) {
             AuthResult.Error("This account is already signed in on another device.", e.session)
         } catch (e: Exception) {
@@ -188,6 +191,35 @@ class AuthRepository(
         }
         auth.signIn(authEmailFor(person.id), password, endOtherSession, approval)
         Log.d(TAG, "Password verified: TRUE")
+        return finishSignIn(person, username, password)
+    }
+
+    /**
+     * The second step of a sign-in with two-factor: answers the [challenge] a password sign-in left, then finishes exactly like a password sign-in.
+     * [password] is only used for the offline verifier (never stored in clear).
+     */
+    suspend fun completeTwoFactor(username: String, password: String, challenge: TwoFactorChallenge, kind: SecondFactor, code: String, trustDevice: Boolean): AuthResult = try {
+        withTimeout(SIGN_IN_TIMEOUT_MS) {
+            val person = findPersonByUsername(username) ?: return@withTimeout AuthResult.Error("Invalid username or password.")
+            auth.verifyTwoFactor(challenge, kind, code, trustDevice)
+            finishSignIn(person, username, password)
+        }
+    } catch (e: AuthFailure.InvalidCode) {
+        AuthResult.Error("That code is not right." + (e.triesLeft?.let { " You can try $it more time(s)." } ?: ""))
+    } catch (e: AuthFailure.ChallengeExpired) {
+        AuthResult.Error("Your sign-in expired. Please sign in again.")
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.e(TAG, "Two-factor verification failed: ${e::class.simpleName}")
+        AuthResult.Error(friendlyAuthErrorMessage(e))
+    }
+
+    /** E-mails the sign-in code to the confirmed recovery address; returns the masked address. */
+    suspend fun sendTwoFactorEmailCode(challenge: TwoFactorChallenge): Result<String> = runCatching { auth.sendTwoFactorEmailCode(challenge) }
+
+    /** What follows a verified sign-in, however it was verified: caches, offline verifier, session marker, audit entry. */
+    private suspend fun finishSignIn(person: Person, username: String, password: String): AuthResult {
         // Cache-only: a stale pre-sign-in snapshot must never get queued as a
         // pending upload here (see PersonRepository.cacheFromServer's doc
         // comment) — it would race, and could clobber, UserSession

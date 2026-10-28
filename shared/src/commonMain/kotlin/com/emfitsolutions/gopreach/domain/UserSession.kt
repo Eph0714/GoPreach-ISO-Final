@@ -20,7 +20,6 @@ import com.emfitsolutions.gopreach.data.repository.personIdFromAuthEmail
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
@@ -50,12 +49,6 @@ data class SessionState(
     val grant: UserAccessGrant? = null,
     /** The congregation's FS Groups, only to name a group role ("Group Coordinator — FS Group 5"). */
     val groups: List<Group> = emptyList(),
-    /** Spec §7 — set by [UserSession.selectRole] once the user picks an
-     * account off the role-selection screen; cleared automatically on sign
-     * out (see [UserSession]'s own flow chain). Only ever matters when
-     * [roleOptions] has more than one entry — a single-role account never
-     * needs this to resolve [activeRoleAssignment]. */
-    val selectedRoleAssignmentId: String? = null,
     /** True when this session exists only because
      * [com.emfitsolutions.gopreach.data.repository.AuthRepository
      * .offlineSignIn] verified a cached password hash *locally*, with no
@@ -120,40 +113,48 @@ data class SessionState(
             return adminOptions + listOfNotNull(publisherOption)
         }
 
-    /** Spec §3/§4 — the role-selection screen is skipped entirely for a
-     * single-role account, and never shown before [roleOptions] has actually
-     * loaded (so it can't flash on an empty list the instant sign-in
-     * succeeds, before Firestore's first RoleAssignment snapshot arrives). */
-    val needsRoleSelection: Boolean
-        get() = !isLoading && person != null && roleOptions.size > 1 && activeRoleAssignment == null
+    /** Unified multi-role account: every ACTIVE Admin-track [RoleAssignment] this person holds, most senior first (enum order of [AdminRole]). */
+    val adminAssignments: List<RoleAssignment>
+        get() = roleOptions.map { it.assignment }.filter { it.resolvedRoleTypeOrNull() is RoleType.Admin }
 
-    /** Spec §7 — "the selected role must control the session... do not
-     * automatically combine permissions from all roles." The single
-     * RoleAssignment every permission/navigation/scope decision in the app
-     * is made from: automatic (the only one) for a single-role account,
-     * otherwise whichever [roleOptions] entry [selectRole] chose. Resolves
-     * to null while a multi-role account hasn't picked yet — see
-     * [needsRoleSelection]. */
-    val activeRoleAssignment: RoleAssignment?
-        get() = if (roleOptions.size <= 1) {
-            roleOptions.firstOrNull()?.assignment
-        } else {
-            // Only ever matches one of this account's OWN roleOptions — a
-            // stale/foreign id (the role was revoked mid-session, say) simply
-            // fails to resolve, re-triggering [needsRoleSelection] rather than
-            // ever granting access under a role that isn't really active.
-            roleOptions.firstOrNull { it.assignment.id == selectedRoleAssignmentId }?.assignment
+    /** The person's own active Publisher assignment, if any - what makes the Publisher Main Form the interface of a multi-role account. */
+    val publisherAssignment: RoleAssignment?
+        get() = roleOptions.map { it.assignment }.firstOrNull { it.resolvedRoleTypeOrNull() is RoleType.Publisher }
+
+    /** The most senior Admin-track assignment: the one whose congregation / group scope the admin screens and the server-side rules
+     * follow. Never chosen by the user - there is no role selection any more. */
+    val primaryAdminAssignment: RoleAssignment? get() = adminAssignments.firstOrNull()
+
+    /** The assignments whose permissions are consolidated into this one session: the primary one plus every other Admin-track role in the
+     * same congregation (a congregation-wide role covers a group role there). A role held in a different congregation is never merged in,
+     * so combining roles cannot widen a person's reach into another congregation's records. Super-Admin is not congregation-bound. */
+    val consolidatedAdminAssignments: List<RoleAssignment>
+        get() {
+            val primary = primaryAdminAssignment ?: return emptyList()
+            val role = (primary.resolvedRoleTypeOrNull() as? RoleType.Admin)?.role
+            return if (role == AdminRole.SUPER_ADMIN) adminAssignments
+            else adminAssignments.filter { it === primary || (it.congregationId != null && it.congregationId == primary.congregationId) }
         }
+
+    /** Every Admin-track role consolidated into this session, most senior first (distinct). */
+    val consolidatedAdminRoles: List<AdminRole>
+        get() = consolidatedAdminAssignments.mapNotNull { (it.resolvedRoleTypeOrNull() as? RoleType.Admin)?.role }.distinct()
+
+    /** One account, all its roles: the Admin-track role that scopes the session, else the Publisher assignment. Resolves by itself - once
+     * the roles have loaded there is never a prompt to choose. */
+    val activeRoleAssignment: RoleAssignment?
+        get() = primaryAdminAssignment ?: publisherAssignment
 
     val activeAdminRole: AdminRole?
         get() = (activeRoleAssignment?.resolvedRoleTypeOrNull() as? RoleType.Admin)?.role
 
+    /** The person holds an active Publisher category: the Publisher Main Form is their interface, with every other role's modules in its side panel. */
     val isActivePublisherRole: Boolean
-        get() = activeRoleAssignment?.resolvedRoleTypeOrNull() is RoleType.Publisher
+        get() = publisherAssignment != null
 
-    /** The role this session acts as, in words ("Coordinator Elder", "Group Coordinator — FS Group 5"), shown throughout the app. */
+    /** Every role this account holds, in words ("Coordinator Elder + Publisher"), shown throughout the app. */
     val activeRoleLabel: String?
-        get() = roleOptions.firstOrNull { it.assignment.id == activeRoleAssignment?.id }?.label
+        get() = roleOptions.map { it.label }.takeIf { it.isNotEmpty() }?.joinToString(" + ")
 
     /** The FS Group of an active Group Coordinator / Servant / Assistant role; null for every other role (congregation-wide or none). */
     val activeGroupId: String?
@@ -207,26 +208,6 @@ class UserSession(
      * `currentUser` itself since it never makes a network call. */
     private fun signedInPersonIdFlow(): Flow<String?> =
         combine(authStateFlow(), offlineSessionMarker.personId) { firebaseId, offlineId -> firebaseId ?: offlineId }
-
-    /** Spec §7 — which of the signed-in Person's own [RoleOption]s is active
-     * for this session. Reset to null every time [signedInPersonIdFlow] moves
-     * to a different (or no) person, so a fresh sign-in — including signing
-     * straight back in as someone else without the process restarting —
-     * always starts from "not yet chosen" rather than inheriting whatever the
-     * previous session picked. Deliberately in-memory only: spec §11's "use
-     * another role -> log out, log in again, select another role" already
-     * implies this doesn't need to survive a process death either — a cold
-     * start naturally re-asks, exactly like a fresh login would. */
-    private val _selectedRoleAssignmentId = MutableStateFlow<String?>(null)
-
-    fun selectRole(assignmentId: String) {
-        _selectedRoleAssignmentId.value = assignmentId
-    }
-
-    /** "Switch Role": back to the role selector without signing out. Everything the session shows and allows is then re-derived from the newly chosen role. */
-    fun switchRole() {
-        _selectedRoleAssignmentId.value = null
-    }
 
     /** Group Chat Setting's security-rules trick (see [Person
      * .activeCongregationId]'s doc comment) — keeps that denormalized copy
@@ -291,6 +272,7 @@ class UserSession(
                 }
                 .collect { ctx ->
                     val (person, congregationId, roleName, groupId) = ctx ?: return@collect
+                    runCatching { syncEngine.repullOnceFor(person.id) }
                     if (person.activeCongregationId != congregationId || person.activeAdminRole != roleName || person.activeGroupId != groupId) {
                         runCatching {
                             personRepository.saveNow(person.copy(activeCongregationId = congregationId, activeAdminRole = roleName, activeGroupId = groupId))
@@ -303,12 +285,7 @@ class UserSession(
 
     val state: StateFlow<SessionState> = signedInPersonIdFlow()
         .let { personIdFlow ->
-            var lastPersonId: String? = null
             personIdFlow.flatMapLatest { personId ->
-                if (personId != lastPersonId) {
-                    lastPersonId = personId
-                    _selectedRoleAssignmentId.value = null
-                }
                 if (personId == null) {
                     flowOf(SessionState(isLoading = false, person = null, roleAssignments = emptyList()))
                 } else {
@@ -316,16 +293,14 @@ class UserSession(
                         personRepository.observeAll().map { people -> people.firstOrNull { it.id == personId } },
                         roleAssignmentRepository.observeForPerson(personId),
                         userAccessGrantRepository.observeForPerson(personId),
-                        _selectedRoleAssignmentId,
                         groupRepository.observeAll(),
-                    ) { person, roles, grant, selectedRoleAssignmentId, groups ->
+                    ) { person, roles, grant, groups ->
                         SessionState(
                             isLoading = false,
                             person = person,
                             roleAssignments = roles,
                             grant = grant,
                             groups = groups,
-                            selectedRoleAssignmentId = selectedRoleAssignmentId,
                             // See this field's own doc comment — re-checked on
                             // every emission (not just once at sign-in) so a
                             // session that started offline-only is correctly

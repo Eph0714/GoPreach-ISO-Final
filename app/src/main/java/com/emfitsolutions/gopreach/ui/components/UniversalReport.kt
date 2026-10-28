@@ -134,13 +134,7 @@ fun <T> UniversalReport(
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
               if (compact) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = query, onValueChange = { query = it }, singleLine = true, placeholder = { Text("Search") },
-                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                        trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(28.dp),
-                        modifier = Modifier.weight(1f),
-                    )
+                    StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search", modifier = Modifier.weight(1f))
                     androidx.compose.material3.IconButton(onClick = { RecordFullScreen.active = !RecordFullScreen.active }) {
                         Icon(if (RecordFullScreen.active) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, contentDescription = if (RecordFullScreen.active) "Exit full screen" else "Full screen")
                     }
@@ -186,10 +180,7 @@ fun <T> UniversalReport(
                     if (shown.size == items.size) "Records Found: ${items.size}" else "Records Found: ${shown.size} of ${items.size}",
                     style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold,
                 )
-                OutlinedTextField(
-                    value = query, onValueChange = { query = it }, singleLine = true, label = { Text("Search records...") }, modifier = Modifier.fillMaxWidth(),
-                    trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
-                )
+                StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search records...", modifier = Modifier.fillMaxWidth())
                 filters.forEach { f ->
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         FilterChip(selected = chosen[f.id] == null, onClick = { choose(f.id, "") }, label = { Text("All ${f.label}") })

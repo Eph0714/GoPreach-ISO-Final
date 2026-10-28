@@ -100,9 +100,11 @@ class GroupChatViewModel(
     fun candidatesFor(congregationId: String?): Flow<List<ParticipantCandidate>> = combine(
         personRepository.observeAll(),
         roleAssignmentRepository.observeAll(),
-    ) { people, assignments ->
+        groupRepository.observeAll(),
+    ) { people, assignments, groups ->
         if (congregationId == null) return@combine emptyList()
         val peopleById = people.associateBy { it.id }
+        val groupNames = groups.associate { it.id to it.name }
         assignments
             .filter { it.status == RoleAssignmentStatus.ACTIVE && it.congregationId == congregationId && it.personId in peopleById }
             .mapNotNull { assignment ->
@@ -115,7 +117,8 @@ class GroupChatViewModel(
                 ParticipantCandidate(
                     personId = person.id,
                     name = person.fullName,
-                    roleLabel = roleLabel,
+                    // Each person's FS Group beside the role, so whoever sets up a congregation-wide chat can verify the intended membership.
+                    roleLabel = roleLabel + " · " + (assignment.groupId?.let { groupNames[it] } ?: "No FS Group"),
                     publisherName = person.username,
                 )
             }
@@ -276,7 +279,7 @@ class GroupChatViewModel(
         }
     }
 
-    /** Sender-only — enforced again server-side (see firestore.rules), this
+    /** Sender-only — enforced again server-side (see docs/legacy-firebase/firestore.rules), this
      * is UI-side gating so the option isn't even offered on someone else's
      * message in the first place. */
     fun deleteForEveryone(groupChatId: String, message: GroupChatMessage) {

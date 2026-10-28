@@ -19,7 +19,7 @@ class HouseholderAssignmentRepository(
     fun observeAll(): Flow<List<HouseholderAssignment>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(assignment: HouseholderAssignment): HouseholderAssignment {
-        val id = assignment.id.ifBlank { remote.newId(COLLECTION) }
+        val id = assignment.id.ifBlank { RecentCreates.idFor(COLLECTION, assignment) { remote.newId(COLLECTION) } }
         val withId = assignment.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId

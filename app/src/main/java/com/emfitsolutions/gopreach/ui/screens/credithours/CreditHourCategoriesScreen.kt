@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.credithours
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import androidx.compose.foundation.layout.Box
@@ -184,7 +187,7 @@ fun CreditHourCategoriesScreen(
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmDelete(check.category) }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = viewModel::dismissDelete) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = viewModel::dismissDelete, label = "Cancel") },
         )
         is CategoryDeleteCheck.InUse -> AlertDialog(
             onDismissRequest = viewModel::dismissDelete,
@@ -203,7 +206,7 @@ fun CreditHourCategoriesScreen(
                     TextButton(onClick = { viewModel.deactivateInstead(check.category) }) { Text("Deactivate") }
                 }
             },
-            dismissButton = { TextButton(onClick = viewModel::dismissDelete) { Text("Close") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = viewModel::dismissDelete, label = "Close") },
         )
     }
 }
@@ -231,8 +234,8 @@ private fun CategoryRow(
             StatusBadge(category.active)
         }
         Switch(checked = category.active, onCheckedChange = onToggleActive)
-        IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, contentDescription = "Edit ${category.name}") }
-        IconButton(onClick = onDelete) { Icon(Icons.Rounded.Delete, contentDescription = "Delete ${category.name}") }
+        ActionIconButton(ActionKind.Edit, onClick = onEdit, contentDescription = "Edit ${category.name}")
+        ActionIconButton(ActionKind.Delete, onClick = onDelete, contentDescription = "Delete ${category.name}")
     }
 }
 

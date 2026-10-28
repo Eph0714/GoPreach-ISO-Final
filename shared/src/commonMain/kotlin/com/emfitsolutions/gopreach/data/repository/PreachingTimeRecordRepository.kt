@@ -28,7 +28,7 @@ class PreachingTimeRecordRepository(
 
     suspend fun save(record: PreachingTimeRecord): PreachingTimeRecord {
         monthLock.requireOpen(record.congregationId, record.date) // a month submitted to the Circuit Overseer is locked
-        val id = record.id.ifBlank { remote.newId(COLLECTION) }
+        val id = record.id.ifBlank { RecentCreates.idFor(COLLECTION, record) { remote.newId(COLLECTION) } }
         val withId = record.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId

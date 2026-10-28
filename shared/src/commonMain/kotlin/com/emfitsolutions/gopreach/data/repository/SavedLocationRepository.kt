@@ -19,7 +19,7 @@ class SavedLocationRepository(
             .map { list -> list.filter { it.publisherPersonId == publisherPersonId }.sortedByDescending { it.createdAt } }
 
     suspend fun save(location: SavedLocation): SavedLocation {
-        val id = location.id.ifBlank { remote.newId(COLLECTION) }
+        val id = location.id.ifBlank { RecentCreates.idFor(COLLECTION, location) { remote.newId(COLLECTION) } }
         val withId = location.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId

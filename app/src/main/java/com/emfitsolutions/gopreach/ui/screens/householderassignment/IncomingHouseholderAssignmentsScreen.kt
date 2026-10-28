@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.householderassignment
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -174,18 +176,16 @@ fun IncomingHouseholderAssignmentsScreen(
                 }
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                         viewModel.accept(assignment, currentPersonId, currentPersonName)
                         showToast("${assignment.personNameSnapshot} has been successfully accepted and assigned to $currentPersonName.")
                         selected = null
-                    },
-                ) { Text("Accept Assignment") }
+                    }, label = "Accept Assignment")
             },
             dismissButton = {
                 Row {
-                    TextButton(onClick = { confirmingReject = true }) { Text("Reject Assignment") }
-                    TextButton(onClick = { selected = null }) { Text("Close") }
+                    ActionButton(ActionKind.Delete, onClick = { confirmingReject = true }, label = "Reject Assignment")
+                    ActionButton(ActionKind.Cancel, onClick = { selected = null }, label = "Close")
                 }
             },
         )
@@ -247,17 +247,15 @@ private fun RejectAssignmentDialog(onDismiss: () -> Unit, onConfirm: (String?) -
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
+            ActionButton(ActionKind.Save, onClick = {
                     val reason = when {
                         selectedReason == "Other" -> otherText.trim().ifBlank { "Other" }
                         selectedReason != null -> selectedReason
                         else -> null
                     }
                     onConfirm(reason)
-                },
-            ) { Text("Confirm Reject") }
+                }, label = "Confirm Reject")
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }

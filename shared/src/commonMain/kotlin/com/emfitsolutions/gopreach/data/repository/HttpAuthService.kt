@@ -35,6 +35,8 @@ private const val K_EXPIRES = "expiresAt"
 private const val K_PERSON = "personId"
 private const val K_LAST_SIGN_IN = "lastSignInAt"
 private const val K_ENDED = "sessionEndedElsewhere"
+private const val K_DEVICE_ID = "deviceId"
+private const val K_TRUSTED = "trustedToken"
 private const val EARLY_REFRESH_MS = 60_000L
 
 /**
@@ -49,6 +51,8 @@ class HttpAuthService(
     private val scope: CoroutineScope,
     /** What this phone calls itself to the server (shown on the other device); only what the system reports. */
     private val deviceLabel: String? = null,
+    /** Full description of this device (model, system, app version) for the device list; [deviceLabel] alone is what older servers read. */
+    private val deviceInfo: DeviceInfo? = null,
 ) : AuthService {
     private val prefs by lazy { stores.openSecure(PREFS) }
     private val lock = Mutex()
@@ -61,6 +65,19 @@ class HttpAuthService(
         val person = runCatching { prefs.getString(K_PERSON, null) }.getOrNull()
         val refresh = runCatching { prefs.getString(K_REFRESH, null) }.getOrNull()
         if (person != null && refresh != null) state.value = userFor(person, prefs.getLong(K_LAST_SIGN_IN, 0L).takeIf { it > 0L })
+    }
+
+    /** A random id of this installation, kept in the encrypted store. It tells devices apart; it is never trusted by itself (trust is a separate, server-issued credential). */
+    private fun deviceId(): String = runCatching { prefs.getString(K_DEVICE_ID, null) }.getOrNull()
+        ?: kotlin.random.Random.nextBytes(18).joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }.also { id -> runCatching { prefs.edit { putString(K_DEVICE_ID, id) } } }
+
+    private fun deviceJson(): kotlinx.serialization.json.JsonElement {
+        val d = deviceInfo ?: return JsonPrimitive(deviceLabel ?: "GoPreach app")
+        return buildJsonObject {
+            put("id", JsonPrimitive(deviceId())); put("name", JsonPrimitive(deviceLabel ?: d.name)); put("type", JsonPrimitive(d.type))
+            d.model?.let { put("model", JsonPrimitive(it)) }; d.os?.let { put("os", JsonPrimitive(it)) }
+            d.osVersion?.let { put("osVersion", JsonPrimitive(it)) }; d.appVersion?.let { put("appVersion", JsonPrimitive(it)) }
+        }
     }
 
     private fun userFor(personId: String, lastSignIn: Long?) = AuthUser(personId, authEmailFor(personId), lastSignIn)
@@ -94,10 +111,43 @@ class HttpAuthService(
             // Only an older server (one that cannot ask the other device) reads this; the current server ignores it for a password sign-in.
             if (endOtherSession) put("endOtherSession", JsonPrimitive(true))
             approval?.let { put("approval", buildJsonObject { put("requestId", JsonPrimitive(it.requestId)); put("pollToken", JsonPrimitive(it.pollToken)) }) }
-            deviceLabel?.let { put("device", JsonPrimitive(it)) }
+            put("device", deviceJson())
+            runCatching { prefs.getString(K_TRUSTED, null) }.getOrNull()?.let { put("trustedToken", JsonPrimitive(it)) }
         }, token = null)
+        if ((reply["twoFactorRequired"] as? JsonPrimitive)?.content == "true") throw AuthFailure.TwoFactorRequired(challengeOf(reply))
         lock.withLock { prefs.edit { remove(K_ENDED) }; save(reply, signedInNow = true) }
     }
+
+    private fun challengeOf(reply: JsonObject): TwoFactorChallenge {
+        val methods = reply["methods"] as? JsonObject
+        return TwoFactorChallenge(
+            challengeId = reply.string("challengeId").orEmpty(), challengeToken = reply.string("challengeToken").orEmpty(),
+            expiresAtMillis = (reply["expiresAt"] as? JsonPrimitive)?.content?.toLongOrNull() ?: 0L,
+            totp = (methods?.get("totp") as? JsonPrimitive)?.content == "true", recovery = (methods?.get("recovery") as? JsonPrimitive)?.content != "false",
+            emailMasked = (methods?.get("email") as? JsonObject)?.string("masked"),
+        )
+    }
+
+    override suspend fun verifyTwoFactor(challenge: TwoFactorChallenge, kind: SecondFactor, code: String, trustDevice: Boolean) {
+        ensureLoaded()
+        val reply = post("/v1/auth/2fa/verify", buildJsonObject {
+            put("challengeId", JsonPrimitive(challenge.challengeId)); put("challengeToken", JsonPrimitive(challenge.challengeToken))
+            put(when (kind) { SecondFactor.AUTHENTICATOR_APP -> "code"; SecondFactor.RECOVERY_CODE -> "recoveryCode"; SecondFactor.EMAIL_CODE -> "emailCode" }, JsonPrimitive(code.trim()))
+            if (trustDevice) put("trustDevice", JsonPrimitive(true))
+        }, token = null)
+        lock.withLock {
+            prefs.edit { remove(K_ENDED) }
+            save(reply, signedInNow = true)
+            reply.string("trustedToken")?.let { t -> prefs.edit { putString(K_TRUSTED, t) } }
+        }
+    }
+
+    override fun saveTrustedDeviceToken(token: String) { ensureLoaded(); runCatching { prefs.edit { putString(K_TRUSTED, token) } } }
+    override fun clearTrustedDeviceToken() { ensureLoaded(); runCatching { prefs.edit { remove(K_TRUSTED) } } }
+
+    override suspend fun sendTwoFactorEmailCode(challenge: TwoFactorChallenge): String =
+        post("/v1/auth/2fa/email-code", buildJsonObject { put("challengeId", JsonPrimitive(challenge.challengeId)); put("challengeToken", JsonPrimitive(challenge.challengeToken)) }, token = null)
+            .string("masked") ?: challenge.emailMasked.orEmpty()
 
     private fun ticketBody(t: LoginRequestTicket) = buildJsonObject { put("requestId", JsonPrimitive(t.requestId)); put("pollToken", JsonPrimitive(t.pollToken)) }
 
@@ -211,7 +261,7 @@ class HttpAuthService(
         val response = DocJson.parseToJsonElement(responseJson)
         val reply = post("/v1/auth/passkey/login/verify", buildJsonObject {
             put("sessionId", JsonPrimitive(sessionId)); put("response", response); put("endOtherSession", JsonPrimitive(endOtherSession))
-            deviceLabel?.let { put("device", JsonPrimitive(it)) }
+            put("device", deviceJson())
         }, token = null)
         lock.withLock { save(reply, signedInNow = true) }
         return reply.string("username")
@@ -280,6 +330,8 @@ class HttpAuthService(
         val error = json?.string("error")
         throw when {
             code == 401 && error == "session-ended" -> AuthFailure.SessionEnded()
+            code == 401 && error == "invalid-challenge" -> AuthFailure.ChallengeExpired()
+            code == 401 && error == "invalid-code" -> AuthFailure.InvalidCode((json?.get("triesLeft") as? JsonPrimitive)?.content?.toIntOrNull())
             code == 401 -> AuthFailure.InvalidCredentials()
             code == 409 && error == "session-active" -> AuthFailure.SessionActive(ActiveSessionInfo(
                 json?.string("device"), (json?.get("lastActiveAt") as? JsonPrimitive)?.content?.toLongOrNull(),
@@ -290,6 +342,7 @@ class HttpAuthService(
                     )
                 },
             ))
+            code == 429 && error == "too-many-tries" -> AuthFailure.ChallengeExpired()
             code == 429 -> AuthFailure.TooManyRequests()
             code == 404 && error == "invalid-user" -> AuthFailure.InvalidUser()
             code == 403 && error == "requires-recent-login" -> AuthFailure.Other("For security, please sign in again before changing your password.")

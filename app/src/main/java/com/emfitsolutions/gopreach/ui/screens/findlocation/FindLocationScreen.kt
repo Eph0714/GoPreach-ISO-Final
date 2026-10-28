@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.findlocation
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -307,10 +310,7 @@ fun FindLocationScreen(
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            OutlinedButton(onClick = { showSaveDialog = true }, modifier = Modifier.weight(1f)) {
-                                Icon(Icons.Rounded.Save, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
-                                Text("Save Location")
-                            }
+                            ActionButton(ActionKind.Save, onClick = { showSaveDialog = true }, label = "Save Location", modifier = Modifier.weight(1f))
                             // Attaches this coordinate to one of the signed-in
                             // Publisher's *own existing* records — meaningless
                             // for a role that owns none.
@@ -356,9 +356,7 @@ fun FindLocationScreen(
                                     destination = saved.lat to saved.lng
                                     errorText = null
                                 }) { Text("Use") }
-                                IconButton(onClick = { pendingDelete = saved }) {
-                                    Icon(Icons.Rounded.Delete, contentDescription = "Delete saved location")
-                                }
+                                ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = saved }, contentDescription = "Delete saved location")
                             }
                         }
                     }
@@ -449,13 +447,13 @@ fun FindLocationScreen(
             title = { Text("Delete Saved Location?") },
             text = { Text("This removes \"${toDelete.remarks.ifBlank { "this location" }}\" from your saved locations.") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     viewModel.deleteSavedLocation(toDelete.id)
                     showToast("Saved location deleted.")
                     pendingDelete = null
-                }) { Text("Delete") }
+                }, label = "Delete")
             },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { pendingDelete = null }, label = "Cancel") },
         )
     }
 }
@@ -568,7 +566,7 @@ private fun AssignToRecordDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -612,7 +610,7 @@ private fun SelectCongregationDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 

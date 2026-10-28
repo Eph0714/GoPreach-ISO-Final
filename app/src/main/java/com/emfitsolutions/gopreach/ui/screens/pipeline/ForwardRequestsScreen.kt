@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.screens.pipeline
 
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionIconButton
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -240,7 +243,7 @@ fun ForwardRequestsScreen(
                                     Row {
                                         TextButton(onClick = { selected = request }) { Text(if (readOnly) "View" else "Review") }
                                         if (isSuperAdmin) {
-                                            IconButton(onClick = { editingCongregationRequest = request }) { Icon(Icons.Rounded.Edit, contentDescription = "Edit") }
+                                            ActionIconButton(ActionKind.Edit, onClick = { editingCongregationRequest = request }, contentDescription = "Edit")
                                         }
                                     }
                                 }
@@ -323,16 +326,16 @@ fun ForwardRequestsScreen(
             title = { Text("Delete Forward Request Record(s)?") },
             text = { Text("Are you sure you want to delete the selected Forward Request record(s)? This action cannot be undone.") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                     requests.filter { it.id in selectedCongRequestIds }.forEach { viewModel.deleteRequest(it, currentPersonId) }
                     publisherRequests.filter { it.id in selectedPublisherRequestIds }.forEach { publisherForwardViewModel.deleteRequest(it, currentPersonId) }
                     showToast("Forward Request record(s) successfully deleted.")
                     selectedCongRequestIds = emptySet()
                     selectedPublisherRequestIds = emptySet()
                     confirmingBulkDelete = false
-                }) { Text("Yes, Delete") }
+                }, label = "Yes, Delete")
             },
-            dismissButton = { TextButton(onClick = { confirmingBulkDelete = false }) { Text("Cancel") } },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmingBulkDelete = false }, label = "Cancel") },
         )
     }
 }
@@ -369,7 +372,7 @@ private fun PublisherForwardRequestRow(
                 Text("Requested: ${formatRecordTimestamp(request.requestedAt)}", style = MaterialTheme.typography.bodySmall)
                 Text("Status: ${statusLabel(request.status)}", style = MaterialTheme.typography.bodySmall, color = statusColor(request.status))
                 if (isSuperAdmin) {
-                    IconButton(onClick = onEdit) { Icon(Icons.Rounded.Edit, contentDescription = "Edit") }
+                    ActionIconButton(ActionKind.Edit, onClick = onEdit, contentDescription = "Edit")
                 }
             }
         }
@@ -418,7 +421,7 @@ private fun ReviewForwardRequestDialog(
                     Text("Status: Pending", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.tertiary)
                 }
             },
-            confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+            confirmButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Close") },
         )
         return
     }
@@ -467,10 +470,9 @@ private fun ReviewForwardRequestDialog(
         },
         confirmButton = {
             if (!assigning) {
-                TextButton(onClick = { assigning = true }, enabled = !hasActed) { Text("Accept") }
+                ActionButton(ActionKind.Save, onClick = { assigning = true }, label = "Accept", enabled = !hasActed)
             } else {
-                TextButton(
-                    onClick = {
+                ActionButton(ActionKind.Save, onClick = {
                         val publisher = selectedPublisher
                         if (publisher != null && !hasActed) {
                             hasActed = true
@@ -478,17 +480,12 @@ private fun ReviewForwardRequestDialog(
                             onAccepted(publisher)
                             onDismiss()
                         }
-                    },
-                    enabled = selectedPublisher != null && !hasActed,
-                ) { Text("Confirm") }
+                    }, label = "Confirm", enabled = selectedPublisher != null && !hasActed)
             }
         },
         dismissButton = {
             if (!assigning) {
-                TextButton(
-                    onClick = { if (!hasActed) { hasActed = true; onDecline() } },
-                    enabled = !hasActed,
-                ) { Text("Decline") }
+                ActionButton(ActionKind.Delete, onClick = { if (!hasActed) { hasActed = true; onDecline() } }, label = "Decline", enabled = !hasActed)
             } else {
                 TextButton(onClick = { assigning = false; selectedPublisher = null }, enabled = !hasActed) { Text("Back") }
             }
@@ -572,9 +569,9 @@ private fun EditCongregationRequestDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(request.copy(personNameSnapshot = name, status = status)) }) { Text("Save") }
+            ActionButton(ActionKind.Save, onClick = { onSave(request.copy(personNameSnapshot = name, status = status)) }, label = "Save")
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }
 
@@ -617,8 +614,8 @@ private fun EditPublisherRequestDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(request.copy(personNameSnapshot = name, status = status)) }) { Text("Save") }
+            ActionButton(ActionKind.Save, onClick = { onSave(request.copy(personNameSnapshot = name, status = status)) }, label = "Save")
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
     )
 }

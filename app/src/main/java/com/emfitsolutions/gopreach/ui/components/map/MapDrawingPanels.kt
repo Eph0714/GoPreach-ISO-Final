@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.components.map
 
+import com.emfitsolutions.gopreach.ui.components.ActionKind
+import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -279,7 +281,7 @@ fun DrawingInfoPanel(
             InfoLine("Created", dateTime.format(Date(drawing.createdAt)))
             InfoLine("Last modified", dateTime.format(Date(drawing.updatedAt)) + drawing.updatedByName.takeIf { it.isNotBlank() }?.let { " by $it" }.orEmpty())
             if (syncState == DrawingSyncState.SYNC_FAILED) {
-                OutlinedButton(onClick = actions.onRetrySync, modifier = Modifier.fillMaxWidth()) { Text("Retry Sync") }
+                ActionButton(ActionKind.Refresh, onClick = actions.onRetrySync, label = "Retry Sync", modifier = Modifier.fillMaxWidth())
             }
             if (actions.canManage) {
                 HorizontalDivider()

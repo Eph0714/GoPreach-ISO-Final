@@ -93,16 +93,12 @@ fun DeleteChoiceDialog(
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("Move to Inactive") }
                     if (canPermanentlyDelete) {
-                        OutlinedButton(
-                            onClick = { showPermanentConfirm = true },
-                            enabled = !hasActed,
-                            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        ) { Text("Delete") }
+                        ActionButton(ActionKind.Delete, onClick = { showPermanentConfirm = true }, label = "Delete", enabled = !hasActed, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                     }
                 }
             },
             dismissButton = {
-                TextButton(onClick = onDismiss, enabled = !hasActed) { Text("Cancel") }
+                ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel", enabled = !hasActed)
             },
         )
     } else {

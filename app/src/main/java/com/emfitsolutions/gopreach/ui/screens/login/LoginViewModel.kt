@@ -52,6 +52,18 @@ data class LoginUiState(
     val activeSession: ActiveSessionInfo? = null,
     /** The account is signed in elsewhere and this device is waiting for that device (or an e-mail code) to approve it. */
     val approval: ApprovalUi? = null,
+    /** The password was right but the account has two-factor sign-in: the verification dialog is open. */
+    val twoFactor: TwoFactorUi? = null,
+)
+
+/** What the two-factor dialog shows: which methods this account offers, the last error, and whether an e-mail code was sent. */
+data class TwoFactorUi(
+    val totp: Boolean,
+    val recovery: Boolean,
+    val emailMasked: String?,
+    val busy: Boolean = false,
+    val error: String? = null,
+    val emailSent: Boolean = false,
 )
 
 /** What the "Waiting for approval" dialog shows. [message] is the current state in plain words; [emailMasked] is null when no code can be e-mailed. */
@@ -395,50 +407,15 @@ class LoginViewModel(
                 val result = if (online) authRepository.signIn(username, password, endOtherSession, approval) else authRepository.offlineSignIn(username, password)
                 when (result) {
                     is AuthResult.Success -> {
-                        Log.d(TAG, "Authentication result: SUCCESS")
-                        // Bug fix: a real, successful sign-in must never be
-                        // reported as a failure just because the "Remember
-                        // me" convenience write afterward hit a Keystore
-                        // error — this is a non-essential side effect of an
-                        // otherwise-complete login, so it's caught and
-                        // logged, not allowed to fall through to this
-                        // function's own catch block below and overwrite a
-                        // real success with an error message.
-                        runCatching {
-                            // A biometric sign-in leaves the Remember Login choice alone.
-                            if (viaBiometric) return@runCatching
-                            if (_uiState.value.rememberMe) {
-                                credentialStore.save(username, password)
-                                rememberedUsername = username
-                            } else {
-                                credentialStore.clearRemembered()
-                                rememberedUsername = null
-                            }
-                        }.onFailure { Log.e(TAG, "Failed to update saved credential: ${it::class.simpleName}") }
-                        // "Automatically start synchronization when... the user
-                        // logs in" — this device may have pending writes queued
-                        // from a previous session (or simply hasn't had a
-                        // connectivity transition since launch, so
-                        // SyncScheduler's own automatic triggers never fired
-                        // yet); a fresh login is a natural moment to flush
-                        // rather than waiting on the 15-minute periodic floor.
-                        syncScheduler.triggerSyncIfOnline()
-                        // After a password sign-in, offer (never silently do) biometric login — only if the
-                        // device has a biometric, it isn't already enrolled for this account, and the user
-                        // hasn't said "not now". The offer is shown from the nav graph, since the login
-                        // screen itself goes away as soon as the session is signed in.
-                        val offer = !viaBiometric && !result.requiresPasswordChange && runCatching {
-                            deviceHasBiometrics(context) &&
-                                !credentialStore.biometricOfferDeclined() &&
-                                !(credentialStore.isBiometricEnrolled() && credentialStore.biometricUsername().equals(username, ignoreCase = true))
-                        }.getOrDefault(false)
-                        if (offer) biometricEnrollmentOffer.offer(username, password)
-                        _uiState.update {
-                            it.copy(isLoading = false, signedIn = true, requiresPasswordChange = result.requiresPasswordChange)
-                        }
+                        onAuthSuccess(result, username, password, viaBiometric)
                     }
                     is AuthResult.Error -> {
                         Log.d(TAG, "Authentication result: FAILED")
+                        val challenge = result.twoFactor
+                        if (challenge != null) {
+                            beginTwoFactor(challenge, username, password, viaBiometric)
+                            return@launch
+                        }
                         if (result.activeSession != null) {
                             // Only a server-confirmed live session on another device asks first; the password is kept in memory just to repeat this sign-in.
                             pendingSignIn = PendingSignIn.Password(username, password, viaBiometric)
@@ -471,6 +448,105 @@ class LoginViewModel(
         }
     }
 
+    /** Everything that follows a successful sign-in, whether the password alone or the password and a second factor completed it. */
+    private suspend fun onAuthSuccess(result: AuthResult.Success, username: String, password: String, viaBiometric: Boolean) {
+        Log.d(TAG, "Authentication result: SUCCESS")
+        // Bug fix: a real, successful sign-in must never be
+        // reported as a failure just because the "Remember
+        // me" convenience write afterward hit a Keystore
+        // error — this is a non-essential side effect of an
+        // otherwise-complete login, so it's caught and
+        // logged, not allowed to fall through to this
+        // function's own catch block below and overwrite a
+        // real success with an error message.
+        runCatching {
+            // A biometric sign-in leaves the Remember Login choice alone.
+            if (viaBiometric) return@runCatching
+            if (_uiState.value.rememberMe) {
+                credentialStore.save(username, password)
+                rememberedUsername = username
+            } else {
+                credentialStore.clearRemembered()
+                rememberedUsername = null
+            }
+        }.onFailure { Log.e(TAG, "Failed to update saved credential: ${it::class.simpleName}") }
+        // "Automatically start synchronization when... the user
+        // logs in" — this device may have pending writes queued
+        // from a previous session (or simply hasn't had a
+        // connectivity transition since launch, so
+        // SyncScheduler's own automatic triggers never fired
+        // yet); a fresh login is a natural moment to flush
+        // rather than waiting on the 15-minute periodic floor.
+        syncScheduler.triggerSyncIfOnline()
+        // After a password sign-in, offer (never silently do) biometric login — only if the
+        // device has a biometric, it isn't already enrolled for this account, and the user
+        // hasn't said "not now". The offer is shown from the nav graph, since the login
+        // screen itself goes away as soon as the session is signed in.
+        val offer = !viaBiometric && !result.requiresPasswordChange && runCatching {
+            deviceHasBiometrics(context) &&
+                !credentialStore.biometricOfferDeclined() &&
+                !(credentialStore.isBiometricEnrolled() && credentialStore.biometricUsername().equals(username, ignoreCase = true))
+        }.getOrDefault(false)
+        if (offer) biometricEnrollmentOffer.offer(username, password)
+        _uiState.update {
+            it.copy(isLoading = false, signedIn = true, requiresPasswordChange = result.requiresPasswordChange)
+        }
+    }
+
+    // ---- Two-factor sign-in: the password was right, the account asks for a code before anything is signed in ----
+    private var twoFactorChallenge: com.emfitsolutions.gopreach.data.repository.TwoFactorChallenge? = null
+    private var twoFactorCredentials: Triple<String, String, Boolean>? = null
+
+    private fun beginTwoFactor(challenge: com.emfitsolutions.gopreach.data.repository.TwoFactorChallenge, username: String, password: String, viaBiometric: Boolean) {
+        twoFactorChallenge = challenge
+        twoFactorCredentials = Triple(username, password, viaBiometric)
+        _uiState.update { it.copy(isLoading = false, errorMessage = null, twoFactor = TwoFactorUi(challenge.totp, challenge.recovery, challenge.emailMasked)) }
+    }
+
+    /** Leaves the verification dialog; nothing was signed in, so only the typed password is forgotten. */
+    fun cancelTwoFactor() {
+        twoFactorChallenge = null
+        twoFactorCredentials = null
+        _uiState.update { it.copy(twoFactor = null, isLoading = false, password = if (passwordAutoFilled) it.password else "") }
+    }
+
+    fun sendTwoFactorEmail() {
+        val challenge = twoFactorChallenge ?: return
+        _uiState.update { s -> s.copy(twoFactor = s.twoFactor?.copy(busy = true, error = null)) }
+        viewModelScope.launch {
+            authRepository.sendTwoFactorEmailCode(challenge)
+                .onSuccess { _uiState.update { s -> s.copy(twoFactor = s.twoFactor?.copy(busy = false, emailSent = true)) } }
+                .onFailure { _uiState.update { s -> s.copy(twoFactor = s.twoFactor?.copy(busy = false, error = "A code could not be sent right now. Use your authenticator app or a recovery code.")) } }
+        }
+    }
+
+    fun verifyTwoFactor(kind: com.emfitsolutions.gopreach.data.repository.SecondFactor, code: String, trustDevice: Boolean) {
+        val challenge = twoFactorChallenge ?: return
+        val (username, password, viaBiometric) = twoFactorCredentials ?: return
+        if (code.isBlank() || _uiState.value.twoFactor?.busy == true) return
+        _uiState.update { s -> s.copy(twoFactor = s.twoFactor?.copy(busy = true, error = null)) }
+        viewModelScope.launch {
+            try {
+                when (val result = authRepository.completeTwoFactor(username, password, challenge, kind, code, trustDevice)) {
+                    is AuthResult.Success -> {
+                        twoFactorChallenge = null
+                        twoFactorCredentials = null
+                        _uiState.update { it.copy(twoFactor = null) }
+                        onAuthSuccess(result, username, password, viaBiometric)
+                    }
+                    is AuthResult.Error -> {
+                        // An expired or used-up challenge ends the dialog; a wrong code keeps it open for another try.
+                        val ended = result.message.contains("expired", ignoreCase = true)
+                        if (ended) cancelTwoFactor()
+                        _uiState.update { s -> if (ended) s.copy(errorMessage = result.message) else s.copy(twoFactor = s.twoFactor?.copy(busy = false, error = result.message)) }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Unexpected two-factor error: ${e::class.simpleName}")
+                _uiState.update { s -> s.copy(twoFactor = s.twoFactor?.copy(busy = false, error = "Something went wrong. Please try again.")) }
+            }
+        }
+    }
     fun consumeNavigationEvent() {
         _uiState.update { it.copy(signedIn = false, requiresPasswordChange = null) }
     }

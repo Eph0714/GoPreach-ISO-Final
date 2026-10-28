@@ -31,7 +31,7 @@ class MinistryTimerSessionRepository(
     fun observeAll(): Flow<List<MinistryTimerSession>> = offline.observeCollection(COLLECTION)
 
     suspend fun save(session: MinistryTimerSession): MinistryTimerSession {
-        val id = session.id.ifBlank { remote.newId(COLLECTION) }
+        val id = session.id.ifBlank { RecentCreates.idFor(COLLECTION, session) { remote.newId(COLLECTION) } }
         val withId = session.copy(id = id)
         offline.save(COLLECTION, id, withId)
         return withId
