@@ -330,24 +330,7 @@ fun FieldServiceReportScreen(
                     if (!compareMode) IconButton(onClick = { tableOnly = true }, enabled = congregationId != null && !listView) {
                         Icon(Icons.Rounded.OpenInFull, contentDescription = "View the table full screen")
                     }
-                    if (compareMode) Box {
-                        IconButton(onClick = { shareMenu = true }) { Icon(Icons.Rounded.IosShare, contentDescription = "Export and view options") }
-                        androidx.compose.material3.DropdownMenu(expanded = shareMenu, onDismissRequest = { shareMenu = false }) {
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Export to Excel") }, enabled = ready != null, leadingIcon = { Icon(Icons.Rounded.TableChart, contentDescription = null) },
-                                onClick = { shareMenu = false; ready?.let { FieldServiceReportExporter.shareExcel(context, it) } },
-                            )
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("Print / Save as PDF") }, enabled = ready != null, leadingIcon = { Icon(Icons.Rounded.PictureAsPdf, contentDescription = null) },
-                                onClick = { shareMenu = false; ready?.let { FieldServiceReportExporter.printPdf(context, it, if (compareMode && periodA != null && periodB != null) comparativeGraphHtml(periodA.label(), periodB.label(), metricsAState.map { m -> m.monthStart }, metricsBState.map { m -> m.monthStart }, fsMetrics, fsMetrics[graphIndex.coerceIn(0, fsMetrics.lastIndex)]) else null) } },
-                            )
-                            androidx.compose.material3.DropdownMenuItem(
-                                text = { Text("View the table full screen") }, enabled = congregationId != null && !compareMode && !listView,
-                                leadingIcon = { Icon(Icons.Rounded.OpenInFull, contentDescription = null) },
-                                onClick = { shareMenu = false; tableOnly = true },
-                            )
-                        }
-                    }
+                    if (compareMode) FieldServiceExportMenu(ready = ready, iconOnly = true, graphHtml = { if (compareMode && periodA != null && periodB != null) comparativeGraphHtml(periodA.label(), periodB.label(), metricsAState.map { m -> m.monthStart }, metricsBState.map { m -> m.monthStart }, fsMetrics, fsMetrics[graphIndex.coerceIn(0, fsMetrics.lastIndex)]) else null })
                 },
             )
         },
@@ -492,13 +475,8 @@ fun FieldServiceReportScreen(
                             androidx.compose.material3.FilterChip(selected = reportFilter == index, onClick = { reportFilter = index }, label = { Text("$label ($n)") })
                         }
                     }
-                    // Print / Save as PDF and Export to Excel, on the same line as the chips to save room.
-                    IconButton(onClick = { ready?.let { FieldServiceReportExporter.printPdf(context, it, null) } }, enabled = ready != null, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Print / Save as PDF", modifier = Modifier.size(22.dp))
-                    }
-                    IconButton(onClick = { ready?.let { FieldServiceReportExporter.shareExcel(context, it) } }, enabled = ready != null, modifier = Modifier.size(40.dp)) {
-                        Icon(Icons.Rounded.TableChart, contentDescription = "Export to Excel", modifier = Modifier.size(22.dp))
-                    }
+                    // One Export button (Print, PDF, Excel, Word), the same as the Ministry's.
+                    FieldServiceExportMenu(ready = ready, iconOnly = false, graphHtml = { null })
                 }
             }
             val current = searchedSheets
@@ -1069,6 +1047,35 @@ private fun CompareListView(labelA: String, itemsA: List<FieldServiceReportListI
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** The Export button of the Field Service Report: Print, PDF, Excel, Word (the same menu as the Ministry's). */
+@Composable
+private fun FieldServiceExportMenu(ready: List<FieldServiceReportSheet>?, iconOnly: Boolean, graphHtml: () -> String?) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var open by remember { mutableStateOf(false) }
+    Box {
+        if (iconOnly) com.emfitsolutions.gopreach.ui.components.ActionIconButton(com.emfitsolutions.gopreach.ui.components.ActionKind.Export, onClick = { open = true }, contentDescription = "Export", enabled = ready != null)
+        else com.emfitsolutions.gopreach.ui.components.ActionButton(com.emfitsolutions.gopreach.ui.components.ActionKind.Export, onClick = { open = true }, label = "Export", enabled = ready != null)
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            listOf("print" to "Print", "pdf" to "PDF", "excel" to "Excel", "word" to "Word").forEach { (key, label) ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        open = false
+                        ready?.let { sheets ->
+                            when (key) {
+                                "print" -> FieldServiceReportExporter.printPdf(context, sheets, graphHtml())
+                                "pdf" -> { android.widget.Toast.makeText(context, "In the print window choose \"Save as PDF\".", android.widget.Toast.LENGTH_LONG).show(); FieldServiceReportExporter.printPdf(context, sheets, graphHtml()) }
+                                "excel" -> FieldServiceReportExporter.shareExcel(context, sheets)
+                                "word" -> FieldServiceReportExporter.shareWord(context, sheets)
+                            }
+                        }
+                    },
+                )
             }
         }
     }

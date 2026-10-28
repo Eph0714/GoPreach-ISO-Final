@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 
+import com.emfitsolutions.gopreach.data.model.displayName
 import com.emfitsolutions.gopreach.ui.components.ActionKind
 import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.layout.Arrangement
@@ -101,6 +102,9 @@ fun RecordEditDialog(
     val current = existing.firstOrNull { it.publisherPersonId == publisherId && it.periodMonth == month }
     var hours by remember(publisherId) { mutableStateOf(current?.hoursRendered?.let { it.toInt().toString() } ?: "0") }
     var minutes by remember(publisherId) { mutableStateOf(current?.hoursRendered?.let { Math.round((it - it.toInt()) * 60).toInt().toString() } ?: "0") }
+    // The category for this month: the real one at first (the record's own, else the publisher's), and the person may choose another, for any month.
+    var chosenCategory by remember(publisherId) { mutableStateOf(current?.category ?: publisher?.category) }
+    val isPioneer = chosenCategory?.let { com.emfitsolutions.gopreach.domain.MonthlyReportCalculator.isPioneerCategory(it) } ?: (publisher?.isPioneer == true)
     var participated by remember(publisherId) { mutableStateOf(current?.participatedInPreaching) }
     var studies by remember(publisherId) { mutableStateOf((current?.bibleStudiesCount ?: 0).toString()) }
     var returnVisits by remember(publisherId) { mutableStateOf((current?.returnVisitsCount ?: 0).toString()) }
@@ -124,7 +128,13 @@ fun RecordEditDialog(
                     Text(publisher?.person?.fullName.orEmpty(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 }
                 if (publisher != null) {
-                    if (publisher.isPioneer) {
+                    SimpleDropdown(
+                        label = "Category for this month",
+                        selectedLabel = chosenCategory?.displayName ?: publisher.category.displayName,
+                        options = com.emfitsolutions.gopreach.data.model.PublisherCategory.entries.filter { it != com.emfitsolutions.gopreach.data.model.PublisherCategory.REMOVED_PUBLISHER }.map { it.name to it.displayName },
+                        onSelected = { chosenCategory = com.emfitsolutions.gopreach.data.model.PublisherCategory.valueOf(it) },
+                    )
+                    if (isPioneer) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             NumberBox("Hours", hours, { hours = it }, Modifier.weight(1f))
                             NumberBox("Minutes", minutes, { minutes = it }, Modifier.weight(1f))
@@ -156,8 +166,9 @@ fun RecordEditDialog(
                             ManualRecordInput(
                                 publisherPersonId = p.person.id, month = month,
                                 hours = hours.toIntOrNull() ?: 0, minutes = minutes.toIntOrNull() ?: 0,
-                                participated = if (p.isPioneer) null else participated,
+                                participated = if (isPioneer) null else participated,
                                 bibleStudies = studies.toIntOrNull() ?: 0, remarks = remarks, returnVisits = returnVisits.toIntOrNull() ?: 0,
+                                category = chosenCategory,
                             ),
                             congregationId, actorRole, actorPersonId, scopeGroupId,
                         )

@@ -341,6 +341,40 @@ object FieldServiceReportExporter {
         context.startActivity(Intent.createChooser(intent, "Share Field Service Report"))
     }
 
+    /** The sheets as one table (Group, No., Status, Name, Reports, Hours, Bible Studies, Remarks) with the totals per status as the closing summary: what the Word copy is built from. */
+    fun wordData(sheets: List<FieldServiceReportSheet>): com.emfitsolutions.gopreach.data.export.TableReportData {
+        val first = sheets.firstOrNull()
+        val table = buildList {
+            add(listOf("Group", "No.", "Status", "Name", "Reports", "Hours", "Bible Studies", "Remarks"))
+            sheets.forEach { sheet ->
+                sheet.rows.forEach { r ->
+                    add(listOf(sheet.groupName, r.number.toString(), r.status.label, r.name, r.reportsCount.toString(), r.hours?.let { formatHours(it) } ?: "", r.bibleStudies?.toString() ?: "", r.remarks))
+                }
+            }
+        }
+        val summary = buildList {
+            add(listOf("Metric", "Value"))
+            add(listOf("Total Publishers", sheets.sumOf { it.publisherCount }.toString()))
+            add(listOf("Participated", sheets.sumOf { it.participatedCount }.toString()))
+            add(listOf("Total Reports", sheets.sumOf { s -> s.rows.sumOf { it.reportsCount } }.toString()))
+            add(listOf("Total Hours", formatHours(sheets.sumOf { s -> s.rows.sumOf { it.hours ?: 0.0 } })))
+            add(listOf("Total Bible Studies", sheets.sumOf { s -> s.rows.sumOf { it.bibleStudies ?: 0 } }.toString()))
+        }
+        return com.emfitsolutions.gopreach.data.export.TableReportData(
+            title = "Field Service Report",
+            details = listOf("Groups" to (if (sheets.size == 1) sheets[0].groupName else "All FS Groups"), (if (first?.isRange == true) "Period" else "Month") to first?.monthLabel.orEmpty()),
+            recordsFound = table.size.minus(1).toString(),
+            table = table,
+            summary = summary,
+            generatedBy = "",
+            generatedAt = java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(java.util.Date()),
+            landscape = true,
+        )
+    }
+
+    /** A Word (.docx) copy of the report, handed to the share sheet. */
+    fun shareWord(context: Context, sheets: List<FieldServiceReportSheet>) =
+        com.emfitsolutions.gopreach.data.export.TableReportExporter.shareWord(context, wordData(sheets))
     /** Print / Save as PDF through the system print dialog, in the same layout (a page per group). */
     fun printPdf(context: Context, sheets: List<FieldServiceReportSheet>, graphHtml: String? = null, footerHtml: String? = null) =
         ReportPrinter.printHtml(

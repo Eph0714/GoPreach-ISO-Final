@@ -54,7 +54,7 @@ data class ManualRecordInput(
     val remarks: String,
     /** Null keeps whatever the record already holds (the Manual form has no such field). */
     val returnVisits: Int? = null,
-    /** The status the publisher had IN [month], chosen by the admin for a previous month. Null = the record's own / the publisher's current status. */
+    /** The category the publisher had IN [month], chosen for ANY month (the current one too). Null = the record's own / the publisher's current status. */
     val category: PublisherCategory? = null,
 )
 
@@ -129,8 +129,8 @@ class ManualFieldServiceViewModel(
         if (input.bibleStudies < 0) return "Bible Studies cannot be negative."
         val existing = monthlyReportRepository.observeAll().first()
             .firstOrNull { it.publisherPersonId == publisher.person.id && MonthBounds.of(it.periodMonth).startInclusive == monthStart }
-        // A previous month may be recorded under the status the publisher had then; the current month always uses the current status.
-        val chosen = input.category?.takeIf { isPreviousMonth(monthStart) && it != PublisherCategory.REMOVED_PUBLISHER }
+        // Any month, the current one included, may be recorded under a category the person chooses; without a choice it is the record's own, else the publisher's real one.
+        val chosen = input.category?.takeIf { it != PublisherCategory.REMOVED_PUBLISHER }
         val category = chosen ?: existing?.category ?: publisher.category
         val isPioneer = isPioneerCategory(category)
         if (isPioneer) {
