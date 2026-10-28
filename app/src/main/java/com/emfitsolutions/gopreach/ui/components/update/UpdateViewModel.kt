@@ -130,6 +130,13 @@ class UpdateViewModel(
      * it. */
     fun checkOnLogin() = maybeAutoCheck()
 
+    /** The sign-in form just showed up (a fresh launch, a sign-out, a session the server ended): look for a newer release right now, whatever the 15-minute throttle says. */
+    fun checkWhenLoginShows() {
+        if (_state.value == UpdateCheckState.Checking) return
+        lastAutoCheckAtMillis = System.currentTimeMillis()
+        check(silent = true)
+    }
+
     /** Called from Settings' "Check for Updates" — always shows a result,
      * including the explicit "GoPreach is up to date" message, and ignores
      * any "Remind Me Later" snooze in effect (the user asked directly). */

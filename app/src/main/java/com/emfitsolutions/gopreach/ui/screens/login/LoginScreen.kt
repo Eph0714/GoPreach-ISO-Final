@@ -116,6 +116,9 @@ fun LoginScreen(
     // doesn't spin up a second, unobserved one.
     val updateViewModel: UpdateViewModel = koinViewModel(viewModelStoreOwner = activity)
 
+    // The sign-in form showing up is itself a moment to look for an update (the person may have been away or signed out for a long time).
+    LaunchedEffect(Unit) { updateViewModel.checkWhenLoginShows() }
+
     LaunchedEffect(uiState.signedIn) {
         if (uiState.signedIn) {
             updateViewModel.checkOnLogin()

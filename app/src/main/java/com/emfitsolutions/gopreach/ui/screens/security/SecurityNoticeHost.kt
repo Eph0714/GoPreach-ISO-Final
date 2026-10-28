@@ -69,6 +69,12 @@ class SecurityNoticeViewModel(private val security: SecurityService, userSession
         _notices.value = unseen
     }
 
+    /** Signed out: nothing of the last session is shown on the sign-in form. */
+    fun clearAll() {
+        _notices.value = emptyList()
+        _requests.value = emptyList()
+    }
+
     fun dismiss() {
         dismissed += _notices.value.map { it.id }
         _notices.value = emptyList()
@@ -105,6 +111,8 @@ fun SecurityNoticeHost(onReview: () -> Unit = { SecurityNav.open?.invoke() }, vi
             delay(8_000)
         }
     }
+    LaunchedEffect(signedIn) { if (!signedIn) viewModel.clearAll() }
+    if (!signedIn) return
     requests.firstOrNull()?.let { r ->
         AlertDialog(
             onDismissRequest = { },
@@ -122,7 +130,8 @@ fun SecurityNoticeHost(onReview: () -> Unit = { SecurityNav.open?.invoke() }, vi
         )
         return
     }
-    if (notices.isEmpty()) return    AlertDialog(
+    if (notices.isEmpty()) return
+    AlertDialog(
         onDismissRequest = viewModel::dismiss,
         title = { Text("Security notice") },
         text = {
