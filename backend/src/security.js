@@ -149,6 +149,20 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
     return (await store.secList('trusted', personId)).filter((t) => !t.data.revokedAt && t.data.expiresAt > Date.now());
   }
 
+  // ---- new-device approval (opt-in per account) --------------------------------------------------------------------------------------------------------------------
+  /** Whether this account asks for approval of a device it has not trusted yet (the account holder turns it on in Security & Devices). */
+  const approvalRequired = async (personId) => !!(await a2fa(personId)).deviceApproval?.enabled;
+
+  /** A device is trusted only by the credential it keeps (the server keeps its hash), tied to the device id, not revoked, not expired: never by its name, address or user agent. */
+  async function deviceIsTrusted(personId, trustedToken, info) {
+    if (typeof trustedToken !== 'string' || trustedToken.length < 20 || trustedToken.length > 200) return false;
+    const t = await store.secGet('trusted', sha256(trustedToken));
+    if (!t || t.personId !== personId || t.data.revokedAt || t.data.expiresAt <= Date.now()) return false;
+    if (t.data.deviceId && info?.deviceId && t.data.deviceId !== info.deviceId) return false;
+    await store.secPut('trusted', t.id, personId, { ...t.data, lastUsedAt: Date.now() });
+    return true;
+  }
+
   /** A device session is created ONLY after the sign-in is complete (password, and the second factor when the account has one). */
   async function createSession(personId, info, ip, authMethod) {
     const sessionId = newId();
@@ -301,7 +315,29 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
       },
       emailAvailable: !!mailer, trustedDays,
       trustedDevices: (await trustedFor(req.personId)).length,
+      deviceApproval: !!s.deviceApproval?.enabled,
     });
+  });
+
+  /**
+   * Turns "approve new devices" on or off (a recent sign-in is needed). Turning it on trusts THIS device (it returns that device's credential once), so the account can still
+   * approve the next one; with no trusted device left a new device can only be settled by an e-mail code or a passkey (see loginApproval.js).
+   */
+  app.post('/v1/security/device-approval', enabled, auth, actLimit, async (req, res) => {
+    if (needRecent(req, res)) return;
+    try {
+      const on = req.body?.enabled === true;
+      const s = await a2fa(req.personId);
+      await saveA2fa(req.personId, { ...s, deviceApproval: { enabled: on, at: Date.now() } });
+      await event(req.personId, on ? 'DEVICE_APPROVAL_ON' : 'DEVICE_APPROVAL_OFF', { sessionId: req.sessionId ?? null, notify: true, by: req.personId });
+      if (!on) return res.json({ ok: true, enabled: false });
+      const ds = await store.secGet('dsession', req.sessionId ?? '');
+      const trust = ds && ds.personId === req.personId ? await trustDevice(req.personId, { ...ds.data, sessionId: ds.id }) : {};
+      res.json({ ok: true, enabled: true, ...trust });
+    } catch (e) {
+      console.error('device approval setting failed', e);
+      res.status(500).json({ error: 'Server error' });
+    }
   });
 
   app.post('/v1/security/2fa/totp/setup', enabled, auth, actLimit, async (req, res) => {
@@ -565,7 +601,7 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
   });
 
   return {
-    gate, createSession, event, deviceInfo,
+    gate, createSession, event, deviceInfo, approvalRequired, deviceIsTrusted,
     /** The account's password changed: every other session ends and no trusted device stays trusted. */
     async onPasswordChanged(personId, keepSessionId) {
       const n = await revokeMany(personId, { except: keepSessionId ?? null, by: 'system', reason: 'password-changed' });

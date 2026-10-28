@@ -419,3 +419,109 @@ test('new devices are announced to the account; older apps that send only a labe
     assert.ok(list.devices.some((d) => d.name === 'GoPreach Web (Chrome on Windows)'));
   } finally { w.close(); }
 });
+
+// ---- new-device approval (opt-in) ---------------------------------------------------------------------------------------------------------------------------------
+
+const dev = (id, name = `${id} device`) => ({ id, name, type: 'phone', os: 'Android', osVersion: '14', appVersion: '1.165.0' });
+
+test('device approval: a new device waits for an approval from one of the account own devices; the password alone opens nothing', async () => {
+  const w = await world();
+  try {
+    const first = await w.signIn('ana001', dev('dev-1', 'Ana phone'));
+    const on = await (await w.post('/v1/security/device-approval', { enabled: true }, first.accessToken)).json();
+    assert.equal(on.enabled, true);
+    assert.ok(on.trustedToken, 'this device became the trusted one');
+    assert.equal((await (await w.get('/v1/security/status', first.accessToken)).json()).deviceApproval, true);
+
+    // the trusted device signs in again without being asked
+    const again = await (await w.login('ana001', { device: dev('dev-1', 'Ana phone'), trustedToken: on.trustedToken })).json();
+    assert.ok(again.accessToken, 'a trusted device signs in at once');
+
+    // a new device: the right password gets a request and NO tokens
+    const attempt = await w.login('ana001', { device: dev('dev-2', 'New tablet') });
+    assert.equal(attempt.status, 409);
+    const req = await attempt.json();
+    assert.equal(req.error, 'session-active');
+    assert.ok(req.requestId && req.pollToken && req.expiresAt > Date.now());
+    assert.equal(req.accessToken, undefined);
+    assert.equal(req.refreshToken, undefined);
+    assert.equal((await (await w.post('/v1/auth/login-requests/status', { requestId: req.requestId, pollToken: req.pollToken })).json()).status, 'pending');
+    // still pending: repeating the sign-in with the unapproved request opens nothing (it just asks again: the newest request is the one that counts)
+    const retry = await w.login('ana001', { device: dev('dev-2'), approval: { requestId: req.requestId, pollToken: req.pollToken } });
+    assert.equal(retry.status, 409);
+    const req0 = { ...req };
+    Object.assign(req, await retry.json());
+    assert.notEqual(req.requestId, req0.requestId);
+    assert.equal((await (await w.post('/v1/auth/login-requests/status', { requestId: req0.requestId, pollToken: req0.pollToken })).json()).status, 'expired', 'the older request is superseded');
+
+    // somebody else's account cannot decide it; a wrong poll token reads nothing
+    const ben = await w.signIn('ben001');
+    assert.equal((await w.post(`/v1/auth/login-requests/${req.requestId}/approve`, {}, ben.accessToken)).status, 404, 'another account cannot approve');
+    assert.equal((await (await w.post('/v1/auth/login-requests/status', { requestId: req.requestId, pollToken: 'x'.repeat(30) })).json()).status, 'expired');
+
+    // the account own device sees it and approves exactly that request
+    const pending = await (await w.get('/v1/auth/login-requests', first.accessToken)).json();
+    assert.equal(pending.requests.length, 1);
+    assert.equal(pending.requests[0].id, req.requestId);
+    assert.equal((await w.post(`/v1/auth/login-requests/${req.requestId}/approve`, {}, first.accessToken)).status, 200);
+    assert.equal((await w.post(`/v1/auth/login-requests/${req.requestId}/approve`, {}, first.accessToken)).status, 409, 'decided only once');
+
+    const done = await w.login('ana001', { device: dev('dev-2', 'New tablet'), approval: { requestId: req.requestId, pollToken: req.pollToken } });
+    assert.equal(done.status, 200);
+    assert.ok((await done.json()).accessToken, 'approved: the session is issued');
+    // the approval is spent: replaying it asks again
+    assert.equal((await w.login('ana001', { device: dev('dev-2', 'New tablet'), approval: { requestId: req.requestId, pollToken: req.pollToken } })).status, 409);
+
+    const types = (await (await w.get('/v1/security/events', first.accessToken)).json()).events.map((e) => e.type);
+    for (const t of ['DEVICE_APPROVAL_ON', 'LOGIN_APPROVAL_REQUESTED', 'LOGIN_APPROVAL_APPROVED', 'LOGIN_APPROVAL_USED']) assert.ok(types.includes(t), t);
+  } finally { w.close(); }
+});
+
+test('device approval: a rejected or expired request opens nothing; a revoked trusted device needs approval again; turning it off lifts the gate', async () => {
+  const w = await world();
+  try {
+    const first = await w.signIn('ana001', dev('dev-1', 'Ana phone'));
+    const on = await (await w.post('/v1/security/device-approval', { enabled: true }, first.accessToken)).json();
+
+    const r1 = await (await w.login('ana001', { device: dev('dev-3') })).json();
+    assert.equal((await w.post(`/v1/auth/login-requests/${r1.requestId}/deny`, {}, first.accessToken)).status, 200);
+    assert.equal((await (await w.post('/v1/auth/login-requests/status', { requestId: r1.requestId, pollToken: r1.pollToken })).json()).status, 'denied');
+    assert.equal((await w.login('ana001', { device: dev('dev-3'), approval: { requestId: r1.requestId, pollToken: r1.pollToken } })).status, 409, 'rejected: no session');
+
+    const r2 = await (await w.login('ana001', { device: dev('dev-4') })).json();
+    const stored = await w.st.getChallenge(r2.requestId);
+    await w.st.putChallenge(r2.requestId, { ...stored, expiresAt: Date.now() - 1000 });
+    assert.equal((await (await w.post('/v1/auth/login-requests/status', { requestId: r2.requestId, pollToken: r2.pollToken })).json()).status, 'expired');
+    assert.equal((await w.login('ana001', { device: dev('dev-4'), approval: { requestId: r2.requestId, pollToken: r2.pollToken } })).status, 409, 'expired: no session');
+
+    // the trusted device is removed: it is new again
+    const list = await w.st.secList('trusted', 'ana001');
+    assert.ok(list.length >= 1);
+    await w.post(`/v1/security/trusted/${list[0].id}/remove`, {}, first.accessToken);
+    assert.equal((await w.login('ana001', { device: dev('dev-1', 'Ana phone'), trustedToken: on.trustedToken })).status, 409, 'a revoked device needs approval again');
+
+    // off: devices sign in without asking again
+    assert.equal((await (await w.post('/v1/security/device-approval', { enabled: false }, first.accessToken)).json()).enabled, false);
+    assert.equal((await w.login('ana001', { device: dev('dev-9') })).status, 200);
+  } finally { w.close(); }
+});
+
+test('device approval: the e-mail code settles a request when no device is at hand, and a stranger flooding requests is stopped', async () => {
+  const w = await world();
+  try {
+    await w.st.transaction((tx) => tx.put('people', 'ana001', person({ username: 'ana', email: 'ana@example.org' }), 'seed'));
+    const first = await w.signIn('ana001', dev('dev-1'));
+    await w.post('/v1/security/device-approval', { enabled: true }, first.accessToken);
+    const r = await (await w.login('ana001', { device: dev('dev-5', 'Borrowed laptop') })).json();
+    assert.ok(w.sent.some((m) => m.to === 'ana@example.org' && /new device/i.test(m.subject)), 'the owner is told by e-mail');
+    assert.ok(!w.sent.some((m) => m.text.includes(r.pollToken)), 'no secret is e-mailed');
+    assert.equal((await w.post('/v1/auth/login-requests/email-code', { requestId: r.requestId, pollToken: r.pollToken })).status, 200);
+    const code = /\b(\d{6})\b/.exec(w.sent.at(-1).text)[1];
+    assert.equal((await w.post('/v1/auth/login-requests/email-verify', { requestId: r.requestId, pollToken: r.pollToken, code })).status, 200);
+    assert.equal((await w.login('ana001', { device: dev('dev-5'), approval: { requestId: r.requestId, pollToken: r.pollToken } })).status, 200);
+    // flooding: at most 5 requests in 15 minutes
+    let last = 0;
+    for (let i = 0; i < 8; i += 1) last = (await w.login('ana001', { device: dev(`flood-${i}`) })).status;
+    assert.equal(last, 429);
+  } finally { w.close(); }
+});

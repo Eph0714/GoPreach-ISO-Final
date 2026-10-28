@@ -69,7 +69,10 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
 
   const sec = mountSecurity(app, { store, auth, enabled, mailer, issue, secret, limits: limits.security });
   // Older apps still ask for login requests: there are none any more (devices no longer queue behind one session), so they simply see an empty list.
-  mountLoginApproval(app, { store, auth, enabled, mailer, limits: limits.approval, requestMs: loginRequestMs });
+  const approvals = mountLoginApproval(app, {
+    store, auth, enabled, mailer, limits: limits.approval, requestMs: loginRequestMs,
+    onDecision: (personId, type, c, req) => sec.event(personId, type, { result: type.endsWith('APPROVED') ? 'success' : 'rejected', notify: true, by: req?.personId ?? personId, meta: { device: c.data.device?.name ?? c.data.device ?? null, ip: c.data.ip ?? null, requestId: c.id, via: c.data.approvedBy ?? 'device' } }),
+  });
 
   mountPasskeys(app, { store, auth, enabled, loginLimit, issue, startSession, refuseActive, passkeyConfig: limits.passkey ?? config.passkey });
 
@@ -82,7 +85,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
   }
 
   app.post('/v1/auth/login', enabled, sprayLimit, loginLimit, async (req, res) => {
-    const { email, password, device, trustedToken } = req.body ?? {};
+    const { email, password, device, trustedToken, approval } = req.body ?? {};
     const personId = personIdFromEmail(email);
     if (!personId || typeof password !== 'string' || password.length === 0 || password.length > 200) return res.status(401).json({ error: 'invalid-credentials' });
     try {
@@ -95,6 +98,21 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       }
       accountFails.delete(personId);
       await store.touchLogin(personId);
+      // An account that asks for approval of new devices: a device it has not trusted gets a login request, and NOTHING is issued (no session, no tokens) until the request is
+      // approved by one of the account's own signed-in devices or settled by an e-mail code; the approval is spent here, once. A correct password alone never opens it.
+      if (await sec.approvalRequired(personId)) {
+        const info = sec.deviceInfo(device);
+        if (!(await sec.deviceIsTrusted(personId, trustedToken, info))) {
+          const approved = approval && typeof approval === 'object' ? await approvals.redeem(personId, approval) : false;
+          if (!approved) {
+            const request = await approvals.createRequest(personId, { device: info.name, lastActiveAt: null }, { device: info, ip: req.ip });
+            if (request.tooMany) return res.status(429).json({ error: 'too-many-requests' });
+            await sec.event(personId, 'LOGIN_APPROVAL_REQUESTED', { result: 'pending', deviceId: info.deviceId, notify: true, meta: { device: info.name, os: info.os, ip: request.ip ?? null, requestId: request.requestId, expiresAt: request.expiresAt } });
+            return res.status(409).json({ error: 'session-active', ...request });
+          }
+          await sec.event(personId, 'LOGIN_APPROVAL_USED', { deviceId: info.deviceId, meta: { device: info.name } });
+        }
+      }
       // The password is right. An account with two-factor sign-in answers 202 and the device must prove the second factor (a trusted device may skip it); nothing else is
       // issued before that. Without 2FA the sign-in completes. Either way ANY number of devices may be signed in; each one is a session the account holder can end.
       const gate = await sec.gate(personId, { device, ip: req.ip, trustedToken });

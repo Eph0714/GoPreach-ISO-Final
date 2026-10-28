@@ -1,7 +1,7 @@
 import { isWide, isSlotHolder, ok, deny } from './index.js';
 
 /**
- * Server-side port of the drawing rules in firestore.rules (User Role → Congregation → FS Group → Territory):
+ * Server-side port of the drawing rules in docs/legacy-firebase/firestore.rules (User Role → Congregation → FS Group → Territory):
  *   - Super Admin / Admin / Coordinator Elder / Service Overseer / Secretary of the drawing's congregation: anywhere on
  *     that congregation's map, including areas no FS Group has claimed (territoryId '').
  *   - Group Overseer / Servant / Assistant: only their own FS Group's territory — and the drawing's bounding box must sit

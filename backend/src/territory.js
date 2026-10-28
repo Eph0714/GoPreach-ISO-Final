@@ -11,7 +11,7 @@ import { isWide } from './policy/index.js';
  * silent overwrite.
  *
  * Who may call: Super Admin, or Admin / Coordinator Elder / Service Overseer / Secretary of that congregation (the same set
- * firestore.rules `canManageTerritoryAssignmentsFor` allows).
+ * docs/legacy-firebase/firestore.rules `canManageTerritoryAssignmentsFor` allows).
  *
  * Every function takes the open transaction `tx` and returns a plain result object; the HTTP layer maps `status` to a code.
  */

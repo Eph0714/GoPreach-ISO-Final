@@ -2,7 +2,7 @@ import { congregationOf } from '../store.js';
 import { authorizeRulesWrite, canReadDoc, loadGrant, grantAllows } from './rules.js';
 import { authorizeDrawingWrite, authorizeAuditWrite, authorizeBoundsWrite } from './drawings.js';
 
-/** Roles that may manage a congregation's territory (same set as firestore.rules `canManageTerritoryAssignmentsFor`). */
+/** Roles that may manage a congregation's territory (same set as docs/legacy-firebase/firestore.rules `canManageTerritoryAssignmentsFor`). */
 export const CONGREGATION_WIDE_ROLES = ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY'];
 
 /**
@@ -63,7 +63,7 @@ const DRAWING_COLLECTIONS = new Set(['territoryDrawings', 'territoryDrawingAudit
 
 /**
  * READ: may [actor] receive this stored row in a pull? The three drawing collections keep their own (stricter, tested)
- * read rules; every other collection follows firestore.rules via rules.js. `grant` comes from loadGrant().
+ * read rules; every other collection follows docs/legacy-firebase/firestore.rules via rules.js. `grant` comes from loadGrant().
  */
 export async function canReadRow(actor, grant, row, get) {
   if (!actor.known) return false;
@@ -82,7 +82,7 @@ function canReadDrawing(actor, grant, collection, data) {
 
 /**
  * WRITE: returns { ok: true } or { ok: false, reason }. `existing` is the stored row (tombstones included) or null.
- * Drawings use drawings.js; every other collection is the port of firestore.rules in rules.js.
+ * Drawings use drawings.js; every other collection is the port of docs/legacy-firebase/firestore.rules in rules.js.
  */
 export async function authorizeWrite(actor, op, collection, id, data, existing, get) {
   if (!actor.known) return deny('Unknown user');

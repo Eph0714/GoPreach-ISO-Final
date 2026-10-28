@@ -32,10 +32,10 @@ server's own format at their first sign-in (`scripts/import-auth.js`, `FIREBASE_
 
 ## Authorization
 
-`src/policy/` is the server-side port of `firestore.rules`.
+`src/policy/` is the server-side port of `docs/legacy-firebase/firestore.rules`.
 
 * **Drawings** (`territoryDrawings`, `territoryDrawingAudits`, `territoryBounds`): `drawings.js`, role → congregation → FS Group → territory, bounding box for group-level users, append-only audits.
-* **Every other collection**: `rules.js`, a faithful port of each `allow` in `firestore.rules` (people, userAccessGrants, congregations, groups,
+* **Every other collection**: `rules.js`, a faithful port of each `allow` in `docs/legacy-firebase/firestore.rules` (people, userAccessGrants, congregations, groups,
   roleAssignments, monthlyReports, owner-only planner / Bible text / credit hours / timer records, groupChats and messages,
   interestedPeople and visits, presence, dashboardModuleLayouts, deletedRecords, mapPins, territory assignments,
   creditHourCategories, appSettings, preachingTimeRecords, and the plain signed-in collections). `test/rules.test.js` has a test per rule.

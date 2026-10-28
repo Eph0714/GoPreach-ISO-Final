@@ -55,7 +55,7 @@ before(async () => {
 
 async function write(who, op, collection, id, data) {
   return store.transaction(async (tx) => {
-    const actor = await loadActor(who, tx.get);
+    const actor = await loadActor(who, tx.get, (c, cong) => store.list(c, cong));   // the same lister the push endpoint gives it
     const existing = await tx.get(collection, id);
     const verdict = await authorizeWrite(actor, op, collection, id, data, existing, tx.get);
     return verdict.ok;
@@ -325,6 +325,11 @@ test('FS Group chat: the Overseer / Servant / Assistant of a group manage that g
   await put('people', 'grpElderN', person('REGULAR_ELDER', 'congA', { activeGroupId: 'gN' }));
   await put('groups', 'gM', { congregationId: 'congA', servantPersonId: 'msSlot', status: 'ACTIVE' });
   await put('groups', 'gN', { congregationId: 'congA', overseerPersonId: 'grpElderN', status: 'ACTIVE' });
+  // who really belongs to which group comes from the role assignments (the database), never from the request
+  await put('roleAssignments', 'gm-pubA', { personId: 'pubA', congregationId: 'congA', groupId: 'gM', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
+  await put('roleAssignments', 'gm-pubA2', { personId: 'pubA2', congregationId: 'congA', groupId: 'gM', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
+  await put('people', 'pubN', person(null));
+  await put('roleAssignments', 'gn-pubN', { personId: 'pubN', congregationId: 'congA', groupId: 'gN', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
   const mine = { congregationId: 'congA', fsGroupId: 'gM', groupName: 'FS Group M', participantIds: ['pubA'] };
   assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', mine), true, 'creates the chat of its own group under the group\'s fixed id');
   assert.equal(await set('msSlot', 'groupChats', 'chatX', { ...mine }), false, 'any other id would be a second room for the group');
@@ -333,7 +338,10 @@ test('FS Group chat: the Overseer / Servant / Assistant of a group manage that g
   await put('groupChats', 'fsg_gM', mine);   // (the checks above only ask the rules; this stores it)
   assert.equal(await reads('msSlot', 'groupChats', 'fsg_gM'), true, 'reads it without being a participant');
   assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubA2'] }), true, 'adds a member of the congregation');
-  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubA2', 'newbie'] }), true, 'a person who has no congregation yet may be added');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubA2', 'newbie'] }), false, 'a person who belongs to no FS Group is not a member of this one');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubN'] }), false, 'someone of ANOTHER FS Group of the same congregation');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'msSlot'] }), true, 'the group\'s own Servant may be in it');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gMnew', { ...mine, participantIds: ['pubN'] }), false, 'creating: another group\'s member, wrong id as well');
   assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubB'] }), false, 'a person of another congregation');
   assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA'], groupName: 'Renamed' }), true, 'removes a member and renames');
   assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, fsGroupId: 'gN' }), false, 'cannot hand the chat to another group');
@@ -765,4 +773,35 @@ test('a record waiting to be transferred is readable by the receiving congregati
   assert.equal(await read('nosy'), false, 'a third congregation');
   await seed('forwardRequests', 'fr1', { interestedPersonId: 'ip1', fromCongregationId: 'congA', toCongregationId: 'congB', status: 'ACCEPTED' });
   assert.equal(await read('so'), false, 'once answered it is no longer exposed this way');
+});
+
+test('group chats of a whole congregation: Admin, Coordinator Elder, Service Overseer and Secretary, held as an active OR an assigned role; members of that congregation only', async () => {
+  await put('people', 'secA', person('SECRETARY'));
+  await put('people', 'multiA', person('REGULAR_ELDER'));   // active role is a plain elder; the Secretary role is assigned too
+  await put('roleAssignments', 'ra-multi-sec', { personId: 'multiA', congregationId: 'congA', roleType: 'ADMIN:SECRETARY', status: 'ACTIVE' });
+  const chat = (ids, extra = {}) => ({ congregationId: 'congA', groupName: 'All', participantIds: ids, ...extra });
+  for (const who of ['adminA', 'coordA', 'soA', 'secA', 'multiA']) {
+    assert.equal(await set(who, 'groupChats', 'wide-' + who, chat(['pubA', 'pubN'])), true, `${who} creates a chat with members of several FS Groups`);
+  }
+  assert.equal(await set('elderA', 'groupChats', 'wide-elder', chat(['pubA'])), false, 'a Regular Elder alone does not');
+  assert.equal(await set('adminA', 'groupChats', 'wide-x', chat(['pubA', 'pubB'])), false, 'a member of another congregation is refused');
+  assert.equal(await set('soA', 'groupChats', 'wide-y', chat(['pubB'])), false);
+  assert.equal(await set('adminB', 'groupChats', 'wide-z', chat(['pubA'])), false, 'another congregation\'s manager');
+  await put('groupChats', 'wide-up', chat(['pubA']));
+  assert.equal(await set('secA', 'groupChats', 'wide-up', chat(['pubA', 'pubA2'])), true, 'adds a member of the congregation later');
+  assert.equal(await set('secA', 'groupChats', 'wide-up', chat(['pubA', 'pubB'])), false, 'but not one of another congregation, even by editing');
+});
+
+test('Field Service Record: the Assistant of an FS Group (an ordinary publisher) writes reports of THAT group\'s publishers only; nobody else, nothing across groups', async () => {
+  await put('people', 'asstQ', person(null, 'congA', { activeGroupId: 'gQ' }));
+  await put('people', 'pubQ', person(null));
+  await put('groups', 'gQ', { congregationId: 'congA', assistantPersonId: 'asstQ', status: 'ACTIVE' });
+  await put('roleAssignments', 'raQ', { personId: 'pubQ', congregationId: 'congA', groupId: 'gQ', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
+  const rec = (who, ra, extra = {}) => ({ congregationId: 'congA', publisherPersonId: who, periodMonth: 1710000000000, status: 'SUBMITTED', source: 'MANUAL', groupRoleAssignmentId: ra, ...extra });
+  assert.equal(await set('asstQ', 'monthlyReports', 'q1', rec('pubQ', 'raQ')), true, 'a publisher of its own group');
+  assert.equal(await set('asstQ', 'monthlyReports', 'q2', rec('pubA', 'ra1')), false, 'a publisher of another group (changing the member and the assignment)');
+  assert.equal(await set('asstQ', 'monthlyReports', 'q3', rec('pubA', 'raQ')), false, 'another member under this group\'s assignment');
+  assert.equal(await set('asstQ', 'monthlyReports', 'q4', rec('pubQ', 'raQ', { congregationId: 'congB' })), false, 'another congregation');
+  assert.equal(await set('pubA2', 'monthlyReports', 'q5', rec('pubQ', 'raQ')), false, 'an ordinary publisher of the same congregation');
+  assert.equal(await set('adminA', 'monthlyReports', 'q6', rec('pubQ', 'raQ')), true, 'the Admin keeps full access');
 });

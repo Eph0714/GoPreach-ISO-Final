@@ -61,7 +61,7 @@ export function smtpMailer(mail = config.mail) {
   };
 }
 
-export function mountLoginApproval(app, { store, auth, enabled, mailer = null, limits = {}, requestMs = LOGIN_REQUEST_MS }) {
+export function mountLoginApproval(app, { store, auth, enabled, mailer = null, limits = {}, requestMs = LOGIN_REQUEST_MS, onDecision = null }) {
   const statusLimit = rateLimit({ windowMs: 60_000, max: 90, key: (req) => req.ip, ...limits.status });
   const codeLimit = rateLimit({ windowMs: 10 * 60_000, max: 12, key: (req) => `${req.ip}|${String(req.body?.requestId ?? '').slice(0, 64)}`, ...limits.code });
   const made = new Map(); // personId -> recent request times (so a stranger who knows the password cannot flood the owner's phone)
@@ -87,8 +87,13 @@ export function mountLoginApproval(app, { store, auth, enabled, mailer = null, l
       personId, kind: 'loginreq', expiresAt,
       data: { status: 'pending', device: device ?? null, ip: maskIp(ip), createdAt: Date.now(), pollHash: sha256(pollToken), email, codeHash: null, codeSentAt: 0, codesSent: 0, tries: 0 },
     });
+    // The owner is told by e-mail too (never a token or a link that approves anything: approving needs one of the account's own signed-in devices).
+    if (email && mailer) {
+      const who = device?.name ?? device ?? 'a new device';
+      mailer.send(email, 'GoPreach: a new device is trying to sign in', `Someone entered your GoPreach password on ${who}. Approve or reject it from a device that is already signed in, within ${Math.round(requestMs / 60000)} minutes. If this was not you, do not approve it and change your password.`).catch((e) => console.error('approval e-mail failed', e?.message));
+    }
     return {
-      requestId: id, pollToken, expiresAt,
+      requestId: id, ip: maskIp(ip), pollToken, expiresAt,
       methods: { device: true, email: email ? { masked: maskEmail(email) } : null },
       device: active.device ?? null, lastActiveAt: active.lastActiveAt,
     };
@@ -126,6 +131,7 @@ export function mountLoginApproval(app, { store, auth, enabled, mailer = null, l
     if (!c || c.kind !== 'loginreq' || c.personId !== req.personId) return res.status(404).json({ error: 'not-found' });
     if (c.data.status !== 'pending') return res.status(409).json({ error: 'not-pending', status: c.data.status });
     await store.putChallenge(c.id, { ...c, data: { ...c.data, status, decidedAt: Date.now() } });
+    if (onDecision) await Promise.resolve(onDecision(c.personId, status === 'approved' ? 'LOGIN_APPROVAL_APPROVED' : 'LOGIN_APPROVAL_REJECTED', c, req)).catch(() => {});
     res.json({ ok: true, status });
   };
   app.post('/v1/auth/login-requests/:id/approve', enabled, auth, decide('approved'));
@@ -167,6 +173,7 @@ export function mountLoginApproval(app, { store, auth, enabled, mailer = null, l
       return res.status(401).json({ error: 'wrong-code', triesLeft: Math.max(0, MAX_CODE_TRIES - tries) });
     }
     await store.putChallenge(c.id, { ...c, data: { ...c.data, status: 'approved', codeHash: null, approvedBy: 'email' } }); // the code can never be used again
+    if (onDecision) await Promise.resolve(onDecision(c.personId, 'LOGIN_APPROVAL_APPROVED', { ...c, data: { ...c.data, approvedBy: 'email' } }, req)).catch(() => {});
     res.json({ status: 'approved' });
   });
 

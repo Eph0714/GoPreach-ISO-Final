@@ -1,7 +1,7 @@
 ﻿/**
- * Server-side port of firestore.rules for every collection except the three drawing collections (see drawings.js).
+ * Server-side port of docs/legacy-firebase/firestore.rules for every collection except the three drawing collections (see drawings.js).
  *
- * This is a FAITHFUL port: each `allow` below mirrors one `allow` in firestore.rules, including the places where that file
+ * This is a FAITHFUL port: each `allow` below mirrors one `allow` in docs/legacy-firebase/firestore.rules, including the places where that file
  * is deliberately coarse (plain `isSignedIn()`), so moving to this server does not change who can do what today. The
  * known weak spots the rules file itself documents are NOT tightened here; they are listed in backend/README.md as a
  * separate hardening step, to be done with a data audit rather than as a side effect of the migration.
@@ -15,7 +15,8 @@
  */
 import { ok, deny, isSlotHolder } from './index.js';
 
-const ROLES_CHAT = ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER'];
+// Group chats of a whole congregation: Admin, Coordinator Elder, Service Overseer and Secretary (an assigned role counts, not only the active one: see roleIn).
+const ROLES_CHAT = ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY'];
 const ROLES_REPORTS = ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'REGULAR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY'];
 const ROLES_WIDE = ['ADMIN_PER_CONGREGATION', 'COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY']; // same set as CONGREGATION_WIDE_ROLES in index.js
 const ROLES_APP_SETTINGS = ROLES_REPORTS;
@@ -44,7 +45,7 @@ export async function loadGrant(personId, get) {
   };
 }
 
-/** Builds the helper functions firestore.rules defines at the top of the file, bound to one caller. */
+/** Builds the helper functions docs/legacy-firebase/firestore.rules defines at the top of the file, bound to one caller. */
 function helpers(actor, grant, get) {
   const me = actor.personId;
   const sa = actor.isSuperAdmin;
@@ -149,7 +150,7 @@ const OWNER_ONLY = new Set([
   'creditHourRecords', 'ministryTimerSessions', 'favorites',
 ]);
 
-/** Collections firestore.rules gives plain `allow read, write: if isSignedIn()` (explicitly or via the catch-all). */
+/** Collections docs/legacy-firebase/firestore.rules gives plain `allow read, write: if isSignedIn()` (explicitly or via the catch-all). */
 const SIGNED_IN_ONLY = new Set([
   'forwardRequests', 'publisherForwardRequests', 'houseHolderAssignments', 'territories', 'schedules', 'elderTitles',
   'auditLog', 'sharedLocations', 'savedLocations', 'cartAssignments', 'locationSharingSettings', 'publisherVisibilitySettings',
@@ -179,14 +180,31 @@ async function chatMembersInCongregation(h, cong, ids) {
   }
   return true;
 }
+/**
+ * The people an FS Group's chat may hold: the publishers whose ACTIVE role assignment names that group (read from the database, never from what the client says),
+ * and the group's Overseer, Servant and Assistant. A slot holder can therefore never put someone of another FS Group into the chat.
+ */
+async function chatMembersInFsGroup(h, groupId, cong, ids) {
+  if (!ids.length) return true;
+  if (typeof h.actor.list !== 'function') return false;   // cannot verify membership: refuse
+  const g = live(await h.get('groups', groupId));
+  if (!g || nul(g.congregationId) !== nul(cong)) return false;
+  const allowed = new Set([g.overseerPersonId, g.servantPersonId, g.assistantPersonId].filter(Boolean));
+  for (const row of await h.actor.list('roleAssignments', cong)) {
+    const a = row.data ?? {};
+    if (a.groupId === groupId && a.personId && (a.status ?? 'ACTIVE') === 'ACTIVE' && String(a.roleType ?? '').startsWith('PUBLISHER:') && a.roleType !== 'PUBLISHER:REMOVED_PUBLISHER') allowed.add(a.personId);
+  }
+  return ids.every((pid) => allowed.has(pid));
+}
 /** A slot holder may create the chat of their OWN group under its fixed id (one chat per group, never a duplicate room). */
 async function slotMayCreateChat(h, id, next) {
   if (!nul(next?.fsGroupId) || id !== 'fsg_' + next.fsGroupId || !(await slotManagesChat(h, next))) return false;
-  return chatMembersInCongregation(h, next.congregationId, next.participantIds ?? []);
+  const ids = next.participantIds ?? [];
+  return (await chatMembersInCongregation(h, next.congregationId, ids)) && (await chatMembersInFsGroup(h, next.fsGroupId, next.congregationId, ids));
 }
 
 /**
- * Sensitive collections whose records carry a congregationId. firestore.rules lets any signed-in user read many of these
+ * Sensitive collections whose records carry a congregationId. docs/legacy-firebase/firestore.rules lets any signed-in user read many of these
  * (the rules language cannot filter a query, so it could not scope them); this server filters every pull row by row, so it
  * additionally keeps a congregation's records inside that congregation. To loosen one, remove it from this set.
  * Deliberately NOT here: people (an admin must see never-signed-in members, whose congregation is still empty),
@@ -244,7 +262,7 @@ async function baseRead(h, actor, grant, collection, id, data, get) { // match /
     case 'groups': return h.restrictedAllows('VIEW_GROUPS', nul(data.congregationId));
     case 'deletedRecords': return nul(data.deletedByPersonId) === h.me || h.canManageTrashFor(nul(data.congregationId));
     case 'roleAssignments':
-      // A grant-based account (Circuit Overseer) always reads its OWN role assignment: mirrors firestore.rules.
+      // A grant-based account (Circuit Overseer) always reads its OWN role assignment: mirrors docs/legacy-firebase/firestore.rules.
       return !grant.has || h.restrictedAllows('VIEW_ELDERS', nul(data.congregationId)) || h.restrictedAllows('VIEW_PUBLISHERS', nul(data.congregationId)) || nul(data.personId) === h.me;
     case 'monthlyReports':
       // A Circuit Overseer reads the ACTUAL records, but only of a service month the congregation has submitted.
@@ -433,14 +451,21 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       return ok();
 
     case 'groupChats':
-      if (isCreate) return verdict(h.canManageGroupChatsFor(next.congregationId) || (await slotMayCreateChat(h, id, next)), 'Not allowed to create this chat');
+      // A congregation-wide manager (Admin / Coordinator Elder / Service Overseer / Secretary) adds people of THAT congregation only; a group's slot holder, people of THAT FS Group only.
+      if (isCreate) {
+        return verdict(
+          (h.canManageGroupChatsFor(next.congregationId) && (await chatMembersInCongregation(h, next.congregationId, next.participantIds ?? []))) || (await slotMayCreateChat(h, id, next)),
+          'Not allowed to create this chat, or a member is outside the allowed congregation / FS Group',
+        );
+      }
       if (isUpdate) {
         const participantEdit = chatParticipant(h, old) && next.congregationId === old.congregationId && same(next.participantIds, old.participantIds);
         // The Overseer / Servant / Assistant of an FS Group manage that group's chat: its members and name, never which group or congregation it belongs to.
         const added = (next.participantIds ?? []).filter((x) => !(old.participantIds ?? []).includes(x));
         const slotEdit = (await slotManagesChat(h, old)) && nul(next.fsGroupId) === nul(old.fsGroupId) && nul(next.congregationId) === nul(old.congregationId) &&
-          (await chatMembersInCongregation(h, old.congregationId, added));
-        return verdict(h.canManageGroupChatsFor(old.congregationId) || participantEdit || slotEdit, 'Not allowed to change this chat');
+          (await chatMembersInCongregation(h, old.congregationId, added)) && (await chatMembersInFsGroup(h, old.fsGroupId, old.congregationId, added));
+        const wideEdit = h.canManageGroupChatsFor(old.congregationId) && nul(next.congregationId) === nul(old.congregationId) && (await chatMembersInCongregation(h, old.congregationId, added));
+        return verdict(wideEdit || participantEdit || slotEdit, 'Not allowed to change this chat, or a member is outside the allowed congregation / FS Group');
       }
       return verdict(h.canManageGroupChatsFor(old?.congregationId));
 
@@ -633,7 +658,7 @@ const attCount = (v) => Number.isInteger(v) && v >= 0 && v <= 999999;
 
 /**
  * Meeting attendance record: whole-number counts for the parts of its meeting type only, the real mean, and the official figure that
- * mean rounded half-up (ROUNDED) or kept (EXACT). Mirrors attValid in firestore.rules.
+ * mean rounded half-up (ROUNDED) or kept (EXACT). Mirrors attValid in docs/legacy-firebase/firestore.rules.
  */
 function attendanceValid(d) {
   const mid = d.meetingType === 'MIDWEEK';
@@ -675,7 +700,7 @@ const CMP_EDIT_KEYS = ['reportSnapshot', 'sourceSnapshotIds', 'attendanceRoundin
 const CMP_SEND_KEYS = ['status', 'version', 'reportSnapshot', 'sourceSnapshotIds', 'attendanceRoundingMode', 'submittedBy', 'submittedByName', 'submittedByRole', 'submittedAt', 'updatedAt'];
 const CMP_CO_KEYS = ['status', 'receivedBy', 'receivedByName', 'receivedAt', 'returnedBy', 'returnedByName', 'returnedAt', 'returnReason', 'currentCoRemarks', 'updatedAt'];
 
-/** A congregation's formal Comparative Report (see firestore.rules congregationComparativeReports): DRAFT -> SUBMITTED -> RECEIVED, or SUBMITTED -> RETURNED -> SUBMITTED. */
+/** A congregation's formal Comparative Report (see docs/legacy-firebase/firestore.rules congregationComparativeReports): DRAFT -> SUBMITTED -> RECEIVED, or SUBMITTED -> RETURNED -> SUBMITTED. */
 function writeComparativeReport(h, { id, next, old, isCreate, isUpdate, isDelete, verdict }) {
   const periodsValid = (d) => Number(d.periodAStart) <= Number(d.periodAEnd) && Number(d.periodBStart) <= Number(d.periodBEnd) &&
     Number(d.periodAEnd) <= Date.now() && Number(d.periodBEnd) <= Date.now() &&
@@ -789,7 +814,7 @@ const CANCEL_KEYS = ['status', 'cancelledAt', 'cancelledByPersonId', 'cancelledB
 const CO_KEYS = ['status', 'receivedAt', 'receivedByPersonId', 'receivedByName', 'returnedAt', 'returnedByPersonId', 'returnedByName',
   'returnReason', 'coRemarks', 'coRemarksAt', 'coRemarksByName', 'updatedAt'];
 
-/** The status of a congregation's service month (SUBMITTED -> RECEIVED, ... see firestore.rules coFieldServiceMonthStatus). */
+/** The status of a congregation's service month (SUBMITTED -> RECEIVED, ... see docs/legacy-firebase/firestore.rules coFieldServiceMonthStatus). */
 function writeMonthStatus(h, { id, next, old, isCreate, isUpdate, verdict }) {
   const notFuture = (m) => Number(m) <= Date.now();
   if (isCreate) {
@@ -859,14 +884,18 @@ async function writeMonthlyReports(h, { op, next, old, verdict }) {
 /**
  * A Group Coordinator / Servant / Assistant (active role REGULAR_ELDER with a group) may write a report only for a publisher of THAT
  * FS Group: they must really fill a slot of the group, and the report must name the publisher's own active role assignment in that
- * group and congregation (mirrors groupRoleMayWriteReport in firestore.rules).
+ * group and congregation (mirrors groupRoleMayWriteReport in docs/legacy-firebase/firestore.rules).
  */
 async function groupRoleMayWriteReport(h, rec) {
   const { actor, get } = h;
-  if (!rec || !['REGULAR_ELDER', 'MINISTERIAL_SERVANT'].includes(actor.adminRole) || !actor.groupId || !rec.groupRoleAssignmentId) return false;
-  if (!(await isSlotHolder(actor, actor.groupId, undefined, get))) return false;
+  if (!rec || !rec.groupRoleAssignmentId || !actor.known || h.grant.has) return false;
   const ra = live(await get('roleAssignments', rec.groupRoleAssignmentId));
-  return !!ra && ra.personId === rec.publisherPersonId && ra.groupId === actor.groupId && ra.congregationId === rec.congregationId && ra.status === 'ACTIVE';
+  if (!ra || ra.personId !== rec.publisherPersonId || ra.congregationId !== rec.congregationId || ra.status !== 'ACTIVE' || !ra.groupId) return false;
+  // An Overseer / Servant who acts in that group (the app's group role) ...
+  if (['REGULAR_ELDER', 'MINISTERIAL_SERVANT'].includes(actor.adminRole) && actor.groupId === ra.groupId && (await isSlotHolder(actor, actor.groupId, undefined, get))) return true;
+  // ... or anyone who fills a slot (Overseer, Servant or Assistant) of THAT group, whatever their active role: the Assistant is often an ordinary publisher.
+  const g = live(await get('groups', ra.groupId));
+  return !!g && nul(g.congregationId) === nul(rec.congregationId) && h.inMyActiveCongregation(nul(rec.congregationId)) && (await h.isSlotHolderOfGroup(ra.groupId));
 }
 
 async function writeSubcollection(h, sub, { op, id, next, old, isCreate, isUpdate, isDelete, verdict }) {
