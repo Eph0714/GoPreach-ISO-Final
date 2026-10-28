@@ -519,9 +519,9 @@ test('device approval: the e-mail code settles a request when no device is at ha
     const code = /\b(\d{6})\b/.exec(w.sent.at(-1).text)[1];
     assert.equal((await w.post('/v1/auth/login-requests/email-verify', { requestId: r.requestId, pollToken: r.pollToken, code })).status, 200);
     assert.equal((await w.login('ana001', { device: dev('dev-5'), approval: { requestId: r.requestId, pollToken: r.pollToken } })).status, 200);
-    // flooding: at most 5 requests in 15 minutes
+    // flooding from many devices: the account as a whole allows four times the per-device limit (20 in 15 minutes)
     let last = 0;
-    for (let i = 0; i < 8; i += 1) last = (await w.login('ana001', { device: dev(`flood-${i}`) })).status;
+    for (let i = 0; i < 25; i += 1) last = (await w.login('ana001', { device: dev(`flood-${i}`) })).status;
     assert.equal(last, 429);
   } finally { w.close(); }
 });
@@ -591,8 +591,13 @@ test('approval limits: only the Super Admin manages them, within safe bounds; th
     await w.post('/v1/security/device-approval', { enabled: true }, ana.accessToken);
     const r1 = await (await w.login('ana001', { device: dev('x1') })).json();
     assert.ok(Math.abs(r1.expiresAt - Date.now() - 3 * 60_000) < 5000, 'expires after the configured minutes');
-    assert.equal((await w.login('ana001', { device: dev('x2') })).status, 409);
-    assert.equal((await w.login('ana001', { device: dev('x3') })).status, 429);
+    await w.post(`/v1/auth/login-requests/${r1.requestId}/deny`, {}, ana.accessToken);
+    const r2 = await (await w.login('ana001', { device: dev('x1') })).json();
+    await w.post(`/v1/auth/login-requests/${r2.requestId}/deny`, {}, ana.accessToken);
+    const blocked = await w.login('ana001', { device: dev('x1') });
+    assert.equal(blocked.status, 429, 'the third request of this device in the window is refused');
+    assert.ok((await blocked.json()).retryAfter > 0, 'and it says how long to wait');
+    assert.equal((await w.login('ana001', { device: dev('x2') })).status, 409, 'another device has its own allowance');
 
     const log = (await (await w.get('/v1/admin/security/events?personId=sup001&limit=50', sup.accessToken)).json()).events;
     const change = log.find((e) => e.type === 'APPROVAL_LIMITS_CHANGED');
@@ -620,5 +625,25 @@ test('deleting a trusted device logs out its other sessions, keeps the caller an
     assert.equal((await w.get('/v1/security/status', other.accessToken)).status, 200, 'another device is untouched');
     assert.equal((await w.login('ana001', { device: dev('dev-1', 'Ana phone'), trustedToken: on.trustedToken })).status, 409, 'the trust is gone: it needs approval again');
     assert.equal((await w.post(`/v1/security/trusted/${list[0].id}/remove`, {}, first.accessToken)).status, 404, 'deleted once');
+  } finally { w.close(); }
+});
+
+test('approval limit is per device: tries from the website never use the phone\'s allowance, and a retry while waiting is not counted', async () => {
+  const w = await world();
+  try {
+    const first = await w.signIn('ana001', dev('dev-1', 'Ana phone'));
+    await w.post('/v1/security/device-approval', { enabled: true }, first.accessToken);
+    // a browser tries many times in a row: each retry replaces its own waiting request and is not counted again
+    for (let i = 0; i < 12; i += 1) assert.equal((await w.login('ana001', { device: dev('web-1', 'GoPreach Web') })).status, 409);
+    // it also exhausts its own allowance once its requests are decided (5 per 15 minutes)
+    for (let i = 0; i < 5; i += 1) {
+      const r = await (await w.login('ana001', { device: dev('web-2', 'Other browser') })).json();
+      await w.post(`/v1/auth/login-requests/${r.requestId}/deny`, {}, first.accessToken);
+    }
+    assert.equal((await w.login('ana001', { device: dev('web-2', 'Other browser') })).status, 429);
+    // the phone has not tried yet and is not blocked
+    const phone = await w.login('ana001', { device: dev('phone-9', 'New phone') });
+    assert.equal(phone.status, 409, 'a new device still gets its request');
+    assert.ok((await phone.json()).requestId);
   } finally { w.close(); }
 });

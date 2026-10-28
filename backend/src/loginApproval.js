@@ -64,8 +64,8 @@ export function smtpMailer(mail = config.mail) {
 export function mountLoginApproval(app, { store, auth, enabled, mailer = null, limits = {}, requestMs = LOGIN_REQUEST_MS, onDecision = null, getSettings = null }) {
   const statusLimit = rateLimit({ windowMs: 60_000, max: 90, key: (req) => req.ip, ...limits.status });
   const codeLimit = rateLimit({ windowMs: 10 * 60_000, max: 12, key: (req) => `${req.ip}|${String(req.body?.requestId ?? '').slice(0, 64)}`, ...limits.code });
-  const made = new Map(); // personId -> recent request times (so a stranger who knows the password cannot flood the owner's phone)
-  const recentMade = (id, windowMs = 15 * 60_000) => (made.get(id) ?? []).filter((t) => Date.now() - t < windowMs);
+  const made = new Map(); // personId -> recent requests { t: time, d: device id } (so a stranger who knows the password cannot flood the owner's phone)
+  const recentMade = (id, windowMs = 15 * 60_000) => (made.get(id) ?? []).filter((e) => Date.now() - e.t < windowMs);
   const busy = new Set();
 
   const emailOf = async (personId) => {
@@ -79,10 +79,23 @@ export function mountLoginApproval(app, { store, auth, enabled, mailer = null, l
     // The Super Admin may tune the limit (requests per window) and the life of a request; until then the defaults (5 in 15 minutes, 5 minutes) apply.
     const cfg = (await getSettings?.()) ?? null;
     const windowMs = (cfg?.windowMinutes ?? 15) * 60_000;
-    if (recentMade(personId, windowMs).length >= (cfg?.maxRequests ?? 5)) return { tooMany: true };
-    made.set(personId, [...recentMade(personId, Math.max(windowMs, 120 * 60_000)), Date.now()]);
+    const max = cfg?.maxRequests ?? 5;
+    const deviceId = String(device?.deviceId ?? '').slice(0, 80);
+    const pending = (await store.listChallenges(personId, 'loginreq')).filter((c) => c.data.status === 'pending');
+    // The same device asking again while its own request is still waiting is a retry: it replaces the old request and is not counted again
+    // (and the owner is not e-mailed twice). The limit counts requests PER DEVICE, so another device's tries never use this device's allowance;
+    // a higher cap per account (four times as many) still stops one password from flooding the owner from many devices.
+    const retry = !!deviceId && pending.some((c) => c.data.device?.deviceId === deviceId);
+    if (!retry) {
+      const recent = recentMade(personId, windowMs);
+      const ofThisDevice = deviceId ? recent.filter((e) => e.d === deviceId) : recent;
+      const blocked = ofThisDevice.length >= max ? ofThisDevice : recent.length >= max * 4 ? recent : null;
+      if (blocked) return { tooMany: true, retryAfter: Math.max(1, Math.ceil((blocked[0].t + windowMs - Date.now()) / 1000)) };
+      made.set(personId, [...recentMade(personId, Math.max(windowMs, 120 * 60_000)), { t: Date.now(), d: deviceId }]);
+    }
     const lifeMs = cfg?.custom ? cfg.expiryMinutes * 60_000 : requestMs;
-    for (const old of await store.listChallenges(personId, 'loginreq')) if (old.data.status === 'pending') await store.putChallenge(old.id, { ...old, data: { ...old.data, status: 'superseded' } });
+    // Only this device's own older request is replaced; the other devices' requests stay as they are.
+    for (const old of pending) if (!deviceId || old.data.device?.deviceId === deviceId) await store.putChallenge(old.id, { ...old, data: { ...old.data, status: 'superseded' } });
     const id = randomBytes(12).toString('base64url');
     const pollToken = randomBytes(24).toString('base64url');
     const email = mailer ? await emailOf(personId) : null; // fixed now: changing the address during the sign-in changes nothing
@@ -92,7 +105,7 @@ export function mountLoginApproval(app, { store, auth, enabled, mailer = null, l
       data: { status: 'pending', device: device ?? null, ip: maskIp(ip), createdAt: Date.now(), pollHash: sha256(pollToken), email, codeHash: null, codeSentAt: 0, codesSent: 0, tries: 0 },
     });
     // The owner is told by e-mail too (never a token or a link that approves anything: approving needs one of the account's own signed-in devices).
-    if (email && mailer) {
+    if (email && mailer && !retry) {
       const who = device?.name ?? device ?? 'a new device';
       mailer.send(email, 'GoPreach: a new device is trying to sign in', `Someone entered your GoPreach password on ${who}. Approve or reject it from a device that is already signed in, within ${Math.round(lifeMs / 60000)} minutes. If this was not you, do not approve it and change your password.`).catch((e) => console.error('approval e-mail failed', e?.message));
     }

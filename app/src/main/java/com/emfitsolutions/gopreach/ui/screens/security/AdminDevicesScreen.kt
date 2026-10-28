@@ -166,9 +166,9 @@ private fun ApprovalLimitsCard(limits: ApprovalLimits, busy: Boolean, message: S
     androidx.compose.material3.Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("New-device request limits", style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-            Text("For accounts that turned on Approve new devices. Each account may raise at most this many requests in the time window; more tries are refused (Too many attempts) until it passes. Changes apply at once and are logged below.", style = MaterialTheme.typography.bodySmall)
+            Text("For accounts that turned on Approve new devices. Each device may raise at most this many requests in the time window (another device's tries never use it up; a retry while waiting is not counted); an account allows four times as many. More tries are refused (Too many attempts) until it passes. Changes apply at once and are logged below.", style = MaterialTheme.typography.bodySmall)
             val number = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number)
-            OutlinedTextField(value = max, onValueChange = { max = it.filter(Char::isDigit).take(2) }, label = { Text("Requests per account (1-20)") }, singleLine = true, keyboardOptions = number, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = max, onValueChange = { max = it.filter(Char::isDigit).take(2) }, label = { Text("Requests per device (1-20)") }, singleLine = true, keyboardOptions = number, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = window, onValueChange = { window = it.filter(Char::isDigit).take(3) }, label = { Text("Within (minutes, 1-120)") }, singleLine = true, keyboardOptions = number, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(value = expiry, onValueChange = { expiry = it.filter(Char::isDigit).take(2) }, label = { Text("A request waits (minutes, 1-30)") }, singleLine = true, keyboardOptions = number, modifier = Modifier.fillMaxWidth())
             PasswordField(value = password, onValueChange = { password = it }, label = "Your password")

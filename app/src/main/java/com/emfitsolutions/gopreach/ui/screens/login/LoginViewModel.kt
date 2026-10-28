@@ -183,12 +183,13 @@ class LoginViewModel(
         rememberedUsername = runCatching { credentialStore.rememberedUsername() }
             .onFailure { Log.e(TAG, "Failed to read remembered username: ${it::class.simpleName}") }
             .getOrNull()
+        runCatching { credentialStore.dropRememberedPassword() }
         val enrolled = runCatching { credentialStore.isBiometricEnrolled() }.getOrDefault(false)
-        // Both fields always start empty — after a session expiry, a logout or a fresh launch.
-        // The password is never filled in just because the screen opened.
+        // Remember me: the remembered USERNAME is filled in when the screen opens (after a logout, a session expiry or a fresh launch).
+        // The password always starts empty: it is never remembered or filled in.
         _uiState.update {
             it.copy(
-                username = "",
+                username = rememberedUsername.orEmpty(),
                 password = "",
                 rememberMe = rememberedUsername != null,
                 biometricEnrolled = enrolled,

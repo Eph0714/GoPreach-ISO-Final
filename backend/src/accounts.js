@@ -106,7 +106,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
           const approved = approval && typeof approval === 'object' ? await approvals.redeem(personId, approval) : false;
           if (!approved) {
             const request = await approvals.createRequest(personId, { device: info.name, lastActiveAt: null }, { device: info, ip: req.ip });
-            if (request.tooMany) return res.status(429).json({ error: 'too-many-requests' });
+            if (request.tooMany) return res.set('Retry-After', String(request.retryAfter ?? 60)).status(429).json({ error: 'too-many-requests', retryAfter: request.retryAfter ?? 60 });
             await sec.event(personId, 'LOGIN_APPROVAL_REQUESTED', { result: 'pending', deviceId: info.deviceId, notify: true, meta: { device: info.name, os: info.os, ip: request.ip ?? null, requestId: request.requestId, expiresAt: request.expiresAt } });
             return res.status(409).json({ error: 'session-active', ...request });
           }
