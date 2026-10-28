@@ -536,3 +536,32 @@ test('purgeChallenges drops long-expired login requests and keeps live and recen
   assert.equal((await st.getChallenge('live'))?.id, 'live');
   assert.equal(await st.purgeChallenges(), 0);
 });
+
+test('login history: filters by result, type, device text and date; the notice list can include seen notices', async () => {
+  const w = await world();
+  try {
+    const d1 = { id: 'dev-1', name: 'Ana phone', type: 'phone', os: 'Android', osVersion: '14', appVersion: '1' };
+    const first = await w.signIn('ana001', d1);
+    await w.login('ana001', { device: { ...d1, id: 'dev-2', name: 'Kitchen tablet' }, password: 'wrong-password' });
+    const get = async (q) => (await (await w.get(`/v1/security/events${q}`, first.accessToken)).json()).events;
+    const everything = await get('');
+    assert.ok(everything.length >= 2);
+    assert.ok((await get('?result=failure')).every((e) => e.result === 'failure'));
+    assert.ok((await get('?result=success')).every((e) => e.result === 'success'));
+    const failed = (await get('?result=failure'))[0];
+    assert.ok(failed, 'the wrong password was logged');
+    assert.deepEqual((await get(`?type=${failed.type}&result=failure`)).map((e) => e.type), (await get('?result=failure')).filter((e) => e.type === failed.type).map((e) => e.type));
+    assert.equal((await get('?q=zzz-no-such-device')).length, 0);
+    assert.equal((await get(`?from=${Date.now() + 60_000}`)).length, 0);
+    assert.equal((await get(`?to=${Date.now() + 60_000}`)).length, everything.length);
+
+    await w.post('/v1/security/device-approval', { enabled: true }, first.accessToken);
+    await w.login('ana001', { device: { ...d1, id: 'dev-9', name: 'New tablet' } });
+    const unseen = await (await w.get('/v1/security/notices', first.accessToken)).json();
+    assert.ok(unseen.notices.length >= 1 && unseen.unseen === unseen.notices.length);
+    await w.post('/v1/security/notices/seen', {}, first.accessToken);
+    assert.equal((await (await w.get('/v1/security/notices', first.accessToken)).json()).notices.length, 0);
+    const all = await (await w.get('/v1/security/notices?all=1', first.accessToken)).json();
+    assert.ok(all.notices.length >= 1 && all.notices.every((n) => n.seen === true) && all.unseen === 0);
+  } finally { w.close(); }
+});

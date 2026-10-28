@@ -492,13 +492,29 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
 
   // ---- the person's own log and notices ----------------------------------------------------------------------------------------------------------------------------------
   const publicEvent = (e) => ({ id: e.id, at: e.data.at, type: e.data.type, result: e.data.result, deviceId: e.data.deviceId, sessionId: e.data.sessionId, by: e.data.by, meta: e.data.meta });
+  /** Login-history filters (all optional): result=success|failure, type=A,B, q=text in the device name, from/to = epoch ms, notify=1 (only entries that raise a notice). */
+  const historyFilter = (q) => {
+    const types = String(q.type ?? '').split(',').map((t) => t.trim()).filter(Boolean);
+    const result = String(q.result ?? '').toLowerCase();
+    const text = String(q.q ?? '').trim().toLowerCase();
+    const from = Number(q.from) || 0;
+    const to = Number(q.to) || Infinity;
+    return (e) => (!types.length || types.includes(e.data.type))
+      && (!result || String(e.data.result ?? '').toLowerCase() === result)
+      && (!text || String(e.data.meta?.device ?? '').toLowerCase().includes(text))
+      && e.data.at >= from && e.data.at <= to
+      && (q.notify !== '1' || e.data.notify);
+  };
   app.get('/v1/security/events', enabled, auth, async (req, res) => {
     const limit = Math.min(Number.parseInt(String(req.query.limit ?? '100'), 10) || 100, 300);
-    res.json({ events: (await store.secList('secevent', req.personId, { limit })).map(publicEvent) });
+    const all = await store.secList('secevent', req.personId, { limit: 300 });
+    res.json({ events: all.filter(historyFilter(req.query)).slice(0, limit).map(publicEvent) });
   });
+  /** Notification centre: unseen notices by default; all=1 also lists the ones already seen (each with seen:true/false). */
   app.get('/v1/security/notices', enabled, auth, async (req, res) => {
-    const unseen = (await store.secList('secevent', req.personId, { limit: 100 })).filter((e) => e.data.notify && !e.data.seenAt);
-    res.json({ notices: unseen.map(publicEvent) });
+    const mine = (await store.secList('secevent', req.personId, { limit: 300 })).filter((e) => e.data.notify);
+    const wanted = req.query.all === '1' ? mine : mine.filter((e) => !e.data.seenAt);
+    res.json({ notices: wanted.map((e) => ({ ...publicEvent(e), seen: !!e.data.seenAt })), unseen: mine.filter((e) => !e.data.seenAt).length });
   });
   app.post('/v1/security/notices/seen', enabled, auth, async (req, res) => {
     for (const e of (await store.secList('secevent', req.personId, { limit: 100 })).filter((x) => x.data.notify && !x.data.seenAt)) await store.secPut('secevent', e.id, e.personId, { ...e.data, seenAt: Date.now() });

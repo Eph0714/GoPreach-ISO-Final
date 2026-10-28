@@ -76,6 +76,6 @@ Rollback: revert the commit on `main` and redeploy. Approval is off for every ac
 * Approval is off by default; accounts must opt in.
 * No push when the app is closed; notices appear on next open.
 * Approximate location is not stored (shortened IP only).
-* Expired login requests are purged hourly by the server (`purgeChallenges`). Login-history filters, an in-app notification centre screen and the account-recovery request flow are not built yet.
+* Expired login requests are purged hourly by the server (`purgeChallenges`). The account-recovery request flow is not built yet. Login-history filters (result, kind, time range, device) and a notification centre are on the Security page of web and Android; the API takes `result`, `type`, `q`, `from`, `to` on `/v1/security/events` and `all=1` on `/v1/security/notices`.
 * A Super Admin cannot bypass 2FA or approval, by design.
 * The 2FA and approval flows are covered by backend and web tests but have not been exercised on a physical device yet.
