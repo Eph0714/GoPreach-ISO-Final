@@ -103,6 +103,9 @@ class HttpAuthService(
 
     private fun clear() {
         prefs.edit { remove(K_ACCESS); remove(K_REFRESH); remove(K_EXPIRES); remove(K_PERSON); remove(K_LAST_SIGN_IN) }
+        // Before the signed-out state is announced: the app forgets its saved passwords and the "signed in" marker, so it really returns to the login screen
+        // (a session the server ended must not leave the phone half signed in).
+        runCatching(onSignedOut)
         state.value = null
     }
 
@@ -207,7 +210,6 @@ class HttpAuthService(
         ensureLoaded()
         val refresh = prefs.getString(K_REFRESH, null)
         clear()
-        runCatching(onSignedOut)
         if (refresh != null) scope.launch { runCatching { post("/v1/auth/logout", buildJsonObject { put("refreshToken", JsonPrimitive(refresh)) }, token = null) } }
     }
 
@@ -221,13 +223,11 @@ class HttpAuthService(
             save(reply, signedInNow = false)
             reply.string("accessToken")
         } catch (e: AuthFailure.SessionEnded) {
-            clear()
-            runCatching(onSignedOut) // signed out by the server (another device, a deleted trusted device, a password change): no saved password stays behind
+            clear() // signed out by the server (another device, a deleted trusted device, a password change)
             prefs.edit { putString(K_ENDED, "1") } // the sign-in screen explains why
             null
         } catch (e: AuthFailure.InvalidCredentials) {
             clear() // the server no longer knows this session (signed out elsewhere, password changed, account removed)
-            runCatching(onSignedOut)
             null
         }
     }

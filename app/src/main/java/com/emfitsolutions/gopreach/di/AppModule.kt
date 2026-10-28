@@ -287,7 +287,10 @@ val infraModule = module {
                 os = "Android", osVersion = android.os.Build.VERSION.RELEASE, appVersion = com.emfitsolutions.gopreach.BuildConfig.VERSION_NAME,
             ),
             // Signing out, for any reason, forgets every saved password on this phone (remembered, fingerprint and PIN/pattern sign-in).
-            onSignedOut = { get<CredentialStore>().forgetPasswords(); get<com.emfitsolutions.gopreach.data.repository.QuickLoginStore>().disableAll() },
+            onSignedOut = {
+                get<CredentialStore>().forgetPasswords(); get<com.emfitsolutions.gopreach.data.repository.QuickLoginStore>().disableAll()
+                get<OfflineSessionMarker>().clear()
+            },
         )
     }
     single<com.emfitsolutions.gopreach.data.repository.SecurityService> {

@@ -667,3 +667,123 @@ test('a device that was logged out finds out by itself: the cheap session check 
     assert.equal((await w.get('/v1/auth/session', phone.accessToken)).status, 401);
   } finally { w.close(); }
 });
+
+// ---- account recovery: lost password AND authenticator ------------------------------------------------------------------------------------------------------------------
+
+async function withRecoveryEmail(w, id = 'ana001') {
+  const s = await w.signIn(id, dev('dev-1', 'Ana phone'));
+  await w.enable2fa(id, s);
+  await w.post('/v1/security/recovery-email', { email: 'ana@example.org' }, s.accessToken);
+  const code = /(\d{6})/.exec(w.sent.at(-1).text)[1];
+  assert.equal((await w.post('/v1/security/recovery-email/verify', { code }, s.accessToken)).status, 200);
+  return s;
+}
+const readyNow = async (w, requestId) => { const c = await w.st.getChallenge(requestId); await w.st.putChallenge(requestId, { ...c, data: { ...c.data, readyAt: Date.now() - 1000 } }); };
+
+test('recovery: e-mail code, then a 24-hour wait, then a new password; every session, trusted device and two-factor are cleared', async () => {
+  const w = await world();
+  try {
+    const owner = await withRecoveryEmail(w);
+    const sentBefore = w.sent.length;
+    // the answer is the same for an unknown username and nothing is sent
+    const ghost = await (await w.post('/v1/public/recovery/request', { username: 'nobody-here' })).json();
+    assert.ok(ghost.requestId && ghost.pollToken);
+    assert.equal(w.sent.length, sentBefore, 'no e-mail for an unknown account');
+    // an account without a confirmed recovery e-mail gets the same answer and no e-mail
+    await w.post('/v1/public/recovery/request', { username: 'ben' });
+    assert.equal(w.sent.length, sentBefore);
+
+    const req = await (await w.post('/v1/public/recovery/request', { username: 'ana' })).json();
+    assert.equal(w.sent.length, sentBefore + 1);
+    assert.equal(w.sent.at(-1).to, 'ana@example.org');
+    assert.ok(!w.sent.at(-1).text.includes(req.pollToken), 'no secret is e-mailed');
+    const code = /(\d{6})/.exec(w.sent.at(-1).text)[1];
+    const at = { requestId: req.requestId, pollToken: req.pollToken };
+    assert.equal((await w.post('/v1/public/recovery/status', { ...at, pollToken: 'x'.repeat(30) })).status, 404, 'a wrong poll token reads nothing');
+    assert.equal((await w.post('/v1/public/recovery/verify', { ...at, code: '000000' })).status, 401);
+    assert.equal((await w.post('/v1/public/recovery/complete', { ...at, newPassword: 'Brand-new-1' })).status, 409, 'no code yet: nothing to complete');
+
+    const started = await (await w.post('/v1/public/recovery/verify', { ...at, code })).json();
+    assert.equal(started.status, 'waiting');
+    assert.ok(Math.abs(started.readyAt - Date.now() - 24 * 3_600_000) < 10_000, '24 hours');
+    assert.equal((await w.post('/v1/public/recovery/verify', { ...at, code })).status, 409, 'a code works once');
+    assert.ok(w.sent.at(-1).subject.includes('recovery started'), 'the owner is told by e-mail');
+    const notices = await (await w.get('/v1/security/notices', owner.accessToken)).json();
+    assert.ok(notices.notices.some((n) => n.type === 'RECOVERY_STARTED'), 'and in the app');
+    const pending = await (await w.get('/v1/security/recovery', owner.accessToken)).json();
+    assert.equal(pending.pending.status, 'waiting');
+
+    // too early
+    const early = await w.post('/v1/public/recovery/complete', { ...at, newPassword: 'Brand-new-1' });
+    assert.equal(early.status, 409);
+    assert.equal((await early.json()).error, 'not-yet');
+    assert.equal((await w.login('ana001', {}, 'Brand-new-1')).status, 401, 'the old password still rules until the wait is over');
+
+    await readyNow(w, req.requestId);
+    assert.equal((await (await w.post('/v1/public/recovery/status', at)).json()).status, 'ready');
+    assert.equal((await w.post('/v1/public/recovery/complete', { ...at, newPassword: 'abc' })).status, 400, 'a weak password is refused');
+    assert.equal((await w.post('/v1/public/recovery/complete', { ...at, newPassword: 'Brand-new-1' })).status, 200);
+    assert.equal((await w.post('/v1/public/recovery/complete', { ...at, newPassword: 'Another-1' })).status, 409, 'once');
+
+    assert.equal((await w.get('/v1/security/status', owner.accessToken)).status, 401, 'every old session is ended');
+    assert.equal((await w.login('ana001')).status, 401, 'the old password is gone');
+    const fresh = await w.login('ana001', {}, 'Brand-new-1');
+    assert.equal(fresh.status, 200, 'the new password signs in with no second step: two-factor starts again from nothing');
+    const status = await (await w.get('/v1/security/status', (await fresh.json()).accessToken)).json();
+    assert.equal(status.twoFactor.enabled, false);
+    const types = (await w.st.secList('secevent', 'ana001', { limit: 100 })).map((e) => e.data.type);
+    for (const t of ['RECOVERY_CODE_SENT', 'RECOVERY_STARTED', 'RECOVERY_COMPLETED']) assert.ok(types.includes(t), t);
+  } finally { w.close(); }
+});
+
+test('recovery: the owner cancels with "This was not me", and five wrong codes end the request', async () => {
+  const w = await world();
+  try {
+    const owner = await withRecoveryEmail(w);
+    const start = async () => {
+      const req = await (await w.post('/v1/public/recovery/request', { username: 'ana' })).json();
+      const code = /(\d{6})/.exec(w.sent.at(-1).text)[1];
+      const at = { requestId: req.requestId, pollToken: req.pollToken };
+      return { at, code, verify: () => w.post('/v1/public/recovery/verify', { ...at, code }) };
+    };
+    // "This was not me"
+    const a = await start();
+    assert.equal((await a.verify()).status, 200);
+    assert.equal((await (await w.post('/v1/security/recovery/cancel', {}, owner.accessToken)).json()).cancelled, 1);
+    await readyNow(w, a.at.requestId);
+    assert.equal((await w.post('/v1/public/recovery/complete', { ...a.at, newPassword: 'Brand-new-1' })).status, 409, 'a cancelled recovery cannot be completed');
+    assert.equal((await (await w.get('/v1/security/recovery', owner.accessToken)).json()).pending, null);
+
+    // a password alone (the second step is still asked) cancels nothing; an unrelated account signing in cancels nothing
+    const b = await start();
+    assert.equal((await b.verify()).status, 200);
+    assert.ok((await w.signIn('ben001')).accessToken);
+    const stage = await (await w.login('ana001', { device: dev('dev-1', 'Ana phone') })).json();
+    assert.equal(stage.twoFactorRequired, true);
+    assert.equal((await (await w.post('/v1/public/recovery/status', b.at)).json()).status, 'waiting');
+    await w.post('/v1/security/recovery/cancel', {}, owner.accessToken);
+
+    // five wrong codes end the request
+    const c = await start();
+    for (let i = 0; i < 5; i += 1) assert.equal((await w.post('/v1/public/recovery/verify', { ...c.at, code: '111111' })).status, 401);
+    assert.equal((await w.post('/v1/public/recovery/verify', { ...c.at, code: c.code })).status, 429, 'the right code is too late');
+    assert.equal((await w.post('/v1/public/recovery/status', c.at)).status, 404);
+  } finally { w.close(); }
+});
+
+test('recovery: the owner signing in cancels a recovery started in their name', async () => {
+  const w = await world();
+  try {
+    const ben = await w.signIn('ben001');
+    await w.post('/v1/security/recovery-email', { email: 'ben@example.org' }, ben.accessToken);
+    await w.post('/v1/security/recovery-email/verify', { code: /(\d{6})/.exec(w.sent.at(-1).text)[1] }, ben.accessToken);
+    const req = await (await w.post('/v1/public/recovery/request', { username: 'ben' })).json();
+    const at = { requestId: req.requestId, pollToken: req.pollToken };
+    assert.equal((await w.post('/v1/public/recovery/verify', { ...at, code: /(\d{6})/.exec(w.sent.at(-1).text)[1] })).status, 200);
+    assert.equal((await (await w.post('/v1/public/recovery/status', at)).json()).status, 'waiting');
+    assert.ok((await w.signIn('ben001', dev('dev-7', 'Ben tablet'))).accessToken, 'the owner remembers the password and signs in');
+    assert.equal((await (await w.post('/v1/public/recovery/status', at)).json()).status, 'cancelled');
+    const types = (await w.st.secList('secevent', 'ben001', { limit: 100 })).map((e) => e.data.type);
+    assert.ok(types.includes('RECOVERY_CANCELLED'));
+  } finally { w.close(); }
+});

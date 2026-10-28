@@ -208,6 +208,12 @@ fun LoginScreen(
                         TextButton(onClick = onForgotPasswordClick, enabled = !busy) { Text(stringResource(Res.string.login_forgot_password), color = pal.primary) }
                     }
 
+                    // Lost the password AND the authenticator: the website's recovery page (e-mail code, a 24-hour wait the owner can cancel, then a new password).
+                    val recoveryUri = androidx.compose.ui.platform.LocalUriHandler.current
+                    TextButton(onClick = { runCatching { recoveryUri.openUri("https://web.gopreach.sinaglahinv.com/recover") } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                        Text("Lost your authenticator? Recover your account", color = pal.primary)
+                    }
+
                     Button(
                         onClick = viewModel::signIn,
                         enabled = !busy,

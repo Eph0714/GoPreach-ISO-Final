@@ -12,18 +12,23 @@ class RecentCreateGuard(private val windowMillis: Long = 30_000, private val clo
     private data class Seen(val id: String, val at: Long)
 
     private val seen = HashMap<String, Seen>()
+    private val lock = GuardLock()
 
     /** The id to save a brand-new record under: the earlier id when [signature] was already created within the window, else [newId]. */
-    @Synchronized
-    fun idFor(signature: String, newId: () -> String): String {
+    fun idFor(signature: String, newId: () -> String): String = lock.withLock {
         val now = clock()
         seen.entries.removeAll { now - it.value.at > windowMillis }
         val earlier = seen[signature]
-        if (earlier != null) return earlier.id
+        if (earlier != null) return@withLock earlier.id
         val id = newId()
         seen[signature] = Seen(id, now)
-        return id
+        id
     }
+}
+
+/** A small mutual-exclusion lock for the guard (Android: a synchronized block, iOS: an NSLock). */
+internal expect class GuardLock() {
+    fun <T> withLock(block: () -> T): T
 }
 
 /** One guard for the whole app: every repository that creates a record from a form asks it for the id of a brand-new entry. */

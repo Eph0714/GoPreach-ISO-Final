@@ -14,7 +14,7 @@ Everything below runs on the Hostinger Node/MySQL backend (`backend/`). No Fireb
 | Login history / audit log | `/v1/security/events` | Done, append-only. Filters in the UI are not built yet. |
 | Server-enforced revocation | `auth.js` | Done. A revoked session gets `401 session-ended` on its next request and its refresh tokens are deleted. |
 | Role / congregation scope | `security.js`, `policy/` | Own account; Super Admin all; congregation Admin only that congregation (others get 404). |
-| Account recovery request flow | | **Not built.** |
+| Account recovery (lost password and authenticator) | `security.js` | Done: see section 9. |
 
 Why the lockout seen earlier cannot return: approval used to be forced on everyone by a one-session rule. It is now a setting each account turns on from a device it already holds, and turning it off needs only the password.
 
@@ -76,10 +76,21 @@ Rollback: revert the commit on `main` and redeploy. Approval is off for every ac
 * Approval is off by default; accounts must opt in.
 * No push when the app is closed; notices appear on next open.
 * Approximate location is not stored (shortened IP only).
-* Expired login requests are purged hourly by the server (`purgeChallenges`). The account-recovery request flow is not built yet. Login-history filters (result, kind, time range, device) and a notification centre are on the Security page of web and Android; the API takes `result`, `type`, `q`, `from`, `to` on `/v1/security/events` and `all=1` on `/v1/security/notices`.
+* Expired login requests are purged hourly by the server (`purgeChallenges`). Login-history filters (result, kind, time range, device) and a notification centre are on the Security page of web and Android; the API takes `result`, `type`, `q`, `from`, `to` on `/v1/security/events` and `all=1` on `/v1/security/notices`.
 * A Super Admin cannot bypass 2FA or approval, by design.
 * The 2FA and approval flows are covered by backend and web tests but have not been exercised on a physical device yet.
 
 ## 8. Super Admin: new-device request limits
 
 `GET/POST /v1/admin/security/approval-limits` (Super Admin only; saving needs a password typed in the last 10 minutes). Fields: `maxRequests` (1-20, default 5; counted PER DEVICE, and an account as a whole allows four times as many; a device retrying while its own request waits is not counted), `windowMinutes` (1-120, default 15), `expiryMinutes` (1-30, default 5). Stored as kind `secsettings` in `security_docs`, read on every request so a change applies at once with no restart. Out-of-range values are refused with 400, so the protection can be tuned but never switched off. Each change is written to the audit log (`APPROVAL_LIMITS_CHANGED`, with the old and new values). Screen: Security Audit Logs on web and Android.
+
+## 9. Account recovery (lost password AND authenticator)
+
+For an account with a **confirmed recovery e-mail**. Website page `/recover` (link on the sign-in page; the Android sign-in opens it in the browser).
+
+1. `POST /v1/public/recovery/request {username}`: a 6-digit code goes to the confirmed recovery e-mail (15 minutes, one use, 5 tries). The answer has the same shape for every username, so nothing says whether an account exists. No e-mail is sent for an unknown account or one without a confirmed recovery e-mail.
+2. `POST /v1/public/recovery/verify {requestId, pollToken, code}`: the right code starts a **24-hour waiting period**. The owner gets an in-app notice and an e-mail ("sign in, or press This was not me").
+3. Cancel: the owner signing in (any device) cancels it; `POST /v1/security/recovery/cancel` ("This was not me", shown on the Security page while one is waiting); the requester can cancel with `POST /v1/public/recovery/cancel`.
+4. `POST /v1/public/recovery/complete {requestId, pollToken, newPassword}` after the wait: sets the password, ends every session, ends trusted devices, and turns two-factor and device approval off (set up again). The request is then spent.
+
+`requestId` + `pollToken` (a secret only the requesting browser holds; the server keeps a hash) are required for status, verify, complete and cancel. No administrator can shorten the wait or skip the code. Events: `RECOVERY_CODE_SENT`, `RECOVERY_STARTED`, `RECOVERY_CANCELLED`, `RECOVERY_COMPLETED`. Accounts without a confirmed recovery e-mail still use "Forgot password?" (an Admin issues a temporary password; two-factor stays on).

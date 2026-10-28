@@ -1,6 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { rateLimit } from './rateLimit.js';
 import { config } from './config.js';
+import { hashPassword } from './passwords.js';
 import { maskEmail } from './loginApproval.js';
 import { loadActor } from './policy/index.js';
 
@@ -165,6 +166,7 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
 
   /** A device session is created ONLY after the sign-in is complete (password, and the second factor when the account has one). */
   async function createSession(personId, info, ip, authMethod) {
+    await cancelRecoveries(personId, 'signed-in'); // the real owner signing in ends any recovery started in their name
     const sessionId = newId();
     const known = (await store.secList('dsession', personId, { limit: 200 })).some((s) => s.data.deviceId && s.data.deviceId === info.deviceId);
     const doc = { sessionId, ...info, ip: maskIp(ip), location: null, authMethod, createdAt: Date.now(), lastActiveAt: Date.now(), status: 'active', revokedAt: null, revokedBy: null, revokedReason: null, customName: null };
@@ -661,6 +663,121 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
     await store.secPut('secsettings', 'approval', req.personId, { ...next, updatedBy: req.personId, updatedAt: Date.now() });
     await event(req.personId, 'APPROVAL_LIMITS_CHANGED', { meta: { before: { maxRequests: before.maxRequests, windowMinutes: before.windowMinutes, expiryMinutes: before.expiryMinutes }, after: next } });
     res.json(await settingsReply());
+  });
+
+  // ---- account recovery: lost the password AND the authenticator -------------------------------------------------------------------------------------------------------
+  // 1. request   a code goes to the account's CONFIRMED recovery e-mail (the answer is the same for every username: nothing says whether an account exists)
+  // 2. verify    the right code starts a waiting period (24 hours); the owner is told in the app and by e-mail, and signing in or pressing "This was not me" cancels it
+  // 3. complete  after the wait, a new password is set: every session ends, trusted devices and two-factor are cleared (it is set up again). No administrator can shorten the wait or skip the code.
+  const RECOVERY_WAIT_MS = limits.recoveryWaitMs ?? 24 * 3_600_000;
+  const RECOVERY_CODE_MS = 15 * 60_000;
+  const RECOVERY_LIVE_MS = 48 * 3_600_000; // how long after the wait the request can still be completed
+  const recoveryLimit = rateLimit({ windowMs: 10 * 60_000, max: 10, key: (req) => req.ip, ...limits.recovery });
+  const recoveryTryLimit = rateLimit({ windowMs: 10 * 60_000, max: 30, key: (req) => `${req.ip}|${String(req.body?.requestId ?? '').slice(0, 40)}`, ...limits.recoveryTry });
+  const recoveryOf = async (req, res) => {
+    const c = await store.getChallenge(String(req.body?.requestId ?? '').slice(0, 64));
+    if (!c || c.kind !== 'recovery' || !same(c.data.pollHash, sha256(String(req.body?.pollToken ?? '')))) { res.status(404).json({ error: 'not-found' }); return null; }
+    return c;
+  };
+  const recoveryStatus = (c) => (c.data.status === 'waiting' && Date.now() >= c.data.readyAt ? 'ready' : c.data.status);
+  async function cancelRecoveries(personId, why) {
+    let n = 0;
+    for (const c of await store.listChallenges(personId, 'recovery')) {
+      if (c.data.status !== 'waiting' && c.data.status !== 'code') continue;
+      await store.putChallenge(c.id, { ...c, data: { ...c.data, status: 'cancelled' } });
+      if (c.data.status === 'waiting') {
+        n += 1;
+        await event(personId, 'RECOVERY_CANCELLED', { notify: true, meta: { why } });
+      }
+    }
+    return n;
+  }
+
+  app.post('/v1/public/recovery/request', enabled, recoveryLimit, async (req, res) => {
+    if (!mailer) return res.status(409).json({ error: 'email-not-available' });
+    const fake = () => res.json({ requestId: randomBytes(12).toString('base64url'), pollToken: randomBytes(24).toString('base64url'), expiresAt: Date.now() + RECOVERY_CODE_MS });
+    const username = clean(req.body?.username, 100);
+    if (!username) return res.status(400).json({ error: 'username-required' });
+    const found = await store.findPersonByUsername(username);
+    const personId = found?.id ?? null;
+    const account = personId ? await store.getAccount(personId) : null;
+    const email = personId ? (await a2fa(personId)).recoveryEmail : null;
+    if (!personId || !account || account.disabled || !email?.verified) return fake();
+    for (const old of await store.listChallenges(personId, 'recovery')) {
+      if (old.data.status === 'code') await store.putChallenge(old.id, { ...old, data: { ...old.data, status: 'superseded' } });
+    }
+    const id = randomBytes(12).toString('base64url');
+    const pollToken = randomBytes(24).toString('base64url');
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const expiresAt = Date.now() + RECOVERY_CODE_MS;
+    await store.putChallenge(id, { personId, kind: 'recovery', expiresAt, data: { status: 'code', pollHash: sha256(pollToken), codeHash: sha256(`${id}:${code}`), tries: 0, email: email.address, createdAt: Date.now(), ip: maskIp(req.ip) } });
+    await mailer.send(email.address, 'GoPreach account recovery code', `Your GoPreach account recovery code is ${code}. It works once, for 15 minutes. If you did not ask for it, ignore this e-mail: nothing changes unless the code is used.`);
+    await event(personId, 'RECOVERY_CODE_SENT', { meta: { ip: maskIp(req.ip) } });
+    res.json({ requestId: id, pollToken, expiresAt });
+  });
+
+  app.post('/v1/public/recovery/verify', enabled, recoveryTryLimit, async (req, res) => {
+    const c = await recoveryOf(req, res);
+    if (!c) return;
+    if (c.data.status !== 'code') return res.status(409).json({ error: 'wrong-state', status: recoveryStatus(c) });
+    if (c.data.tries >= MAX_TRIES) { await store.deleteChallenge(c.id); return res.status(429).json({ error: 'too-many-tries' }); }
+    if (!same(c.data.codeHash, sha256(`${c.id}:${String(req.body?.code ?? '').trim()}`))) {
+      await store.putChallenge(c.id, { ...c, data: { ...c.data, tries: c.data.tries + 1 } });
+      return res.status(401).json({ error: 'invalid-code' });
+    }
+    const readyAt = Date.now() + RECOVERY_WAIT_MS;
+    await store.putChallenge(c.id, { ...c, expiresAt: readyAt + RECOVERY_LIVE_MS, data: { ...c.data, status: 'waiting', readyAt, codeHash: null } });
+    await event(c.personId, 'RECOVERY_STARTED', { notify: true, meta: { readyAt, ip: c.data.ip } });
+    if (mailer && c.data.email) {
+      mailer.send(c.data.email, 'GoPreach: account recovery started', `Someone entered the recovery code of your GoPreach account. In ${Math.round(RECOVERY_WAIT_MS / 3_600_000)} hours they can set a new password and turn off two-factor sign-in. If this was NOT you: sign in (that cancels it) or open Security & Device Management and press "This was not me", then change your password.`).catch(() => {});
+    }
+    res.json({ status: 'waiting', readyAt });
+  });
+
+  app.post('/v1/public/recovery/status', enabled, recoveryTryLimit, async (req, res) => {
+    const c = await recoveryOf(req, res);
+    if (!c) return;
+    res.json({ status: recoveryStatus(c), readyAt: c.data.readyAt ?? null });
+  });
+
+  app.post('/v1/public/recovery/cancel', enabled, recoveryTryLimit, async (req, res) => {
+    const c = await recoveryOf(req, res);
+    if (!c) return;
+    if (c.data.status === 'waiting' || c.data.status === 'code') {
+      await store.putChallenge(c.id, { ...c, data: { ...c.data, status: 'cancelled' } });
+      if (c.data.status === 'waiting') await event(c.personId, 'RECOVERY_CANCELLED', { notify: true, meta: { why: 'requester' } });
+    }
+    res.json({ ok: true });
+  });
+
+  app.post('/v1/public/recovery/complete', enabled, recoveryTryLimit, async (req, res) => {
+    const c = await recoveryOf(req, res);
+    if (!c) return;
+    const status = recoveryStatus(c);
+    if (status === 'waiting') return res.status(409).json({ error: 'not-yet', readyAt: c.data.readyAt });
+    if (status !== 'ready') return res.status(409).json({ error: 'wrong-state', status });
+    const newPassword = req.body?.newPassword;
+    if (typeof newPassword !== 'string' || newPassword.length < 6 || newPassword.length > 200) return res.status(400).json({ error: 'weak-password' });
+    const personId = c.personId;
+    await store.setPassword(personId, await hashPassword(newPassword));
+    await store.deleteRefreshTokens(personId);
+    const ended = await revokeMany(personId, { by: 'recovery', reason: 'account-recovery' });
+    await removeTrust(personId);
+    const s = await a2fa(personId);
+    await saveA2fa(personId, { enabled: false, recoveryEmail: s.recoveryEmail ?? null }); // two-factor and device approval start again from nothing
+    await store.putChallenge(c.id, { ...c, data: { ...c.data, status: 'done' } });
+    await event(personId, 'RECOVERY_COMPLETED', { notify: true, meta: { sessionsEnded: ended, ip: c.data.ip } });
+    if (mailer && c.data.email) mailer.send(c.data.email, 'GoPreach: your password was reset', 'The password of your GoPreach account was reset through account recovery, every device was signed out and two-factor sign-in was turned off. If this was not you, contact your Admin at once.').catch(() => {});
+    res.json({ ok: true });
+  });
+
+  // the owner, signed in: is a recovery waiting, and "This was not me"
+  app.get('/v1/security/recovery', enabled, auth, async (req, res) => {
+    const c = (await store.listChallenges(req.personId, 'recovery')).find((x) => x.data.status === 'waiting');
+    res.json({ pending: c ? { id: c.id, readyAt: c.data.readyAt, createdAt: c.data.createdAt, ip: c.data.ip ?? null, status: recoveryStatus(c) } : null });
+  });
+  app.post('/v1/security/recovery/cancel', enabled, auth, actLimit, async (req, res) => {
+    res.json({ ok: true, cancelled: await cancelRecoveries(req.personId, 'owner') });
   });
 
   return {
