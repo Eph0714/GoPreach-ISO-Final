@@ -64,7 +64,7 @@ test('changing a password needs a recently typed one, and the new one works', as
   const changed = await post('/v1/auth/password', { newPassword: 'NewSecret456' }, accessToken);
   assert.equal(changed.status, 200);
   assert.equal((await login('pub001', 'Secret123')).status, 401);
-  assert.equal((await post('/v1/auth/login', { email: 'pub001@gopreach.app', password: 'NewSecret456' })).status, 409, 'the session that changed the password is still the active one');
+  assert.equal((await post('/v1/auth/login', { email: 'pub001@gopreach.app', password: 'NewSecret456' })).status, 200, 'the new password signs in');
   assert.equal((await post('/v1/auth/password', { newPassword: 'abc' }, accessToken)).status, 400, 'too short');
   const reauth = await post('/v1/auth/reauth', { password: 'wrong' }, accessToken);
   assert.equal(reauth.status, 401);
@@ -143,7 +143,7 @@ test('sign-in limits follow the account, and renewing a session never uses the s
   } finally { srv.close(); }
 });
 
-// ---- one account, one session ----
+// ---- one account, any number of devices: each is a session the account holder can end ----
 async function sessionApp(extra = {}) {
   const st = new MemoryStore();
   await st.transaction((tx) => tx.put('people', 'solo01', person(null), 'seed'));
@@ -155,66 +155,40 @@ async function sessionApp(extra = {}) {
   return { st, srv, call, signIn };
 }
 
-test('no active session: sign-in succeeds; a second device is told the account is active and nothing changes until it agrees', async () => {
-  const { srv, call, signIn } = await sessionApp();
-  try {
-    const web = await (await signIn({ device: 'GoPreach Web (Chrome on Windows)' })).json();
-    assert.ok(web.accessToken);
-    const blocked = await signIn({ device: 'Android phone' });
-    assert.equal(blocked.status, 409);
-    const info = await blocked.json();
-    assert.equal(info.error, 'session-active');
-    assert.equal(info.device, 'GoPreach Web (Chrome on Windows)');
-    assert.ok(info.lastActiveAt > 0);
-    assert.equal((await call('/v1/presence', {}, web.accessToken)).status, 200, 'cancelling keeps the existing session working');
-    assert.equal((await signIn({}, 'wrong-password')).status, 401, 'a wrong password reveals nothing about a session');
-  } finally { srv.close(); }
-});
-
-test('ending the other session revokes it on the server: its tokens stop working, online or not', async () => {
-  const { st, srv, call, signIn } = await sessionApp();
-  try {
-    const old = await (await signIn({ device: 'Old phone' })).json();
-    const fresh = await (await loginTakingOver(st, call, { email: 'solo01@gopreach.app', password: 'Secret123', device: 'Web' })).json();
-    const refused = await call('/v1/presence', {}, old.accessToken);
-    assert.equal(refused.status, 401);
-    assert.equal((await refused.json()).error, 'session-ended');
-    const renew = await call('/v1/auth/refresh', { refreshToken: old.refreshToken });
-    assert.equal(renew.status, 401, 'an offline device that comes back cannot renew either');
-    assert.equal((await call('/v1/presence', {}, fresh.accessToken)).status, 200);
-    assert.notEqual(old.accessToken, fresh.accessToken);
-  } finally { srv.close(); }
-});
-
-test('two sign-ins at the same moment leave exactly one session', async () => {
+test('several devices can be signed in at the same time, each with its own session', async () => {
   const { srv, call, signIn } = await sessionApp();
   try {
     const results = await Promise.all([signIn({ device: 'A' }), signIn({ device: 'B' }), signIn({ device: 'C' })]);
-    const codes = results.map((r) => r.status).sort();
-    assert.deepEqual(codes, [200, 409, 409]);
-    const winner = await (await results.find((r) => r.status === 200)).json();
-    assert.equal((await call('/v1/presence', {}, winner.accessToken)).status, 200);
+    assert.deepEqual(results.map((r) => r.status), [200, 200, 200]);
+    const tokens = await Promise.all(results.map((r) => r.json()));
+    assert.equal(new Set(tokens.map((t) => t.sessionId)).size, 3, 'three separate sessions');
+    for (const t of tokens) assert.equal((await call('/v1/presence', {}, t.accessToken)).status, 200);
+    assert.equal((await signIn({}, 'wrong-password')).status, 401);
   } finally { srv.close(); }
 });
 
-test('a session nobody has used for a long time no longer blocks a sign-in', async () => {
-  const { st, srv, signIn } = await sessionApp();
+test('signing out ends only that device: its tokens stop working, the others carry on', async () => {
+  const { srv, call, signIn } = await sessionApp();
   try {
-    await signIn({ device: 'Forgotten tablet' });
-    st.sessions.get('solo01').lastActiveAt = Date.now() - 13 * 3_600_000;
-    assert.equal((await signIn({ device: 'Phone' })).status, 200);
+    const a = await (await signIn({ device: 'Phone' })).json();
+    const b = await (await signIn({ device: 'Web' })).json();
+    await call('/v1/auth/logout', { refreshToken: a.refreshToken });
+    const refused = await call('/v1/presence', {}, a.accessToken);
+    assert.equal(refused.status, 401);
+    assert.equal((await refused.json()).error, 'session-ended');
+    assert.equal((await call('/v1/auth/refresh', { refreshToken: a.refreshToken })).status, 401);
+    assert.equal((await call('/v1/presence', {}, b.accessToken)).status, 200);
   } finally { srv.close(); }
 });
 
-test('signing out frees the account; sessions of a reset password end', async () => {
+test('a password reset by an administrator ends every session of the account', async () => {
   const { st, srv, call, signIn } = await sessionApp();
   try {
     const a = await (await signIn({})).json();
-    await call('/v1/auth/logout', { refreshToken: a.refreshToken });
     const b = await (await signIn({})).json();
-    assert.ok(b.accessToken);
-    await st.endSession('solo01');
-    assert.equal((await call('/v1/presence', {}, b.accessToken)).status, 401);
+    await st.endSession('solo01'); // the legacy single-session row never decides any more
+    assert.equal((await call('/v1/presence', {}, a.accessToken)).status, 200);
+    assert.equal((await call('/v1/presence', {}, b.accessToken)).status, 200);
   } finally { srv.close(); }
 });
 
@@ -225,6 +199,6 @@ test('renewing keeps the same session, and wrong-password attempts are still lim
     const b = await (await call('/v1/auth/refresh', { refreshToken: a.refreshToken })).json();
     assert.equal((await call('/v1/presence', {}, b.accessToken)).status, 200);
     for (let i = 0; i < 10; i++) await signIn({}, 'bad');
-    assert.equal((await signIn({ endOtherSession: true })).status, 429, 'brute force protection is intact');
+    assert.equal((await signIn({})).status, 429, 'brute force protection is intact');
   } finally { srv.close(); }
 });

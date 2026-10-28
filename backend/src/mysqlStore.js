@@ -46,6 +46,10 @@ export class MysqlStore {
       id VARCHAR(64) NOT NULL PRIMARY KEY, person_id VARCHAR(190) NOT NULL, kind VARCHAR(30) NOT NULL, data TEXT NOT NULL, expires_at BIGINT NOT NULL,
       KEY idx_person_kind (person_id, kind)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS security_docs (
+      n BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, kind VARCHAR(16) NOT NULL, doc_id VARCHAR(100) NOT NULL, person_id VARCHAR(190) NOT NULL, data MEDIUMTEXT NOT NULL,
+      created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, UNIQUE KEY uq_doc (kind, doc_id), KEY idx_person_kind (person_id, kind)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
     await MysqlCoData.migrate(pool);
     return new MysqlStore(pool);
   }
@@ -284,6 +288,29 @@ export class MysqlStore {
     if (sessionId === undefined) await this.pool.query('DELETE FROM sessions WHERE person_id = ?', [personId]);
     else await this.pool.query('DELETE FROM sessions WHERE person_id = ? AND session_id = ?', [personId, sessionId]);
   }
+
+
+
+  // ---- security documents: device sessions, 2FA settings, trusted devices and the append-only security log (see security.js) ----
+  static secRow(r) { return { id: r.doc_id, personId: r.person_id, data: typeof r.data === 'string' ? JSON.parse(r.data) : r.data, createdAt: Number(r.created_at), updatedAt: Number(r.updated_at), n: Number(r.n) }; }
+  async secPut(kind, id, personId, data) {
+    const now = Date.now();
+    await this.pool.query(
+      'INSERT INTO security_docs (kind, doc_id, person_id, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE person_id = VALUES(person_id), data = VALUES(data), updated_at = VALUES(updated_at)',
+      [kind, id, personId, JSON.stringify(data), now, now],
+    );
+  }
+  async secGet(kind, id) { const [rows] = await this.pool.query('SELECT * FROM security_docs WHERE kind = ? AND doc_id = ?', [kind, id]); return rows.length ? MysqlStore.secRow(rows[0]) : null; }
+  async secList(kind, personId, { limit = 500 } = {}) {
+    const [rows] = await this.pool.query('SELECT * FROM security_docs WHERE kind = ? AND person_id = ? ORDER BY n DESC LIMIT ?', [kind, personId, limit]);
+    return rows.map(MysqlStore.secRow);
+  }
+  async secListKind(kind, { limit = 1000, before = null } = {}) {
+    const [rows] = await this.pool.query(`SELECT * FROM security_docs WHERE kind = ? ${before === null ? '' : 'AND n < ?'} ORDER BY n DESC LIMIT ?`, before === null ? [kind, limit] : [kind, before, limit]);
+    return rows.map(MysqlStore.secRow);
+  }
+  async secDelete(kind, id) { await this.pool.query('DELETE FROM security_docs WHERE kind = ? AND doc_id = ?', [kind, id]); }
+  async deleteRefreshTokensBySession(personId, sessionId) { await this.pool.query('DELETE FROM refresh_tokens WHERE person_id = ? AND session_id = ?', [personId, sessionId]); }
 
   async close() { await this.pool.end(); }
 }

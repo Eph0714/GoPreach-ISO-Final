@@ -8,6 +8,7 @@ import { config } from './config.js';
 import { mountPasskeys } from './passkeys.js';
 import { audit } from './coAccess.js';
 import { mountLoginApproval } from './loginApproval.js';
+import { mountSecurity } from './security.js';
 
 /**
  * GoPreach's own sign-in (replaces Firebase Auth). The app still signs in with "<personId>@<domain>" and a password.
@@ -59,17 +60,16 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
     };
   }
 
-  /** A password / passkey sign-in that was verified: claims the account's session, then issues the tokens. { conflict } when another live session holds it. */
-  async function startSession(personId, authTime, { device, endOtherSession } = {}) {
-    const sessionId = randomBytes(18).toString('base64url');
-    const claim = await store.claimSession(personId, { sessionId, device: cleanDevice(device), now: Date.now(), idleMs: SESSION_IDLE_MS, replace: endOtherSession === true });
-    if (!claim.ok) return { conflict: claim.active };
-    await store.deleteRefreshTokens(personId); // nothing of any earlier session survives
-    return issue(personId, authTime, sessionId);
+  /** A passkey sign-in that was verified (a passkey is its own second factor): opens a device session and issues the tokens. Any number of devices may be signed in at once. */
+  async function startSession(personId, authTime, { device } = {}) {
+    const ds = await sec.createSession(personId, sec.deviceInfo(device), null, 'passkey');
+    return { ...(await issue(personId, authTime, ds.sessionId)), sessionId: ds.sessionId };
   }
   const refuseActive = (res, active) => res.status(409).json({ error: 'session-active', device: active.device ?? null, lastActiveAt: active.lastActiveAt });
 
-  const approvals = mountLoginApproval(app, { store, auth, enabled, mailer, limits: limits.approval, requestMs: loginRequestMs });
+  const sec = mountSecurity(app, { store, auth, enabled, mailer, issue, secret, limits: limits.security });
+  // Older apps still ask for login requests: there are none any more (devices no longer queue behind one session), so they simply see an empty list.
+  mountLoginApproval(app, { store, auth, enabled, mailer, limits: limits.approval, requestMs: loginRequestMs });
 
   mountPasskeys(app, { store, auth, enabled, loginLimit, issue, startSession, refuseActive, passkeyConfig: limits.passkey ?? config.passkey });
 
@@ -82,25 +82,25 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
   }
 
   app.post('/v1/auth/login', enabled, sprayLimit, loginLimit, async (req, res) => {
-    const { email, password, device, approval } = req.body ?? {};
+    const { email, password, device, trustedToken } = req.body ?? {};
     const personId = personIdFromEmail(email);
     if (!personId || typeof password !== 'string' || password.length === 0 || password.length > 200) return res.status(401).json({ error: 'invalid-credentials' });
     try {
       if (tooMany(personId)) return res.status(429).json({ error: 'too-many-requests' });
-      const { ok } = await checkPassword(personId, password);
-      if (!ok) { noteFail(personId); return res.status(401).json({ error: 'invalid-credentials' }); }
+      const { ok, account } = await checkPassword(personId, password);
+      if (!ok) {
+        noteFail(personId);
+        if (account) await sec.event(personId, 'LOGIN_FAILED', { result: 'failure', meta: { device: sec.deviceInfo(device).name } }); // an unknown account is never named in the log
+        return res.status(401).json({ error: 'invalid-credentials' });
+      }
       accountFails.delete(personId);
       await store.touchLogin(personId);
-      // The password alone never takes over a live session (a client's endOtherSession is ignored): the other device must approve, or an e-mail code / passkey must prove it.
-      // An approved login request (the password is right, and the request was approved by the signed-in device or by an e-mail code) is spent here, once.
-      const approved = approval && typeof approval === 'object' ? await approvals.redeem(personId, approval) : false;
-      const started = await startSession(personId, Date.now(), { device, endOtherSession: approved });
-      if (started.conflict) {
-        const request = await approvals.createRequest(personId, started.conflict, { device: cleanDevice(device), ip: req.ip });
-        if (request.tooMany) return res.status(429).json({ error: 'too-many-requests' });
-        return res.status(409).json({ error: 'session-active', ...request });
-      }
-      res.json(started);
+      // The password is right. An account with two-factor sign-in answers 202 and the device must prove the second factor (a trusted device may skip it); nothing else is
+      // issued before that. Without 2FA the sign-in completes. Either way ANY number of devices may be signed in; each one is a session the account holder can end.
+      const gate = await sec.gate(personId, { device, ip: req.ip, trustedToken });
+      if (gate.challenge) return res.status(202).json(gate.challenge);
+      const ds = await sec.createSession(personId, gate.info, req.ip, gate.method);
+      res.json({ ...(await issue(personId, Date.now(), ds.sessionId)), sessionId: ds.sessionId });
     } catch (e) {
       console.error('login failed', e);
       res.status(500).json({ error: 'Server error' });
@@ -115,14 +115,20 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       if (!row) return res.status(401).json({ error: 'invalid-token' });
       const account = await store.getAccount(row.personId);
       if (!account || account.disabled) return res.status(401).json({ error: 'invalid-token' });
-      const session = await store.getSession(row.personId);
       let sessionId = row.sessionId;
-      if (session ? session.sessionId !== sessionId : sessionId) return res.status(401).json({ error: 'session-ended' }); // replaced or ended elsewhere
-      if (!session) { // a sign-in from before sessions existed adopts the first one
-        sessionId = randomBytes(18).toString('base64url');
-        const claim = await store.claimSession(row.personId, { sessionId, device: null, now: Date.now(), idleMs: SESSION_IDLE_MS, replace: false });
-        if (!claim.ok) return res.status(401).json({ error: 'session-ended' });
-      } else await store.touchSession(row.personId, sessionId, Date.now());
+      const device = sessionId ? await store.secGet('dsession', sessionId) : null;
+      if (device) {
+        // a revoked (or someone else's) device session can never renew
+        if (device.personId !== row.personId || device.data.status !== 'active') return res.status(401).json({ error: 'session-ended' });
+        await store.secPut('dsession', device.id, device.personId, { ...device.data, lastActiveAt: Date.now() });
+      } else {
+        const session = await store.getSession(row.personId);
+        if (session ? session.sessionId !== sessionId : sessionId) return res.status(401).json({ error: 'session-ended' }); // replaced or ended elsewhere
+        if (!session) { // a sign-in from before sessions existed becomes a device session
+          const ds = await sec.createSession(row.personId, sec.deviceInfo(null), null, 'password');
+          sessionId = ds.sessionId;
+        } else await store.touchSession(row.personId, sessionId, Date.now());
+      }
       res.json(await issue(row.personId, row.authTime, sessionId));
     } catch (e) {
       console.error('refresh failed', e);
@@ -134,7 +140,10 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
     const token = req.body?.refreshToken;
     if (typeof token === 'string' && token.length <= 200) {
       const row = await store.takeRefreshToken(sha256(token)).catch(() => null);
-      if (row?.sessionId) await store.endSession(row.personId, row.sessionId).catch(() => {}); // signing out frees the account for the next sign-in
+      if (row?.sessionId) {
+        await store.endSession(row.personId, row.sessionId).catch(() => {});
+        await sec.endOwn(row.personId, row.sessionId).catch(() => {}); // the device session ends: its access token is refused from now on
+      }
     }
     res.json({ ok: true });
   });
@@ -161,6 +170,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       if (!(await store.getAccount(req.personId))) return res.status(404).json({ error: 'invalid-user' });
       await store.setPassword(req.personId, await hashPassword(newPassword));
       await store.deleteRefreshTokens(req.personId); // every other signed-in phone must sign in again
+      await sec.onPasswordChanged(req.personId, req.sessionId); // their sessions end now, trusted devices are no longer trusted
       res.json(await issue(req.personId, req.authTime, req.sessionId));
     } catch (e) {
       console.error('password change failed', e);
@@ -196,6 +206,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       await store.setPassword(personId, await hashPassword(password));
       await store.deleteRefreshTokens(personId); // sessions made with the old password end
       await store.endSession(personId);
+      await sec.onPasswordReset(personId, req.personId);
       await audit(store, req.personId, 'ACCOUNT_PASSWORD_RESET', 'Person', personId, 'temporary password set (the password itself is never recorded)');
       res.json({ ok: true });
     } catch (e) {

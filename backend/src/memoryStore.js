@@ -172,6 +172,27 @@ export class MemoryStore {
 
   async deleteRefreshTokens(personId) { for (const [k, v] of (this.refresh ??= new Map())) if (v.personId === personId) this.refresh.delete(k); }
 
+  // ---- security documents: device sessions, 2FA settings, trusted devices and the append-only security log (see security.js) ----
+  // kind: 'dsession' | 'a2fa' | 'trusted' | 'secevent'. Documents are small JSON objects owned by one person.
+  async secPut(kind, id, personId, data) {
+    const m = (this.sec ??= new Map());
+    const key = `${kind}/${id}`;
+    const old = m.get(key);
+    m.set(key, { kind, id, personId, data: structuredClone(data), createdAt: old?.createdAt ?? Date.now(), updatedAt: Date.now(), n: old?.n ?? (this.secN = (this.secN ?? 0) + 1) });
+  }
+  async secGet(kind, id) { const r = (this.sec ??= new Map()).get(`${kind}/${id}`); return r ? { id: r.id, personId: r.personId, data: structuredClone(r.data), createdAt: r.createdAt, updatedAt: r.updatedAt } : null; }
+  async secList(kind, personId, { limit = 500 } = {}) {
+    return [...(this.sec ??= new Map()).values()].filter((r) => r.kind === kind && r.personId === personId).sort((a, b) => b.n - a.n).slice(0, limit)
+      .map((r) => ({ id: r.id, personId: r.personId, data: structuredClone(r.data), createdAt: r.createdAt, updatedAt: r.updatedAt }));
+  }
+  /** Every document of a kind, newest first (the Super Admin's views). */
+  async secListKind(kind, { limit = 1000, before = null } = {}) {
+    return [...(this.sec ??= new Map()).values()].filter((r) => r.kind === kind && (before === null || r.n < before)).sort((a, b) => b.n - a.n).slice(0, limit)
+      .map((r) => ({ id: r.id, personId: r.personId, data: structuredClone(r.data), createdAt: r.createdAt, updatedAt: r.updatedAt, n: r.n }));
+  }
+  async secDelete(kind, id) { (this.sec ??= new Map()).delete(`${kind}/${id}`); }
+  async deleteRefreshTokensBySession(personId, sessionId) { for (const [k, v] of (this.refresh ??= new Map())) if (v.personId === personId && v.sessionId === sessionId) this.refresh.delete(k); }
+
   async close() {}
 }
 

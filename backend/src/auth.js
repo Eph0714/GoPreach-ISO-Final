@@ -47,10 +47,17 @@ export function authenticate({ devMode = false, secret = config.authSecret, stor
       const { payload } = await jwtVerify(token, key(secret), { issuer: ISSUER, algorithms: ['HS256'] });
       if (!payload.sub) return res.status(401).json({ error: 'Invalid token' });
       if (store) {
-        const session = await store.getSession(payload.sub);
-        // A token from before sessions existed (no sid) still works until the account's first session-aware sign-in.
-        if (session ? session.sessionId !== payload.sid : !!payload.sid) return res.status(401).json({ error: 'session-ended' });
-        if (session && Date.now() - session.lastActiveAt > TOUCH_EVERY_MS) await store.touchSession(payload.sub, session.sessionId, Date.now());
+        // A device session (security.js) is checked on EVERY request: once it is revoked, the very next call is refused, whatever time its token has left.
+        const device = payload.sid && typeof store.secGet === 'function' ? await store.secGet('dsession', payload.sid) : null;
+        if (device) {
+          if (device.personId !== payload.sub || device.data.status !== 'active') return res.status(401).json({ error: 'session-ended' });
+          if (Date.now() - device.data.lastActiveAt > TOUCH_EVERY_MS) await store.secPut('dsession', device.id, device.personId, { ...device.data, lastActiveAt: Date.now() });
+        } else {
+          const session = await store.getSession(payload.sub);
+          // A token from before device sessions existed still works until the account's next sign-in.
+          if (session ? session.sessionId !== payload.sid : !!payload.sid) return res.status(401).json({ error: 'session-ended' });
+          if (session && Date.now() - session.lastActiveAt > TOUCH_EVERY_MS) await store.touchSession(payload.sub, session.sessionId, Date.now());
+        }
         req.sessionId = payload.sid ?? null;
       }
       req.personId = payload.sub;

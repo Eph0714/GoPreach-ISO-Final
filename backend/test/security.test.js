@@ -1,0 +1,421 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { MemoryStore } from '../src/memoryStore.js';
+import { createApp } from '../src/app.js';
+import { hashPassword } from '../src/passwords.js';
+import { base32, hotp, totp, matchTotp, seal, unseal } from '../src/security.js';
+
+const SECRET = 'test-secret-test-secret-test-secret';
+const person = (extra = {}) => ({ isSuperAdmin: false, activeAdminRole: null, activeCongregationId: 'congA', firstName: 'Ana', lastName: 'Cruz', ...extra });
+
+async function world() {
+  const st = new MemoryStore();
+  const sent = [];
+  const mailer = { send: async (to, subject, text) => { sent.push({ to, subject, text }); } };
+  await st.transaction(async (tx) => {
+    await tx.put('people', 'ana001', person({ username: 'ana' }), 'seed');
+    await tx.put('people', 'ben001', person({ username: 'ben', activeCongregationId: 'congB', firstName: 'Ben' }), 'seed');
+    await tx.put('people', 'adm001', person({ username: 'admA', activeAdminRole: 'ADMIN_PER_CONGREGATION', firstName: 'Ada' }), 'seed');
+    await tx.put('people', 'sup001', person({ username: 'super', isSuperAdmin: true, activeAdminRole: 'SUPER_ADMIN', activeCongregationId: null, firstName: 'Sue' }), 'seed');
+    await tx.put('people', 'ele001', person({ username: 'elder', activeAdminRole: 'COORDINATOR_ELDER', firstName: 'Eli' }), 'seed');
+    await tx.put('congregations', 'congA', { name: 'Congregation A' }, 'seed');
+    await tx.put('congregations', 'congB', { name: 'Congregation B' }, 'seed');
+    await tx.put('roleAssignments', 'r1', { personId: 'ana001', congregationId: 'congA', roleType: 'PUBLISHER:REGULAR_PIONEER', status: 'ACTIVE' }, 'seed');
+  });
+  for (const id of ['ana001', 'ben001', 'adm001', 'sup001', 'ele001']) await st.createAccount(id, await hashPassword('Secret123'));
+  const srv = createApp(st, { authOptions: { secret: SECRET, mailer, limits: { login: { max: 1000 }, spray: { max: 1000 }, verify: { max: 1000 }, act: { max: 1000 } } } }).listen(0);
+  const url = `http://127.0.0.1:${srv.address().port}`;
+  const call = (method, path, body, token) => fetch(url + path, { method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const post = (path, body, token) => call('POST', path, body ?? {}, token);
+  const get = (path, token) => call('GET', path, null, token);
+  const login = (id, extra = {}, password = 'Secret123') => post('/v1/auth/login', { email: `${id}@gopreach.app`, password, ...extra });
+  const signIn = async (id, device = { id: `dev-${id}`, name: `${id} phone`, type: 'phone', os: 'Android', osVersion: '14', appVersion: '1.165.0' }) => (await login(id, { device })).json();
+  const enable2fa = async (id, session) => {
+    const setup = await (await post('/v1/security/2fa/totp/setup', {}, session.accessToken)).json();
+    const bytes = base32.decode(setup.secret);
+    const confirm = await post('/v1/security/2fa/totp/confirm', { code: totp(bytes) }, session.accessToken);
+    return { setup, bytes, confirm, ...(await confirm.json()) };
+  };
+  return { st, srv, sent, post, get, call, login, signIn, enable2fa, close: () => srv.close() };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+test('TOTP is RFC 6238: the published SHA-1 test vectors', () => {
+  const secret = Buffer.from('12345678901234567890');
+  for (const [t, code] of [[59, '94287082'], [1111111109, '07081804'], [1111111111, '14050471'], [1234567890, '89005924'], [2000000000, '69279037'], [20000000000, '65353130']]) {
+    assert.equal(totp(secret, t * 1000, 8), code);
+  }
+  assert.equal(hotp(secret, 0), '755224', 'RFC 4226 counter 0');
+  assert.equal(base32.encode(Buffer.from('foobar')), 'MZXW6YTBOI');
+  assert.deepEqual(base32.decode('MZXW6YTBOI'), Buffer.from('foobar'));
+  const now = Date.now();
+  assert.ok(matchTotp(secret, totp(secret, now), now) !== null);
+  assert.equal(matchTotp(secret, totp(secret, now - 5 * 60_000), now), null, 'an old code is not accepted');
+  assert.equal(matchTotp(secret, '12345', now), null);
+});
+
+test('the TOTP secret is sealed with AES-GCM and cannot be opened with another key or altered', () => {
+  const sealed = seal('JBSWY3DPEHPK3PXP', SECRET);
+  assert.ok(!sealed.includes('JBSWY3DPEHPK3PXP'));
+  assert.equal(unseal(sealed, SECRET), 'JBSWY3DPEHPK3PXP');
+  assert.throws(() => unseal(sealed, 'another-secret-another-secret-another'));
+  const bad = Buffer.from(sealed, 'base64url'); bad[bad.length - 1] ^= 1;
+  assert.throws(() => unseal(bad.toString('base64url'), SECRET));
+});
+
+test('login without 2FA: no prompt, and any number of devices may be signed in at once', async () => {
+  const w = await world();
+  try {
+    const a = await w.signIn('ana001', { id: 'dev-1', name: 'Phone' });
+    const b = await w.signIn('ana001', { id: 'dev-2', name: 'Tablet' });
+    assert.ok(a.accessToken && b.accessToken && a.sessionId !== b.sessionId);
+    const list = await (await w.get('/v1/security/devices', a.accessToken)).json();
+    assert.equal(list.devices.length, 2);
+    assert.equal(list.devices.filter((d) => d.current).length, 1);
+    assert.equal(list.devices.find((d) => d.current).deviceId, 'dev-1');
+    assert.ok(list.devices.every((d) => d.status === 'active' && !('refreshToken' in d) && !('accessToken' in d)), 'no token is ever listed');
+  } finally { w.close(); }
+});
+
+test('enabling 2FA needs a recently typed password and a code from the authenticator app; recovery codes are shown once', async () => {
+  const w = await world();
+  try {
+    const s = await w.signIn('ana001');
+    assert.equal((await (await w.get('/v1/security/status', s.accessToken)).json()).twoFactor.enabled, false);
+    const wrong = await w.post('/v1/security/2fa/totp/setup', {}, s.accessToken);
+    assert.equal(wrong.status, 200);
+    const setup = await wrong.json();
+    assert.match(setup.otpauthUri, /^otpauth:\/\/totp\/GoPreach:ana\?secret=[A-Z2-7]+&issuer=GoPreach/);
+    assert.equal((await w.post('/v1/security/2fa/totp/confirm', { code: '000000' }, s.accessToken)).status, 401, 'a wrong code does not turn it on');
+    assert.equal((await (await w.get('/v1/security/status', s.accessToken)).json()).twoFactor.enabled, false);
+    const ok = await w.post('/v1/security/2fa/totp/confirm', { code: totp(base32.decode(setup.secret)) }, s.accessToken);
+    assert.equal(ok.status, 200);
+    const { recoveryCodes } = await ok.json();
+    assert.equal(recoveryCodes.length, 10);
+    assert.match(recoveryCodes[0], /^[A-Z2-9]{5}-[A-Z2-9]{5}$/);
+    const status = await (await w.get('/v1/security/status', s.accessToken)).json();
+    assert.deepEqual([status.twoFactor.enabled, status.twoFactor.recoveryCodesLeft], [true, 10]);
+    assert.ok(!JSON.stringify([...w.st.sec.values()]).includes(setup.secret), 'the secret is not stored in clear');
+    assert.ok(!JSON.stringify([...w.st.sec.values()]).includes(recoveryCodes[0]), 'recovery codes are not stored in clear');
+  } finally { w.close(); }
+});
+
+test('sign-in with 2FA: password alone gives nothing; a right code gives the session; a wrong one and a replayed one do not', async () => {
+  const w = await world();
+  try {
+    const s = await w.signIn('ana001');
+    const e = await w.enable2fa('ana001', s);
+    const first = await w.login('ana001', { device: { id: 'dev-new', name: 'New phone', type: 'phone' } });
+    assert.equal(first.status, 202);
+    const c = await first.json();
+    assert.equal(c.twoFactorRequired, true);
+    assert.ok(!c.accessToken && !c.refreshToken, 'nothing is issued before the second factor');
+    assert.equal((await w.post('/v1/auth/2fa/verify', { challengeId: c.challengeId, challengeToken: 'nope' })).status, 401, 'the challenge secret is needed');
+    const bad = await w.post('/v1/auth/2fa/verify', { challengeId: c.challengeId, challengeToken: c.challengeToken, code: '123456' });
+    assert.equal(bad.status, 401);
+    assert.equal((await bad.json()).triesLeft, 4);
+    const code = totp(e.bytes);
+    // the setup consumed this time step: a code is never accepted twice
+    assert.equal((await w.post('/v1/auth/2fa/verify', { challengeId: c.challengeId, challengeToken: c.challengeToken, code })).status, 401, 'the code used to set up cannot be replayed');
+    const next = matchTotp(e.bytes, totp(e.bytes, Date.now() + 30_000), Date.now() + 30_000);
+    const good = await w.post('/v1/auth/2fa/verify', { challengeId: c.challengeId, challengeToken: c.challengeToken, code: totp(e.bytes, Date.now() + 30_000) });
+    assert.equal(good.status, 200);
+    const t = await good.json();
+    assert.ok(t.accessToken && t.sessionId && next);
+    assert.equal((await w.post('/v1/auth/2fa/verify', { challengeId: c.challengeId, challengeToken: c.challengeToken, code: totp(e.bytes, Date.now() + 60_000) })).status, 401, 'a challenge works once');
+    const list = await (await w.get('/v1/security/devices', t.accessToken)).json();
+    assert.equal(list.devices.find((d) => d.current).authMethod, 'password+totp');
+  } finally { w.close(); }
+});
+
+test('five wrong codes end the challenge', async () => {
+  const w = await world();
+  try {
+    const s = await w.signIn('ana001');
+    await w.enable2fa('ana001', s);
+    const c = await (await w.login('ana001', {})).json();
+    for (let i = 0; i < 5; i++) assert.equal((await w.post('/v1/auth/2fa/verify', { challengeId: c.challengeId, challengeToken: c.challengeToken, code: '000000' })).status, 401);
+    assert.equal((await w.post('/v1/auth/2fa/verify', { challengeId: c.challengeId, challengeToken: c.challengeToken, code: '000000' })).status, 429);
+    assert.equal((await w.post('/v1/auth/2fa/verify', { challengeId: c.challengeId, challengeToken: c.challengeToken, code: totp(base32.decode(unseal((await w.st.secGet('a2fa', 'ana001')).data.totp.secret, SECRET)), Date.now() + 30_000) })).status, 401, 'the challenge is gone');
+  } finally { w.close(); }
+});
+
+test('a recovery code signs in once and then never again; regenerating replaces them all', async () => {
+  const w = await world();
+  try {
+    const s = await w.signIn('ana001');
+    const e = await w.enable2fa('ana001', s);
+    const [one, two] = e.recoveryCodes;
+    const challenge = async () => (await w.login('ana001', {})).json();
+    let c = await challenge();
+    assert.equal((await w.post('/v1/auth/2fa/verify', { ...pick(c), recoveryCode: one })).status, 200);
+    c = await challenge();
+    assert.equal((await w.post('/v1/auth/2fa/verify', { ...pick(c), recoveryCode: one })).status, 401, 'used');
+    assert.equal((await w.post('/v1/auth/2fa/verify', { ...pick(c), recoveryCode: two.toLowerCase().replace('-', ' ') })).status, 200, 'case and separators do not matter');
+    const left = (await (await w.get('/v1/security/status', s.accessToken)).json()).twoFactor.recoveryCodesLeft;
+    assert.equal(left, 8);
+    const fresh = await (await w.post('/v1/security/2fa/recovery-codes', { recoveryCode: e.recoveryCodes[2] }, s.accessToken)).json();
+    assert.equal(fresh.recoveryCodes.length, 10);
+    c = await challenge();
+    assert.equal((await w.post('/v1/auth/2fa/verify', { ...pick(c), recoveryCode: e.recoveryCodes[3] })).status, 401, 'the old codes are invalid');
+    assert.equal((await w.post('/v1/auth/2fa/verify', { ...pick(c), recoveryCode: fresh.recoveryCodes[0] })).status, 200);
+  } finally { w.close(); }
+});
+const pick = (c) => ({ challengeId: c.challengeId, challengeToken: c.challengeToken });
+
+test('disabling 2FA needs a recent password and a current code; everything is then back to password only', async () => {
+  const w = await world();
+  try {
+    const s = await w.signIn('ana001');
+    const e = await w.enable2fa('ana001', s);
+    assert.equal((await w.post('/v1/security/2fa/disable', { code: '000000' }, s.accessToken)).status, 401);
+    const off = await w.post('/v1/security/2fa/disable', { code: totp(e.bytes, Date.now() + 30_000) }, s.accessToken);
+    assert.equal(off.status, 200);
+    assert.equal((await w.login('ana001', {})).status, 200, 'no prompt any more');
+    assert.equal((await (await w.get('/v1/security/status', s.accessToken)).json()).twoFactor.enabled, false);
+  } finally { w.close(); }
+});
+
+test('sensitive settings need a recently typed password', async () => {
+  const w = await world();
+  try {
+    const s = await w.signIn('ana001');
+    const e = await w.enable2fa('ana001', s);
+    // make the session look old: the access token carries the time the password was typed
+    const { signAccessToken } = await import('../src/auth.js');
+    const old = await signAccessToken('ana001', Date.now() - 20 * 60_000, SECRET, s.sessionId);
+    for (const [path, body] of [['/v1/security/2fa/totp/setup', {}], ['/v1/security/2fa/disable', { code: totp(e.bytes, Date.now() + 30_000) }], ['/v1/security/devices/revoke-others', {}], ['/v1/security/devices/revoke-all', {}], ['/v1/security/2fa/recovery-codes', { recoveryCode: e.recoveryCodes[0] }]]) {
+      const r = await w.post(path, body, old);
+      assert.equal(r.status, 403, path);
+      assert.equal((await r.json()).error, 'requires-recent-login');
+    }
+  } finally { w.close(); }
+});
+
+test('revoking a device ends it on the server at once: its token, its renewal and the others are untouched', async () => {
+  const w = await world();
+  try {
+    const phone = await w.signIn('ana001', { id: 'd1', name: 'Phone' });
+    const tablet = await w.signIn('ana001', { id: 'd2', name: 'Tablet' });
+    const other = await w.signIn('ana001', { id: 'd3', name: 'Web' });
+    assert.equal((await w.post('/v1/presence', {}, tablet.accessToken)).status, 200);
+    const r = await w.post(`/v1/security/devices/${tablet.sessionId}/revoke`, {}, phone.accessToken);
+    assert.equal(r.status, 200);
+    const refused = await w.post('/v1/presence', {}, tablet.accessToken);
+    assert.equal(refused.status, 401);
+    assert.equal((await refused.json()).error, 'session-ended', 'the existing clients already treat this as "signed out"');
+    assert.equal((await w.post('/v1/auth/refresh', { refreshToken: tablet.refreshToken })).status, 401, 'it cannot renew');
+    assert.equal((await w.post('/v1/presence', {}, phone.accessToken)).status, 200);
+    assert.equal((await w.post('/v1/presence', {}, other.accessToken)).status, 200, 'other sessions were not touched');
+    const list = await (await w.get('/v1/security/devices', phone.accessToken)).json();
+    const row = list.devices.find((d) => d.sessionId === tablet.sessionId);
+    assert.deepEqual([row.status, row.revokedBy], ['revoked', 'self']);
+  } finally { w.close(); }
+});
+
+test('Log Out Other Devices keeps this one; Log Out All Devices ends every one, this included', async () => {
+  const w = await world();
+  try {
+    const a = await w.signIn('ana001', { id: 'a' });
+    const b = await w.signIn('ana001', { id: 'b' });
+    const c = await w.signIn('ana001', { id: 'c' });
+    const others = await (await w.post('/v1/security/devices/revoke-others', {}, a.accessToken)).json();
+    assert.equal(others.revoked, 2);
+    assert.equal((await w.post('/v1/presence', {}, b.accessToken)).status, 401);
+    assert.equal((await w.post('/v1/presence', {}, c.accessToken)).status, 401);
+    assert.equal((await w.post('/v1/presence', {}, a.accessToken)).status, 200, 'this device is preserved');
+    const all = await (await w.post('/v1/security/devices/revoke-all', {}, a.accessToken)).json();
+    assert.equal(all.revoked, 1);
+    assert.equal((await w.post('/v1/presence', {}, a.accessToken)).status, 401, 'this device too');
+    assert.equal((await w.post('/v1/auth/refresh', { refreshToken: a.refreshToken })).status, 401);
+    const again = await w.signIn('ana001', { id: 'a' });
+    assert.ok(again.accessToken, 'a new sign-in works');
+  } finally { w.close(); }
+});
+
+test('nobody can see or end another person\'s device', async () => {
+  const w = await world();
+  try {
+    const ana = await w.signIn('ana001');
+    const ben = await w.signIn('ben001');
+    assert.equal((await w.post(`/v1/security/devices/${ben.sessionId}/revoke`, {}, ana.accessToken)).status, 404);
+    assert.equal((await w.post('/v1/presence', {}, ben.accessToken)).status, 200);
+    const list = await (await w.get('/v1/security/devices', ana.accessToken)).json();
+    assert.ok(list.devices.every((d) => d.sessionId !== ben.sessionId));
+    assert.equal((await w.get('/v1/admin/security/sessions', ana.accessToken)).status, 403, 'an ordinary account has no device monitoring');
+    assert.equal((await w.post(`/v1/admin/security/sessions/${ben.sessionId}/revoke`, {}, ana.accessToken)).status, 403);
+  } finally { w.close(); }
+});
+
+test('a trusted device skips the code; it is bound to a secret credential and to the device; removing or a password change ends the trust', async () => {
+  const w = await world();
+  try {
+    const s = await w.signIn('ana001', { id: 'my-phone', name: 'My phone' });
+    const e = await w.enable2fa('ana001', s);
+    assert.equal((await w.post('/v1/security/trusted/current', { code: '000000' }, s.accessToken)).status, 401, 'trust needs a verified code');
+    const trust = await (await w.post('/v1/security/trusted/current', { code: totp(e.bytes, Date.now() + 30_000) }, s.accessToken)).json();
+    assert.ok(trust.trustedToken.length > 30 && trust.trustedUntil > Date.now());
+    assert.ok(!JSON.stringify([...w.st.sec.values()]).includes(trust.trustedToken), 'only a hash of the credential is kept');
+    const phone = { id: 'my-phone', name: 'My phone' };
+    const skip = await w.login('ana001', { device: phone, trustedToken: trust.trustedToken });
+    assert.equal(skip.status, 200, 'trusted: no code');
+    assert.equal((await w.login('ana001', { device: phone, trustedToken: 'x'.repeat(40) })).status, 202, 'a wrong credential is not trust');
+    assert.equal((await w.login('ana001', { device: { id: 'another', name: 'My phone' }, trustedToken: trust.trustedToken })).status, 202, 'the same credential on another device is not trusted');
+    assert.equal((await w.login('ana001', { device: { name: 'My phone' } })).status, 202, 'a device name alone is never trust');
+    const list = await (await w.get('/v1/security/devices', s.accessToken)).json();
+    assert.equal(list.trusted.length, 1);
+    assert.equal(list.devices.find((d) => d.deviceId === 'my-phone').trusted, true);
+    await w.post('/v1/security/devices/revoke-others', {}, s.accessToken);
+    // a password change ends the trust
+    assert.equal((await w.post('/v1/auth/password', { newPassword: 'NewSecret456' }, s.accessToken)).status, 200);
+    assert.equal((await w.login('ana001', { device: phone, trustedToken: trust.trustedToken }, 'NewSecret456')).status, 202, 'trust ended with the password change');
+    // removing trust
+    const t2 = await (await w.post('/v1/security/trusted/current', { recoveryCode: e.recoveryCodes[0] }, (await (await w.post('/v1/auth/reauth', { password: 'NewSecret456' }, s.accessToken)).json()).accessToken)).json();
+    const [tr] = (await (await w.get('/v1/security/devices', s.accessToken)).json()).trusted;
+    const fresh = await (await w.post('/v1/auth/reauth', { password: 'NewSecret456' }, s.accessToken)).json();
+    assert.equal((await w.post(`/v1/security/trusted/${tr.id}/remove`, {}, fresh.accessToken)).status, 200);
+    assert.equal((await w.login('ana001', { device: phone, trustedToken: t2.trustedToken }, 'NewSecret456')).status, 202, 'a removed device is no longer trusted');
+  } finally { w.close(); }
+});
+
+test('a password change ends every other session at once', async () => {
+  const w = await world();
+  try {
+    const a = await w.signIn('ana001', { id: 'a' });
+    const b = await w.signIn('ana001', { id: 'b' });
+    assert.equal((await w.post('/v1/auth/password', { newPassword: 'NewSecret456' }, a.accessToken)).status, 200);
+    assert.equal((await w.post('/v1/presence', {}, b.accessToken)).status, 401, 'the other device is out immediately, not when its token expires');
+    assert.equal((await w.post('/v1/presence', {}, a.accessToken)).status, 200);
+  } finally { w.close(); }
+});
+
+test('e-mail code: only to a confirmed recovery address, single use, limited', async () => {
+  const w = await world();
+  try {
+    const s = await w.signIn('ana001');
+    await w.enable2fa('ana001', s);
+    const set = await w.post('/v1/security/recovery-email', { email: 'ana@example.com' }, s.accessToken);
+    assert.equal(set.status, 200);
+    assert.equal((await set.json()).masked, 'a**@example.com');
+    let c = await (await w.login('ana001', {})).json();
+    assert.equal(c.methods.email, null, 'not offered until confirmed');
+    const code = /(\d{6})/.exec(w.sent.at(-1).text)[1];
+    assert.equal((await w.post('/v1/security/recovery-email/verify', { code: '000000' }, s.accessToken)).status, 401);
+    assert.equal((await w.post('/v1/security/recovery-email/verify', { code }, s.accessToken)).status, 200);
+    c = await (await w.login('ana001', {})).json();
+    assert.equal(c.methods.email.masked, 'a**@example.com');
+    assert.equal((await w.post('/v1/auth/2fa/email-code', pick(c))).status, 200);
+    const sentCode = /(\d{6})/.exec(w.sent.at(-1).text)[1];
+    assert.equal((await w.post('/v1/auth/2fa/email-code', pick(c))).status, 429, 'one a minute');
+    assert.equal((await w.post('/v1/auth/2fa/verify', { ...pick(c), emailCode: '111111' })).status, 401);
+    assert.equal((await w.post('/v1/auth/2fa/verify', { ...pick(c), emailCode: sentCode })).status, 200);
+    assert.equal((await w.post('/v1/auth/2fa/verify', { ...pick(c), emailCode: sentCode })).status, 401, 'once');
+  } finally { w.close(); }
+});
+
+test('the security log records the events, names no secret, and cannot be edited', async () => {
+  const w = await world();
+  try {
+    await w.login('ana001', {}, 'wrong-password');
+    const s = await w.signIn('ana001');
+    const e = await w.enable2fa('ana001', s);
+    const c = await (await w.login('ana001', {})).json();
+    await w.post('/v1/auth/2fa/verify', { ...pick(c), code: '000000' });
+    const t = await (await w.post('/v1/auth/2fa/verify', { ...pick(c), code: totp(e.bytes, Date.now() + 30_000) })).json();
+    await w.post(`/v1/security/devices/${t.sessionId}/rename`, { name: 'Ana tablet' }, s.accessToken);
+    await w.post(`/v1/security/devices/${t.sessionId}/revoke`, {}, s.accessToken);
+    await w.post('/v1/security/devices/revoke-others', {}, s.accessToken);
+    await w.post('/v1/security/devices/revoke-all', {}, s.accessToken);
+    const sup = await w.signIn('sup001');
+    const log = (await (await w.get('/v1/admin/security/events?personId=ana001&limit=300', sup.accessToken)).json()).events;
+    const types = new Set(log.map((x) => x.type));
+    for (const need of ['LOGIN_FAILED', 'LOGIN_SUCCESS', 'NEW_DEVICE_LOGIN', 'TWO_FACTOR_ENABLED', 'TWO_FACTOR_FAILED', 'TWO_FACTOR_SUCCESS', 'DEVICE_LOGOUT', 'LOG_OUT_OTHER_DEVICES', 'LOG_OUT_ALL_DEVICES']) assert.ok(types.has(need), need);
+    const text = JSON.stringify([...w.st.sec.values()].filter((r) => r.kind === 'secevent'));
+    for (const secret of ['Secret123', 'wrong-password', e.setup.secret, e.recoveryCodes[0], c.challengeToken, t.accessToken, t.refreshToken]) assert.ok(!text.includes(secret), `the log never holds ${secret.slice(0, 6)}...`);
+    const failed = log.find((x) => x.type === 'LOGIN_FAILED');
+    assert.equal(failed.result, 'failure');
+    // there is no route that changes or deletes an entry
+    for (const method of ['PUT', 'PATCH', 'DELETE', 'POST']) assert.equal((await w.call(method, '/v1/admin/security/events', {}, sup.accessToken)).status, 404, method);
+    assert.equal((await w.get('/v1/admin/security/events', (await w.signIn('ele001')).accessToken)).status, 403, 'only the Super Admin reads the whole log');
+  } finally { w.close(); }
+});
+
+test('Super Admin: sees every device with filters, never a secret, and can revoke one or all of a user', async () => {
+  const w = await world();
+  try {
+    const ana = await w.signIn('ana001', { id: 'a1', name: 'Ana phone', type: 'phone', os: 'Android', osVersion: '14', appVersion: '1.165.0' });
+    const ana2 = await w.signIn('ana001', { id: 'a2', name: 'Ana laptop', type: 'web', os: 'Windows' });
+    const ben = await w.signIn('ben001', { id: 'b1', name: 'Ben phone', type: 'phone' });
+    const sup = await w.signIn('sup001');
+    const all = (await (await w.get('/v1/admin/security/sessions', sup.accessToken)).json()).sessions;
+    assert.equal(all.length, 4);
+    const row = all.find((r) => r.sessionId === ana.sessionId);
+    assert.deepEqual([row.username, row.name, row.congregation, row.deviceName, row.type, row.os, row.osVersion, row.appVersion, row.status], ['ana', 'Ana Cruz', 'Congregation A', 'Ana phone', 'phone', 'Android', '14', '1.165.0', 'active']);
+    assert.ok(row.roles.includes('REGULAR_PIONEER'));
+    assert.ok(!JSON.stringify(all).match(/"(accessToken|refreshToken|trustedToken|token|secret|pwHash|recoveryCodes?)"/), 'no secret in the Super Admin view');
+    const q = async (qs) => (await (await w.get(`/v1/admin/security/sessions?${qs}`, sup.accessToken)).json()).sessions.map((r) => r.deviceName).sort();
+    assert.deepEqual(await q('q=ana'), ['Ana laptop', 'Ana phone']);
+    assert.deepEqual(await q('congregation=congB'), ['Ben phone']);
+    assert.deepEqual(await q('type=web'), ['Ana laptop']);
+    assert.deepEqual(await q('role=REGULAR_PIONEER&status=active'), ['Ana laptop', 'Ana phone']);
+    assert.deepEqual(await q('q=Congregation%20B'), ['Ben phone']);
+    assert.equal((await w.post(`/v1/admin/security/sessions/${ana2.sessionId}/revoke`, {}, sup.accessToken)).status, 200);
+    assert.equal((await w.post('/v1/presence', {}, ana2.accessToken)).status, 401, 'revoked on the server');
+    assert.equal((await w.post('/v1/presence', {}, ana.accessToken)).status, 200);
+    assert.equal((await w.post('/v1/admin/security/users/ana001/revoke-all', {}, sup.accessToken)).status, 200);
+    assert.equal((await w.post('/v1/presence', {}, ana.accessToken)).status, 401);
+    assert.equal((await w.post('/v1/presence', {}, ben.accessToken)).status, 200);
+    const mine = (await (await w.get('/v1/security/notices', (await w.signIn('ana001')).accessToken)).json()).notices;
+    assert.ok(mine.some((n) => n.type === 'ADMIN_SESSION_REVOKED'), 'the person is told');
+    const history = (await (await w.get('/v1/admin/security/users/ana001/history', sup.accessToken)).json()).events;
+    assert.ok(history.some((h) => h.type === 'ADMIN_SESSION_REVOKED' && h.by === 'sup001'));
+    const supLog = (await (await w.get('/v1/admin/security/events?personId=sup001', sup.accessToken)).json()).events;
+    assert.ok(supLog.some((h) => h.type === 'ADMIN_REVOKED_A_SESSION'), 'the administrator\'s own action is logged too');
+  } finally { w.close(); }
+});
+
+test('a congregation Admin sees and ends devices of their own congregation only; other roles nothing', async () => {
+  const w = await world();
+  try {
+    const ana = await w.signIn('ana001');
+    const ben = await w.signIn('ben001');
+    const adm = await w.signIn('adm001');
+    const rows = (await (await w.get('/v1/admin/security/sessions', adm.accessToken)).json()).sessions;
+    assert.deepEqual(new Set(rows.map((r) => r.username)), new Set(['ana', 'admA']), 'congregation B is not visible');
+    assert.equal((await w.post(`/v1/admin/security/sessions/${ben.sessionId}/revoke`, {}, adm.accessToken)).status, 404, 'another congregation: as if it did not exist');
+    assert.equal((await w.post('/v1/admin/security/users/ben001/revoke-all', {}, adm.accessToken)).status, 404);
+    assert.equal((await w.post('/v1/presence', {}, ben.accessToken)).status, 200);
+    assert.equal((await w.post(`/v1/admin/security/sessions/${ana.sessionId}/revoke`, {}, adm.accessToken)).status, 200);
+    assert.equal((await w.post('/v1/presence', {}, ana.accessToken)).status, 401);
+    const elder = await w.signIn('ele001');
+    assert.equal((await w.get('/v1/admin/security/sessions', elder.accessToken)).status, 403);
+    assert.equal((await w.get('/v1/admin/security/events', adm.accessToken)).status, 403, 'the whole log is the Super Admin\'s');
+  } finally { w.close(); }
+});
+
+test('a multi-role account signs in the same way; its roles do not change the session', async () => {
+  const w = await world();
+  try {
+    await w.st.transaction((tx) => tx.put('roleAssignments', 'r2', { personId: 'ele001', congregationId: 'congA', roleType: 'PUBLISHER:REGULAR_PIONEER', status: 'ACTIVE' }, 'seed'));
+    const s = await w.signIn('ele001');
+    assert.ok(s.accessToken);
+    assert.equal((await w.post('/v1/presence', {}, s.accessToken)).status, 200);
+    assert.equal((await w.get('/v1/security/devices', s.accessToken)).status, 200);
+  } finally { w.close(); }
+});
+
+test('new devices are announced to the account; older apps that send only a label still work', async () => {
+  const w = await world();
+  try {
+    const first = await (await w.login('ana001', { device: 'GoPreach Web (Chrome on Windows)' })).json();
+    const second = await (await w.login('ana001', { device: { id: 'new-one', name: 'Pixel 8', type: 'phone' } })).json();
+    const notices = (await (await w.get('/v1/security/notices', first.accessToken)).json()).notices;
+    assert.ok(notices.filter((n) => n.type === 'NEW_DEVICE_LOGIN').length >= 1);
+    assert.ok(notices.some((n) => n.meta.device === 'Pixel 8'));
+    await w.post('/v1/security/notices/seen', {}, first.accessToken);
+    assert.equal((await (await w.get('/v1/security/notices', first.accessToken)).json()).notices.length, 0);
+    const list = await (await w.get('/v1/security/devices', second.accessToken)).json();
+    assert.ok(list.devices.some((d) => d.name === 'GoPreach Web (Chrome on Windows)'));
+  } finally { w.close(); }
+});

@@ -45,6 +45,20 @@ await store.createAccount('coDemo', await hashPassword('co1234'));
 await put('congregationCircuits', 'congDemo', { id: 'congDemo', congregationId: 'congDemo', circuitOverseerPersonId: 'coDemo', circuitCode: 'CO-1', assignedAt: now, assignedByPersonId: 'saDemo' });
 await put('groups', 'grp1', { id: 'grp1', congregationId: 'congDemo', name: 'Group 1', overseerPersonId: 'adminDemo', status: 'ACTIVE', createdAt: now });
 
+// Multi-role accounts (one login, several roles): demo.multi = Coordinator Elder + Regular Pioneer, demo.so = Service Overseer + Regular Pioneer,
+// demo.three = Coordinator Elder + Service Overseer + Group Coordinator (no Publisher category), demo.group = Group Coordinator + Regular Pioneer.
+const multi = async (id, username, password, roles) => {
+  await put('people', id, { username, firstName: 'Multi', lastName: username.split('.')[1], isSuperAdmin: false, activeAdminRole: null, activeCongregationId: 'congDemo', status: 'ACTIVE', accountStatus: 'ACTIVE' });
+  let n = 0;
+  for (const r of roles) await put('roleAssignments', `${id}-r${n++}`, { congregationId: 'congDemo', personId: id, status: 'ACTIVE', ...r });
+  await store.createAccount(id, await hashPassword(password));
+};
+const pioneer = { roleType: 'PUBLISHER:REGULAR_PIONEER', groupId: 'grp1' };
+await multi('multiCe', 'demo.multi', 'multi1234', [{ roleType: 'ADMIN:COORDINATOR_ELDER' }, pioneer]);
+await multi('multiSo', 'demo.so', 'multi1234', [{ roleType: 'ADMIN:SERVICE_OVERSEER' }, pioneer]);
+await multi('multiThree', 'demo.three', 'multi1234', [{ roleType: 'ADMIN:COORDINATOR_ELDER' }, { roleType: 'ADMIN:SERVICE_OVERSEER' }, { roleType: 'ADMIN:REGULAR_ELDER', groupId: 'grp1', regularElderRole: 'GROUP_OVERSEER' }]);
+await multi('multiGroup', 'demo.group', 'multi1234', [{ roleType: 'ADMIN:REGULAR_ELDER', groupId: 'grp1', regularElderRole: 'GROUP_OVERSEER' }, pioneer]);
+
 // A Bible Text event with two texts, and a private note of someone else (which the demo publisher must never see).
 await put('bibleTextCategories', 'ev1', {
   id: 'ev1', publisherPersonId: 'pubDemo', name: 'Circuit Assembly Talk', event: 'Circuit Assembly', speaker: 'Brother Cruz', subtopics: [], videos: [], createdAt: now, updatedAt: now,
