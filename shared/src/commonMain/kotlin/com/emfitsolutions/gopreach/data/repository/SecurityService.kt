@@ -36,6 +36,41 @@ data class DeviceSession(
 
 data class TrustedDevice(val id: String, val deviceId: String?, val name: String, val since: Long, val expiresAt: Long)
 data class DevicesOverview(val devices: List<DeviceSession>, val trusted: List<TrustedDevice>)
+
+/** One DEVICE (however many sessions it has had): the most recent session's facts, whether it is this one, signed in, trusted. */
+data class DeviceGroup(
+    val key: String, val deviceId: String?, val sessionId: String?, val name: String, val type: String, val os: String?, val osVersion: String?, val model: String?, val appVersion: String?,
+    val ip: String?, val location: String?, val current: Boolean, val active: Boolean, val trusted: Boolean, val trustedUntil: Long?, val sessions: Int, val lastActiveAt: Long, val loginAt: Long,
+)
+
+/**
+ * One entry per device, the device in use first, then the most recently active. A device that is only signed out is history (the login history lists it) and is left out;
+ * a trusted device that has no session is listed, so it can still be removed.
+ */
+fun groupDevices(sessions: List<DeviceSession>, trusted: List<TrustedDevice>): List<DeviceGroup> {
+    val trustOf = trusted.filter { it.deviceId != null }.associateBy { it.deviceId!! }
+    val groups = LinkedHashMap<String, DeviceGroup>()
+    sessions.forEach { d ->
+        val key = d.deviceId ?: d.sessionId
+        val active = d.status == "active"
+        val old = groups[key]
+        val newest = old == null || d.lastActiveAt >= old.lastActiveAt
+        groups[key] = DeviceGroup(
+            key = key, deviceId = d.deviceId, sessionId = if (newest) d.sessionId else old!!.sessionId,
+            name = if (newest) d.name else old!!.name, type = if (newest) d.type else old!!.type, os = if (newest) d.os else old!!.os, osVersion = if (newest) d.osVersion else old!!.osVersion,
+            model = if (newest) d.model else old!!.model, appVersion = if (newest) d.appVersion else old!!.appVersion, ip = if (newest) d.ip else old!!.ip, location = if (newest) d.location else old!!.location,
+            current = (old?.current ?: false) || d.current, active = (old?.active ?: false) || active, trusted = (old?.trusted ?: false) || d.trusted,
+            trustedUntil = d.deviceId?.let { trustOf[it]?.expiresAt }, sessions = (old?.sessions ?: 0) + if (active) 1 else 0,
+            lastActiveAt = maxOf(old?.lastActiveAt ?: 0L, d.lastActiveAt), loginAt = minOf(old?.loginAt ?: Long.MAX_VALUE, d.loginAt),
+        )
+    }
+    trustOf.forEach { (deviceId, t) ->
+        val g = groups[deviceId]
+        if (g == null) groups[deviceId] = DeviceGroup(deviceId, deviceId, null, t.name, "other", null, null, null, null, null, null, false, false, true, t.expiresAt, 0, 0L, t.since)
+        else groups[deviceId] = g.copy(trusted = true, trustedUntil = t.expiresAt)
+    }
+    return groups.values.filter { it.active || it.trusted }.sortedWith(compareByDescending<DeviceGroup> { it.current }.thenByDescending { it.lastActiveAt })
+}
 data class SecurityEvent(val id: String, val at: Long, val type: String, val result: String, val device: String?, val by: String?, val username: String? = null, val personId: String? = null, val seen: Boolean = true)
 
 /** New-device request limits (Super Admin): requests one account may raise within [windowMinutes], and how long a request waits ([expiryMinutes]). */
@@ -85,6 +120,10 @@ interface SecurityService {
     /** Trusts THIS device after a verified code; the credential is kept by the device itself and sent at the next sign-in. */
     suspend fun trustThisDevice(code: String): String?
     suspend fun removeTrusted(id: String)
+    /** Renames a device: every session it has had carries the new name. */
+    suspend fun renameDeviceById(deviceId: String, name: String)
+    /** Removes a device: logged out everywhere it is signed in, its trust ends. (The device in use is logged out with revokeDevice.) */
+    suspend fun removeDevice(deviceId: String)
     /** Turns "approve new devices" on or off (needs a recently typed password). Turning it on trusts THIS device. */
     suspend fun setDeviceApproval(enabled: Boolean)
 
@@ -122,6 +161,7 @@ class HttpSecurityService(
         val error = json?.str("error").orEmpty()
         if (code == 401 && error == "session-ended") { auth.idToken(true); throw SecurityFailure("session-ended", "Your session has ended. Please sign in again.") }
         throw SecurityFailure(error.ifEmpty { "error-$code" }, when {
+            error == "this-device" -> "This is the device you are using. Use Log out for it."
             error == "requires-recent-login" -> "Type your current password again to confirm."
             error == "invalid-code" -> "That code is not right."
             error == "not-enabled" -> "Two-factor sign-in is not turned on."
@@ -221,6 +261,9 @@ class HttpSecurityService(
         val token = call(HttpMethod.Post, "/v1/security/device-approval", buildJsonObject { put("enabled", JsonPrimitive(enabled)) }).str("trustedToken")
         token?.let(saveTrustedToken)
     }
+
+    override suspend fun renameDeviceById(deviceId: String, name: String) { call(HttpMethod.Post, "/v1/security/device/rename", buildJsonObject { put("deviceId", JsonPrimitive(deviceId)); put("name", JsonPrimitive(name.trim())) }) }
+    override suspend fun removeDevice(deviceId: String) { call(HttpMethod.Post, "/v1/security/device/remove", buildJsonObject { put("deviceId", JsonPrimitive(deviceId)) }) }
 
     override suspend fun removeTrusted(id: String) { call(HttpMethod.Post, "/v1/security/trusted/${id.encodeURLParameter()}/remove", JsonObject(emptyMap())) }
 

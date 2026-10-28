@@ -440,6 +440,35 @@ export function mountSecurity(app, { store, auth, enabled, mailer = null, issue,
     });
   });
 
+  // One device, however many sessions it has had: the person renames it or removes it. Removing logs the device out everywhere it is signed in (the device in the caller's hand is only
+  // renamed: use "log out" for it) and ends its trust, so it must sign in again with the password (and the code, if two-factor is on).
+  const deviceIdOf = (req) => clean(req.body?.deviceId, 80);
+  app.post('/v1/security/device/rename', enabled, auth, actLimit, async (req, res) => {
+    const deviceId = deviceIdOf(req);
+    const name = clean(req.body?.name, 80);
+    if (!deviceId) return res.status(400).json({ error: 'device-required' });
+    if (!name) return res.status(400).json({ error: 'name-required' });
+    const mine = (await store.secList('dsession', req.personId, { limit: 1000 })).filter((d) => d.data.deviceId === deviceId);
+    if (!mine.length) return res.status(404).json({ error: 'not-found' });
+    for (const d of mine) await store.secPut('dsession', d.id, req.personId, { ...d.data, customName: name });
+    await event(req.personId, 'ACCOUNT_SECURITY_SETTINGS_CHANGED', { sessionId: req.sessionId, meta: { change: 'device renamed' } });
+    res.json({ ok: true });
+  });
+  app.post('/v1/security/device/remove', enabled, auth, actLimit, async (req, res) => {
+    if (needRecent(req, res)) return;
+    const deviceId = deviceIdOf(req);
+    if (!deviceId) return res.status(400).json({ error: 'device-required' });
+    const mine = (await store.secList('dsession', req.personId, { limit: 1000 })).filter((d) => d.data.deviceId === deviceId);
+    const trusted = (await trustedFor(req.personId)).filter((t) => t.data.deviceId === deviceId);
+    if (!mine.length && !trusted.length) return res.status(404).json({ error: 'not-found' });
+    if (mine.some((d) => d.id === req.sessionId)) return res.status(409).json({ error: 'this-device' });
+    let loggedOut = 0;
+    for (const d of mine) if (d.data.status !== 'revoked' && await revokeSession(req.personId, d.id, { by: 'self', reason: 'device-removed' })) loggedOut += 1;
+    for (const t of trusted) await store.secPut('trusted', t.id, req.personId, { ...t.data, revokedAt: Date.now() });
+    await event(req.personId, 'DEVICE_REMOVED', { sessionId: req.sessionId, deviceId, notify: true, meta: { device: mine[0]?.data.customName ?? mine[0]?.data.name ?? trusted[0]?.data.name ?? null, loggedOut } });
+    res.json({ ok: true, loggedOut });
+  });
+
   app.post('/v1/security/devices/:sessionId/rename', enabled, auth, actLimit, async (req, res) => {
     const s = await store.secGet('dsession', String(req.params.sessionId).slice(0, 60));
     const name = clean(req.body?.name, 80);

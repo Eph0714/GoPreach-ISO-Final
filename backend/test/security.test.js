@@ -787,3 +787,39 @@ test('recovery: the owner signing in cancels a recovery started in their name', 
     assert.ok(types.includes('RECOVERY_CANCELLED'));
   } finally { w.close(); }
 });
+
+test('one device: rename it everywhere, or remove it (its sessions are logged out and its trust ends); the device in hand is only renamed', async () => {
+  const w = await world();
+  try {
+    const tablet = await w.signIn('ana001', dev('dev-3', 'Old tablet'));
+    const laptop = await w.signIn('ana001', dev('dev-5', 'Laptop'));
+    const first = await w.signIn('ana001', dev('dev-1', 'Ana phone'));
+    const on = await (await w.post('/v1/security/device-approval', { enabled: true }, first.accessToken)).json();
+    // the phone signs in again with its trusted credential: a second session of the same device
+    const again = await (await w.login('ana001', { device: dev('dev-1', 'Ana phone'), trustedToken: on.trustedToken })).json();
+    assert.ok(again.accessToken);
+
+    // rename: every session of the device carries the new name
+    assert.equal((await w.post('/v1/security/device/rename', { deviceId: 'dev-3', name: 'Kitchen tablet' }, first.accessToken)).status, 200);
+    const list = await (await w.get('/v1/security/devices', first.accessToken)).json();
+    assert.ok(list.devices.filter((d) => d.deviceId === 'dev-3').every((d) => d.name === 'Kitchen tablet'));
+    assert.equal((await w.post('/v1/security/device/rename', { deviceId: 'dev-3', name: ' ' }, first.accessToken)).status, 400);
+    assert.equal((await w.post('/v1/security/device/rename', { deviceId: 'nope', name: 'X' }, first.accessToken)).status, 404);
+
+    // the device in hand cannot be removed from itself
+    assert.equal((await w.post('/v1/security/device/remove', { deviceId: 'dev-1' }, first.accessToken)).status, 409);
+    // another device is removed: signed out at once
+    const removed = await (await w.post('/v1/security/device/remove', { deviceId: 'dev-3' }, first.accessToken)).json();
+    assert.equal(removed.loggedOut, 1);
+    assert.equal((await w.get('/v1/security/status', tablet.accessToken)).status, 401);
+    assert.equal((await w.post('/v1/security/device/remove', { deviceId: 'dev-9' }, first.accessToken)).status, 404);
+
+    // the trusted phone, removed from the laptop: both its sessions end and its trust is gone
+    const phone = await (await w.post('/v1/security/device/remove', { deviceId: 'dev-1' }, laptop.accessToken)).json();
+    assert.equal(phone.loggedOut, 2);
+    assert.equal((await w.get('/v1/security/status', first.accessToken)).status, 401);
+    assert.equal((await w.login('ana001', { device: dev('dev-1', 'Ana phone'), trustedToken: on.trustedToken })).status, 409, 'its trust ended: it needs approval again');
+    const types = (await w.st.secList('secevent', 'ana001', { limit: 100 })).map((e) => e.data.type);
+    assert.ok(types.includes('DEVICE_REMOVED'));
+  } finally { w.close(); }
+});

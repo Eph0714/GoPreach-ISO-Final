@@ -7,6 +7,7 @@ import com.emfitsolutions.gopreach.data.repository.AuthFailure
 import com.emfitsolutions.gopreach.data.repository.AuthRepository
 import com.emfitsolutions.gopreach.data.repository.ApprovalLimits
 import com.emfitsolutions.gopreach.data.repository.AuthService
+import com.emfitsolutions.gopreach.data.repository.DeviceGroup
 import com.emfitsolutions.gopreach.data.repository.DeviceSession
 import com.emfitsolutions.gopreach.data.repository.HistoryFilter
 import com.emfitsolutions.gopreach.data.repository.SecurityEvent
@@ -168,6 +169,23 @@ class SecurityViewModel(
     }
 
     // ---- devices ----
+    /** Renames a device (all its sessions); an older session without a device id is renamed on its own. */
+    fun renameDevice(g: DeviceGroup, name: String) {
+        viewModelScope.launch {
+            try {
+                val id = g.deviceId
+                if (id != null) security.renameDeviceById(id, name) else g.sessionId?.let { security.renameDevice(it, name) }
+                _state.update { it.copy(message = "The device was renamed.") }; refresh()
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { _state.update { it.copy(error = messageOf(e)) } }
+        }
+    }
+
+    /** Removes a device: logged out wherever it is signed in, its trust ends. Needs the password again. */
+    fun removeDevice(g: DeviceGroup, password: String) = secured(password, "The device was removed. It is logged out and must sign in again.") {
+        val id = g.deviceId
+        if (id != null) security.removeDevice(id) else g.sessionId?.let { security.revokeDevice(it) }
+    }
+
     fun rename(sessionId: String, name: String) {
         viewModelScope.launch {
             try { security.renameDevice(sessionId, name); _state.update { it.copy(message = "The device was renamed.") }; refresh() }

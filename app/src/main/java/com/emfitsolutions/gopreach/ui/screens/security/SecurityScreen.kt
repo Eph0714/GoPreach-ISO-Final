@@ -54,7 +54,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.emfitsolutions.gopreach.data.repository.DeviceGroup
 import com.emfitsolutions.gopreach.data.repository.DeviceSession
+import com.emfitsolutions.gopreach.data.repository.groupDevices
 import com.emfitsolutions.gopreach.data.repository.HistoryFilter
 import com.emfitsolutions.gopreach.data.repository.SecurityEvent
 import com.emfitsolutions.gopreach.ui.components.AlertDialog
@@ -117,7 +119,7 @@ private sealed interface Ask {
     data object LogOutOthers : Ask
     data object LogOutAll : Ask
     data class LogOut(val device: DeviceSession) : Ask
-    data class Untrust(val id: String, val name: String) : Ask
+    data class Remove(val group: DeviceGroup) : Ask
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -125,7 +127,7 @@ private sealed interface Ask {
 fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var ask by remember { mutableStateOf<Ask?>(null) }
-    var renaming by remember { mutableStateOf<DeviceSession?>(null) }
+    var renaming by remember { mutableStateOf<DeviceGroup?>(null) }
     var emailToSet by remember { mutableStateOf("") }
     val clipboard = LocalClipboardManager.current
     val uriHandler = LocalUriHandler.current
@@ -211,51 +213,36 @@ fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewMo
             }
 
             item { SectionHeader("Your devices", "Where you are signed in right now, and the devices that were. Log out anything you do not recognise.") }
-            // ---- devices ----
-            items(state.devices, key = { it.sessionId }) { d ->
+            // ---- devices: each device once, with Rename and Remove ----
+            val deviceGroups = groupDevices(state.devices, state.trusted)
+            items(deviceGroups, key = { it.key }) { g ->
                 Card(shape = RoundedCornerShape(14.dp)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(d.name + if (d.current) "  (This device)" else "", fontWeight = FontWeight.Bold)
-                        Text(statusWord(d.status) + revokedWord(d.revokedBy) + if (d.trusted) "  -  Trusted" else "", color = if (d.status == "active") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                        Fact("Type", typeWord(d.type))
-                        Fact("System", listOfNotNull(d.os, d.osVersion).joinToString(" ").ifBlank { "-" })
-                        Fact("Model", d.model ?: "-")
-                        Fact("GoPreach version", d.appVersion ?: "-")
-                        Fact("Signed in", whenText(d.loginAt))
-                        Fact("Last active", whenText(d.lastActiveAt))
-                        Fact("How it signed in", methodWord(d.authMethod))
-                        Fact("Approximate place", d.location ?: d.ip ?: "Not available")
-                        Fact("Device ID", d.deviceId ?: "-", mono = true)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (d.status != "revoked") OutlinedButton(onClick = { ask = Ask.LogOut(d) }) { Text("Log out") }
-                            ActionButton(ActionKind.Edit, onClick = { renaming = d }, label = "Rename")
-                            if (d.current && status?.enabled == true && !d.trusted) OutlinedButton(onClick = { ask = Ask.TrustThis }) { Text("Mark as trusted") }
+                        Text(g.name + if (g.current) "  (This device)" else "", fontWeight = FontWeight.Bold)
+                        Text(
+                            (if (g.active) "Signed in" + (if (g.sessions > 1) " (${g.sessions} sessions)" else "") else "Not signed in") +
+                                (if (g.trusted) "  -  Trusted" + (g.trustedUntil?.let { " until ${whenText(it)}" } ?: "") else ""),
+                            color = if (g.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(typeWord(g.type) + (listOfNotNull(g.os, g.osVersion).joinToString(" ").takeIf { it.isNotBlank() }?.let { "  -  $it" } ?: "") + "  -  Last active ${whenText(g.lastActiveAt)}", style = MaterialTheme.typography.bodySmall)
+                        var more by remember(g.key) { mutableStateOf(false) }
+                        if (more) {
+                            Fact("Model", g.model ?: "-")
+                            Fact("GoPreach version", g.appVersion ?: "-")
+                            Fact("First signed in", if (g.loginAt == Long.MAX_VALUE) "-" else whenText(g.loginAt))
+                            Fact("Approximate place", g.location ?: g.ip ?: "Not available")
+                            Fact("Device ID", g.deviceId ?: "-", mono = true)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            ActionButton(ActionKind.Edit, onClick = { renaming = g }, label = "Rename")
+                            if (!g.current) ActionButton(ActionKind.Delete, onClick = { ask = Ask.Remove(g) }, label = "Remove")
+                            if (g.current && status?.enabled == true && !g.trusted) OutlinedButton(onClick = { ask = Ask.TrustThis }) { Text("Mark as trusted") }
+                            TextButton(onClick = { more = !more }) { Text(if (more) "Less" else "Details") }
                         }
                     }
                 }
             }
-            if (!state.loading && state.devices.isEmpty()) item { Text("No devices yet.", style = MaterialTheme.typography.bodySmall) }
-
-            // ---- trusted ----
-            item {
-                Card {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Trusted devices", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text("A trusted device skips the code for ${status?.trustedDays ?: 30} days. A password change or turning two-factor off ends all trust.", style = MaterialTheme.typography.bodySmall)
-                        if (state.trusted.isEmpty()) Text("No trusted devices.", style = MaterialTheme.typography.bodySmall)
-                        state.trusted.forEach { t ->
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(t.name, fontWeight = FontWeight.SemiBold)
-                                    Text("since ${whenText(t.since)}, until ${whenText(t.expiresAt)}", style = MaterialTheme.typography.bodySmall)
-                                }
-                                ActionButton(ActionKind.Delete, onClick = { ask = Ask.Untrust(t.id, t.name) }, label = "Delete trusted device")
-                            }
-                        }
-                    }
-                }
-            }
-
+            if (!state.loading && deviceGroups.isEmpty()) item { Text("No devices yet.", style = MaterialTheme.typography.bodySmall) }
             // ---- log out devices ----
             item {
                 Card {
@@ -324,7 +311,8 @@ fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewMo
             if (a.enable) "This device becomes the trusted one. Any other device that enters your password will wait for your approval." else "New devices will sign in with your password (and your code, if two-factor is on).",
             if (a.enable) "Turn on" else "Turn off", state.busy, confirmError, onConfirm = { p, _ -> viewModel.setDeviceApproval(a.enable, p) }, onDismiss = { ask = null },
         )
-        is Ask.Untrust -> SecurityConfirmDialog("Delete this trusted device?", "${a.name} is logged out and must sign in again with your password (and a code). Nothing is remembered on it.", "Delete", state.busy, confirmError, onConfirm = { p, _ -> viewModel.removeTrusted(a.id, p) }, onDismiss = { ask = null })
+        is Ask.Remove -> SecurityConfirmDialog("Remove ${a.group.name}?", "It is logged out wherever it is signed in and must sign in again with your password (and a code, if two-factor is on). Nothing is remembered on it.", "Remove", state.busy, confirmError, destructive = true, onConfirm = { p, _ -> viewModel.removeDevice(a.group, p) }, onDismiss = { ask = null },
+        )
         null -> Unit
     }
 
@@ -370,12 +358,12 @@ fun SecurityScreen(onBack: () -> Unit, viewModel: SecurityViewModel = koinViewMo
     }
 
     renaming?.let { d ->
-        var name by remember(d.sessionId) { mutableStateOf(d.name) }
+        var name by remember(d.key) { mutableStateOf(d.name) }
         AlertDialog(
             onDismissRequest = { renaming = null },
             title = { Text("Rename device") },
             text = { OutlinedTextField(value = name, onValueChange = { name = it.take(80) }, singleLine = true, label = { Text("Device name") }, modifier = Modifier.fillMaxWidth()) },
-            confirmButton = { ActionButton(ActionKind.Save, onClick = { viewModel.rename(d.sessionId, name); renaming = null }, label = "Save", enabled = name.isNotBlank()) },
+            confirmButton = { ActionButton(ActionKind.Save, onClick = { viewModel.renameDevice(d, name); renaming = null }, label = "Save", enabled = name.isNotBlank()) },
             dismissButton = { ActionButton(ActionKind.Cancel, onClick = { renaming = null }, label = "Cancel") },
         )
     }
