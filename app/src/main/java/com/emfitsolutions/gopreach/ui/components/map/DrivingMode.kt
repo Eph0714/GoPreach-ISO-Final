@@ -58,6 +58,11 @@ class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
     var snapshot by mutableStateOf(DrivingSnapshot())
         private set
 
+    /** While a route is followed and the fix is on the road: the road point and the road's direction. The arrow and the camera use it, so they stay on the road instead of wandering with the GPS. Null otherwise. */
+    var roadFix by mutableStateOf<RoadFix?>(null)
+
+    data class RoadFix(val lat: Double, val lng: Double, val bearingDeg: Float?)
+
     private var pausedAt = 0L
 
     /** Bumped by Recenter so the camera moves at once even when nothing else changed. */
@@ -69,6 +74,7 @@ class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
         tracker = DrivingTracker(if (walking) config.copy(minCourseSpeedMps = 0.5f, minDerivedMoveMeters = 3.0, courseAccuracyMeters = 35f) else config)
         tracker.reset()
         snapshot = DrivingSnapshot()
+        roadFix = null
         following = true
         active = true
     }
@@ -80,6 +86,7 @@ class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
         following = true
         tracker.reset()
         snapshot = DrivingSnapshot()
+        roadFix = null
     }
 
     fun onFix(fix: GpsPoint, nowMillis: Long) {
@@ -164,17 +171,18 @@ fun DrivingCameraEffect(map: MapLibreMap?, state: DrivingModeState?) {
         }
     }
 
-    LaunchedEffect(map, state.active, state.following, state.headingUp, state.tiltDeg, state.recenterTick, snap.lat, snap.lng, snap.courseDeg, state.compassDeg) {
+    val road = state.roadFix
+    LaunchedEffect(map, state.active, state.following, state.headingUp, state.tiltDeg, state.recenterTick, snap.lat, snap.lng, snap.courseDeg, state.compassDeg, road) {
         val m = map ?: return@LaunchedEffect
-        val lat = snap.lat ?: return@LaunchedEffect
-        val lng = snap.lng ?: return@LaunchedEffect
+        val lat = road?.lat ?: snap.lat ?: return@LaunchedEffect
+        val lng = road?.lng ?: snap.lng ?: return@LaunchedEffect
         if (!state.active || !state.following) return@LaunchedEffect
         // Route previews and navigation reset the padding to zero: put the arrow back in the lowest position before the camera moves (changing it afterwards would cancel the animation).
         val top = (m.height * DrivingModeState.LOWER_THIRD).toInt()
         if (m.padding[1] != top) m.setPadding(0, top, 0, 0)
         val current = m.cameraPosition
         val zoom = if (current.zoom in DrivingModeState.MIN_FOLLOW_ZOOM..DrivingModeState.MAX_FOLLOW_ZOOM) current.zoom else if (state.walking) DrivingModeState.NAV_ZOOM + 1.0 else DrivingModeState.NAV_ZOOM
-        val course = snap.courseDeg
+        val course = road?.bearingDeg ?: snap.courseDeg
         val bearing = when {
             !state.headingUp -> 0.0
             course != null -> course.toDouble()

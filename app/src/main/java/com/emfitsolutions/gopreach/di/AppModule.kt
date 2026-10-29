@@ -358,7 +358,10 @@ val appModule = module {
     singleOf(::ListenButtonPreference)
     singleOf(::WeatherPreferences)
     singleOf(::CurrentPlaceResolver)
-    single<RoutingService> { ValhallaRoutingService(get()) }
+    single<RoutingService> {
+        val own = com.emfitsolutions.gopreach.BuildConfig.ROUTING_URL.trim()
+        if (own.isEmpty()) ValhallaRoutingService(get()) else ValhallaRoutingService(get(), baseUrl = own, fallbackBaseUrl = ValhallaRoutingService.DEFAULT_BASE_URL)
+    }
     single<WeatherService> { OpenMeteoWeatherService(get()) }
     single<com.emfitsolutions.gopreach.data.weather.OfficialAlertService> { com.emfitsolutions.gopreach.data.weather.PagasaAlertService(get()) }
     singleOf(::NotificationDismissedStore)

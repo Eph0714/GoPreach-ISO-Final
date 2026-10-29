@@ -20,6 +20,10 @@ data class NavigationProgress(
     val arrived: Boolean,
     /** Spoken instructions that became due with this position, in order. Each is returned once. */
     val announcements: List<String>,
+    /** The point of the route line nearest the fix, and the direction of the road there - only when the fix is on the route (null when off it or the signal is too poor to trust). The arrow and camera are drawn here, so they stay on the road. */
+    val matchedLat: Double? = null,
+    val matchedLng: Double? = null,
+    val routeBearingDeg: Float? = null,
 )
 
 /**
@@ -30,7 +34,7 @@ data class NavigationProgress(
  * ahead or behind. Leaving the route needs [OFF_ROUTE_FIXES] consecutive fixes beyond the allowed distance (or one clearly far away), so a
  * single poor fix does not trigger a reroute.
  */
-class NavigationEngine(val route: Route) {
+class NavigationEngine(val route: Route, val walking: Boolean = false) {
     private val points = route.points
     private val cumulative = DoubleArray(points.size)
     private val stepStart: DoubleArray
@@ -54,18 +58,36 @@ class NavigationEngine(val route: Route) {
         matchedSegment = segment
         // Progress never goes backwards: a noisy fix beside the road cannot undo distance already driven.
         if (along > traveled) traveled = along
-        val allowed = max(35.0, (accuracyMeters ?: 0f) * 1.5)
+        val allowed = max(if (walking) WALK_OFF_ROUTE_METERS else 35.0, (accuracyMeters ?: 0f) * 1.5)
         offCount = if (cross > allowed) offCount + 1 else 0
         val off = offCount >= OFF_ROUTE_FIXES || cross > max(150.0, allowed * 3)
 
         val remaining = (total - traveled).coerceAtLeast(0.0)
-        val arrived = remaining <= max(ARRIVE_METERS, (accuracyMeters ?: 0f).toDouble()) && !off
+        val arrived = remaining <= max(if (walking) WALK_ARRIVE_METERS else ARRIVE_METERS, (accuracyMeters ?: 0f).toDouble()) && !off
         val idx = if (arrived) route.steps.lastIndex else stepIndexAt(traveled)
         val toManeuver = if (idx < route.steps.lastIndex) (stepEnd[idx] - traveled).coerceAtLeast(0.0) else remaining
         val seconds = if (total > 0) route.durationSeconds * (remaining / total) else 0.0
 
         val said = if (off) emptyList() else announcementsFor(idx, toManeuver, remaining, speedMps ?: 0f, arrived)
-        return NavigationProgress(idx, toManeuver, remaining, seconds, cross, off, arrived, said)
+        // On the road and the signal is good enough to trust: report the road point (and the road's direction) the arrow should be drawn at.
+        val snapTolerance = max(if (walking) 12.0 else 25.0, (accuracyMeters ?: 0f).toDouble())
+        val onRoad = !off && cross <= snapTolerance && (accuracyMeters ?: 0f) <= MAX_SNAP_ACCURACY_METERS
+        val here = if (onRoad) pointAt(traveled) else null
+        val ahead = if (onRoad) pointAt(traveled + if (walking) 6.0 else 12.0) else null
+        val bearing = if (here != null && ahead != null && meters(here, ahead) > 1.0) DrivingTracker.bearingBetween(here.lat, here.lng, ahead.lat, ahead.lng).toFloat() else null
+        return NavigationProgress(idx, toManeuver, remaining, seconds, cross, off, arrived, said, here?.lat, here?.lng, bearing)
+    }
+
+    /** The point on the route [distance] metres from its start (clamped to the route). */
+    private fun pointAt(distance: Double): GeoPoint? {
+        if (points.isEmpty()) return null
+        val d = distance.coerceIn(0.0, total)
+        var i = matchedSegment.coerceIn(0, points.size - 2)
+        while (i > 0 && cumulative[i] > d) i--
+        while (i < points.size - 2 && cumulative[i + 1] < d) i++
+        val seg = cumulative[i + 1] - cumulative[i]
+        val t = if (seg <= 0.0) 0.0 else ((d - cumulative[i]) / seg).coerceIn(0.0, 1.0)
+        return GeoPoint(points[i].lat + (points[i + 1].lat - points[i].lat) * t, points[i].lng + (points[i + 1].lng - points[i].lng) * t)
     }
 
     private fun announcementsFor(idx: Int, toManeuver: Double, remaining: Double, speedMps: Float, arrived: Boolean): List<String> {
@@ -84,8 +106,9 @@ class NavigationEngine(val route: Route) {
         if (idx > 0 && current.lengthMeters >= LONG_STRETCH_METERS) once("post$idx", current.post)
 
         val next = steps.getOrNull(idx + 1) ?: return out
-        val far = (speedMps * 22f).toDouble().coerceIn(180.0, 650.0)
-        val near = (speedMps * 7f).toDouble().coerceIn(45.0, 140.0)
+        // Driving warns about 22 s / 7 s ahead; walking warns about 15 s / 6 s ahead on a much shorter scale (a pedestrian is told 60-200 m and 15-40 m before a turn).
+        val far = if (walking) (speedMps * 15f).toDouble().coerceIn(60.0, 200.0) else (speedMps * 22f).toDouble().coerceIn(180.0, 650.0)
+        val near = if (walking) (speedMps * 6f).toDouble().coerceIn(15.0, 40.0) else (speedMps * 7f).toDouble().coerceIn(45.0, 140.0)
         if (toManeuver <= near) {
             once("pre${idx + 1}", next.pre ?: next.instruction)
         } else if (toManeuver <= far && current.lengthMeters > far + 60) {
@@ -130,6 +153,10 @@ class NavigationEngine(val route: Route) {
     companion object {
         const val OFF_ROUTE_FIXES = 3
         const val ARRIVE_METERS = 25.0
+        const val WALK_ARRIVE_METERS = 15.0
+        const val WALK_OFF_ROUTE_METERS = 20.0
+        /** A fix less precise than this is not snapped to the road: the arrow would be drawn on a guess. */
+        const val MAX_SNAP_ACCURACY_METERS = 40f
         const val LONG_STRETCH_METERS = 400.0
         private const val WINDOW_SEGMENTS = 60
 

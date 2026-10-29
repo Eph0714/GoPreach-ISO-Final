@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -156,7 +158,7 @@ class TurnByTurnState(
     fun begin() {
         val r = route ?: return
         if (phase != GuidancePhase.PREVIEW) return
-        engine = NavigationEngine(r)
+        engine = NavigationEngine(r, walking)
         progress = null
         choices = emptyList()
         phase = GuidancePhase.ACTIVE
@@ -167,7 +169,7 @@ class TurnByTurnState(
         try {
             val r = routing.route(fromLat, fromLng, to.lat, to.lng, walking)
             route = r
-            engine = NavigationEngine(r)
+            engine = NavigationEngine(r, walking)
             progress = null
             message = null
             warnedOfflineReroute = false
@@ -348,9 +350,21 @@ fun RoutePreviewPanel(state: TurnByTurnState, onStart: () -> Unit, onCancel: () 
     }
 }
 
+/** Current speed from the GPS (no speed-limit data is available, so none is shown); "--" until the phone reports a speed, and 0 under 1 km/h. */
+@Composable
+private fun SpeedBadge(speedKmh: Float?) {
+    val shown = speedKmh?.let { if (it < 1f) 0 else it.roundToInt() }
+    Surface(shape = androidx.compose.foundation.shape.CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.padding(end = 12.dp).size(56.dp)) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Text(shown?.toString() ?: "--", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            Text("km/h", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+    }
+}
+
 /** The bottom card: distance and time left, a note when something is wrong, the voice switch and End. */
 @Composable
-fun GuidancePanel(state: TurnByTurnState, onEnd: () -> Unit, modifier: Modifier = Modifier) {
+fun GuidancePanel(state: TurnByTurnState, onEnd: () -> Unit, modifier: Modifier = Modifier, speedKmh: Float? = null) {
     val p = state.progress
     val r = state.route
     Surface(modifier = modifier, shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 10.dp) {
@@ -358,6 +372,7 @@ fun GuidancePanel(state: TurnByTurnState, onEnd: () -> Unit, modifier: Modifier 
             state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             if (!state.voiceAvailable) Text("Spoken guidance is not available on this phone, so instructions are shown only.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically) {
+                SpeedBadge(speedKmh)
                 Column(Modifier.weight(1f)) {
                     val remaining = p?.remainingMeters ?: r?.distanceMeters
                     val seconds = p?.remainingSeconds ?: r?.durationSeconds

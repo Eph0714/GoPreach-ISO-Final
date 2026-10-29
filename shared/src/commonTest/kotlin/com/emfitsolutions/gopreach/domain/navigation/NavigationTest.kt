@@ -128,6 +128,38 @@ class NavigationTest {
     }
 
     @Test
+    fun aFixBesideTheRoadIsDrawnOnTheRoadAndFacesTheRoadsDirection() {
+        val engine = NavigationEngine(route)
+        val (lat, lng) = at(600.0, sideMeters = 12.0)
+        val p = engine.update(lat, lng, 8f, 10f)
+        val matchedLat = p.matchedLat!!; val matchedLng = p.matchedLng!!
+        val (roadLat, roadLng) = at(600.0)
+        assertTrue(DrivingTracker.distanceMeters(matchedLat, matchedLng, roadLat, roadLng) < 20.0, "the drawn point is on the route line, not beside it")
+        assertTrue(p.offRouteMeters <= DrivingTracker.distanceMeters(lat, lng, roadLat, roadLng) + 1.0, "it is never farther from the road than the raw fix")
+        assertTrue(p.routeBearingDeg != null, "the arrow gets the direction of the road")
+    }
+
+    @Test
+    fun aPoorOrFarFixIsNeverDrawnOnTheRoad() {
+        val engine = NavigationEngine(route)
+        val (lat, lng) = at(300.0, sideMeters = 3.0)
+        assertTrue(engine.update(lat, lng, 80f, 10f).matchedLat == null, "accuracy worse than 40 m: not snapped")
+        val (lat2, lng2) = at(320.0, sideMeters = 90.0)
+        assertTrue(engine.update(lat2, lng2, 8f, 10f).matchedLat == null, "90 m from the road: not snapped")
+    }
+
+    @Test
+    fun walkingUsesItsOwnShortWarningDistancesAndTighterTolerance() {
+        val walker = NavigationEngine(route, walking = true)
+        val (lat, lng) = at(200.0, sideMeters = 28.0)
+        repeat(3) { walker.update(lat, lng, 5f, 1.4f) }
+        assertTrue(walker.update(lat, lng, 5f, 1.4f).offRoute, "28 m off the path is off the route for a pedestrian")
+        val driver = NavigationEngine(route)
+        repeat(3) { driver.update(lat, lng, 5f, 1.4f) }
+        assertFalse(driver.update(lat, lng, 5f, 1.4f).offRoute, "but still on the road for a vehicle (35 m)")
+    }
+
+    @Test
     fun formattingReadsTheWayADriverSpeaks() {
         assertEquals("30 m", RouteFormat.distance(31.0)); assertEquals("350 m", RouteFormat.distance(351.0)); assertEquals("1.2 km", RouteFormat.distance(1190.0))
         assertEquals("200 meters", RouteFormat.spokenDistance(204.0)); assertEquals("1.2 kilometers", RouteFormat.spokenDistance(1190.0))

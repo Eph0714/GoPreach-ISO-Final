@@ -39,14 +39,26 @@ class ValhallaRoutingService(
     private val client: HttpClient,
     private val baseUrl: String = DEFAULT_BASE_URL,
     private val timeoutMillis: Long = 20_000L,
+    /** Tried when [baseUrl] is down, busy or unreachable (not when it says there is no route); null for none. */
+    private val fallbackBaseUrl: String? = null,
 ) : RoutingService {
     override suspend fun route(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, walking: Boolean): Route = routes(fromLat, fromLng, toLat, toLng, alternatives = 0, walking = walking).first()
 
     override suspend fun routes(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, alternatives: Int, walking: Boolean): List<Route> {
+        val fallback = fallbackBaseUrl?.takeIf { it.trimEnd('/') != baseUrl.trimEnd('/') }
+        return try {
+            routesFrom(baseUrl, fromLat, fromLng, toLat, toLng, alternatives, walking)
+        } catch (e: RoutingException) {
+            if (fallback == null || e.failure == RoutingFailure.NO_ROUTE) throw e
+            routesFrom(fallback, fromLat, fromLng, toLat, toLng, alternatives, walking)
+        }
+    }
+
+    private suspend fun routesFrom(baseUrl: String, fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, alternatives: Int, walking: Boolean): List<Route> {
         val alt = if (alternatives > 0) ""","alternates":$alternatives""" else ""
         val body = """{"locations":[{"lat":$fromLat,"lon":$fromLng},{"lat":$toLat,"lon":$toLng}],"costing":"${if (walking) "pedestrian" else "auto"}","directions_options":{"units":"kilometers","language":"en-US","directions_type":"instructions"}$alt}"""
         val text = try {
-            withTimeout(timeoutMillis) {
+            withTimeoutUnlessZero(timeoutMillis) {
                 val response = client.post(baseUrl.trimEnd('/') + "/route") { contentType(ContentType.Application.Json); setBody(body) }
                 val code = response.status.value
                 val payload = response.bodyAsText()
@@ -69,6 +81,9 @@ class ValhallaRoutingService(
         }
         return parseAll(text)
     }
+
+    /** A timeout of 0 means none (tests run on a virtual clock that would fire any timeout at once). */
+    private suspend fun <T> withTimeoutUnlessZero(millis: Long, block: suspend () -> T): T = if (millis <= 0L) block() else withTimeout(millis) { block() }
 
     companion object {
         const val DEFAULT_BASE_URL = "https://valhalla1.openstreetmap.de"

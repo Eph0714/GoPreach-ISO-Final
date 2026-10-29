@@ -49,3 +49,41 @@ Starts from a record ("Navigate here (turn-by-turn)" in the record sheet) or fro
 
 ## Street View sources (updated)
 Order: **Google** (only when `googleMapsApiKey=...` is in `local.properties`; Street View Static API + Maps Embed API enabled in Google Cloud) - checked first with Google's free availability check (nearest outdoor photo within 60 m), then **Mapillary** (`mapillaryToken=...`, search within about 150 m). If neither has a photo the screen says "No Street View here" and never shows a map. With neither configured the button falls back to the Google Maps app. Tested here with a Mapillary token only: for the record at 16.5227, 121.1864 (Solano) Mapillary has no photos within 150 m (nearest about 1 km away, from 2016), and the Google Maps app, given the same point, showed a plain map rather than street imagery. The Google in-app path is built but untested (no Google key here).
+
+# Road-following arrow and walking thresholds (navigation phase 1)
+
+**Audit result.** Routing (Valhalla, driving and walking profiles, alternatives), rerouting, voice, ETA and the Walking | Driving choice already existed on Android and on the web. The real defect was that the arrow and the camera were drawn at the *filtered raw GPS fix*, while the route matching only fed the instructions. So the arrow wandered off the road with every GPS error even when the route was known. The web additionally matched to the nearest route *vertex* (not the line), used one 70 m rule to reroute for walking and driving, and used driving warning distances for walkers.
+
+**Changes (Android `NavigationEngine`/`DrivingMode`/`TerritoryMapScreen`, web `territories/map.blade.php`).**
+- Map matching: the fix is projected onto the route *line*. When the fix is within max(25 m driving / 12 m walking, GPS accuracy) of it and accuracy is 40 m or better, the arrow and camera are drawn at that road point and face the road's direction (taken from the route 12 m / 6 m ahead). Otherwise the filtered GPS is used unchanged. Rerouting still uses the raw fix, so there is no feedback loop.
+- Off-route: Android tolerance 35 m driving / 20 m walking; the web now needs 3 consecutive fixes beyond the tolerance (50 m driving / 25 m walking) or one fix over 150 m. The web measures distance to the line, not to a vertex.
+- Walking: warnings 60-200 m ahead and 15-40 m before a turn (driving 180-650 m / 45-140 m); arrival within 15 m (driving 25 m).
+- Tests: `NavigationTest` gained 3 tests (a fix beside the road is drawn on it and faces its direction; poor or far fixes are never snapped; walking is off-route at 28 m where driving is not). The web matcher was checked with a small simulation only.
+
+**Not done / not verified.** No real drive or walk was done: arrow behaviour on real roads, camera rotation at speed and rerouting on real deviations are untested. The routing server is still the shared public FOSSGIS Valhalla (no availability guarantee); a self-hosted Valhalla or a keyed provider behind the backend is the recommended production step. No speed limit or traffic data (no reliable source configured). A heavier map matcher (Hidden-Markov, off-route road snapping) was not built.
+
+## Speed display, routing server and field test (navigation phase 2)
+
+**Speed.** Android (bottom panel) and the website (top banner) show the current speed from the GPS in km/h: `--` until the device reports a speed, `0` under 1 km/h. There is no speed-limit or traffic data, so none is shown.
+
+**Routing server.**
+- Website: set `GOPREACH_ROUTING_URL` in `.env` (default is the public FOSSGIS Valhalla). Requests already go through the server, so no key reaches the browser.
+- Android: add `routingUrl=https://your-valhalla.example` to `local.properties` and rebuild. When it is set, the public server is tried only if yours is down, busy or unreachable (never when yours says there is no route). Blank = the public server only. Covered by `ValhallaFallbackTest`.
+- The public server is shared and fair-use with no availability guarantee; a self-hosted Valhalla (Philippines extract from Geofabrik) or a keyed provider is the production answer.
+
+**Field test checklist** (nothing here has been run on a real road; write the result and date in each row).
+
+| # | Test | Pass when | Result |
+|---|---|---|---|
+| 1 | Drive a straight road, phone on the dash | Arrow sits on the road line and faces along it; no jumping sideways | |
+| 2 | Drive past a parallel street | Arrow stays on the planned road | |
+| 3 | Take a turn | Warning about 180-650 m ahead, then 45-140 m; camera turns with the road | |
+| 4 | Deliberately miss a turn | Reroute after about 3 fixes; new route spoken once | |
+| 5 | Stop at a light | Arrow stays put, speed reads 0, no reroute | |
+| 6 | Enter a tunnel or lose GPS | "GPS signal lost" notice, no false reroute, recovers after | |
+| 7 | Walk a block | Person icon on the pedestrian route; warnings 15-200 m; off-route at about 20-25 m | |
+| 8 | Walk across a plaza off the path | Reroute, not an endless off-route state | |
+| 9 | Arrive | Driving within 25 m, walking within 15 m; arrival announced once | |
+| 10 | Mute voice, switch Walking/Driving | Voice stays muted; route and ETA redraw | |
+| 11 | Compare speed with another speedometer | Within a few km/h while moving | |
+| 12 | Same route on the website on a phone browser | Same arrow, 3-fix reroute, speed shown | |

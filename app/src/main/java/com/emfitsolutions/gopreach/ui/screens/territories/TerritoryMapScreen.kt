@@ -492,7 +492,8 @@ fun TerritoryMapScreen(
 
     // What the map shows as "you": while driving, only a fix that passed every check - never an estimate.
     val driveSnap = driving.snapshot
-    val shownLocation = if (driving.active && driveSnap.hasPosition) driveSnap.lat!! to driveSnap.lng!! else myLocation
+    val roadFix = driving.roadFix
+    val shownLocation = if (driving.active && roadFix != null) roadFix.lat to roadFix.lng else if (driving.active && driveSnap.hasPosition) driveSnap.lat!! to driveSnap.lng!! else myLocation
     val shownAccuracy = if (driving.active && driveSnap.hasPosition) driveSnap.accuracyMeters else myAccuracy
     val connectivity: com.emfitsolutions.gopreach.data.sync.ConnectivityObserver = org.koin.compose.koinInject()
     var online by remember { mutableStateOf(connectivity.isOnline()) }
@@ -522,6 +523,13 @@ fun TerritoryMapScreen(
         val la = driveSnap.lat
         val ln = driveSnap.lng
         if (guidance.active && la != null && ln != null) guidance.onPosition(la, ln, driveSnap.accuracyMeters, driveSnap.speedKmh?.let { it / 3.6f }, online)
+    }
+    // Follow the road: while a route is followed and the fix is on it, the arrow and camera are drawn at the matched road point, facing the road's direction.
+    LaunchedEffect(guidance.progress, guidance.phase, driving.active) {
+        val p = guidance.progress
+        driving.roadFix = if (driving.active && guidance.phase == com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.ACTIVE && p != null && !p.offRoute && p.matchedLat != null && p.matchedLng != null) {
+            com.emfitsolutions.gopreach.ui.components.map.DrivingModeState.RoadFix(p.matchedLat!!, p.matchedLng!!, p.routeBearingDeg)
+        } else null
     }
     // Turning Driving Mode off ends a route being followed; a route still being chosen (or found) does not need Driving Mode yet.
     LaunchedEffect(driving.active) {
@@ -1350,6 +1358,7 @@ fun TerritoryMapScreen(
                             state = guidance,
                             onEnd = { guidance.stop() },
                             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                            speedKmh = driveSnap.speedKmh,
                         )
                     }
                     // Full screen: the one standard back arrow floats on the map (the same icon as every other screen); it leaves the open barangay first, then the map.

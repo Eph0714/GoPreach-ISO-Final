@@ -37,6 +37,8 @@ val mapillaryToken: String = localProperties.getProperty("mapillaryToken", "")
 val googleMapsApiKey: String = localProperties.getProperty("googleMapsApiKey", "")
 // Where the Philippines offline map file (.pmtiles) is hosted, as `offlineMapUrl=https://...` in local.properties. Blank = the file can only be chosen from the phone.
 val offlineMapUrl: String = localProperties.getProperty("offlineMapUrl", "")
+// Your own Valhalla server for Driving and Walking Mode, as `routingUrl=https://...` in local.properties. Blank = the public FOSSGIS server (shared, fair use); when set, the public one is the fallback.
+val routingUrl: String = localProperties.getProperty("routingUrl", "")
 
 android {
     namespace = "com.emfitsolutions.gopreach"
@@ -46,8 +48,8 @@ android {
         applicationId = "com.emfitsolutions.gopreach"
         minSdk = 24
         targetSdk = 36
-        versionCode = 237
-        versionName = "1.169.4"
+        versionCode = 238
+        versionName = "1.169.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -63,6 +65,7 @@ android {
         buildConfigField("String", "MAPILLARY_TOKEN", "\"$mapillaryToken\"")
         buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsApiKey\"")
         buildConfigField("String", "OFFLINE_MAP_URL", "\"$offlineMapUrl\"")
+        buildConfigField("String", "ROUTING_URL", "\"$routingUrl\"")
     }
 
     // Release signing. A production build is signed with GoPreach's own release key, read from

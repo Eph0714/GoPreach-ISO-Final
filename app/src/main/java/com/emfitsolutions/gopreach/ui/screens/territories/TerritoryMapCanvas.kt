@@ -230,7 +230,7 @@ fun TerritoryMapCanvas(
         drawingLayers = true,
         recenterOnArrowTap = false,
         drivingMode = driving?.active == true,
-        headingOverrideDeg = driving?.snapshot?.courseDeg,
+        headingOverrideDeg = driving?.roadFix?.bearingDeg ?: driving?.snapshot?.courseDeg,
         walkingMode = driving?.active == true && driving.walking,
         // The map turns to the direction of travel, so the arrow always points to the top of the screen (in front of the driver).
         arrowForward = driving?.active == true && !driving.walking && driving.following && driving.headingUp,
