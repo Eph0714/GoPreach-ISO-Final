@@ -117,6 +117,8 @@ will refuse the install; a manual uninstall/reinstall would be needed).
 
 A production build must be signed with GoPreach's own release key, never the debug key.
 
+**Quick way:** `node scripts/create-release-key.mjs` does steps 1-2 below, registers the fingerprint in `scripts/release-cert.sha256`, and asks you for the password. Then back the key up and release with `node scripts/release.mjs` (no `--legacy`). Phones with the debug-signed app must uninstall and reinstall once.
+
 1. Create the key once and keep it (and its passwords) somewhere safe and backed up -- losing it means
    no future update can ever be installed over existing installs:
    `keytool -genkeypair -v -keystore gopreach-release.jks -alias gopreach -keyalg RSA -keysize 4096 -validity 10000`

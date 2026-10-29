@@ -610,6 +610,22 @@ private fun PipelineListScreen(
                                         }
                                     },
                                     onStreetView = { if (person.validCoordinates() == null) noLocationFor = person to "Street View" else streetViewFor = person },
+                                    onPrint = {
+                                        actions.print(
+                                            com.emfitsolutions.gopreach.data.print.ReportTable(
+                                                title = person.name,
+                                                count = 1,
+                                                countLabel = "Total Records",
+                                                columns = exportTable.columns,
+                                                rows = listOf(listOf(
+                                                    person.name, person.address, person.province.orEmpty(), person.cityMunicipality.orEmpty(), person.barangay.orEmpty(), person.contact.orEmpty(),
+                                                    if (person.publisherPersonId.isBlank()) "Unassigned" else publisherNames[person.publisherPersonId] ?: "—",
+                                                    if (person.status == RecordStatus.INACTIVE) "Inactive" else "Active",
+                                                )),
+                                                totals = emptyList(),
+                                            ),
+                                        )
+                                    },
                                 )
                             }
                         }
@@ -2065,13 +2081,14 @@ private fun InterestedPerson.validCoordinates(): Pair<Double, Double>? {
     return lat to lng
 }
 
-/** Show Details, Show Maps and Show Street View beside a record's name: same size and spacing, each in its own colour (violet, green, gold). */
+/** Show Details, Show Maps, Show Street View and Print beside a record's name: same size and spacing, each in its own colour (violet, green, gold). */
 @Composable
-private fun RecordQuickActions(onDetails: () -> Unit, onMap: () -> Unit, onStreetView: () -> Unit) {
+private fun RecordQuickActions(onDetails: () -> Unit, onMap: () -> Unit, onStreetView: () -> Unit, onPrint: () -> Unit) {
     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         ActionIconButton(ActionKind.View, onClick = onDetails, contentDescription = "Show Details")
         ActionIconButton(ActionKind.Map, onClick = onMap, contentDescription = "Show Maps")
         ActionIconButton(ActionKind.Map, onClick = onStreetView, contentDescription = "Show Street View", icon = Icons.Rounded.Streetview)
+        ActionIconButton(ActionKind.Print, onClick = onPrint, contentDescription = "Print")
     }
 }
 
