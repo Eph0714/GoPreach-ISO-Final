@@ -53,8 +53,11 @@ class HttpAuthService(
     private val deviceLabel: String? = null,
     /** Full description of this device (model, system, app version) for the device list; [deviceLabel] alone is what older servers read. */
     private val deviceInfo: DeviceInfo? = null,
-    /** Called whenever this device is signed out (by the person, by another device, or by the server): the app forgets every saved password then. */
-    private val onSignedOut: () -> Unit = {},
+    /**
+     * Called whenever this device is signed out. [endedByServer] is true when the server ended the session (another device, a deleted trusted device, a password change):
+     * the app then forgets every saved password. When the person signs out (or the idle timeout does), the fingerprint and PIN sign-ins are kept so the next login works.
+     */
+    private val onSignedOut: (endedByServer: Boolean) -> Unit = {},
 ) : AuthService {
     private val prefs by lazy { stores.openSecure(PREFS) }
     private val lock = Mutex()
@@ -101,11 +104,11 @@ class HttpAuthService(
         state.value = userFor(personId, lastSignIn.takeIf { it > 0L })
     }
 
-    private fun clear() {
+    private fun clear(endedByServer: Boolean) {
         prefs.edit { remove(K_ACCESS); remove(K_REFRESH); remove(K_EXPIRES); remove(K_PERSON); remove(K_LAST_SIGN_IN) }
         // Before the signed-out state is announced: the app forgets its saved passwords and the "signed in" marker, so it really returns to the login screen
         // (a session the server ended must not leave the phone half signed in).
-        runCatching(onSignedOut)
+        runCatching { onSignedOut(endedByServer) }
         state.value = null
     }
 
@@ -209,7 +212,7 @@ class HttpAuthService(
     override fun signOut() {
         ensureLoaded()
         val refresh = prefs.getString(K_REFRESH, null)
-        clear()
+        clear(endedByServer = false)
         if (refresh != null) scope.launch { runCatching { post("/v1/auth/logout", buildJsonObject { put("refreshToken", JsonPrimitive(refresh)) }, token = null) } }
     }
 
@@ -223,11 +226,11 @@ class HttpAuthService(
             save(reply, signedInNow = false)
             reply.string("accessToken")
         } catch (e: AuthFailure.SessionEnded) {
-            clear() // signed out by the server (another device, a deleted trusted device, a password change)
+            clear(endedByServer = true) // signed out by the server (another device, a deleted trusted device, a password change)
             prefs.edit { putString(K_ENDED, "1") } // the sign-in screen explains why
             null
         } catch (e: AuthFailure.InvalidCredentials) {
-            clear() // the server no longer knows this session (signed out elsewhere, password changed, account removed)
+            clear(endedByServer = true) // the server no longer knows this session (signed out elsewhere, password changed, account removed)
             null
         }
     }

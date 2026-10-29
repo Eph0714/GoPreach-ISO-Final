@@ -151,6 +151,7 @@ fun ManageCongregationsScreen(
                                 UniversalColumn("Code", 90.dp) { it.code },
                                 UniversalColumn("Address", 240.dp) { it.address },
                                 UniversalColumn("Circuit Overseer", 170.dp) { circuitLinks[it.id]?.let { l -> overseerNames[l.circuitOverseerPersonId] } ?: "Not assigned" },
+                                UniversalColumn("Enrolled by", 150.dp) { it.enrolledByPersonId?.let { id -> overseerNames[id] ?: "Circuit Overseer" } ?: "-" },
                                 UniversalColumn("Status", 90.dp) { if (it.status == RecordStatus.ACTIVE) "Active" else "Inactive" },
                         ),
                         onRowClick = { pendingEdit = it },
@@ -165,6 +166,7 @@ fun ManageCongregationsScreen(
                             chips = listOfNotNull(
                                 link?.let { "Circuit Overseer: ${overseerNames[it.circuitOverseerPersonId] ?: "-"}" },
                                 link?.let { "Circuit Code: ${it.circuitCode}" },
+                                congregation.enrolledByPersonId?.let { "Enrolled by Circuit Overseer: ${overseerNames[it] ?: "-"}" },
                             ) + congregation.languages,
                             note = if (link == null) "Circuit Overseer: not assigned" else null,
                             onEdit = { pendingEdit = congregation },

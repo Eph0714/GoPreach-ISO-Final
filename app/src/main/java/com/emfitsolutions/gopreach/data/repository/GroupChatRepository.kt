@@ -121,6 +121,9 @@ class GroupChatRepository(
         attachmentFileName: String? = null,
         attachmentType: GroupChatAttachmentType? = null,
         attachmentSize: Long = 0L,
+        attachmentThumbUrl: String? = null,
+        attachmentWidth: Int = 0,
+        attachmentHeight: Int = 0,
     ) {
         val now = System.currentTimeMillis()
         val message = GroupChatMessage(
@@ -133,6 +136,9 @@ class GroupChatRepository(
             attachmentFileName = attachmentFileName,
             attachmentType = attachmentType,
             attachmentSize = attachmentSize,
+            attachmentThumbUrl = attachmentThumbUrl,
+            attachmentWidth = attachmentWidth,
+            attachmentHeight = attachmentHeight,
             createdAt = now,
         )
         saveMessage(groupChatId, message)
@@ -157,8 +163,14 @@ class GroupChatRepository(
 
     /** Uploads an attachment under a fixed per-message path and returns its download URL. [messageId] is a freshly generated id the
      * caller then passes into [sendMessage], so the stored file and the message line up. */
-    suspend fun uploadAttachment(groupChatId: String, messageId: String, fileUri: Uri, fileName: String): String =
-        files.upload("groupChats/$groupChatId/attachments/$messageId/$fileName", fileUri.toString())
+    suspend fun uploadAttachment(groupChatId: String, messageId: String, fileUri: Uri, fileName: String, onProgress: ((sent: Long, total: Long) -> Unit)? = null): String =
+        files.upload("groupChats/$groupChatId/attachments/$messageId/$fileName", fileUri.toString(), onProgress)
+
+    /** A picture's small preview, stored next to the picture (the website uses the same name, so either can delete it). */
+    suspend fun uploadThumbnail(groupChatId: String, messageId: String, fileName: String, thumbUri: Uri): String =
+        files.upload(thumbnailPath(groupChatId, messageId, fileName), thumbUri.toString())
+
+    private fun thumbnailPath(groupChatId: String, messageId: String, fileName: String) = "groupChats/$groupChatId/attachments/$messageId/thumb-${fileName.substringBeforeLast('.', fileName)}.jpg"
 
     fun newMessageId(groupChatId: String): String = newLocalId()
 
@@ -172,9 +184,12 @@ class GroupChatRepository(
     /** "Delete for everyone" — sender-only soft delete: clears the content and removes the stored attachment (best effort); the message
      * line itself, and its place in the chat history, stays. */
     suspend fun deleteForEveryone(groupChatId: String, messageId: String, attachmentFileName: String?) {
-        if (attachmentFileName != null) files.delete("groupChats/$groupChatId/attachments/$messageId/$attachmentFileName")
+        if (attachmentFileName != null) {
+            files.delete("groupChats/$groupChatId/attachments/$messageId/$attachmentFileName")
+            files.delete(thumbnailPath(groupChatId, messageId, attachmentFileName))
+        }
         offline.get<GroupChatMessage>("$COLLECTION/$groupChatId/$MESSAGES_SUBCOLLECTION", messageId)?.let {
-            saveMessage(groupChatId, it.copy(text = "", attachmentUrl = null, attachmentFileName = null, attachmentType = null, attachmentSize = 0L, isDeletedForEveryone = true))
+            saveMessage(groupChatId, it.copy(text = "", attachmentUrl = null, attachmentFileName = null, attachmentType = null, attachmentSize = 0L, attachmentThumbUrl = null, attachmentWidth = 0, attachmentHeight = 0, isDeletedForEveryone = true))
         }
         runCatching { syncEngine.syncOnce() }
     }

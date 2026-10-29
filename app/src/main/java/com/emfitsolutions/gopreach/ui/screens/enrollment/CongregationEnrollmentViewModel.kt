@@ -39,6 +39,9 @@ data class CongregationEnrollmentUiState(
     val isSaving: Boolean = false,
     val errorMessage: String? = null,
     val saved: Boolean = false,
+    /** True when a Circuit Overseer is enrolling: the overseer is the signed-in account (read-only), and the server assigns it. */
+    val coMode: Boolean = false,
+    val assignedOverseerName: String = "",
 )
 
 /** Spec §4.1 — Super-Admin only. */
@@ -49,7 +52,11 @@ class CongregationEnrollmentViewModel(
     private val philippineLocationRepository: PhilippineLocationRepository,
     circuitOverseerDirectory: CircuitOverseerDirectory,
     private val circuitAssignmentService: CircuitAssignmentService,
+    private val coCongregationService: com.emfitsolutions.gopreach.data.repository.CoCongregationService,
+    private val userSession: com.emfitsolutions.gopreach.domain.UserSession,
 ) : ViewModel() {
+    /** One id for this form, kept for every retry, so a repeated press or a lost answer never enrols the congregation twice. */
+    private val requestId = com.emfitsolutions.gopreach.data.repository.newRequestId()
 
     private val _uiState = MutableStateFlow(CongregationEnrollmentUiState())
     val uiState: StateFlow<CongregationEnrollmentUiState> = _uiState.asStateFlow()
@@ -57,6 +64,12 @@ class CongregationEnrollmentViewModel(
     /** Active Circuit Overseers that hold an active Circuit Code — the only ones a congregation may be given to. */
     val overseers: StateFlow<List<OverseerOption>> = circuitOverseerDirectory.activeOverseers
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** The Circuit Overseer's own use of this form: no overseer to pick, the congregation goes under the signed-in account. */
+    fun startAsCircuitOverseer() {
+        val name = userSession.state.value.person?.fullName.orEmpty()
+        _uiState.update { it.copy(coMode = true, assignedOverseerName = name) }
+    }
 
     fun onOverseerSelected(personId: String) = _uiState.update { it.copy(circuitOverseerPersonId = personId, errorMessage = null) }
 
@@ -104,6 +117,8 @@ class CongregationEnrollmentViewModel(
 
     fun save(createdByPersonId: String) {
         val state = _uiState.value
+        if (state.isSaving) return   // one submission at a time
+        if (state.coMode) { saveAsCircuitOverseer(state, createdByPersonId); return }
         if (state.name.isBlank() || state.province.isNullOrBlank() || state.cityMunicipality.isNullOrBlank() ||
             state.barangay.isNullOrBlank() || state.code.isBlank()
         ) {
@@ -157,6 +172,25 @@ class CongregationEnrollmentViewModel(
                 _uiState.update {
                     it.copy(isSaving = false, errorMessage = e.localizedMessage ?: "Couldn't create this congregation. Please try again.")
                 }
+            }
+        }
+    }
+
+    /** A Circuit Overseer enrols a congregation: the same fields and checks as the Super Admin, then ONE server call that assigns it to the signed-in overseer. */
+    private fun saveAsCircuitOverseer(state: CongregationEnrollmentUiState, coPersonId: String) {
+        if (state.name.isBlank() || state.province.isNullOrBlank() || state.cityMunicipality.isNullOrBlank() || state.barangay.isNullOrBlank() || state.code.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Name, Province, Municipality/City, Barangay, and code are required.") }
+            return
+        }
+        _uiState.update { it.copy(isSaving = true, errorMessage = null) }
+        viewModelScope.launch {
+            val result = coCongregationService.enroll(
+                name = state.name.trim(), code = state.code.trim(), province = state.province, cityMunicipality = state.cityMunicipality, barangay = state.barangay,
+                languages = state.languages, requestId = requestId, coPersonId = coPersonId,
+            )
+            when (result) {
+                is com.emfitsolutions.gopreach.data.repository.CoCongregationResult.Saved -> _uiState.update { it.copy(isSaving = false, saved = true) }
+                is com.emfitsolutions.gopreach.data.repository.CoCongregationResult.Failed -> _uiState.update { it.copy(isSaving = false, errorMessage = result.message) }
             }
         }
     }

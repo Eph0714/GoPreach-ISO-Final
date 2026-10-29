@@ -65,6 +65,12 @@ class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
 
     private var pausedAt = 0L
 
+    /** Height in pixels of the navigation panel covering the bottom of the map (0 when there is none): the arrow is placed in the part of the map that stays visible above it. */
+    var bottomInsetPx by mutableStateOf(0)
+
+    /** Map padding (top) that puts the arrow [ARROW_FROM_TOP] of the way down the visible map: the camera target (the arrow's real position) is the centre of what is left after padding. */
+    fun topPaddingPx(mapHeight: Float): Int = ((mapHeight - bottomInsetPx).coerceAtLeast(0f) * (2 * ARROW_FROM_TOP - 1).toFloat()).toInt().coerceAtLeast(0)
+
     /** Bumped by Recenter so the camera moves at once even when nothing else changed. */
     var recenterTick by mutableStateOf(0)
         private set
@@ -135,6 +141,8 @@ class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
         const val MAX_FOLLOW_ZOOM = 18.5
         /** The top padding of the map as a share of its height: the arrow sits in the middle of what is left below it, so with 0.60 it is about 80% of the way down (the lowest comfortable spot) and nearly all of the screen shows the road ahead. */
         const val LOWER_THIRD = 0.60
+        /** The arrow sits this far down the visible map (measured from the top, above the bottom panel): 75%, inside the 70-80% the design asks for. */
+        const val ARROW_FROM_TOP = 0.75
     }
 }
 
@@ -162,7 +170,7 @@ fun DrivingCameraEffect(map: MapLibreMap?, state: DrivingModeState?) {
     // Leaving Driving Mode: back to the normal map.
     DisposableEffect(map, state.active) {
         val m = map
-        if (m != null && state.active) m.setPadding(0, (m.height * DrivingModeState.LOWER_THIRD).toInt(), 0, 0)
+        if (m != null && state.active) m.setPadding(0, state.topPaddingPx(m.height), 0, state.bottomInsetPx)
         onDispose {
             if (m != null) {
                 m.setPadding(0, 0, 0, 0)
@@ -172,14 +180,15 @@ fun DrivingCameraEffect(map: MapLibreMap?, state: DrivingModeState?) {
     }
 
     val road = state.roadFix
-    LaunchedEffect(map, state.active, state.following, state.headingUp, state.tiltDeg, state.recenterTick, snap.lat, snap.lng, snap.courseDeg, state.compassDeg, road) {
+    LaunchedEffect(map, state.active, state.following, state.headingUp, state.tiltDeg, state.recenterTick, snap.lat, snap.lng, snap.courseDeg, state.compassDeg, road, state.bottomInsetPx) {
         val m = map ?: return@LaunchedEffect
         val lat = road?.lat ?: snap.lat ?: return@LaunchedEffect
         val lng = road?.lng ?: snap.lng ?: return@LaunchedEffect
         if (!state.active || !state.following) return@LaunchedEffect
         // Route previews and navigation reset the padding to zero: put the arrow back in the lowest position before the camera moves (changing it afterwards would cancel the animation).
-        val top = (m.height * DrivingModeState.LOWER_THIRD).toInt()
-        if (m.padding[1] != top) m.setPadding(0, top, 0, 0)
+        val top = state.topPaddingPx(m.height)
+        val bottom = state.bottomInsetPx
+        if (m.padding[1] != top || m.padding[3] != bottom) m.setPadding(0, top, 0, bottom)
         val current = m.cameraPosition
         val zoom = if (current.zoom in DrivingModeState.MIN_FOLLOW_ZOOM..DrivingModeState.MAX_FOLLOW_ZOOM) current.zoom else if (state.walking) DrivingModeState.NAV_ZOOM + 1.0 else DrivingModeState.NAV_ZOOM
         val course = road?.bearingDeg ?: snap.courseDeg

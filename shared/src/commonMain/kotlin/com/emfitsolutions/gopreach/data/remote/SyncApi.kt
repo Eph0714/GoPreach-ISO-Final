@@ -25,7 +25,7 @@ interface SyncApi {
     suspend fun postJson(path: String, body: JsonObject): ApiReply = throw UnsupportedOperationException("postJson is not available")
 
     /** Uploads [bytes] to the server's file store under [path] (replacing any file there) and returns the public download URL. */
-    suspend fun uploadFile(path: String, bytes: ByteArray, mime: String): String = throw UnsupportedOperationException("uploadFile is not available")
+    suspend fun uploadFile(path: String, bytes: ByteArray, mime: String, onProgress: ((sent: Long, total: Long) -> Unit)? = null): String = throw UnsupportedOperationException("uploadFile is not available")
 
     /** Best-effort delete of the file stored under [path]. */
     suspend fun deleteFile(path: String) { throw UnsupportedOperationException("deleteFile is not available") }

@@ -13,7 +13,7 @@ import org.junit.Test
 class MotherFormsAuditTest {
     /** Screens opened FROM a mother form (add / edit / detail / wizard / settings sub-pages): no Home button of their own. */
     private val children = setOf(
-        "ADD_CIRCUIT_OVERSEER", "ADD_USER", "CIRCUIT_CONGREGATION", "EDIT_CIRCUIT_OVERSEER", "EDIT_MONTHLY_REPORT", "EDIT_USER", "GROUP_CHAT_DETAIL", "GROUP_CHAT_SETTING",
+        "ADD_CIRCUIT_OVERSEER", "ADD_USER", "CIRCUIT_CONGREGATION", "CO_ENROLL_CONGREGATION", "EDIT_CIRCUIT_OVERSEER", "EDIT_MONTHLY_REPORT", "EDIT_USER", "GROUP_CHAT_DETAIL", "GROUP_CHAT_SETTING",
         "SESSION_TIMEOUT_SETTING", "TERRITORY_ASSIGNMENT_WIZARD", "THEME_COLOR_SETTINGS", "VIEW_CIRCUIT_OVERSEER",
     )
 

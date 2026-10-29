@@ -227,7 +227,7 @@ internal fun navGroupOf(route: String): NavGroup = when (route) {
     Destinations.MANAGE_CONGREGATIONS, Destinations.MANAGE_ADMINS, Destinations.MANAGE_ELDERS, Destinations.MANAGE_MINISTERIAL_SERVANTS,
     Destinations.MANAGE_GROUPS, Destinations.MANAGE_PUBLISHERS, Destinations.MANAGE_TERRITORY_ASSIGNMENTS, Destinations.ACCOUNT_MANAGEMENT,
     Destinations.MANAGE_USERS, Destinations.ADMIN_CO_FILES, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_CIRCUIT_CODES, Destinations.MANAGE_CIRCUIT_OVERSEERS,
-    Destinations.CIRCUIT_ASSIGNMENT -> NavGroup.MANAGEMENT
+    Destinations.CIRCUIT_ASSIGNMENT, Destinations.CO_CONGREGATIONS, Destinations.CO_ENROLL_CONGREGATION -> NavGroup.MANAGEMENT
 
     Destinations.ADMIN_DEVICES, Destinations.ADMIN_SECURITY_LOG -> NavGroup.MANAGEMENT
 
@@ -400,6 +400,7 @@ fun adminSideItems(caps: AdminCapabilities, includeTabModules: Boolean = false):
             // tile grid gets hidden next.
             if (isCircuitOverseer) {
                 add(SideItem("Congregations", Icons.Rounded.AccountBalance, Destinations.CIRCUIT_CONGREGATIONS))
+                add(SideItem("Congregation Management", Icons.Rounded.AdminPanelSettings, Destinations.CO_CONGREGATIONS))
                 add(SideItem("Announcements", Icons.Rounded.Campaign, Destinations.CO_ANNOUNCEMENTS))
                 add(SideItem("Publishers", Icons.Rounded.People, Destinations.circuitPublishers()))
                 add(SideItem("Elders", Icons.Rounded.PersonAdd, Destinations.circuitLeaders(kind = "elders")))

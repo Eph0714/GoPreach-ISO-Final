@@ -36,7 +36,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 private fun coordinateText(lat: Double, lng: Double) = "%.6f, %.6f".format(lat, lng)
 
@@ -48,36 +50,43 @@ private fun coordinateText(lat: Double, lng: Double) = "%.6f, %.6f".format(lat, 
 @Composable
 fun RecordLocationActions(lat: Double, lng: Double, name: String?, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    Surface(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)) {
-        Column(Modifier.padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // The website's place card: a thin border, the pin and the coordinates (monospace, bold) with Copy, then two bordered compact buttons side by side.
+    Surface(
+        modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), color = androidx.compose.ui.graphics.Color.Transparent,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.LocationOn, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
                     coordinateText(lat, lng),
-                    style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)
+                    fontSize = 14.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f)
                         .semantics { contentDescription = "Coordinates: latitude ${"%.6f".format(lat)}, longitude ${"%.6f".format(lng)}" },
                 )
-                IconButton(onClick = { copyCoordinates(context, lat, lng) }) { Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy coordinates", modifier = Modifier.size(20.dp)) }
+                IconButton(onClick = { copyCoordinates(context, lat, lng) }, modifier = Modifier.size(36.dp)) { Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy coordinates", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) }
             }
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.padding(end = 8.dp)) {
-                val streetView: @Composable (Modifier) -> Unit = { m ->
-                    ActionButton(ActionKind.Map, onClick = { openStreetViewExternally(context, lat, lng) }, label = "Street View", modifier = m)
-                }
-                val maps: @Composable (Modifier) -> Unit = { m ->
-                    ActionButton(ActionKind.Map, onClick = { openCoordinatesInMaps(context, lat, lng, name?.ifBlank { null }) }, label = "Open in Maps", modifier = m)
-                }
-                // Side by side when there is room, stacked (each full width) in a narrow dialog so no label is squeezed.
-                if (maxWidth >= 300.dp) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { streetView(Modifier.weight(1f)); maps(Modifier.weight(1f)) }
-                } else {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { streetView(Modifier.fillMaxWidth()); maps(Modifier.fillMaxWidth()) }
-                }
+            Row(Modifier.padding(end = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PlaceButton(Icons.Rounded.Streetview, "Street View", Modifier.weight(1f)) { openStreetViewExternally(context, lat, lng) }
+                PlaceButton(Icons.Rounded.Map, "Open in Maps", Modifier.weight(1f)) { openCoordinatesInMaps(context, lat, lng, name?.ifBlank { null }) }
             }
         }
     }
 }
 
+/** The website's place button: a thin border, no fill, the icon in the theme colour and a short label. */
+@Composable
+private fun PlaceButton(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick, shape = RoundedCornerShape(10.dp), color = androidx.compose.ui.graphics.Color.Transparent, contentColor = MaterialTheme.colorScheme.onSurface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = modifier.height(40.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+            Text(label, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        }
+    }
+}
 
 /**
  * The same place choices as [RecordLocationActions] on one light line for dense lists: the coordinates, Copy, and small Street View / Maps

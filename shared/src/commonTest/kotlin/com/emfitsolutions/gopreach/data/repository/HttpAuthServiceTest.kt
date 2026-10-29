@@ -88,20 +88,20 @@ class HttpAuthServiceTest {
         assertFalse(auth.takeSessionEndedNotice(), "the message is shown once")
     }
 
-    @Test fun everySignOutMakesThePhoneForgetItsSavedPasswords() = runTest {
-        var forgotten = 0
-        // by the person
-        val own = HttpAuthService(HttpClient(MockEngine { respond(tokens, HttpStatusCode.OK, json) }), "https://api.test", MemoryStores(), CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined), onSignedOut = { forgotten++ })
+    @Test fun aSignOutByThePersonKeepsTheFingerprintLoginButOneEndedByTheServerForgetsEverything() = runTest {
+        val ended = mutableListOf<Boolean>()
+        // by the person (or the idle timeout): the fingerprint / PIN sign-ins stay
+        val own = HttpAuthService(HttpClient(MockEngine { respond(tokens, HttpStatusCode.OK, json) }), "https://api.test", MemoryStores(), CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined), onSignedOut = { ended += it })
         own.signIn("p1@gopreach.internal", "pw")
         own.signOut()
-        assertEquals(1, forgotten, "signing out forgets the saved passwords")
-        // by the server (another device, a deleted trusted device, a password change)
+        assertEquals(listOf(false), ended, "signing out is reported as the person's own")
+        // by the server (another device, a deleted trusted device, a password change): everything saved is forgotten
         var call = 0
         val engine = MockEngine { call++; if (call == 1) respond(tokens, HttpStatusCode.OK, json) else respond("""{"error":"session-ended"}""", HttpStatusCode.Unauthorized, json) }
-        val ended = HttpAuthService(HttpClient(engine), "https://api.test", MemoryStores(), CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined), onSignedOut = { forgotten++ })
-        ended.signIn("p1@gopreach.internal", "pw")
-        assertNull(ended.idToken(force = true))
-        assertEquals(2, forgotten, "a session the server ended forgets them too")
+        val serverEnded = HttpAuthService(HttpClient(engine), "https://api.test", MemoryStores(), CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined), onSignedOut = { ended += it })
+        serverEnded.signIn("p1@gopreach.internal", "pw")
+        assertNull(serverEnded.idToken(force = true))
+        assertEquals(listOf(false, true), ended, "a session the server ended is reported as such")
     }
     @Test fun anOrdinaryExpiredLoginIsNotReportedAsSignedInElsewhere() = runTest {
         var call = 0

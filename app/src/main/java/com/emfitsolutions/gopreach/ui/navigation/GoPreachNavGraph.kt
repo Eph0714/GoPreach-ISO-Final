@@ -330,6 +330,29 @@ fun GoPreachNavGraph(
                 onSaved = { navController.popBackStack() },
             )
         }
+        // Circuit Overseer: Congregation Management. The screens are for the Circuit Overseer only; the server enforces it again on every request.
+        composable(Destinations.CO_CONGREGATIONS) {
+            if (currentRole != AdminRole.CIRCUIT_OVERSEER) {
+                NoAccessScreen(onBack = { navController.popBackStack() })
+            } else {
+                com.emfitsolutions.gopreach.ui.screens.circuit.CoCongregationsScreen(
+                    onBack = { navController.popBackStack() },
+                    onAdd = { navController.navigate(Destinations.CO_ENROLL_CONGREGATION) },
+                )
+            }
+        }
+        composable(Destinations.CO_ENROLL_CONGREGATION) {
+            if (currentRole != AdminRole.CIRCUIT_OVERSEER) {
+                NoAccessScreen(onBack = { navController.popBackStack() })
+            } else {
+                CongregationEnrollmentScreen(
+                    currentPersonId = currentPersonId,
+                    coMode = true,
+                    onBack = { navController.popBackStack() },
+                    onSaved = { navController.popBackStack() },
+                )
+            }
+        }
         composable(Destinations.ENROLL_ADMIN) {
             AdminEnrollmentScreen(
                 currentPersonId = currentPersonId,

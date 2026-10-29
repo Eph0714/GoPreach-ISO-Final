@@ -1,5 +1,24 @@
 package com.emfitsolutions.gopreach.ui.screens.groupchat
 
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
+
+import kotlinx.coroutines.launch
+
+import androidx.compose.ui.input.pointer.pointerInput
+
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.ui.draw.clip
+
+import androidx.compose.material.icons.rounded.PhotoCamera
+
+import androidx.compose.material.icons.rounded.PhotoLibrary
+
+import androidx.compose.foundation.layout.statusBarsPadding
+
+import androidx.compose.foundation.layout.aspectRatio
+
 import com.emfitsolutions.gopreach.ui.components.ActionKind
 import com.emfitsolutions.gopreach.ui.components.ActionButton
 import com.emfitsolutions.gopreach.shared.resources.Res
@@ -104,7 +123,26 @@ import androidx.compose.ui.window.DialogProperties
 /** A picked-but-not-yet-sent attachment — shown as its own row above the
  * input box (spec §8: "show file name, file type/icon, file size, upload
  * progress, cancel upload option"). */
-private data class PendingAttachment(val uri: Uri, val fileName: String, val fileSize: Long, val type: GroupChatAttachmentType)
+private enum class PendingStage { PREPARING, READY, UPLOADING, FAILED }
+
+/**
+ * [id] is the message id, chosen once when the file is picked and kept for every retry (a retry replaces the same message, never adds a second one).
+ * A picture is first optimized (quality first, see [ChatImageOptimizer]); [prepared] is what will be uploaded. The picked file is kept until it is sent or removed.
+ */
+private data class PendingAttachment(
+    val id: String,
+    val uri: Uri,
+    val fileName: String,
+    val fileSize: Long,
+    val type: GroupChatAttachmentType,
+    val stage: PendingStage = PendingStage.READY,
+    val prepared: PreparedChatImage? = null,
+    val progress: Float = 0f,
+    val note: String = "",
+    val error: String? = null,
+    /** False when sending again cannot help (a file over the size limit, a photo that cannot be read): only Remove is offered. */
+    val canRetry: Boolean = true,
+)
 
 /**
  * "Group Chat Interface" (spec §7-8) — header, chronological message
@@ -170,7 +208,12 @@ fun GroupChatScreen(
     var showDocuments by remember { mutableStateOf(false) }
     var messageText by remember { mutableStateOf("") }
     var pendingAttachment by remember { mutableStateOf<PendingAttachment?>(null) }
-    var isUploading by remember { mutableStateOf(false) }
+    var showAttachMenu by remember { mutableStateOf(false) }
+    var viewerUrl by remember { mutableStateOf<String?>(null) }
+    var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    val optimizer = remember { ChatImageOptimizer(context) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val isUploading = pendingAttachment?.stage == PendingStage.UPLOADING
     // "Allow the sender to edit and delete (to everyone, delete for me) the
     // message he sent" — editingMessage drives an edit dialog;
     // pendingDeleteForEveryone a confirmation (an irreversible, everyone-
@@ -191,6 +234,64 @@ fun GroupChatScreen(
 
     val unsupportedFileTypeMessage = stringResource(Res.string.chat_unsupported_file_type)
     val uploadFailedMessage = stringResource(Res.string.chat_upload_failed)
+    val uploadFailedConnection = "The photo was not sent. It is kept: press Retry."
+
+    /** Removes the optimized copies made for a pick (the person's own photo is never touched). */
+    fun cleanUp(p: PendingAttachment?) {
+        p?.prepared?.let { r ->
+            listOfNotNull(r.uri.takeIf { it != p.uri }, r.thumbUri).forEach { u -> runCatching { u.path?.let { path -> java.io.File(path).delete() } } }
+        }
+        if (p != null && p.uri.scheme == "content" && p.uri.authority?.endsWith(".fileprovider") == true) runCatching { context.contentResolver.delete(p.uri, null, null) }
+    }
+
+    /** Picked from the Gallery or the camera: shown at once, optimized in the background, and ready to send when the preview says so. */
+    fun startPending(uri: Uri, name: String, size: Long, type: GroupChatAttachmentType) {
+        cleanUp(pendingAttachment)
+        val id = viewModel.newMessageId(groupChatId)
+        if (type != GroupChatAttachmentType.IMAGE) {
+            val tooBig = size > com.emfitsolutions.gopreach.domain.chat.ChatImagePlanner.LIMIT_BYTES + 64 * 1024
+            pendingAttachment = PendingAttachment(id, uri, name, size, type, error = if (tooBig) "The file is larger than 8 MB." else null, canRetry = false)
+            return
+        }
+        pendingAttachment = PendingAttachment(id, uri, name, size, type, stage = PendingStage.PREPARING, note = "Optimizing...")
+        scope.launch {
+            try {
+                val prepared = optimizer.prepare(uri, name)
+                val note = (if (prepared.sizeBytes < prepared.originalBytes) "${formatFileSize(prepared.originalBytes)} \u2192 ${formatFileSize(prepared.sizeBytes)} - " else "${formatFileSize(prepared.sizeBytes)} - ") + prepared.note
+                pendingAttachment = pendingAttachment?.takeIf { it.id == id }?.copy(stage = PendingStage.READY, prepared = prepared, note = note)
+            } catch (e: ChatImageException) {
+                pendingAttachment = pendingAttachment?.takeIf { it.id == id }?.copy(stage = PendingStage.FAILED, error = e.message, canRetry = false)
+            } catch (e: Exception) {
+                pendingAttachment = pendingAttachment?.takeIf { it.id == id }?.copy(stage = PendingStage.FAILED, error = "This photo could not be processed. Choose another one.", canRetry = false)
+            }
+        }
+    }
+
+    // The Android Photo Picker: the phone's own gallery chooser, which needs no storage permission.
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) startPending(uri, queryFileName(context, uri) ?: "photo.jpg", queryFileSize(context, uri), GroupChatAttachmentType.IMAGE)
+    }
+    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        val uri = cameraUri
+        if (saved && uri != null) startPending(uri, "Photo " + java.text.SimpleDateFormat("yyyy-MM-dd HH-mm", java.util.Locale.US).format(java.util.Date()) + ".jpg", queryFileSize(context, uri), GroupChatAttachmentType.IMAGE)
+        else if (uri != null) runCatching { context.contentResolver.delete(uri, null, null) }
+    }
+    fun openCamera() {
+        runCatching {
+            val file = java.io.File(context.cacheDir, "camera").apply { mkdirs() }.let { java.io.File(it, "chat_" + java.util.UUID.randomUUID() + ".jpg") }
+            val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+            cameraUri = uri
+            takePhoto.launch(uri)
+        }.onFailure { showToast("The camera could not be opened.") }
+    }
+    // The app declares the camera permission, so Android asks for it once before the camera opens.
+    val requestCameraPermission = com.emfitsolutions.gopreach.platform.rememberPermissionRequester { granted ->
+        if (granted) openCamera() else showToast("Allow the camera for GoPreach in the phone settings to take a photo.")
+    }
+    fun launchCamera() {
+        val granted = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) openCamera() else requestCameraPermission.launch(com.emfitsolutions.gopreach.platform.AppPermission.CAMERA)
+    }
     val pickAttachment = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             val name = queryFileName(context, uri) ?: uri.lastPathSegment ?: "file"
@@ -198,8 +299,7 @@ fun GroupChatScreen(
             if (type == null) {
                 showToast(unsupportedFileTypeMessage)
             } else {
-                val size = queryFileSize(context, uri)
-                pendingAttachment = PendingAttachment(uri, name, size, type)
+                startPending(uri, name, queryFileSize(context, uri), type)
             }
         }
     }
@@ -209,26 +309,41 @@ fun GroupChatScreen(
         val attachment = pendingAttachment
         if (text.isBlank() && attachment == null) return
         if (attachment != null) {
-            isUploading = true
+            if (attachment.stage == PendingStage.UPLOADING) return
+            if (attachment.stage == PendingStage.PREPARING) { showToast("Your photo is still being optimized."); return }
+            if (attachment.error != null && !attachment.canRetry) return
+            val prepared = attachment.prepared
+            pendingAttachment = attachment.copy(stage = PendingStage.UPLOADING, progress = 0f, error = null, note = "Uploading...")
             viewModel.sendAttachment(
                 groupChatId = groupChatId,
+                messageId = attachment.id,
                 senderId = currentPersonId,
                 senderName = currentPersonName,
                 senderRole = currentPersonRoleLabel,
                 text = text,
-                fileUri = attachment.uri,
-                fileName = attachment.fileName,
-                fileSize = attachment.fileSize,
+                fileUri = prepared?.uri ?: attachment.uri,
+                fileName = prepared?.fileName ?: attachment.fileName,
+                fileSize = prepared?.sizeBytes ?: attachment.fileSize,
                 attachmentType = attachment.type,
-                onFailed = { isUploading = false; showToast(uploadFailedMessage) },
+                thumbUri = prepared?.thumbUri,
+                width = prepared?.width ?: 0,
+                height = prepared?.height ?: 0,
+                onProgress = { f -> pendingAttachment = pendingAttachment?.takeIf { it.id == attachment.id }?.copy(progress = f) },
+                onDone = {
+                    val current = pendingAttachment
+                    if (current?.id == attachment.id) { cleanUp(current); pendingAttachment = null; messageText = "" }
+                },
+                onFailed = {
+                    pendingAttachment = pendingAttachment?.takeIf { it.id == attachment.id }?.copy(stage = PendingStage.READY, error = uploadFailedConnection, note = "Not sent - your file is kept", progress = 0f)
+                },
             )
-            isUploading = false
-            pendingAttachment = null
         } else {
             viewModel.sendText(groupChatId, currentPersonId, currentPersonName, currentPersonRoleLabel, text)
+            messageText = ""
         }
-        messageText = ""
     }
+
+    viewerUrl?.let { url -> ChatImageViewer(url = url, onClose = { viewerUrl = null }) }
 
     if (chat != null && !isAuthorized) {
         UnauthorizedGroupChatScreen(onBack = onBack)
@@ -289,26 +404,45 @@ fun GroupChatScreen(
                         onEdit = { editingMessage = message },
                         onDeleteForEveryone = { pendingDeleteForEveryone = message },
                         onDeleteForMe = { viewModel.deleteForMe(groupChatId, message.id, currentPersonId) },
+                        onOpenImage = { viewerUrl = it },
                     )
                 }
             }
 
             pendingAttachment?.let { attachment ->
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(14.dp)).padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(attachment.type.icon(), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                        Text(attachment.fileName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
-                        Text(formatFileSize(attachment.fileSize), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    if (isUploading) {
-                        CircularProgressIndicator(modifier = Modifier.height(20.dp).widthIn(max = 20.dp))
+                    if (attachment.type == GroupChatAttachmentType.IMAGE) {
+                        AsyncImage(
+                            model = attachment.prepared?.thumbUri ?: attachment.uri,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(56.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)),
+                        )
                     } else {
-                        IconButton(onClick = { pendingAttachment = null }) {
-                            Icon(Icons.Rounded.Close, contentDescription = stringResource(Res.string.chat_cancel_attachment_cd))
+                        Icon(attachment.type.icon(), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                    }
+                    Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
+                        Text(attachment.prepared?.fileName ?: attachment.fileName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(
+                            attachment.note.ifBlank { formatFileSize(attachment.fileSize) },
+                            style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        when (attachment.stage) {
+                            PendingStage.PREPARING -> androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                            PendingStage.UPLOADING -> androidx.compose.material3.LinearProgressIndicator(progress = { attachment.progress }, modifier = Modifier.fillMaxWidth().padding(top = 4.dp))
+                            else -> {}
                         }
+                        attachment.error?.let { Text(it, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error) }
+                    }
+                    if (attachment.error != null && attachment.canRetry && attachment.stage != PendingStage.UPLOADING) {
+                        androidx.compose.material3.TextButton(onClick = ::send) { Text("Retry") }
+                    }
+                    IconButton(onClick = { cleanUp(attachment); pendingAttachment = null }, enabled = attachment.stage != PendingStage.UPLOADING) {
+                        Icon(Icons.Rounded.Close, contentDescription = stringResource(Res.string.chat_cancel_attachment_cd))
                     }
                 }
             }
@@ -317,8 +451,27 @@ fun GroupChatScreen(
                 modifier = Modifier.fillMaxWidth().padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(onClick = { pickAttachment.launch(GROUP_CHAT_ATTACHMENT_MIME_TYPES) }) {
-                    Icon(Icons.Rounded.AttachFile, contentDescription = stringResource(Res.string.chat_attach_file_cd))
+                Box {
+                    IconButton(onClick = { showAttachMenu = true }, enabled = !isUploading) {
+                        Icon(Icons.Rounded.AttachFile, contentDescription = stringResource(Res.string.chat_attach_file_cd))
+                    }
+                    DropdownMenu(expanded = showAttachMenu, onDismissRequest = { showAttachMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text("Photo from Gallery") },
+                            leadingIcon = { Icon(Icons.Rounded.PhotoLibrary, contentDescription = null) },
+                            onClick = { showAttachMenu = false; pickPhoto.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Take Photo") },
+                            leadingIcon = { Icon(Icons.Rounded.PhotoCamera, contentDescription = null) },
+                            onClick = { showAttachMenu = false; launchCamera() },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("File") },
+                            leadingIcon = { Icon(Icons.Rounded.AttachFile, contentDescription = null) },
+                            onClick = { showAttachMenu = false; pickAttachment.launch(GROUP_CHAT_ATTACHMENT_MIME_TYPES) },
+                        )
+                    }
                 }
                 OutlinedTextField(
                     value = messageText,
@@ -453,6 +606,7 @@ private fun MessageBubble(
     onEdit: () -> Unit,
     onDeleteForEveryone: () -> Unit,
     onDeleteForMe: () -> Unit,
+    onOpenImage: (String) -> Unit = {},
 ) {
     if (message.isDeletedForEveryone) {
         DeletedMessagePlaceholder(isOwnMessage)
@@ -495,12 +649,15 @@ private fun MessageBubble(
                     val actions = rememberPlatformActions()
                     val attachmentFallback = stringResource(Res.string.chat_attachment_fallback)
                     if (message.attachmentType == GroupChatAttachmentType.IMAGE) {
+                        // The small preview (older messages have none: they show the picture itself), in the picture's own proportions, never stretched.
+                        val ratio = if (message.attachmentWidth > 0 && message.attachmentHeight > 0) (message.attachmentWidth.toFloat() / message.attachmentHeight).coerceIn(0.4f, 2.5f) else null
                         AsyncImage(
-                            model = message.attachmentUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxWidth().height(160.dp).padding(top = 4.dp, bottom = 4.dp)
-                                .clickable { actions.openFile(message.attachmentUrl!!, "image/*") },
+                            model = message.attachmentThumbUrl ?: message.attachmentUrl,
+                            contentDescription = message.attachmentFileName,
+                            contentScale = if (ratio != null) ContentScale.Fit else ContentScale.Crop,
+                            modifier = Modifier.widthIn(max = 260.dp).fillMaxWidth().then(if (ratio != null) Modifier.aspectRatio(ratio) else Modifier.height(160.dp))
+                                .padding(top = 4.dp, bottom = 4.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                                .clickable { onOpenImage(message.attachmentUrl!!) },
                         )
                     } else {
                         Row(
@@ -629,4 +786,42 @@ fun formatFileSize(bytes: Long): String = when {
     bytes >= 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
     bytes >= 1024 -> "%.0f KB".format(bytes / 1024.0)
     else -> "$bytes B"
+}
+
+/**
+ * The picture, full screen and full resolution (never the preview). Pinch to zoom, drag to move once zoomed, double tap to zoom in and out,
+ * the close button (or Back) to leave, and Open to hand it to another app.
+ */
+@Composable
+private fun ChatImageViewer(url: String, onClose: () -> Unit) {
+    val actions = rememberPlatformActions()
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onClose,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        var scale by remember { mutableStateOf(1f) }
+        var offset by remember { mutableStateOf(androidx.compose.ui.geometry.Offset.Zero) }
+        Box(Modifier.fillMaxSize().background(Color.Black)) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures(onDoubleTap = { if (scale > 1.2f) { scale = 1f; offset = androidx.compose.ui.geometry.Offset.Zero } else scale = 2.5f })
+                    }
+                    .pointerInput(Unit) {
+                        detectTransformGestures { _, pan, zoom, _ ->
+                            scale = (scale * zoom).coerceIn(1f, 8f)
+                            offset = if (scale <= 1f) androidx.compose.ui.geometry.Offset.Zero else offset + pan
+                        }
+                    }
+                    .graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y },
+            )
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(8.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.TextButton(onClick = { actions.openFile(url, "image/*") }) { Text("Open", color = Color.White) }
+                IconButton(onClick = onClose) { Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White) }
+            }
+        }
+    }
 }

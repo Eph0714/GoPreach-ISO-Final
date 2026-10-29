@@ -248,8 +248,14 @@ class GroupChatViewModel(
     /** Uploads [fileUri] then sends it as a message (spec §8: image/PDF/
      * Word/Excel attachments) — [text] may be blank (an attachment-only
      * message, same as a photo message in any other chat app). */
+    /**
+     * Uploads a picked file (and a picture's preview) and then sends the message. [messageId] is chosen once when the file is picked and kept for every retry:
+     * the stored files and the message are written under it, so sending again after a failure replaces the same message instead of adding a second one.
+     * [onProgress] gets 0..1 for the upload; [onFailed] is called when something went wrong (the person's file is kept by the screen so they can retry).
+     */
     fun sendAttachment(
         groupChatId: String,
+        messageId: String,
         senderId: String,
         senderName: String,
         senderRole: String,
@@ -258,12 +264,20 @@ class GroupChatViewModel(
         fileName: String,
         fileSize: Long,
         attachmentType: GroupChatAttachmentType,
+        thumbUri: Uri? = null,
+        width: Int = 0,
+        height: Int = 0,
+        onProgress: (Float) -> Unit = {},
+        onDone: () -> Unit = {},
         onFailed: () -> Unit,
     ) {
         viewModelScope.launch {
             try {
-                val messageId = groupChatRepository.newMessageId(groupChatId)
-                val url = groupChatRepository.uploadAttachment(groupChatId, messageId, fileUri, fileName)
+                // the picture is almost all of the bytes: its progress is the progress of the whole upload
+                val url = groupChatRepository.uploadAttachment(groupChatId, messageId, fileUri, fileName) { sent, total ->
+                    if (total > 0) onProgress((sent.toFloat() / total).coerceIn(0f, 1f))
+                }
+                val thumbUrl = thumbUri?.let { runCatching { groupChatRepository.uploadThumbnail(groupChatId, messageId, fileName, it) }.getOrNull() }
                 groupChatRepository.sendMessage(
                     groupChatId = groupChatId,
                     messageId = messageId,
@@ -275,13 +289,22 @@ class GroupChatViewModel(
                     attachmentFileName = fileName,
                     attachmentType = attachmentType,
                     attachmentSize = fileSize,
+                    attachmentThumbUrl = thumbUrl,
+                    attachmentWidth = width,
+                    attachmentHeight = height,
                 )
+                onDone()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "sendAttachment failed", e)
                 onFailed()
             }
         }
     }
+
+    /** A new id for a message that is about to be sent with a file; the screen keeps it for retries. */
+    fun newMessageId(groupChatId: String): String = groupChatRepository.newMessageId(groupChatId)
 
     fun editMessage(groupChatId: String, messageId: String, newText: String) {
         if (newText.isBlank()) return

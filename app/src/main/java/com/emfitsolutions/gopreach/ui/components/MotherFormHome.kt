@@ -64,9 +64,8 @@ val LocalGoHome = compositionLocalOf<(() -> Unit)?> { null }
 @Composable
 fun MotherFormHomeHost(navController: NavHostController, homeRoute: String, content: @Composable () -> Unit) {
     val entry by navController.currentBackStackEntryAsState()
-    val isMother = Destinations.isMotherForm(entry?.destination?.route)
-    // The yellow "Back to Homepage" bar is retired: every screen has the one standard back arrow (the Searching / Return Visit icon), so a second way out would only compete with it.
-    val showBar = false && isMother && !RecordFullScreen.active && !HomeBarState.suppressed
+    // "Back to Home" is on every opened form (the website has the same yellow button under its header); the back arrow still goes one step back.
+    val showBar = Destinations.hasHomeButton(entry?.destination?.route) && !RecordFullScreen.active && !HomeBarState.suppressed
     var confirmLeave by remember { mutableStateOf(false) }
     val goHome = {
         // Everything opened from the main form is closed: back to the homepage already on the stack, or open it when it is not there.
@@ -127,7 +126,7 @@ private fun BackToHomepageBar(onClick: () -> Unit) {
             ) {
                 Row(modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Home, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Text("Back to Homepage", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text("Back to Home", modifier = Modifier.padding(start = 8.dp), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 }
             }
         }

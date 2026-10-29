@@ -78,6 +78,22 @@ class NavigationEngine(val route: Route, val walking: Boolean = false) {
         return NavigationProgress(idx, toManeuver, remaining, seconds, cross, off, arrived, said, here?.lat, here?.lng, bearing)
     }
 
+    /** How far along the route the vehicle has got, in metres. Only ever grows: a noisy fix cannot move it back. */
+    val traveledMeters: Double get() = traveled
+
+    /**
+     * What is left of the route: the point of the route line the vehicle has reached, then every route point after it. The part already passed is not in it, and because
+     * [traveledMeters] never goes backwards, a GPS wobble cannot bring a passed stretch back. The original route stays untouched in [route].
+     */
+    fun remainingLine(): List<GeoPoint> {
+        if (points.size < 2) return points
+        val d = traveled.coerceIn(0.0, total)
+        var i = 0
+        while (i < points.size - 2 && cumulative[i + 1] <= d) i++
+        val start = pointAt(d) ?: return points
+        return listOf(start) + points.subList(i + 1, points.size)
+    }
+
     /** The point on the route [distance] metres from its start (clamped to the route). */
     private fun pointAt(distance: Double): GeoPoint? {
         if (points.isEmpty()) return null

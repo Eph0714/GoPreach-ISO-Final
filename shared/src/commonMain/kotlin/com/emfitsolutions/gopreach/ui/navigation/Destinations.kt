@@ -17,6 +17,15 @@ object Destinations {
     /** Whether [route] (a route pattern as declared in the navigation graph) is a main form. */
     fun isMotherForm(route: String?): Boolean = route != null && route in motherForms
 
+    /**
+     * The "Back to Home" button is on EVERY opened form (main forms and the add / edit / detail screens opened from them) - everything except the two homepages
+     * themselves and the screens a person sees before there is a home to go back to (sign-in, forgot password, the forced password change, About).
+     */
+    private val withoutHomeButton: Set<String> get() = setOf("login", "about", "forgot_password", "forced_password_change", "admin_home", "publisher_home")
+
+    /** Whether the screen at [route] shows the "Back to Home" button. */
+    fun hasHomeButton(route: String?): Boolean = route != null && route !in withoutHomeButton
+
     // Phase 0
     const val LOGIN = "login"
     const val ABOUT = "about"
@@ -85,6 +94,9 @@ object Destinations {
     // Phase 3
     const val CONTROL_PANEL = "control_panel"
     const val MANAGE_CONGREGATIONS = "manage_congregations"
+    // Circuit Overseer: "Congregation Management" - the congregations enrolled under their own account, and the same enrolment form with the overseer fixed.
+    const val CO_CONGREGATIONS = "co_congregations"
+    const val CO_ENROLL_CONGREGATION = "co_enroll_congregation"
     // Circuit Overseer module (Super-Admin): Circuit Codes, Circuit Overseer Accounts (list / add / edit / view),
     // bulk "Circuit Assignment" of older congregations, and the Circuit Overseer's own dashboard.
     const val MANAGE_CIRCUIT_CODES = "manage_circuit_codes"
@@ -347,6 +359,6 @@ private val motherForms: Set<String> = setOf(
     Destinations.SENT_REPORTS, Destinations.CO_ANNOUNCEMENTS, Destinations.CO_MANUAL_RECORD, Destinations.CO_FILE_MANAGER, Destinations.ADMIN_CO_FILES,
     Destinations.RECEIVED_SNAPSHOTS, Destinations.CIRCUIT_PUBLISHERS, Destinations.CIRCUIT_LEADERS, Destinations.CIRCUIT_ATTENDANCE_COMPARISON,
     Destinations.CIRCUIT_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.MEETING_ATTENDANCE, Destinations.REPORT_SUBMISSION, Destinations.CONGREGATION_COMPARATIVE,
-    Destinations.CONGREGATION_COMPARATIVE_SUBMITTED, Destinations.CIRCUIT_CONGREGATIONS, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_USERS,
+    Destinations.CONGREGATION_COMPARATIVE_SUBMITTED, Destinations.CIRCUIT_CONGREGATIONS, Destinations.CO_CONGREGATIONS, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_USERS,
     Destinations.SECURITY, Destinations.ADMIN_DEVICES, Destinations.ADMIN_SECURITY_LOG,
 )

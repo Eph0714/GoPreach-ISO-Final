@@ -42,11 +42,14 @@ import com.emfitsolutions.gopreach.ui.components.rememberUnsavedChangesBackHandl
 @Composable
 fun CongregationEnrollmentScreen(
     currentPersonId: String,
+    /** True for a Circuit Overseer: the same form, with the overseer fixed to the signed-in account. */
+    coMode: Boolean = false,
     onBack: () -> Unit,
     onSaved: () -> Unit,
     viewModel: CongregationEnrollmentViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(coMode) { if (coMode) viewModel.startAsCircuitOverseer() }
 
     LaunchedEffect(uiState.saved) {
         if (uiState.saved) onSaved()
@@ -65,7 +68,7 @@ fun CongregationEnrollmentScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("New Congregation") },
+                title = { Text(if (coMode) "Add Congregation" else "New Congregation") },
                 navigationIcon = {
                     IconButton(onClick = guardedBack.onBackPressed) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -129,23 +132,33 @@ fun CongregationEnrollmentScreen(
                 visualTransformation = VisualTransformation.None,
                 modifier = Modifier.fillMaxWidth(),
             )
-            // Circuit Overseer module: required. Only active Circuit Overseers holding an active Circuit Code
-            // are offered; the Circuit Code follows the overseer and can't be edited on its own.
-            val overseers by viewModel.overseers.collectAsStateWithLifecycle()
-            val pickedOverseer = overseers.firstOrNull { it.personId == uiState.circuitOverseerPersonId }
-            SimpleDropdown(
-                label = "Circuit Overseer Assigned *",
-                selectedLabel = pickedOverseer?.name.orEmpty(),
-                options = overseers.map { it.personId to it.name },
-                onSelected = viewModel::onOverseerSelected,
-            )
-            ReadOnlyField("Circuit Code", pickedOverseer?.circuitCode ?: "Select a Circuit Overseer")
-            if (overseers.isEmpty()) {
+            if (coMode) {
+                // The overseer is the signed-in account: shown, never chosen, never editable. The server assigns it again from the sign-in.
+                ReadOnlyField("Assigned Circuit Overseer", uiState.assignedOverseerName.ifBlank { "You" })
                 Text(
-                    "No active Circuit Overseer with an active Circuit Code exists yet. Create the Circuit Code and Circuit Overseer account first.",
+                    "This congregation will be enrolled under your own Circuit Overseer account.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            } else {
+                // Circuit Overseer module: required. Only active Circuit Overseers holding an active Circuit Code
+                // are offered; the Circuit Code follows the overseer and can't be edited on its own.
+                val overseers by viewModel.overseers.collectAsStateWithLifecycle()
+                val pickedOverseer = overseers.firstOrNull { it.personId == uiState.circuitOverseerPersonId }
+                SimpleDropdown(
+                    label = "Circuit Overseer Assigned *",
+                    selectedLabel = pickedOverseer?.name.orEmpty(),
+                    options = overseers.map { it.personId to it.name },
+                    onSelected = viewModel::onOverseerSelected,
+                )
+                ReadOnlyField("Circuit Code", pickedOverseer?.circuitCode ?: "Select a Circuit Overseer")
+                if (overseers.isEmpty()) {
+                    Text(
+                        "No active Circuit Overseer with an active Circuit Code exists yet. Create the Circuit Code and Circuit Overseer account first.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
             LanguagesTagInput(
                 languages = uiState.languages,

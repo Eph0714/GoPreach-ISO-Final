@@ -8,13 +8,13 @@ class BackendRemoteFiles(
     private val context: android.content.Context,
     private val api: com.emfitsolutions.gopreach.data.remote.SyncApi,
 ) : RemoteFiles {
-    override suspend fun upload(path: String, localUri: String): String {
+    override suspend fun upload(path: String, localUri: String, onProgress: ((sent: Long, total: Long) -> Unit)?): String {
         val uri = Uri.parse(localUri)
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: throw IllegalStateException("Couldn't read the selected file.")
         val mime = context.contentResolver.getType(uri)
             ?: android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(path.substringAfterLast('.', "").lowercase())
             ?: "application/octet-stream"
-        return api.uploadFile(path, bytes, mime)
+        return api.uploadFile(path, bytes, mime, onProgress)
     }
 
     override suspend fun delete(path: String) {

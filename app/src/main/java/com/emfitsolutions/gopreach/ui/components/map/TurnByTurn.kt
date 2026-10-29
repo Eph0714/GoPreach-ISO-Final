@@ -89,6 +89,10 @@ class TurnByTurnState(
         private set
     var progress by mutableStateOf<NavigationProgress?>(null)
         private set
+    /** What is left of the route to draw in blue while navigating (from the vehicle's route position to the destination); null until the first position. */
+    var remainingPoints by mutableStateOf<List<Pair<Double, Double>>?>(null)
+        private set
+    private var shownTraveled = -1.0
     var destination by mutableStateOf<GuidanceDestination?>(null)
         private set
     /** A plain-language problem to show to the driver (no connection, no route...), or null. */
@@ -160,6 +164,7 @@ class TurnByTurnState(
         if (phase != GuidancePhase.PREVIEW) return
         engine = NavigationEngine(r, walking)
         progress = null
+        remainingPoints = null; shownTraveled = -1.0
         choices = emptyList()
         phase = GuidancePhase.ACTIVE
     }
@@ -171,6 +176,7 @@ class TurnByTurnState(
             route = r
             engine = NavigationEngine(r, walking)
             progress = null
+            remainingPoints = null; shownTraveled = -1.0
             message = null
             warnedOfflineReroute = false
             phase = GuidancePhase.ACTIVE
@@ -190,6 +196,11 @@ class TurnByTurnState(
         if (phase != GuidancePhase.ACTIVE && phase != GuidancePhase.REROUTING) return
         val p = e.update(lat, lng, accuracyMeters, speedMps)
         progress = p
+        // The blue line keeps only what is left: it is rebuilt each time the vehicle has gone another few metres further along the route (never backwards).
+        if (shownTraveled < 0.0 || e.traveledMeters - shownTraveled >= REMAINING_STEP_METERS) {
+            remainingPoints = e.remainingLine().map { it.lat to it.lng }
+            shownTraveled = e.traveledMeters
+        }
         if (p.announcements.isNotEmpty()) voice.speak(p.announcements.joinToString(" "))
         when {
             p.arrived -> { phase = GuidancePhase.ARRIVED; message = null }
@@ -223,13 +234,17 @@ class TurnByTurnState(
         voice.stopSpeaking()
         phase = GuidancePhase.IDLE
         route = null; engine = null; progress = null; destination = null; message = null
+        remainingPoints = null; shownTraveled = -1.0
         choices = emptyList(); selectedIndex = 0
         warnedOfflineReroute = false
     }
 
     fun dismissMessage() { message = null }
 
-    companion object { const val REROUTE_GAP_MS = 10_000L }
+    companion object {
+        const val REROUTE_GAP_MS = 10_000L
+        const val REMAINING_STEP_METERS = 3.0
+    }
 }
 
 internal fun Maneuver.icon(): ImageVector = when (this) {

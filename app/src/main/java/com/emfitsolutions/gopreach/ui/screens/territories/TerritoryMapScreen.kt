@@ -43,6 +43,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.AddLocationAlt
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
@@ -133,6 +136,7 @@ import androidx.compose.material.icons.rounded.Map
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.compositeOver
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -512,7 +516,13 @@ fun TerritoryMapScreen(
             onVoiceChanged = { on -> store.edit().putBoolean("voice_on", on).apply() },
         )
     }
-    val routePoints = remember(guidance.route) { guidance.route?.points?.map { it.lat to it.lng } }
+    val fullRoutePoints = remember(guidance.route) { guidance.route?.points?.map { it.lat to it.lng } }
+    // While navigating the blue line is only what is LEFT of the route (from the arrow to the destination); the whole route is shown while choosing one, and nothing after arrival.
+    val routePoints = when (guidance.phase) {
+        com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.ACTIVE, com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.REROUTING -> guidance.remainingPoints ?: fullRoutePoints
+        com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.ARRIVED -> null
+        else -> fullRoutePoints
+    }
     // While choosing a route: the other routes (greyer, underneath) and the frame that shows all of them.
     val altRoutePoints = remember(guidance.choices, guidance.selectedIndex) {
         guidance.choices.filterIndexed { i, _ -> i != guidance.selectedIndex }.map { c -> c.route.points.map { it.lat to it.lng } }
@@ -520,7 +530,8 @@ fun TerritoryMapScreen(
     val fitRoutePoints = remember(guidance.phase, guidance.choices) {
         if (guidance.phase == com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.PREVIEW) guidance.choices.flatMap { c -> c.route.points.map { it.lat to it.lng } } else null
     }
-    LaunchedEffect(driveSnap.lat, driveSnap.lng) {
+    // Also when navigation (or a new route after a reroute) starts: the blue line is trimmed to the arrow at once, not only when the next fix arrives.
+    LaunchedEffect(driveSnap.lat, driveSnap.lng, guidance.phase, guidance.route) {
         val la = driveSnap.lat
         val ln = driveSnap.lng
         if (guidance.active && la != null && ln != null) guidance.onPosition(la, ln, driveSnap.accuracyMeters, driveSnap.speedKmh?.let { it / 3.6f }, online)
@@ -563,6 +574,8 @@ fun TerritoryMapScreen(
             com.emfitsolutions.gopreach.ui.components.map.DrivingModeState.RoadFix(p.matchedLat!!, p.matchedLng!!, p.routeBearingDeg)
         } else null
     }
+    // The bottom panel only exists while a route is followed; without it the whole map height is available to the arrow.
+    LaunchedEffect(guidance.active) { if (!guidance.active) driving.bottomInsetPx = 0 }
     // Turning Driving Mode off ends a route being followed; a route still being chosen (or found) does not need Driving Mode yet.
     LaunchedEffect(driving.active) {
         val p = guidance.phase
@@ -1399,7 +1412,7 @@ fun TerritoryMapScreen(
                         com.emfitsolutions.gopreach.ui.components.map.GuidancePanel(
                             state = guidance,
                             onEnd = { guidance.stop() },
-                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { driving.bottomInsetPx = it.height },
                             speedKmh = driveSnap.speedKmh,
                         )
                     }
@@ -1554,9 +1567,12 @@ fun TerritoryMapScreen(
         AlertDialog(
             onDismissRequest = { if (armed) longPressPoint = null },
             title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("What would you like to do?", modifier = Modifier.weight(1f))
-                    IconButton(onClick = { longPressPoint = null }) { Icon(Icons.Rounded.Close, contentDescription = "Close") }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("What would you like to do?", style = MaterialTheme.typography.titleMedium, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    Surface(
+                        onClick = { longPressPoint = null }, shape = RoundedCornerShape(10.dp), color = Color.Transparent,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.size(36.dp),
+                    ) { Box(contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Close, contentDescription = "Close", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(18.dp)) } }
                 }
             },
             text = {
@@ -1573,7 +1589,7 @@ fun TerritoryMapScreen(
                         if (!embedded) add(Triple(if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, if (fullScreenActive) "Exit full screen" else "Full screen", { longPressPoint = null; fullScreen = !fullScreen }))
                         add(Triple(Icons.Rounded.GpsFixed, "GPS status", { longPressPoint = null; toast(if (myLocation == null) "Finding your GPS location." else "GPS is working." + (shownAccuracy?.let { " Accurate to about ${it.toInt()} m." } ?: "")) }))
                     }
-                    Text("Map tools", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    LongPressSectionLabel("Map tools")
                     tools.chunked(3).forEach { rowTools ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             rowTools.forEach { (icon, label, action) -> MapToolTile(icon, label, action, Modifier.weight(1f)) }
@@ -1582,26 +1598,35 @@ fun TerritoryMapScreen(
                     }
                     // Draw is offered only where this role may draw (inside the assigned territory for group-level users,
                     // anywhere on their congregation's map for the wider roles); the map links are always available.
-                    Text("Actions", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    // Actions in two columns: Draw (only where this role may), Start navigation, Walk there.
-                    val actionButtons = buildList<@Composable (Modifier) -> Unit> {
-                        if (canDraw) add { m -> Button(onClick = { longPressPoint = null; drawingState.enter(here) }, modifier = m.height(48.dp)) { Text("Draw") } }
-                        add { m -> Button(onClick = { longPressPoint = null; startNavigation("Selected place", lat, lng) }, modifier = m.height(48.dp)) { Text("Start navigation", maxLines = 1) } }
-                        add { m -> OutlinedButton(onClick = { longPressPoint = null; startNavigation("Selected place", lat, lng, walking = true) }, modifier = m.height(48.dp)) { Text("Walk there", maxLines = 1) } }
+                    LongPressSectionLabel("Actions")
+                    // Actions as tiles, like the website: Draw (only where this role may), Create a Pin, Start navigation, Walk there.
+                    val actionTiles = buildList<Triple<androidx.compose.ui.graphics.vector.ImageVector, String, () -> Unit>> {
+                        if (canDraw) add(Triple(Icons.Rounded.Edit, "Draw", { longPressPoint = null; drawingState.enter(here) }))
+                        // "Create a Pin": a short text mark on this spot, saved for the congregation.
+                        if (congregationId != null && !isLoading) add(Triple(Icons.Rounded.AddLocationAlt, "Create a Pin", { longPressPoint = null; pinDraftText = ""; pinDraftPoint = lat to lng }))
+                        add(Triple(Icons.Rounded.Navigation, "Start navigation", { longPressPoint = null; startNavigation("Selected place", lat, lng) }))
+                        add(Triple(Icons.Rounded.DirectionsWalk, "Walk there", { longPressPoint = null; startNavigation("Selected place", lat, lng, walking = true) }))
                     }
-                    actionButtons.chunked(2).forEach { pair ->
+                    val actionColumns = if (actionTiles.size == 3) 3 else 2
+                    actionTiles.chunked(actionColumns).forEach { rowTiles ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            pair.forEach { b -> b(Modifier.weight(1f)) }
-                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                            rowTiles.forEach { (icon, label, action) -> MapToolTile(icon, label, action, Modifier.weight(1f)) }
+                            repeat(actionColumns - rowTiles.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
-                    ActionButton(ActionKind.Cancel, onClick = { longPressPoint = null }, label = "Cancel", modifier = Modifier.fillMaxWidth())
+                    QuietCloseButton("Close") { longPressPoint = null }
                     // The other filters: after the action buttons (Draw, navigation) so those are always in view, and shown only when asked for.
                     var showExtras by remember { mutableStateOf(false) }
-                    TextButton(onClick = { showExtras = !showExtras }, modifier = Modifier.fillMaxWidth()) { Text(if (showExtras) "Hide filters" else "Show filters") }
+                    Row(Modifier.fillMaxWidth().clickable { showExtras = !showExtras }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) { LongPressSectionLabel("Filters") }
+                        Icon(
+                            if (showExtras) Icons.Rounded.KeyboardArrowUp else Icons.Rounded.KeyboardArrowDown,
+                            contentDescription = if (showExtras) "Hide filters" else "Show filters", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp),
+                        )
+                    }
                     if (showExtras) {
                         territoryExtraFilters()
-                        ActionButton(ActionKind.Cancel, onClick = { showExtras = false }, label = "Close filters", modifier = Modifier.fillMaxWidth())
+                        QuietCloseButton("Close filters") { showExtras = false }
                     }
                 }
                 if (!armed) Box(
@@ -1915,12 +1940,31 @@ private fun MapToolButton(icon: androidx.compose.ui.graphics.vector.ImageVector,
 /** One tile of the long-press "Map tools" grid: the tools that are not on the clean map. */
 @Composable
 private fun MapToolTile(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Surface(onClick = onClick, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f), modifier = modifier.height(64.dp)) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center, modifier = Modifier.padding(horizontal = 4.dp)) {
-            Icon(icon, contentDescription = label, modifier = Modifier.size(22.dp), tint = MaterialTheme.colorScheme.primary)
-            Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    // A compact bordered tile like the website's: thin neutral border, one outline icon in the theme colour, a short label. No fill, no shadow.
+    Surface(
+        onClick = onClick, shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = modifier.height(68.dp),
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically), modifier = Modifier.padding(horizontal = 4.dp)) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
+            Text(label, fontSize = 12.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
     }
+}
+
+/** A section title of the long-press menu: small, heavy, uppercase and muted, as on the website. */
+@Composable
+private fun LongPressSectionLabel(text: String) {
+    Text(text.uppercase(), fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.66.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+}
+
+/** The quiet full-width button at the foot of the menu (the website's Close): a thin border, muted text, no fill. */
+@Composable
+private fun QuietCloseButton(label: String, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick, shape = RoundedCornerShape(12.dp), color = Color.Transparent,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant), modifier = Modifier.fillMaxWidth().height(40.dp),
+    ) { Box(contentAlignment = Alignment.Center) { Text(label, fontSize = 13.5.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant) } }
 }
 
 private enum class FollowUi { OFF, FOLLOWING, DRIVING, PAUSED }

@@ -9,6 +9,7 @@ import { mountFiles } from './files.js';
 import { mountVoice } from './voice.js';
 import { mountAnnouncementFiles } from './announcementFiles.js';
 import { mountPresence } from './presence.js';
+import { mountCoCongregations } from './coCongregations.js';
 import { mountCoFiles } from './coFiles.js';
 import { mountCoManual } from './coManual.js';
 import { mountPublisherEdit } from './publisherEdit.js';
@@ -132,6 +133,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   mountVoice(app, store, auth, voiceOptions);
   mountAnnouncementFiles(app, store, auth);
   mountPresence(app, store, auth);
+  mountCoCongregations(app, store, auth);
   mountCoFiles(app, store, auth);
   mountCoManual(app, store, auth, { ai: authOptions.ai });
   mountAccounts(app, store, auth, authOptions);

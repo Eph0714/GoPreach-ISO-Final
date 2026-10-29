@@ -1,5 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens.home
 
+import androidx.compose.foundation.horizontalScroll
+
 import com.emfitsolutions.gopreach.ui.components.ActionKind
 import com.emfitsolutions.gopreach.ui.components.ActionButton
 import androidx.compose.foundation.selection.selectableGroup
@@ -946,26 +948,27 @@ private val ministryTones = listOf(Color(0xFF212121), Color(0xFF2E7D32), Color(0
 /** The three sub-tabs of the Ministry tab: Searching (the first), Return Visit and Bible Study, in the colour of each list (black, green, blue). */
 @Composable
 private fun MinistrySubTabs(stage: Int, onStage: (Int) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        ministryKinds.forEachIndexed { index, label ->
-            // All three tabs use the theme colour (selected = solid theme colour, the others a light tint of it).
-            val tone = MaterialTheme.colorScheme.primary
-            val on = index == stage
-            androidx.compose.material3.Surface(
-                onClick = { onStage(index) },
-                shape = RoundedCornerShape(12.dp),
-                color = if (on) tone else tone.copy(alpha = 0.08f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, tone.copy(alpha = if (on) 1f else 0.35f)),
-                modifier = Modifier.weight(1f).semantics { this.role = Role.Tab; this.selected = on },
-            ) {
-                Box(modifier = Modifier.heightIn(min = 44.dp).padding(horizontal = 6.dp), contentAlignment = Alignment.Center) {
-                    Text(
-                        label, style = MaterialTheme.typography.labelLarge, fontWeight = if (on) FontWeight.Bold else FontWeight.SemiBold,
-                        color = if (on) MaterialTheme.colorScheme.onPrimary else tone, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
+    // A flat tab bar like the website's: text tabs, an underline in the open tab's colour (theme, green, blue), a thin line under the whole bar. It scrolls sideways on a very narrow screen.
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
+            ministryKinds.forEachIndexed { index, label ->
+                val tone = when (index) { 1 -> Color(0xFF2E7D32); 2 -> Color(0xFF1565C0); else -> MaterialTheme.colorScheme.primary }
+                val on = index == stage
+                Column(
+                    modifier = Modifier.clickable(role = Role.Tab) { onStage(index) }.semantics { this.selected = on },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Box(modifier = Modifier.heightIn(min = 46.dp).padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+                        Text(
+                            label, fontSize = 14.sp, fontWeight = if (on) FontWeight.Bold else FontWeight.SemiBold,
+                            color = if (on) tone else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
+                        )
+                    }
+                    Box(Modifier.fillMaxWidth().height(3.dp).background(if (on) tone else Color.Transparent))
                 }
             }
         }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outlineVariant))
     }
 }
 

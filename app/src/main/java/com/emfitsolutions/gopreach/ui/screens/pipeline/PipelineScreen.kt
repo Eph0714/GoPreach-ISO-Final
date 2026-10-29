@@ -287,57 +287,81 @@ private fun MinistryToolbar(
 ) {
     var menu by remember { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
-    androidx.compose.foundation.layout.FlowRow(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(com.emfitsolutions.gopreach.ui.components.ActionSpacing.Gap),
-        verticalArrangement = Arrangement.spacedBy(com.emfitsolutions.gopreach.ui.components.ActionSpacing.Gap),
-    ) {
-        ActionButton(ActionKind.Add, onClick = onAdd, label = "Add $kind")
-        androidx.compose.foundation.layout.Box {
-            ActionButton(ActionKind.Export, onClick = { menu = true }, label = "Export", enabled = hasRecords)
-            androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                listOf("print" to "Print", "pdf" to "PDF", "excel" to "Excel", "word" to "Word").forEach { (key, label) ->
-                    androidx.compose.material3.DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; onExport(key) })
+    val gap = com.emfitsolutions.gopreach.ui.components.ActionSpacing.Gap
+    // Add (for the open tab) on the left; Export, Name A-Z, Favorites and the Recycle Bin together on the right. On a phone the two groups stack: Add, then the rest.
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+        val wide = maxWidth >= 640.dp
+        val addItem: @Composable (Modifier) -> Unit = { m -> ActionButton(ActionKind.Add, onClick = onAdd, label = "Add $kind", modifier = m) }
+        val exportItem: @Composable () -> Unit = {
+            androidx.compose.foundation.layout.Box {
+                ActionButton(ActionKind.Export, onClick = { menu = true }, label = "Export", enabled = hasRecords)
+                androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    listOf("print" to "Print", "pdf" to "PDF", "excel" to "Excel", "word" to "Word").forEach { (key, label) ->
+                        androidx.compose.material3.DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; onExport(key) })
+                    }
+                    Text(
+                        "Exports all $recordCount records matching the filters.",
+                        style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                    )
                 }
-                Text(
-                    "Exports all $recordCount records matching the filters.",
-                    style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-                )
             }
         }
-        // The label never changes; an outline shows that inactive records are listed.
-        ActionButton(
-            ActionKind.Recycle, onClick = onRecycle, label = "Recycle Bin",
-            modifier = if (showInactive) Modifier.background(androidx.compose.ui.graphics.Color.Transparent).border(2.dp, MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) else Modifier,
-        )
-        // Sort by name: A to Z (ascending) or Z to A (descending).
-        androidx.compose.foundation.layout.Box {
-            androidx.compose.material3.OutlinedButton(
-                onClick = { sortMenu = true },
+        val sortItem: @Composable () -> Unit = {
+            // Sort by name: A to Z (ascending) or Z to A (descending).
+            androidx.compose.foundation.layout.Box {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = { sortMenu = true },
+                    modifier = Modifier.heightIn(min = com.emfitsolutions.gopreach.ui.components.ActionSpacing.ButtonHeight),
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                ) { Text(if (sortAscending) "Name A-Z" else "Name Z-A", maxLines = 1) }
+                androidx.compose.material3.DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Name: Ascending (A-Z)") }, onClick = { sortMenu = false; onSortChange(true) })
+                    androidx.compose.material3.DropdownMenuItem(text = { Text("Name: Descending (Z-A)") }, onClick = { sortMenu = false; onSortChange(false) })
+                }
+            }
+        }
+        val favoritesItem: @Composable () -> Unit = {
+            // Favorites: a visible labelled button (gold and filled while only the starred records are shown).
+            val gold = androidx.compose.ui.graphics.Color(0xFFE6B800)
+            androidx.compose.material3.Button(
+                onClick = { onFavorites(!favoritesOnly) },
                 modifier = Modifier.heightIn(min = com.emfitsolutions.gopreach.ui.components.ActionSpacing.ButtonHeight),
                 shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                    containerColor = if (favoritesOnly) gold else MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (favoritesOnly) androidx.compose.ui.graphics.Color(0xFF231B05) else MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            ) { Text(if (sortAscending) "Name A-Z" else "Name Z-A", maxLines = 1) }
-            androidx.compose.material3.DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-                androidx.compose.material3.DropdownMenuItem(text = { Text("Name: Ascending (A-Z)") }, onClick = { sortMenu = false; onSortChange(true) })
-                androidx.compose.material3.DropdownMenuItem(text = { Text("Name: Descending (Z-A)") }, onClick = { sortMenu = false; onSortChange(false) })
+            ) {
+                Icon(if (favoritesOnly) Icons.Rounded.Star else Icons.Rounded.StarBorder, contentDescription = null, tint = if (favoritesOnly) androidx.compose.ui.graphics.Color(0xFF231B05) else gold, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Favorites", maxLines = 1)
             }
         }
-        // Favorites: a visible labelled button (gold and filled while only the starred records are shown).
-        val gold = androidx.compose.ui.graphics.Color(0xFFE6B800)
-        androidx.compose.material3.Button(
-            onClick = { onFavorites(!favoritesOnly) },
-            modifier = Modifier.heightIn(min = com.emfitsolutions.gopreach.ui.components.ActionSpacing.ButtonHeight),
-            shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = if (favoritesOnly) gold else MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = if (favoritesOnly) androidx.compose.ui.graphics.Color(0xFF231B05) else MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-        ) {
-            Icon(if (favoritesOnly) Icons.Rounded.Star else Icons.Rounded.StarBorder, contentDescription = null, tint = if (favoritesOnly) androidx.compose.ui.graphics.Color(0xFF231B05) else gold, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Favorites", maxLines = 1)
+        val recycleItem: @Composable () -> Unit = {
+            // The label never changes; an outline shows that inactive records are listed.
+            ActionButton(
+                ActionKind.Recycle, onClick = onRecycle, label = "Recycle Bin",
+                modifier = if (showInactive) Modifier.background(androidx.compose.ui.graphics.Color.Transparent).border(2.dp, MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) else Modifier,
+            )
+        }
+        val others: @Composable (Modifier, Arrangement.Horizontal) -> Unit = { m, arrangement ->
+            androidx.compose.foundation.layout.FlowRow(modifier = m, horizontalArrangement = arrangement, verticalArrangement = Arrangement.spacedBy(gap)) {
+                exportItem(); sortItem(); favoritesItem(); recycleItem()
+            }
+        }
+        if (wide) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                addItem(Modifier)
+                Spacer(Modifier.weight(1f))
+                others(Modifier, Arrangement.spacedBy(gap, Alignment.End))
+            }
+        } else {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                addItem(Modifier.fillMaxWidth())
+                others(Modifier.fillMaxWidth(), Arrangement.spacedBy(gap, Alignment.Start))
+            }
         }
     }
 }

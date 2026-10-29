@@ -41,6 +41,9 @@ data class Congregation(
      * active lists/reports; Delete Permanently is only offered when nothing
      * still references this congregation (see ManageCongregationsViewModel). */
     val status: RecordStatus = RecordStatus.ACTIVE,
+    /** The Circuit Overseer who enrolled this congregation through Congregation Management (null when the Super Admin did). Never changed afterwards, even if the congregation is later given to another overseer. */
+    val enrolledByPersonId: String? = null,
+    val enrolledByCircuitCode: String? = null,
 )
 
 /**

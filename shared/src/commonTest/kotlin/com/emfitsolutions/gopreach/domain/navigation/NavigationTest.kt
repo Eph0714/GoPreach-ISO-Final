@@ -140,6 +140,35 @@ class NavigationTest {
     }
 
     @Test
+    fun theRemainingLineStartsAtTheVehicleKeepsTheDestinationAndNeverGrowsBack() {
+        val engine = NavigationEngine(route)
+        val last = route.points.last()
+        var previousLength = Double.MAX_VALUE
+        // drive 1.4 km in 50 m steps; every fourth fix wobbles 30 m BACK along the road, as a bad GPS fix would
+        var m = 0.0
+        var n = 0
+        while (m <= 1400.0) {
+            val shown = if (n % 4 == 3) m - 30.0 else m
+            val (lat, lng) = at(shown.coerceAtLeast(0.0), sideMeters = 4.0)
+            engine.update(lat, lng, 8f, 12f)
+            val line = engine.remainingLine()
+            var length = 0.0
+            for (i in 1 until line.size) length += DrivingTracker.distanceMeters(line[i - 1].lat, line[i - 1].lng, line[i].lat, line[i].lng)
+            assertTrue(length <= previousLength + 0.5, "the remaining line never grows back (was $previousLength, now $length at ${m}m)")
+            previousLength = length
+            assertEquals(last.lat, line.last().lat, 1e-9)
+            assertEquals(last.lng, line.last().lng, 1e-9)
+            m += 50.0
+            n++
+        }
+        assertTrue(engine.traveledMeters > 1300.0, "progress followed the drive despite the wobbles")
+        val (hereLat, hereLng) = at(1400.0)
+        val first = engine.remainingLine().first()
+        assertTrue(DrivingTracker.distanceMeters(first.lat, first.lng, hereLat, hereLng) < 60.0, "the line starts where the vehicle is, not at the start of the route")
+        assertTrue(engine.remainingLine().size < route.points.size, "the part already passed is gone")
+    }
+
+    @Test
     fun aPoorOrFarFixIsNeverDrawnOnTheRoad() {
         val engine = NavigationEngine(route)
         val (lat, lng) = at(300.0, sideMeters = 3.0)

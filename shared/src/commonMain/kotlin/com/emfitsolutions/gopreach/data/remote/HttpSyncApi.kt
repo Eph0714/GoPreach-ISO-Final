@@ -3,6 +3,7 @@ package com.emfitsolutions.gopreach.data.remote
 import com.emfitsolutions.gopreach.data.json.DocJson
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.onUpload
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
@@ -89,13 +90,14 @@ class HttpSyncApi(
         return ApiReply(response.status.value, parsed)
     }
 
-    override suspend fun uploadFile(path: String, bytes: ByteArray, mime: String): String {
+    override suspend fun uploadFile(path: String, bytes: ByteArray, mime: String, onProgress: ((sent: Long, total: Long) -> Unit)?): String {
         val text = call {
             client.put("$baseUrl/v1/files") {
                 header(HttpHeaders.Authorization, "Bearer ${idToken()}")
                 parameter("path", path)
                 contentType(ContentType.parse(mime))
                 setBody(bytes)
+                if (onProgress != null) onUpload { sent, total -> onProgress(sent, total ?: bytes.size.toLong()) }
             }
         }
         val url = (DocJson.parseToJsonElement(text) as? kotlinx.serialization.json.JsonObject)?.get("url") as? kotlinx.serialization.json.JsonPrimitive

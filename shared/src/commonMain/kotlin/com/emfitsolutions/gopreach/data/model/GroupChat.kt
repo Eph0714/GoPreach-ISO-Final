@@ -77,6 +77,11 @@ data class GroupChatMessage(
     val attachmentFileName: String? = null,
     val attachmentType: GroupChatAttachmentType? = null,
     val attachmentSize: Long = 0L,
+    /** A picture's small preview (shown in the chat); the full picture is [attachmentUrl]. Null for older messages and for files that are not pictures. */
+    val attachmentThumbUrl: String? = null,
+    /** A picture's own pixel size, so the chat can reserve the right shape before it loads (0 = unknown). */
+    val attachmentWidth: Int = 0,
+    val attachmentHeight: Int = 0,
     val createdAt: Long = 0L,
 
     /** Sender-only edit (text only — an attachment, once sent, is
