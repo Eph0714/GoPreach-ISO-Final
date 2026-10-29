@@ -58,6 +58,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Settings
 import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -165,6 +166,7 @@ fun GroupChatScreen(
     // rendered content branches on them, at the very bottom of this function.
 
     var showSettings by remember { mutableStateOf(false) }
+    var confirmDeleteChat by remember { mutableStateOf(false) }
     var showDocuments by remember { mutableStateOf(false) }
     var messageText by remember { mutableStateOf("") }
     var pendingAttachment by remember { mutableStateOf<PendingAttachment?>(null) }
@@ -261,6 +263,10 @@ fun GroupChatScreen(
                         Icon(Icons.Rounded.Folder, contentDescription = stringResource(Res.string.chat_shared_documents_cd))
                     }
                     if (canManageParticipants) {
+                        // Whoever manages the chat (a chat manager, or the Overseer / Servant / Assistant of its FS Group) sees Delete right in the bar.
+                        IconButton(onClick = { confirmDeleteChat = true }) {
+                            Icon(Icons.Rounded.Delete, contentDescription = "Delete group chat", tint = MaterialTheme.colorScheme.error)
+                        }
                         IconButton(onClick = { showSettings = true }) {
                             Icon(Icons.Rounded.Settings, contentDescription = stringResource(Res.string.chat_group_settings_cd))
                         }
@@ -329,6 +335,20 @@ fun GroupChatScreen(
     }
 
     val currentChat = chat
+    if (confirmDeleteChat && currentChat != null) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteChat = false },
+            title = { Text("Delete group chat") },
+            text = { Text("Delete \"${currentChat.groupName}\" for everyone? Its messages are removed too. This cannot be undone.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmDeleteChat = false
+                    viewModel.deleteGroupChat(currentChat, currentPersonId) { onBack() }
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmDeleteChat = false }, label = stringResource(Res.string.action_cancel)) },
+        )
+    }
     if (showSettings && currentChat != null) {
         ManageParticipantsDialog(
             chat = currentChat,
