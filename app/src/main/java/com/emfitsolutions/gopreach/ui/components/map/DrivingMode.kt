@@ -126,8 +126,8 @@ class DrivingModeState(private val config: DrivingConfig = DrivingConfig()) {
         const val NAV_ZOOM = 17.0
         const val MIN_FOLLOW_ZOOM = 15.5
         const val MAX_FOLLOW_ZOOM = 18.5
-        /** The arrow sits this far below the middle of the map, so more of the road ahead shows. */
-        const val LOWER_THIRD = 0.36
+        /** The top padding of the map as a share of its height: the arrow sits in the middle of what is left below it, so with 0.60 it is about 80% of the way down (the lowest comfortable spot) and nearly all of the screen shows the road ahead. */
+        const val LOWER_THIRD = 0.60
     }
 }
 
@@ -169,6 +169,9 @@ fun DrivingCameraEffect(map: MapLibreMap?, state: DrivingModeState?) {
         val lat = snap.lat ?: return@LaunchedEffect
         val lng = snap.lng ?: return@LaunchedEffect
         if (!state.active || !state.following) return@LaunchedEffect
+        // Route previews and navigation reset the padding to zero: put the arrow back in the lowest position before the camera moves (changing it afterwards would cancel the animation).
+        val top = (m.height * DrivingModeState.LOWER_THIRD).toInt()
+        if (m.padding[1] != top) m.setPadding(0, top, 0, 0)
         val current = m.cameraPosition
         val zoom = if (current.zoom in DrivingModeState.MIN_FOLLOW_ZOOM..DrivingModeState.MAX_FOLLOW_ZOOM) current.zoom else if (state.walking) DrivingModeState.NAV_ZOOM + 1.0 else DrivingModeState.NAV_ZOOM
         val course = snap.courseDeg

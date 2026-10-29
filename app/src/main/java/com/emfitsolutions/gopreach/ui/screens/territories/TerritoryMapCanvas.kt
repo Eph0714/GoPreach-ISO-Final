@@ -232,6 +232,8 @@ fun TerritoryMapCanvas(
         drivingMode = driving?.active == true,
         headingOverrideDeg = driving?.snapshot?.courseDeg,
         walkingMode = driving?.active == true && driving.walking,
+        // The map turns to the direction of travel, so the arrow always points to the top of the screen (in front of the driver).
+        arrowForward = driving?.active == true && !driving.walking && driving.following && driving.headingUp,
         onHeading = { compassHeading = it; if (driving?.walking == true) driving.setCompass(it) },
         content = { m, styleVer ->
             MapDrawingOverlay(

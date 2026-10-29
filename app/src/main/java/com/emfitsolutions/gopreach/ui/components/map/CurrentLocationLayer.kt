@@ -139,6 +139,13 @@ object CurrentLocationLayer {
         )
     }
 
+    /** Driving Mode with the map turning to the direction of travel: the arrow always points to the top of the screen (in front of the driver) and the map does the turning. Off: it points at its heading relative to north. */
+    fun setForward(style: Style, on: Boolean) {
+        style.getLayerAs<SymbolLayer>(LYR_ARROW)?.setProperties(
+            PropertyFactory.iconRotationAlignment(if (on) Property.ICON_ROTATION_ALIGNMENT_VIEWPORT else Property.ICON_ROTATION_ALIGNMENT_MAP),
+        )
+    }
+
     /** Points the arrow's tip [degrees] clockwise from true north, with the blink's [opacity] and [size] scale. */
     fun setAppearance(style: Style, degrees: Float, opacity: Float, size: Float) {
         style.getLayerAs<SymbolLayer>(LYR_ARROW)?.setProperties(
@@ -307,6 +314,8 @@ fun CurrentLocationUpdater(
     drivingMode: Boolean = false, directionKnown: Boolean = true,
     /** Walking Mode: a walking person on the spot, with a pointer toward the heading. */
     walkingMode: Boolean = false,
+    /** Driving Mode with the map turning to the direction of travel: the arrow always points to the front (top) of the screen. */
+    forward: Boolean = false,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val lastHeading = remember { FloatArray(2) } // [0] = stabilized heading, [1] = 1 once seeded
@@ -320,11 +329,16 @@ fun CurrentLocationUpdater(
     val latestLocation = androidx.compose.runtime.rememberUpdatedState(location)
     val drivingNow = androidx.compose.runtime.rememberUpdatedState(drivingMode)
     val directionKnownNow = androidx.compose.runtime.rememberUpdatedState(directionKnown)
+    val forwardNow = androidx.compose.runtime.rememberUpdatedState(forward)
 
     LaunchedEffect(location) {
         if (location == null) track.reset() else track.onFix(location, SystemClock.elapsedRealtime())
     }
     val hasLocation = location != null
+    LaunchedEffect(map, styleVersion, forward) {
+        val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
+        CurrentLocationLayer.setForward(style, forward)
+    }
     LaunchedEffect(map, styleVersion, walkingMode) {
         val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         CurrentLocationLayer.setWalking(style, walkingMode)
@@ -351,7 +365,7 @@ fun CurrentLocationUpdater(
                 val wave = 0.5f + 0.5f * sin(phase * 2f * PI.toFloat())
                 val opacity = if (track.moving) 1f else 0.62f + 0.38f * wave
                 val size = if (track.moving) 1f else 1f + 0.06f * wave
-                CurrentLocationLayer.setAppearance(style, shownHeading, if (directionKnownNow.value) opacity else minOf(opacity, 0.5f), size * (if (drivingNow.value) 1.35f else 1f))
+                CurrentLocationLayer.setAppearance(style, if (forwardNow.value) 0f else shownHeading, if (directionKnownNow.value) opacity else minOf(opacity, 0.5f), size * (if (drivingNow.value) 1.35f else 1f))
             }
         }
     }

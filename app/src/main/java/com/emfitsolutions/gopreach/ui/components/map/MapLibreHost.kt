@@ -84,6 +84,8 @@ fun MapLibreHost(
     headingOverrideDeg: Float? = null,
     /** Walking Mode (on top of [drivingMode]): a walking person marker, and the compass heading is used while no direction of travel is known. */
     walkingMode: Boolean = false,
+    /** Driving Mode with the map turning to the direction of travel: the arrow always points to the front (top) of the screen; the map does the turning. */
+    arrowForward: Boolean = false,
     /** True: turn the map to the compass heading (what is in front of the arrow is up), as if the compass dial had been tapped. False afterwards: back to north-up. */
     headingUpRequest: Boolean = false,
     /** The compass heading (rounded to 3 degrees), or null when there is none: lets a screen turn the map and move it in ONE camera update. */
@@ -187,7 +189,7 @@ fun MapLibreHost(
             map?.animateCamera(CameraUpdateFactory.bearingTo(0.0), 300)
         }
     }
-    CurrentLocationUpdater(map, styleVersion, myLocation, heading, drivingMode = drivingMode, directionKnown = !drivingMode || headingOverrideDeg != null || (walkingMode && compassHeading != null), walkingMode = walkingMode && drivingMode)
+    CurrentLocationUpdater(map, styleVersion, myLocation, heading, drivingMode = drivingMode, directionKnown = !drivingMode || headingOverrideDeg != null || (walkingMode && compassHeading != null), walkingMode = walkingMode && drivingMode, forward = arrowForward)
     LaunchedEffect(map, styleVersion, myLocation, myAccuracyMeters) {
         val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         CurrentLocationLayer.setAccuracy(style, myLocation, myAccuracyMeters)

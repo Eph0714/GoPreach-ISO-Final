@@ -9,10 +9,10 @@ import com.emfitsolutions.gopreach.platform.DocumentId
  * red = To Do. Never user-chosen.
  */
 @kotlinx.serialization.Serializable
-enum class DrawingStatus(val label: String, val colorHex: String, val borderHex: String, val meaning: String) {
-    FINISHED("Finished", "#43A047", "#1B5E20", "Already worked"),
-    TO_CONTINUE("To Continue", "#FBC02D", "#B26A00", "Started, more work needed"),
-    TO_DO("To Do", "#E53935", "#8E1B17", "Not yet worked"),
+enum class DrawingStatus(val label: String, val colorHex: String, val borderHex: String, val meaning: String, val dateLabel: String) {
+    FINISHED("Finished", "#43A047", "#1B5E20", "Already worked", "Date finished"),
+    TO_CONTINUE("To Continue", "#FBC02D", "#B26A00", "Started, more work needed", "Date to continue"),
+    TO_DO("To Do", "#E53935", "#8E1B17", "Not yet worked", "Date to do"),
 }
 
 /**
@@ -49,6 +49,8 @@ data class TerritoryDrawing(
     val name: String = "",
     /** Free multi-line remarks, editable after saving. */
     val remarks: String = "",
+    /** The date that goes with the [status]: when it was finished, or when it is to be continued / done. Start of that day in milliseconds; 0 = no date. */
+    val statusDate: Long = 0L,
     val userId: String = "",
     val userName: String = "",
     /** Display label of the role the drawing was made under, e.g. "Group Overseer". */

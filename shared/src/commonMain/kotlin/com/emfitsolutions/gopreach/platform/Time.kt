@@ -35,3 +35,9 @@ fun minusCalendar(now: Long, value: Int, unit: CalendarUnit): Long {
 
 /** Zero-padded to [width] digits, like `%0<width>d`. */
 fun Int.padded(width: Int): String = toString().padStart(width, '0')
+
+/** Start of today (device time zone) in epoch millis. */
+fun todayStartMillis(): Long {
+    val (y, m, d) = ymdOf(nowMillis())
+    return startOfDayMillis(y, m, d)
+}

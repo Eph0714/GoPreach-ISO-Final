@@ -1,7 +1,9 @@
 package com.emfitsolutions.gopreach.data.local.psgc
 
+import androidx.room.ConstructedBy
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.RoomDatabaseConstructor
 
 /**
  * "Add a dropdown for City, Municipalities, Town Barangay... automatic if the
@@ -24,6 +26,7 @@ import androidx.room.RoomDatabase
  * future schema changes for no reason.
  */
 @Database(entities = [ProvinceEntity::class, MuncityEntity::class, BarangayEntity::class], version = 1, exportSchema = false)
+@ConstructedBy(PsgcDatabaseConstructor::class)
 abstract class PsgcDatabase : RoomDatabase() {
     abstract fun psgcDao(): PsgcDao
 
@@ -48,4 +51,10 @@ abstract class PsgcDatabase : RoomDatabase() {
         const val DATABASE_NAME = "psgc_v3.db"
         const val ASSET_PATH = "databases/psgc.db"
     }
+}
+
+// Room generates the actual implementation for every target.
+@Suppress("KotlinNoActualForExpect", "EXPECT_ACTUAL_CLASSIFIERS_ARE_IN_BETA_WARNING")
+expect object PsgcDatabaseConstructor : RoomDatabaseConstructor<PsgcDatabase> {
+    override fun initialize(): PsgcDatabase
 }

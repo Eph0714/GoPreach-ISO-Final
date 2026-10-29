@@ -158,6 +158,7 @@ fun DrawingDock(state: MapDrawingState, modifier: Modifier = Modifier) {
                     }
                 }
                 if (active.status == null) Text("Required — pick one to save.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                active.status?.let { s -> StatusDateField(s, active.statusDate, onChange = { state.setStatusDate(it) }) }
                 OutlinedTextField(
                     value = active.remarks,
                     onValueChange = { state.setRemarks(it.take(1000)) },
@@ -180,6 +181,28 @@ fun DrawingDock(state: MapDrawingState, modifier: Modifier = Modifier) {
                 }
             }
         }
+    }
+}
+
+/** The date that goes with the status ("Date finished" / "Date to continue" / "Date to do"): the native date picker, and a way to clear it. */
+@Composable
+private fun StatusDateField(status: DrawingStatus, millis: Long, onChange: (Long) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = {
+                val cal = java.util.Calendar.getInstance().apply { if (millis > 0L) timeInMillis = millis }
+                android.app.DatePickerDialog(
+                    context,
+                    { _, year, month, day -> onChange(com.emfitsolutions.gopreach.platform.startOfDayMillis(year, month + 1, day)) },
+                    cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH), cal.get(java.util.Calendar.DAY_OF_MONTH),
+                ).show()
+            },
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(if (millis > 0L) "${status.dateLabel}: ${com.emfitsolutions.gopreach.domain.map.DrawingLabel.dateText(millis)}" else "Set ${status.dateLabel.replaceFirstChar { it.lowercase() }}", maxLines = 1)
+        }
+        if (millis > 0L) androidx.compose.material3.TextButton(onClick = { onChange(0L) }) { Text("Clear") }
     }
 }
 
@@ -272,6 +295,7 @@ fun DrawingInfoPanel(
             }
             HorizontalDivider()
             InfoLine("Status", "${drawing.status.label} — ${drawing.status.meaning}")
+            InfoLine(drawing.status.dateLabel, if (drawing.statusDate > 0L) com.emfitsolutions.gopreach.domain.map.DrawingLabel.dateText(drawing.statusDate) else "—")
             InfoLine("Remarks", drawing.remarks.ifBlank { "—" })
             InfoLine("Territory", drawing.territoryName.ifBlank { "Unassigned area" })
             InfoLine("FS Group", groupName ?: "None (not in an FS Group territory)")

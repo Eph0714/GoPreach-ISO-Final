@@ -11,6 +11,7 @@ import com.emfitsolutions.gopreach.data.model.DrawingStatus
 import com.emfitsolutions.gopreach.data.model.TerritoryDrawing
 import com.emfitsolutions.gopreach.domain.map.DrawingGeometry
 import com.emfitsolutions.gopreach.domain.map.GeoPoint
+import com.emfitsolutions.gopreach.platform.todayStartMillis
 import org.maplibre.android.geometry.LatLng
 import java.util.UUID
 
@@ -46,6 +47,8 @@ data class DraftPolygon(
     val name: String = "",
     val closed: Boolean = true,
     val existing: TerritoryDrawing? = null,
+    /** The date that goes with [status] (finished / to continue / to do), start of that day in millis; 0 = none. */
+    val statusDate: Long = 0L,
 ) {
     val fillColor: String get() = status?.colorHex ?: UNSET_STATUS_COLOR
     val borderColor: String get() = status?.borderHex ?: darkerBorder(UNSET_STATUS_COLOR)
@@ -261,7 +264,15 @@ class MapDrawingState {
     /** Picks the status — and with it the color — of the polygon, previewed on the map at once. */
     fun selectStatus(value: DrawingStatus) {
         val last = activeItem ?: return
-        commit(items.dropLast(1) + last.copy(status = value))
+        // The date belongs to the status: a new status starts today (the person can pick another day).
+        val date = if (last.status == value) last.statusDate else todayStartMillis()
+        commit(items.dropLast(1) + last.copy(status = value, statusDate = date))
+    }
+
+    fun setStatusDate(millis: Long) {
+        val last = activeItem ?: return
+        if (last.statusDate == millis) return
+        commit(items.dropLast(1) + last.copy(statusDate = millis))
     }
 
     fun setRemarks(text: String) {
@@ -283,7 +294,7 @@ class MapDrawingState {
         editing = drawing
         val ring = DrawingGeometry.parsePolygon(drawing.geometryJson)
         if (ring == null) { exit(); return }
-        history = listOf(listOf(DraftPolygon(drawing.id, ring, drawing.fillOpacity.toFloat(), drawing.status, drawing.remarks, drawing.name, closed = true, existing = drawing)))
+        history = listOf(listOf(DraftPolygon(drawing.id, ring, drawing.fillOpacity.toFloat(), drawing.status, drawing.remarks, drawing.name, closed = true, existing = drawing, statusDate = drawing.statusDate)))
         cursor = 0
         opacity = drawing.fillOpacity.toFloat()
         tool = DrawingTool.POINTS

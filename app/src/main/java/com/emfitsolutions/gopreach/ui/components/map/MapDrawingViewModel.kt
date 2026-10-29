@@ -74,7 +74,9 @@ class MapDrawingViewModel(
 
     /** Changes a polygon's status; its color follows automatically (Finished green, To Continue amber, To Do red). */
     suspend fun changeStatus(access: DrawingAccess, drawing: TerritoryDrawing, status: com.emfitsolutions.gopreach.data.model.DrawingStatus) {
-        val edited = drawing.copy(status = status, fillColor = status.colorHex, borderColor = status.borderHex)
+        // The date belongs to the status, so a new status starts today.
+        val date = if (drawing.status == status) drawing.statusDate else com.emfitsolutions.gopreach.platform.todayStartMillis()
+        val edited = drawing.copy(status = status, fillColor = status.colorHex, borderColor = status.borderHex, statusDate = date)
         repository.update(drawing, edited, access.personId, access.personName, access.roleLabelFor(drawing.groupId))
     }
 
@@ -106,6 +108,7 @@ class MapDrawingViewModel(
             borderColor = item.borderColor,
             status = item.status ?: com.emfitsolutions.gopreach.data.model.DrawingStatus.FINISHED,
             remarks = item.remarks.trim(),
+            statusDate = item.statusDate,
             name = item.name.trim(),
             userId = access.personId, userName = access.personName, userRole = role,
             congregationId = congregationId, groupId = territory?.groupId.orEmpty(),

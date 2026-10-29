@@ -6,6 +6,7 @@ import com.emfitsolutions.gopreach.data.model.DrawingStatus
 import com.emfitsolutions.gopreach.data.model.DrawingSyncState
 import com.emfitsolutions.gopreach.data.model.TerritoryDrawing
 import com.emfitsolutions.gopreach.domain.map.DrawingGeometry
+import com.emfitsolutions.gopreach.domain.map.DrawingLabel
 import com.emfitsolutions.gopreach.domain.map.GeoPoint
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.Style
@@ -86,13 +87,15 @@ object MapDrawingLayers {
                 PropertyFactory.lineDasharray(arrayOf(1.5f, 2.5f)),
             ),
         )
-        // The drawing's own text status, written on it (no pins).
+        // The drawing's own details, written inside it (no pins): name, status + date, remarks.
         style.addSource(GeoJsonSource(SRC_LABELS, empty()))
         style.addLayer(
             SymbolLayer(LYR_LABELS, SRC_LABELS).withProperties(
-                PropertyFactory.textField(Expression.get("status")),
+                PropertyFactory.textField(Expression.get("label")),
                 PropertyFactory.textFont(FONT_BOLD),
                 PropertyFactory.textSize(12f),
+                PropertyFactory.textMaxWidth(11f),
+                PropertyFactory.textJustify(Property.TEXT_JUSTIFY_CENTER),
                 PropertyFactory.textColor(Expression.get("border")),
                 PropertyFactory.textHaloColor("#FFFFFF"),
                 PropertyFactory.textHaloWidth(2f),
@@ -215,7 +218,8 @@ object MapDrawingLayers {
             }
             val c = DrawingGeometry.interiorPoint(ring)
             labels += Feature.fromGeometry(Point.fromLngLat(c.lng, c.lat)).also {
-                it.addStringProperty("status", d.status.label)
+                // The details sit inside the drawing: name, status with its date, first line of the remarks.
+                it.addStringProperty("label", DrawingLabel.text(d.status, d.statusDate, d.name, d.remarks))
                 it.addStringProperty("border", d.status.borderHex)
             }
         }
