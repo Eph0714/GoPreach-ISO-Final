@@ -133,8 +133,7 @@ fun GroupChatListScreen(
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(if (canManage) "Scope: My FS Group" else "FS Group chat", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Text(g.name, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                    Text("You are the Overseer, Servant or Assistant of this group, so you manage its chat and who is in it.", style = MaterialTheme.typography.bodySmall)
-                    androidx.compose.material3.Button(onClick = { viewModel.openFsGroupChat(g, currentPersonId, onOpenGroupChat) }, modifier = Modifier.fillMaxWidth()) { Text("Open the chat and manage participants") }
+                    Text("You are the Overseer, Servant or Assistant of this group, so you create and manage its chats and who is in them. Open a chat from the list below.", style = MaterialTheme.typography.bodySmall)
                     androidx.compose.material3.OutlinedButton(onClick = { showCreateFsChat = true }, modifier = Modifier.fillMaxWidth()) { Text("New chat for ${g.name}") }
                 }
             }
