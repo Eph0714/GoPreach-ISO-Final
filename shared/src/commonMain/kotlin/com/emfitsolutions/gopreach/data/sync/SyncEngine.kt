@@ -173,11 +173,13 @@ class SyncEngine(
      * person's active congregation, so it skips that congregation's FS Groups and territories - and the cursor then moves past them for good (the Territory Map
      * showed one group and no boundaries). The marker lives in the cache, so a new install or a cleared app repeats the catch-up once and nothing more.
      */
-    suspend fun repullOnceFor(personId: String) {
-        val marker = "repull:$personId"
+    suspend fun repullOnceFor(personId: String, congregationId: String?) {
+        // A person with no active congregation yet has nothing to catch up on; the marker is per congregation so a later role/congregation change repeats it once.
+        if (congregationId == null) return
+        val marker = "repull:$personId:$congregationId"
         if (cacheDao.get(META_COLLECTION, marker) != null) return
-        cacheDao.upsert(CachedDocumentEntity(META_COLLECTION, marker, "1", SyncState.SYNCED.name, nowMillis()))
         writeCursor(0L)
+        cacheDao.upsert(CachedDocumentEntity(META_COLLECTION, marker, "1", SyncState.SYNCED.name, nowMillis()))
     }
 
     private suspend fun writeCursor(cursor: Long) {

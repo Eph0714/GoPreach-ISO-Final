@@ -272,13 +272,16 @@ class UserSession(
                 }
                 .collect { ctx ->
                     val (person, congregationId, roleName, groupId) = ctx ?: return@collect
-                    runCatching { syncEngine.repullOnceFor(person.id) }
+                    var contextSaved = true
                     if (person.activeCongregationId != congregationId || person.activeAdminRole != roleName || person.activeGroupId != groupId) {
-                        runCatching {
+                        contextSaved = runCatching {
                             personRepository.saveNow(person.copy(activeCongregationId = congregationId, activeAdminRole = roleName, activeGroupId = groupId))
                         }.onSuccess { runCatching { syncEngine.resetCursor() } }
                             .onFailure { Log.w("UserSession", "Failed to sync active role context: ${it.message}") }
+                            .isSuccess
                     }
+                    // Only after the server knows the active congregation: pull everything once more so its FS Groups and territories (the map's boundaries) arrive.
+                    if (contextSaved) runCatching { syncEngine.repullOnceFor(person.id, congregationId) }
                 }
         }
     }
