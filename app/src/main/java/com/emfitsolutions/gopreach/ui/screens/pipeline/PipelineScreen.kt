@@ -12,6 +12,7 @@ import com.emfitsolutions.gopreach.ui.components.rememberRecordViewMode
 import com.emfitsolutions.gopreach.platform.AppPermission
 import com.emfitsolutions.gopreach.ui.components.RecordFound
 import com.emfitsolutions.gopreach.ui.components.stageColor
+import com.emfitsolutions.gopreach.ui.components.stageWeight
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -280,9 +281,12 @@ private fun MinistryToolbar(
     onAdd: () -> Unit,
     onFavorites: (Boolean) -> Unit,
     onRecycle: () -> Unit,
+    sortAscending: Boolean,
+    onSortChange: (Boolean) -> Unit,
     onExport: (String) -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
+    var sortMenu by remember { mutableStateOf(false) }
     androidx.compose.foundation.layout.FlowRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(com.emfitsolutions.gopreach.ui.components.ActionSpacing.Gap),
@@ -306,6 +310,19 @@ private fun MinistryToolbar(
             ActionKind.Recycle, onClick = onRecycle, label = "Recycle Bin",
             modifier = if (showInactive) Modifier.background(androidx.compose.ui.graphics.Color.Transparent).border(2.dp, MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)) else Modifier,
         )
+        // Sort by name: A to Z (ascending) or Z to A (descending).
+        androidx.compose.foundation.layout.Box {
+            androidx.compose.material3.OutlinedButton(
+                onClick = { sortMenu = true },
+                modifier = Modifier.heightIn(min = com.emfitsolutions.gopreach.ui.components.ActionSpacing.ButtonHeight),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            ) { Text(if (sortAscending) "Name A-Z" else "Name Z-A", maxLines = 1) }
+            androidx.compose.material3.DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                androidx.compose.material3.DropdownMenuItem(text = { Text("Name: Ascending (A-Z)") }, onClick = { sortMenu = false; onSortChange(true) })
+                androidx.compose.material3.DropdownMenuItem(text = { Text("Name: Descending (Z-A)") }, onClick = { sortMenu = false; onSortChange(false) })
+            }
+        }
         // Favorites: a visible labelled button (gold and filled while only the starred records are shown).
         val gold = androidx.compose.ui.graphics.Color(0xFFE6B800)
         androidx.compose.material3.Button(
@@ -405,6 +422,7 @@ private fun PipelineListScreen(
     var searchText by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
     // Favorites: the star on each record and the Favorites filter. They narrow the list; they never widen what the person may see.
     var favoritesOnly by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var sortAscending by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(true) }
     val favoriteIds by remember(currentPersonId) { viewModel.favoriteIds(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptySet())
     LaunchedEffect(Unit) { viewModel.startFavoritesSync().catch { }.collect { } }
     val publisherNames by viewModel.personNames.collectAsStateWithLifecycle(initialValue = emptyMap())
@@ -417,10 +435,12 @@ private fun PipelineListScreen(
     // Filtering happens here, before the count and the list are built.
     val groupMembers by remember(publisherPersonId) { viewModel.groupMembersOf(publisherPersonId) }.collectAsStateWithLifecycle(initialValue = setOf(publisherPersonId))
     val inScope = { p: InterestedPerson -> when (ministryScope) { 0 -> p.publisherPersonId == publisherPersonId; 1 -> p.publisherPersonId in groupMembers; 2 -> true; else -> !mineOnly || p.publisherPersonId == publisherPersonId } }
-    val people = allPeople.filter { (showInactive || it.status == RecordStatus.ACTIVE) && inScope(it) }
+    // Recycle Bin on: only the deleted (Inactive) records, each restorable. Off: only the Active ones.
+    val people = allPeople.filter { (if (showInactive) it.status == RecordStatus.INACTIVE else it.status == RecordStatus.ACTIVE) && inScope(it) }
         .filterByArea(areaMode, areaMunicipality, areaBarangay)
         .filter { it.matchesSearch(searchText, publisherNames[it.publisherPersonId]) }
         .filter { !favoritesOnly || it.id in favoriteIds }
+        .let { list -> if (sortAscending) list.sortedBy { it.name.trim().lowercase() } else list.sortedByDescending { it.name.trim().lowercase() } }
     // Searching and Return Visit show which publisher the record is enrolled to (Bible Study stays as it was).
     val showPublisher = householderHistory || stage != PipelineStage.BIBLE_STUDY
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -493,11 +513,13 @@ private fun PipelineListScreen(
                     favoritesOnly = favoritesOnly,
                     onAdd = { showCreateDialog = true },
                     onFavorites = { favoritesOnly = it },
+                    sortAscending = sortAscending,
+                    onSortChange = { sortAscending = it },
                     onRecycle = { val next = !showInactive; if (hostControlsInactive) onHostShowInactiveChange?.invoke(next) else localShowInactive = next },
                     onExport = { choice ->
                         val data = com.emfitsolutions.gopreach.data.export.TableReportData(
                             title = exportTable.title,
-                            details = listOf("Showing" to exportTable.title, "Search" to searchText.ifBlank { "—" }, "Records" to if (showInactive) "Active and inactive (Recycle Bin)" else "Active"),
+                            details = listOf("Showing" to exportTable.title, "Search" to searchText.ifBlank { "—" }, "Records" to if (showInactive) "Deleted only (Recycle Bin)" else "Active"),
                             recordsFound = exportTable.count.toString(),
                             table = listOf(exportTable.columns) + exportTable.rows,
                             summary = listOf(listOf("Metric", "Value")) + exportTable.totals.map { listOf(it.first, it.second) },
@@ -524,7 +546,7 @@ private fun PipelineListScreen(
             if (people.isEmpty()) {
                 Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     RecordFound(0)
-                    Text(if (favoritesOnly && favoriteIds.isEmpty()) "No Favorites yet. Tap the star on a record to add it." else if (areaMode != AreaFilterMode.ALL || searchText.isNotBlank() || favoritesOnly) "No records match. Clear the search or the filter to see all your authorized records." else "No records yet.", style = MaterialTheme.typography.bodyMedium)
+                    Text(if (favoritesOnly && favoriteIds.isEmpty()) "No Favorites yet. Tap the star on a record to add it." else if (areaMode != AreaFilterMode.ALL || searchText.isNotBlank() || favoritesOnly) "No records match. Clear the search or the filter to see all your authorized records." else if (showInactive) "The recycle bin is empty." else "No records yet.", style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
                 val viewMode = rememberRecordViewMode("pipeline_people")
@@ -550,20 +572,20 @@ private fun PipelineListScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                                    Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = person.pipelineStage.stageColor(), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    Text(person.name, style = MaterialTheme.typography.titleMedium, fontWeight = person.pipelineStage.stageWeight(), color = person.pipelineStage.stageColor(), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                                     Text(person.address, style = MaterialTheme.typography.bodySmall)
                                     if (showPublisher || person.publisherPersonId != publisherPersonId) {
                                         val ownerName = publisherNames[person.publisherPersonId]
                                         Text(
                                             if (person.publisherPersonId.isBlank()) "Unassigned" else if (showPublisher) "Publisher: ${ownerName ?: "—"}" else "Assigned to: ${ownerName ?: "—"}",
                                             style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = if (showPublisher) androidx.compose.ui.text.font.FontWeight.SemiBold else null,
-                                            color = if (showPublisher) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.primary,
                                         )
                                     }
                                     if (person.status == RecordStatus.INACTIVE) {
                                         Text("Inactive", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                                        if (person.publisherPersonId == currentPersonId) androidx.compose.material3.OutlinedButton(onClick = { binTarget = person }, modifier = Modifier.padding(top = 4.dp)) {
+                                        if (person.publisherPersonId == currentPersonId || canPermanentlyDelete) androidx.compose.material3.OutlinedButton(onClick = { binTarget = person }, modifier = Modifier.padding(top = 4.dp)) {
                                             Icon(Icons.Rounded.RestoreFromTrash, contentDescription = null, modifier = Modifier.size(18.dp))
                                             Text("Restore or delete", modifier = Modifier.padding(start = 6.dp))
                                         }
@@ -648,9 +670,9 @@ private fun ForwardStatusBadge(person: InterestedPerson, viewModel: PipelineView
         ForwardRequestStatus.PENDING -> "Forward status: Pending (${r.toCongregationNameSnapshot})" to MaterialTheme.colorScheme.tertiary
         ForwardRequestStatus.ACCEPTED -> "Forward status: Accepted (${r.toCongregationNameSnapshot})" to MaterialTheme.colorScheme.primary
         ForwardRequestStatus.DECLINED -> "Forward status: Declined" to MaterialTheme.colorScheme.error
-        ForwardRequestStatus.CANCELLED -> "Forward status: Cancelled" to MaterialTheme.colorScheme.onSurfaceVariant
+        ForwardRequestStatus.CANCELLED -> "Forward status: Cancelled" to MaterialTheme.colorScheme.secondary
     }
-    Text(text, style = MaterialTheme.typography.bodySmall, color = color)
+    Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = color)
 }
 
 @Composable
@@ -662,9 +684,9 @@ private fun PublisherForwardStatusBadge(person: InterestedPerson, viewModel: Pip
         ForwardRequestStatus.PENDING -> "Forward status: Pending (${r.toPublisherNameSnapshot})" to MaterialTheme.colorScheme.tertiary
         ForwardRequestStatus.ACCEPTED -> "Forward status: Accepted (${r.toPublisherNameSnapshot})" to MaterialTheme.colorScheme.primary
         ForwardRequestStatus.DECLINED -> "Forward status: Declined" to MaterialTheme.colorScheme.error
-        ForwardRequestStatus.CANCELLED -> "Forward status: Cancelled" to MaterialTheme.colorScheme.onSurfaceVariant
+        ForwardRequestStatus.CANCELLED -> "Forward status: Cancelled" to MaterialTheme.colorScheme.secondary
     }
-    Text(text, style = MaterialTheme.typography.bodySmall, color = color)
+    Text(text, style = MaterialTheme.typography.bodySmall, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = color)
 }
 
 /** The same create/edit form (spec's full Searching field list) for every
@@ -773,7 +795,6 @@ internal fun PipelinePersonDialog(
         if (isSubmitted) return
         val message = requiredFieldsMessage(
             "Name" to name.isNotBlank(),
-            "Place of Origin" to address.isNotBlank(),
             "Gender" to (gender != null),
         )
         if (message != null) {
@@ -885,7 +906,7 @@ internal fun PipelinePersonDialog(
                 // to *update* an already-saved record's location later) does
                 // the same auto-fill independently.
                 EditSectionHeader("Place of Origin")
-                OutlinedTextField(value = address, onValueChange = { address = it.uppercase() }, label = { Text("Place of Origin") }, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = address, onValueChange = { address = it.uppercase() }, label = { Text("Place of Origin (optional)") }, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
 
                 EditSectionHeader("Other Details")
                 OutlinedTextField(value = children, onValueChange = { children = it.uppercase() }, label = { Text("Children (optional)") }, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
