@@ -196,9 +196,10 @@ async function chatMembersInFsGroup(h, groupId, cong, ids) {
   }
   return ids.every((pid) => allowed.has(pid));
 }
-/** A slot holder may create the chat of their OWN group under its fixed id (one chat per group, never a duplicate room). */
+/** A slot holder may create chats of their OWN group: the group's main chat 'fsg_<group>' and further chats 'fsg_<group>_<suffix>' - always tied to that group. */
 async function slotMayCreateChat(h, id, next) {
-  if (!nul(next?.fsGroupId) || id !== 'fsg_' + next.fsGroupId || !(await slotManagesChat(h, next))) return false;
+  const gid = nul(next?.fsGroupId);
+  if (!gid || !(id === 'fsg_' + gid || id.startsWith('fsg_' + gid + '_')) || !(await slotManagesChat(h, next))) return false;
   const ids = next.participantIds ?? [];
   return (await chatMembersInCongregation(h, next.congregationId, ids)) && (await chatMembersInFsGroup(h, next.fsGroupId, next.congregationId, ids));
 }
@@ -467,7 +468,8 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
         const wideEdit = h.canManageGroupChatsFor(old.congregationId) && nul(next.congregationId) === nul(old.congregationId) && (await chatMembersInCongregation(h, old.congregationId, added));
         return verdict(wideEdit || participantEdit || slotEdit, 'Not allowed to change this chat, or a member is outside the allowed congregation / FS Group');
       }
-      return verdict(h.canManageGroupChatsFor(old?.congregationId));
+      // The Overseer / Servant / Assistant of an FS Group may also delete the chats of that group (slotManagesChat checks the live group and their slot).
+      return verdict(h.canManageGroupChatsFor(old?.congregationId) || (await slotManagesChat(h, old)));
 
     case 'interestedPeople':
       // "Allow Capture Image" off: no new or changed supporting image (existing ones stay as they are).

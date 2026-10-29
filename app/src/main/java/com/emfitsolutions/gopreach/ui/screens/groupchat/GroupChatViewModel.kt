@@ -155,6 +155,18 @@ class GroupChatViewModel(
         }
     }
 
+    /** A new chat of [group], with only the group's own people (see [fsGroupCandidates]). */
+    fun createFsGroupChat(group: Group, groupName: String, description: String, participantIds: List<String>, createdByPersonId: String, onCreated: (GroupChat) -> Unit) {
+        viewModelScope.launch {
+            runCatching { groupChatRepository.createFsGroupChat(group.id, group.congregationId, groupName, description, participantIds, createdByPersonId) }
+                .onSuccess { chat ->
+                    auditLogRepository.log(actorPersonId = createdByPersonId, action = "CREATE_GROUP_CHAT", targetType = "GroupChat", targetId = chat.id, congregationId = group.congregationId)
+                    onCreated(chat)
+                }
+                .onFailure { Log.e(TAG, "createFsGroupChat failed", it) }
+        }
+    }
+
     fun createGroupChat(
         congregationId: String,
         groupName: String,

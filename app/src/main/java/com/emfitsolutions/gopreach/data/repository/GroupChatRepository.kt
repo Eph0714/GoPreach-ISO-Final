@@ -83,6 +83,16 @@ class GroupChatRepository(
         return chat
     }
 
+    /** An additional chat of an FS Group (its Overseer, Servant or Assistant makes it): id "fsg_<groupId>_<n>", always tied to that group. */
+    suspend fun createFsGroupChat(groupId: String, congregationId: String, groupName: String, description: String, memberIds: List<String>, createdByPersonId: String): GroupChat {
+        val chat = GroupChat(
+            id = "fsg_${groupId}_${newLocalId()}", congregationId = congregationId, groupName = groupName, description = description, fsGroupId = groupId,
+            participantIds = (memberIds + createdByPersonId).distinct(), createdByPersonId = createdByPersonId, createdAt = System.currentTimeMillis(),
+        )
+        saveChat(chat)
+        return chat
+    }
+
     suspend fun updateGroupChat(groupChatId: String, groupName: String, description: String) {
         offline.get<GroupChat>(COLLECTION, groupChatId)?.let { saveChat(it.copy(groupName = groupName, description = description)) }
     }

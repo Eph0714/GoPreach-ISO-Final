@@ -345,7 +345,11 @@ test('FS Group chat: the Overseer / Servant / Assistant of a group manage that g
   assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA', 'pubB'] }), false, 'a person of another congregation');
   assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, participantIds: ['pubA'], groupName: 'Renamed' }), true, 'removes a member and renames');
   assert.equal(await set('msSlot', 'groupChats', 'fsg_gM', { ...mine, fsGroupId: 'gN' }), false, 'cannot hand the chat to another group');
-  assert.equal(await del('msSlot', 'groupChats', 'fsg_gM'), false, 'deleting a chat stays with the chat managers');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM_extra', { ...mine, participantIds: ['pubA'] }), true, 'a further chat of its own group');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gN_extra', { ...mine, fsGroupId: 'gN', participantIds: [] }), false, 'a further chat of another group');
+  assert.equal(await set('msSlot', 'groupChats', 'fsg_gM_extra', { ...mine, fsGroupId: 'gM', congregationId: 'congB' }), false, 'a chat of another congregation');
+  assert.equal(await del('msSlot', 'groupChats', 'fsg_gM'), true, 'the slot holder deletes the chat of its own group');
+  assert.equal(await del('pubA', 'groupChats', 'fsg_gM'), false, 'a plain member cannot');
   // another group's people never reach it
   await put('groupChats', 'fsg_gN', { congregationId: 'congA', fsGroupId: 'gN', groupName: 'FS Group N', participantIds: ['pubA2'] });
   assert.equal(await set('msSlot', 'groupChats', 'fsg_gN', { congregationId: 'congA', fsGroupId: 'gN', groupName: 'x', participantIds: ['pubA2', 'pubA'] }), false, 'another group\'s chat');

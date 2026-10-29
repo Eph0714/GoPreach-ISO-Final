@@ -99,6 +99,7 @@ fun GroupChatListScreen(
     // A group chat can be deleted right from this list by whoever manages group chats (the same people who could already
     // delete it from the chat's Settings; the server still limits them to their own congregation, Super-Admin to all).
     var pendingDelete by remember { mutableStateOf<GroupChat?>(null) }
+    var showCreateFsChat by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -134,6 +135,7 @@ fun GroupChatListScreen(
                     Text(g.name, style = MaterialTheme.typography.titleMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
                     Text("You are the Overseer, Servant or Assistant of this group, so you manage its chat and who is in it.", style = MaterialTheme.typography.bodySmall)
                     androidx.compose.material3.Button(onClick = { viewModel.openFsGroupChat(g, currentPersonId, onOpenGroupChat) }, modifier = Modifier.fillMaxWidth()) { Text("Open the chat and manage participants") }
+                    androidx.compose.material3.OutlinedButton(onClick = { showCreateFsChat = true }, modifier = Modifier.fillMaxWidth()) { Text("New chat for ${g.name}") }
                 }
             }
         }
@@ -164,7 +166,7 @@ fun GroupChatListScreen(
                         congregationName = congregationName,
                         unreadCount = (chat.messageCount - (chat.readCounts[currentPersonId] ?: 0L)).coerceAtLeast(0L),
                         onClick = { onOpenGroupChat(chat.id) },
-                        onDelete = if (canManage) ({ pendingDelete = chat }) else null,
+                        onDelete = if (canManage || (chat.fsGroupId != null && chat.fsGroupId == mySlotGroup?.id)) ({ pendingDelete = chat }) else null,
                     )
                 }
             }
@@ -185,6 +187,20 @@ fun GroupChatListScreen(
             },
             dismissButton = { androidx.compose.material3.TextButton(onClick = { pendingDelete = null }) { Text(stringResource(Res.string.action_cancel)) } },
         )
+    }
+
+    if (showCreateFsChat) {
+        mySlotGroup?.let { g ->
+            CreateGroupChatDialog(
+                fixedCongregationId = g.congregationId,
+                congregations = congregations,
+                currentPersonId = currentPersonId,
+                viewModel = viewModel,
+                onDismiss = { showCreateFsChat = false },
+                onCreated = { chat -> showCreateFsChat = false; onOpenGroupChat(chat.id) },
+                fsGroup = g,
+            )
+        }
     }
 
     if (showCreateDialog) {

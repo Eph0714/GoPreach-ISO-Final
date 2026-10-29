@@ -168,6 +168,8 @@ fun CreateGroupChatDialog(
     viewModel: GroupChatViewModel,
     onDismiss: () -> Unit,
     onCreated: (GroupChat) -> Unit,
+    /** Set for the Overseer, Servant or Assistant of an FS Group: the chat belongs to that group and holds only its people. */
+    fsGroup: com.emfitsolutions.gopreach.data.model.Group? = null,
 ) {
     var groupName by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -181,9 +183,9 @@ fun CreateGroupChatDialog(
     var pickedCongregationId by rememberSaveable { mutableStateOf(fixedCongregationId) }
     var selectedIds by remember { mutableStateOf(setOf<String>()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    val congregationId = fixedCongregationId ?: pickedCongregationId
+    val congregationId = fsGroup?.congregationId ?: fixedCongregationId ?: pickedCongregationId
 
-    val candidatesFlow = remember(congregationId) { viewModel.candidatesFor(congregationId) }
+    val candidatesFlow = remember(congregationId, fsGroup) { if (fsGroup != null) viewModel.fsGroupCandidates(fsGroup) else viewModel.candidatesFor(congregationId) }
     val candidates by candidatesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
 
     fun submit() {
@@ -194,6 +196,10 @@ fun CreateGroupChatDialog(
         )
         if (message != null) {
             errorMessage = message
+            return
+        }
+        if (fsGroup != null) {
+            viewModel.createFsGroupChat(fsGroup, groupName.trim(), description.trim(), selectedIds.toList(), currentPersonId, onCreated)
             return
         }
         viewModel.createGroupChat(
@@ -216,7 +222,7 @@ fun CreateGroupChatDialog(
         hasUnsavedChanges = groupName.isNotBlank() || description.isNotBlank() ||
             pickedCongregationId != fixedCongregationId || selectedIds.isNotEmpty(),
     ) {
-        if (fixedCongregationId == null) {
+        if (fixedCongregationId == null && fsGroup == null) {
             GroupChatCongregationPicker(congregations = congregations, selectedId = pickedCongregationId, onSelected = { pickedCongregationId = it; selectedIds = emptySet() })
         }
         OutlinedTextField(
@@ -265,7 +271,7 @@ fun ManageParticipantsDialog(
     viewModel: GroupChatViewModel,
     onDismiss: () -> Unit,
     onDeleted: () -> Unit = {},
-    /** Set when the person manages ONE FS Group's chat: only that group's people can be added, and the chat cannot be deleted. */
+    /** Set when the person manages ONE FS Group's chat: only that group's people can be added, and the chat can be renamed and deleted. */
     fsGroup: com.emfitsolutions.gopreach.data.model.Group? = null,
 ) {
     var groupName by remember(chat.id) { mutableStateOf(chat.groupName) }
@@ -320,7 +326,7 @@ fun ManageParticipantsDialog(
             onToggle = { id -> selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id },
         )
         if (fsGroup != null) Text("Only people assigned to ${fsGroup.name} can be in this chat. This changes the chat only - never a publisher's FS Group.", style = MaterialTheme.typography.bodySmall)
-        if (fsGroup == null) Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
             ActionButton(ActionKind.Delete, onClick = { showDeleteConfirm = true }, label = stringResource(Res.string.chat_delete_group_chat))
         }
     }

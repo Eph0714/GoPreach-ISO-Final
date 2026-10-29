@@ -317,6 +317,8 @@ private fun MonthlyReportForm(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // The publisher the report is for, so the sent report always names them.
+        Text("Publisher: ${uiState.report.publisherName.ifBlank { "—" }}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 stringResource(Res.string.monthly_report_category, uiState.category?.displayName ?: stringResource(Res.string.monthly_report_category_unknown)),
@@ -432,7 +434,7 @@ private fun MonthlyReportForm(
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     if (report.isPioneer) {
-                        Text("Hours: ${PublisherReportCalculator.formatHours(report.hours ?: 0.0)}", style = MaterialTheme.typography.bodyLarge)
+                        Text("Hours:${PublisherReportCalculator.formatHours(report.hours ?: 0.0)}", style = MaterialTheme.typography.bodyLarge)
                     } else {
                         Text("Attended in Preaching: ${if (report.attendedInPreaching == true) "YES" else "NO"}", style = MaterialTheme.typography.bodyLarge)
                     }
