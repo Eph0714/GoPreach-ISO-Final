@@ -1,7 +1,10 @@
 package com.emfitsolutions.gopreach.data.navigation
 
 import com.emfitsolutions.gopreach.domain.map.GeoPoint
+import com.emfitsolutions.gopreach.domain.navigation.DrivingTracker
 import com.emfitsolutions.gopreach.domain.navigation.Maneuver
+import com.emfitsolutions.gopreach.domain.navigation.MatchedFix
+import com.emfitsolutions.gopreach.domain.navigation.TrailPoint
 import com.emfitsolutions.gopreach.domain.navigation.Route
 import com.emfitsolutions.gopreach.domain.navigation.RouteStep
 import com.emfitsolutions.gopreach.domain.navigation.RoutingException
@@ -17,6 +20,11 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.coroutines.cancellation.CancellationException
 
 /** Where a route comes from. An interface so the screen and the tests never depend on a particular provider. */
@@ -28,6 +36,9 @@ interface RoutingService {
      * Nothing here is invented: every route, distance and time is what the provider answered.
      */
     suspend fun routes(fromLat: Double, fromLng: Double, toLat: Double, toLng: Double, alternatives: Int = 2, walking: Boolean = false): List<Route> = listOf(route(fromLat, fromLng, toLat, toLng, walking))
+
+    /** The road point (and the road's direction) at the end of a recent GPS trail, or null when unknown or unavailable. Best effort: it never throws. */
+    suspend fun matchTrail(trail: List<TrailPoint>, walking: Boolean = false): MatchedFix? = null
 }
 
 /**
@@ -82,12 +93,56 @@ class ValhallaRoutingService(
         return parseAll(text)
     }
 
+    override suspend fun matchTrail(trail: List<TrailPoint>, walking: Boolean): MatchedFix? {
+        if (trail.size < 2) return null
+        val shape = trail.joinToString(",") { "{\"lat\":${it.lat},\"lon\":${it.lng}}" }
+        val costing = if (walking) "pedestrian" else "auto"
+        val body = "{\"shape\":[$shape],\"costing\":\"$costing\",\"shape_match\":\"map_snap\",\"filters\":{\"attributes\":[\"matched.point\",\"matched.type\",\"matched.distance_from_trace_point\"],\"action\":\"include\"}}"
+        for (base in listOfNotNull(baseUrl, fallbackBaseUrl?.takeIf { it.trimEnd('/') != baseUrl.trimEnd('/') })) {
+            val text = try {
+                withTimeoutUnlessZero(if (timeoutMillis > 0) MATCH_TIMEOUT_MILLIS else 0L) {
+                    val response = client.post(base.trimEnd('/') + "/trace_attributes") { contentType(ContentType.Application.Json); setBody(body) }
+                    if (response.status.value in 200..299) response.bodyAsText() else null
+                }
+            } catch (e: TimeoutCancellationException) {
+                null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            }
+            if (text != null) return parseMatch(text)
+        }
+        return null
+    }
+
     /** A timeout of 0 means none (tests run on a virtual clock that would fire any timeout at once). */
     private suspend fun <T> withTimeoutUnlessZero(millis: Long, block: suspend () -> T): T = if (millis <= 0L) block() else withTimeout(millis) { block() }
 
     companion object {
         const val DEFAULT_BASE_URL = "https://valhalla1.openstreetmap.de"
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+
+        private const val MATCH_TIMEOUT_MILLIS = 4_000L
+
+        /** The last matched point of a trace_attributes answer and the direction of the road there (from the last matched point at least 3 m before it); null when nothing matched. */
+        fun parseMatch(text: String): MatchedFix? {
+            val points = try {
+                json.parseToJsonElement(text).jsonObject["matched_points"]?.jsonArray
+            } catch (e: Exception) {
+                null
+            } ?: return null
+            val matched = points.mapNotNull { p ->
+                val o = p as? JsonObject ?: return@mapNotNull null
+                if (o["type"]?.jsonPrimitive?.content != "matched") return@mapNotNull null
+                val lat = o["lat"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+                val lon = o["lon"]?.jsonPrimitive?.doubleOrNull ?: return@mapNotNull null
+                lat to lon
+            }
+            val end = matched.lastOrNull() ?: return null
+            val before = matched.dropLast(1).lastOrNull { DrivingTracker.distanceMeters(it.first, it.second, end.first, end.second) >= 3.0 }
+            return MatchedFix(end.first, end.second, before?.let { DrivingTracker.bearingBetween(it.first, it.second, end.first, end.second) })
+        }
 
         fun parse(text: String): Route = parseAll(text).first()
 

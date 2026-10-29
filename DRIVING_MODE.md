@@ -87,3 +87,11 @@ Order: **Google** (only when `googleMapsApiKey=...` is in `local.properties`; St
 | 10 | Mute voice, switch Walking/Driving | Voice stays muted; route and ETA redraw | |
 | 11 | Compare speed with another speedometer | Within a few km/h while moving | |
 | 12 | Same route on the website on a phone browser | Same arrow, 3-fix reroute, speed shown | |
+
+## Free Drive / Walk without a destination (navigation phase 3)
+
+With no route to follow there is nothing to snap to, so `FreeDriveMatcher` (shared) keeps the last few good fixes (accuracy 40 m or better) and, while moving (3 m/s driving, 0.8 m/s walking), asks the routing server's `trace_attributes` (map matching) about every 3 s where on the road that trail ends. The answer is used only when it lies within 25 m (driving) / 12 m (walking) of the real fix, otherwise the arrow follows the GPS. Between answers the last road offset is applied for up to 6 s. It needs the internet; offline or on any error the arrow follows the GPS as before. Covered by `FreeDriveMatcherTest`; the request format was checked against the public FOSSGIS server. **Not verified on a real road.** Every active driver adds about one request per 3 s to the routing server, so use your own server (see `docs/VALHALLA.md`) before many people drive at once.
+
+Also: the barangay and drawing outlines are drawn from line geometry and their sources have no tile buffer, which removed the square lines and light/dark rectangles inside shapes in the tilted view. A Draw button is on the Territory Map toolbar.
+
+Website: the same free Drive / Walk matching runs through `POST /territories/match` (Laravel asks the routing service, so nothing is exposed to the browser) and `freeRoad()` in `territories/map.blade.php` (same limits: 40 m accuracy, 3 m/s or 0.8 m/s, 25 m or 12 m tolerance, 3 s between requests, 6 s offset). Tested with `TerritoryMapDataTest` and a script simulation; not driven on a real road. The website has no tile seams (Leaflet draws outlines as vectors) and already had a Draw button.

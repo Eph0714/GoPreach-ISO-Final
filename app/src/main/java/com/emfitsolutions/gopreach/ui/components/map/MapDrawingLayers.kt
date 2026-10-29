@@ -36,6 +36,8 @@ import org.maplibre.geojson.Polygon
  */
 object MapDrawingLayers {
     private const val SRC_SAVED = "gp-draw-src"
+    // The outline comes from LineString features, not from the polygons: a line layer on a polygon source also draws the cut edges at every map-tile boundary (the "square lines" inside a shape).
+    private const val SRC_SAVED_LINE = "gp-draw-line-src"
     private const val LYR_FILL = "gp-draw-fill"
     private const val LYR_LINE = "gp-draw-line"
     private const val LYR_LINE_SYNC = "gp-draw-line-sync"
@@ -61,7 +63,7 @@ object MapDrawingLayers {
 
     fun install(style: Style) {
         if (style.getLayer(LYR_FILL) != null) return
-        style.addSource(GeoJsonSource(SRC_SAVED, empty()))
+        style.addSource(GeoJsonSource(SRC_SAVED, empty(), org.maplibre.android.style.sources.GeoJsonOptions().withBuffer(0)))
         style.addLayer(
             FillLayer(LYR_FILL, SRC_SAVED).withProperties(
                 PropertyFactory.fillColor(Expression.get("fill")),
@@ -70,7 +72,7 @@ object MapDrawingLayers {
         )
         // A strong outline keeps even a 10%-opacity polygon easy to identify.
         style.addLayer(
-            LineLayer(LYR_LINE, SRC_SAVED).withProperties(
+            LineLayer(LYR_LINE, SRC_SAVED_LINE).withProperties(
                 PropertyFactory.lineColor(Expression.get("border")),
                 PropertyFactory.lineWidth(
                     Expression.switchCase(Expression.eq(Expression.get("sel"), Expression.literal("1")), Expression.literal(5f), Expression.literal(3f)),
@@ -81,7 +83,7 @@ object MapDrawingLayers {
         )
         // Not yet on the server (pending / failed): a dashed overlay on the outline — white while waiting, red when it failed.
         style.addLayer(
-            LineLayer(LYR_LINE_SYNC, SRC_SAVED).withFilter(Expression.neq(Expression.get("sync"), Expression.literal("ok"))).withProperties(
+            LineLayer(LYR_LINE_SYNC, SRC_SAVED_LINE).withFilter(Expression.neq(Expression.get("sync"), Expression.literal("ok"))).withProperties(
                 PropertyFactory.lineColor(Expression.switchCase(Expression.eq(Expression.get("sync"), Expression.literal("failed")), Expression.color(Color.parseColor("#D93025")), Expression.color(Color.WHITE))),
                 PropertyFactory.lineWidth(1.8f),
                 PropertyFactory.lineDasharray(arrayOf(1.5f, 2.5f)),
@@ -181,6 +183,9 @@ object MapDrawingLayers {
             ),
         )
     }
+
+    private fun lineFeature(ring: List<GeoPoint>): Feature =
+        Feature.fromGeometry(LineString.fromLngLats((ring + ring.first()).map { Point.fromLngLat(it.lng, it.lat) }))
 
     private fun polygonFeature(ring: List<GeoPoint>): Feature {
         val closed = ring + ring.first()

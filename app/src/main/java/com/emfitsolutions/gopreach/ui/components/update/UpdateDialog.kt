@@ -57,10 +57,14 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
     var attempt by remember { mutableIntStateOf(0) }
     var launched by remember { mutableStateOf(false) }
     var stalled by remember { mutableStateOf(false) }
+    var signatureChanged by remember { mutableStateOf(false) }
     LaunchedEffect(state, attempt) {
         val ready = state as? UpdateCheckState.ReadyToInstall
-        if (ready == null) { launched = false; stalled = false; return@LaunchedEffect }
+        if (ready == null) { launched = false; stalled = false; signatureChanged = false; return@LaunchedEffect }
         stalled = false
+        // A build signed with a different key can never install over this copy (Android refuses): say so and show the way, instead of an installer that fails.
+        if (signingKeyDiffers(context, ready.apkFile)) { signatureChanged = true; launched = false; return@LaunchedEffect }
+        signatureChanged = false
         val ok = runCatching {
             if (!viewModel.canInstall()) context.startActivity(viewModel.requestInstallPermissionIntent())
             else context.startActivity(viewModel.installIntentFor(ready.apkFile))
@@ -150,7 +154,29 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
             )
         }
 
-        is UpdateCheckState.ReadyToInstall -> {
+        is UpdateCheckState.ReadyToInstall -> if (signatureChanged) {
+            AlertDialog(
+                properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
+                onDismissRequest = { if (!s.info.isCritical) viewModel.dismiss() },
+                title = { Text("One-time reinstall needed") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Version ${s.info.version} is signed with GoPreach's new official key, so Android cannot install it over this copy.")
+                        Text("1. Make sure everything is synced (the cloud icon on the home screen shows no pending items).", style = MaterialTheme.typography.bodySmall)
+                        Text("2. Tap OPEN DOWNLOAD LINK and let the file download (keep it in Downloads).", style = MaterialTheme.typography.bodySmall)
+                        Text("3. Tap UNINSTALL GOPREACH and confirm.", style = MaterialTheme.typography.bodySmall)
+                        Text("4. Open the downloaded GoPreach.apk, install it and sign in again. Your records come back from the server.", style = MaterialTheme.typography.bodySmall)
+                        Text("Updates after this one install normally.", style = MaterialTheme.typography.bodySmall)
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(s.info.apkUrl)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) { Text("OPEN DOWNLOAD LINK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_DELETE, android.net.Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }) { Text("UNINSTALL GOPREACH") }
+                },
+            )
+        } else {
             AlertDialog(
                 properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
                 onDismissRequest = viewModel::dismiss,
@@ -223,4 +249,16 @@ private fun launchShare(context: android.content.Context, text: String) {
         putExtra(Intent.EXTRA_TEXT, text)
     }
     context.startActivity(Intent.createChooser(intent, "Share GoPreach update"))
+}
+
+/** True when [apk] is signed with a different key than the installed app (so Android would refuse to install it as an update). */
+private fun signingKeyDiffers(context: android.content.Context, apk: java.io.File): Boolean {
+    if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.P) return false
+    return runCatching {
+        fun digests(signers: Array<android.content.pm.Signature>?) = signers.orEmpty().map { java.security.MessageDigest.getInstance("SHA-256").digest(it.toByteArray()).joinToString("") { b -> "%02x".format(b) } }.toSet()
+        val pm = context.packageManager
+        val mine = digests(pm.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES).signingInfo?.apkContentsSigners)
+        val theirs = digests(pm.getPackageArchiveInfo(apk.path, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)?.signingInfo?.apkContentsSigners)
+        mine.isNotEmpty() && theirs.isNotEmpty() && mine != theirs
+    }.getOrDefault(false)
 }

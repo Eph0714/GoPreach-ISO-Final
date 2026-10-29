@@ -45,6 +45,7 @@ import org.maplibre.android.style.sources.GeoJsonOptions
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.Point
+import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Polygon
 
 enum class TerritoryBasemap(val label: String, val styleId: String) {
@@ -58,6 +59,8 @@ enum class TerritoryBasemap(val label: String, val styleId: String) {
 data class RecordWithDistance(val record: LocationRecord, val meters: Double?)
 
 private const val SRC_AREAS = "tm-areas-src"
+// Outlines are LineStrings in their own source: a line layer on the polygon source also draws the cut edges at every map-tile boundary (the "square lines" inside a barangay).
+private const val SRC_AREA_LINES = "tm-area-lines-src"
 private const val LYR_AREA_FILL = "tm-area-fill"
 private const val LYR_AREA_LINE = "tm-area-line"
 private const val SRC_AREA_LABELS = "tm-area-labels-src"
@@ -328,9 +331,11 @@ fun TerritoryMapCanvas(
             }
             style.addImage(IMG_FOCUS, buildFocusPin(density))
 
-            style.addSource(GeoJsonSource(SRC_AREAS, FeatureCollection.fromFeatures(emptyList<Feature>())))
+            style.addSource(GeoJsonSource(SRC_AREAS, FeatureCollection.fromFeatures(emptyList<Feature>()), org.maplibre.android.style.sources.GeoJsonOptions().withBuffer(0)))
+            style.addSource(GeoJsonSource(SRC_AREA_LINES, FeatureCollection.fromFeatures(emptyList<Feature>()), org.maplibre.android.style.sources.GeoJsonOptions().withBuffer(0)))
             style.addLayer(
                 FillLayer(LYR_AREA_FILL, SRC_AREAS).withProperties(
+                    PropertyFactory.fillAntialias(false),
                     PropertyFactory.fillColor(Expression.get("color")),
                     PropertyFactory.fillOpacity(
                         Expression.switchCase(
@@ -342,7 +347,7 @@ fun TerritoryMapCanvas(
                 ),
             )
             style.addLayer(
-                LineLayer(LYR_AREA_LINE, SRC_AREAS).withProperties(
+                LineLayer(LYR_AREA_LINE, SRC_AREA_LINES).withProperties(
                     PropertyFactory.lineColor(Expression.get("color")),
                     PropertyFactory.lineWidth(
                         Expression.switchCase(
@@ -525,6 +530,7 @@ fun TerritoryMapCanvas(
         val m = map ?: return@LaunchedEffect
         val style = m.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         val features = mutableListOf<Feature>()
+        val lineFeatures = mutableListOf<Feature>()
         val labels = mutableListOf<Feature>()
         areas.forEach { area ->
             val json = boundaryJson[area.id] ?: return@forEach
@@ -539,6 +545,10 @@ fun TerritoryMapCanvas(
                     it.addStringProperty("color", color)
                     it.addStringProperty("sel", sel)
                 }
+                lineFeatures += Feature.fromGeometry(LineString.fromLngLats(closed.map { (lat, lng) -> Point.fromLngLat(lng, lat) })).also {
+                    it.addStringProperty("color", color)
+                    it.addStringProperty("sel", sel)
+                }
             }
             val all = rings.flatten()
             val centerLat = (all.minOf { it.first } + all.maxOf { it.first }) / 2
@@ -546,6 +556,7 @@ fun TerritoryMapCanvas(
             labels += Feature.fromGeometry(pointOf(centerLat, centerLng)).also { it.addStringProperty("name", if (showAllGroups) area.barangay + "\n" + area.groupName else area.barangay) }
         }
         style.getSourceAs<GeoJsonSource>(SRC_AREAS)?.setGeoJson(FeatureCollection.fromFeatures(features))
+        style.getSourceAs<GeoJsonSource>(SRC_AREA_LINES)?.setGeoJson(FeatureCollection.fromFeatures(lineFeatures))
         style.getSourceAs<GeoJsonSource>(SRC_AREA_LABELS)?.setGeoJson(FeatureCollection.fromFeatures(labels))
     }
 

@@ -42,6 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
@@ -523,6 +524,37 @@ fun TerritoryMapScreen(
         val la = driveSnap.lat
         val ln = driveSnap.lng
         if (guidance.active && la != null && ln != null) guidance.onPosition(la, ln, driveSnap.accuracyMeters, driveSnap.speedKmh?.let { it / 3.6f }, online)
+    }
+    // Drive / Walk WITHOUT a route: the road server matches the last few fixes to the road network, so the arrow still sits on the road and faces along it.
+    // Between answers (about every 3 s) the last road offset is applied to each new fix for a few seconds, so the arrow keeps moving smoothly; when the match
+    // is missing, far from the real fix, or the signal is poor, the arrow simply follows the GPS.
+    val freeMatcher = remember(driving.active, driving.walking) { com.emfitsolutions.gopreach.domain.navigation.FreeDriveMatcher(routing, driving.walking) }
+    var freeOffset by remember(driving.active) { mutableStateOf<Triple<Double, Double, Long>?>(null) }
+    var freeBearing by remember(driving.active) { mutableStateOf<Float?>(null) }
+    LaunchedEffect(driveSnap.lat, driveSnap.lng) {
+        val la = driveSnap.lat
+        val ln = driveSnap.lng
+        if (!driving.active || guidance.active || la == null || ln == null) return@LaunchedEffect
+        val now = com.emfitsolutions.gopreach.platform.nowMillis()
+        val speed = driveSnap.speedKmh?.let { it / 3.6f }
+        coroutineScope.launch {
+            val out = runCatching { freeMatcher.onFix(la, ln, driveSnap.accuracyMeters, speed, now) }.getOrDefault(com.emfitsolutions.gopreach.domain.navigation.MatchOutcome(true, null))
+            val moving = (speed ?: 0f) >= if (driving.walking) com.emfitsolutions.gopreach.domain.navigation.FreeDriveMatcher.MIN_WALK_MPS else com.emfitsolutions.gopreach.domain.navigation.FreeDriveMatcher.MIN_DRIVE_MPS
+            val m = out.fix
+            when {
+                m != null -> {
+                    freeOffset = Triple(m.lat - la, m.lng - ln, now)
+                    m.bearingDeg?.let { freeBearing = it }
+                    driving.roadFix = com.emfitsolutions.gopreach.ui.components.map.DrivingModeState.RoadFix(m.lat, m.lng, m.bearingDeg ?: freeBearing)
+                }
+                out.updated -> { freeOffset = null; driving.roadFix = null }
+                !moving -> Unit
+                else -> {
+                    val o = freeOffset
+                    driving.roadFix = if (o != null && now - o.third < 6_000L) com.emfitsolutions.gopreach.ui.components.map.DrivingModeState.RoadFix(la + o.first, ln + o.second, freeBearing) else null
+                }
+            }
+        }
     }
     // Follow the road: while a route is followed and the fix is on it, the arrow and camera are drawn at the matched road point, facing the road's direction.
     LaunchedEffect(guidance.progress, guidance.phase, driving.active) {
@@ -1207,6 +1239,16 @@ fun TerritoryMapScreen(
                             label = if (drawingState.markersHidden) "Show Icons" else "Hide Icons",
                             active = drawingState.markersHidden,
                             onClick = { drawingState.markersHidden = !drawingState.markersHidden },
+                        )
+                        // Draw: always visible for roles that may draw. It starts at your GPS spot when that is inside your territory; otherwise it says where to long-press.
+                        if (!readOnly && congregationId != null && !driving.active && !drawingState.active) MapToolButton(
+                            icon = Icons.Rounded.Edit,
+                            label = "Draw",
+                            onClick = {
+                                val spot = myLocation?.let { com.emfitsolutions.gopreach.domain.map.GeoPoint(it.first, it.second) }
+                                if (spot != null && !isLoading && drawingAccess.canDrawAt(spot, drawingTerritories, congregationId)) drawingState.enter(spot)
+                                else toast("To draw, long-press the map inside your FS Group's territory (the outlined barangay), then tap Draw.")
+                            },
                         )
                         // Every map style is one tap away and always visible: Standard, Satellite, Night, and 3D (for every role).
                         if (embedded) {
