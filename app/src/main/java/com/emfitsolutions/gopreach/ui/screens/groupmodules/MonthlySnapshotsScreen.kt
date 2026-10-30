@@ -10,12 +10,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -369,32 +372,60 @@ fun SaveSnapshotRow(
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     val label = monthLabel(year, month)
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Button(
-            onClick = {
-                if (existing != null) confirm = true
-                else {
-                    saving = true
-                    viewModel.save(report, slot, monthStart, year, month, currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
-                        saving = false
-                        message = when (result) {
-                            is SnapshotSaveResult.Saved -> "Your Field Service Record for $label has been successfully saved."
-                            is SnapshotSaveResult.AlreadyExists -> "A saved Field Service Record for $label already exists. It was not replaced."
-                            is SnapshotSaveResult.Failed -> result.reason
+    var deleteAsk by remember { mutableStateOf(false) }
+    // A small bar at the bottom of the Field Service Report: Save (or Update) this record, when it was last saved, View, Delete.
+    androidx.compose.material3.Surface(modifier.fillMaxWidth(), tonalElevation = 3.dp) {
+        Column(Modifier.padding(horizontal = 4.dp, vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Button(
+                    onClick = {
+                        if (existing != null) confirm = true
+                        else {
+                            saving = true
+                            viewModel.save(report, slot, monthStart, year, month, currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
+                                saving = false
+                                message = when (result) {
+                                    is SnapshotSaveResult.Saved -> "Your Field Service Record for $label has been successfully saved."
+                                    is SnapshotSaveResult.AlreadyExists -> "A saved Field Service Record for $label already exists. It was not updated."
+                                    is SnapshotSaveResult.Failed -> result.reason
+                                }
+                            }
                         }
+                    },
+                    enabled = !saving,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                ) {
+                    Icon(Icons.Rounded.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                    androidx.compose.foundation.layout.Spacer(Modifier.width(4.dp))
+                    Text(if (saving) "Saving..." else if (existing != null) "Update this record" else "Save this record", style = MaterialTheme.typography.labelMedium)
+                }
+                if (existing != null) {
+                    onOpenSnapshots?.let { open -> TextButton(onClick = open, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) { Text("View", style = MaterialTheme.typography.labelMedium) } }
+                    TextButton(onClick = { deleteAsk = true }, enabled = !saving, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp), colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                        Text("Delete", style = MaterialTheme.typography.labelMedium)
                     }
                 }
-            },
-            enabled = !saving,
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text(if (saving) "Saving..." else "Save this Field Service Record for the month of $label".uppercase(), fontWeight = FontWeight.ExtraBold) }
-        if (existing != null) {
-            Text("Saved: $label was last saved ${stampFormat.format(Date(existing.savedAt))} by ${existing.savedByName}.", style = MaterialTheme.typography.bodySmall)
-            onOpenSnapshots?.let { open -> TextButton(onClick = open) { Text("View Saved Field Service Record") } }
-        } else {
-            Text("Nothing is saved yet for $label.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                if (existing != null) "$label was last saved ${stampFormat.format(Date(existing.savedAt))} by ${existing.savedByName}." else "Nothing is saved yet for $label.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp),
+            )
+            message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(horizontal = 4.dp)) }
         }
-        message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+    }
+    if (deleteAsk && existing != null) {
+        AlertDialog(
+            onDismissRequest = { deleteAsk = false },
+            title = { Text("Delete the saved record of $label?") },
+            text = { Text("Delete the saved Field Service Record for $label? Only this saved record is removed. The submitted reports are not affected.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleteAsk = false
+                    viewModel.delete(existing) { failure -> message = failure ?: "The saved Field Service Record for $label has been deleted." }
+                }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deleteAsk = false }) { Text("Cancel") } },
+        )
     }
     if (confirm && existing != null) {
         AlertDialog(

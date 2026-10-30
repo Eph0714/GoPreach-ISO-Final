@@ -200,7 +200,8 @@ class ManualFieldServiceViewModel(
             if (groupRole) {
                 // Only a publisher of the group's own FS Group may be touched; the record is stamped with that publisher's role assignment first so the server can verify it.
                 val publisher = publishersIn(scopeCongregationId, scopeGroupId).first().firstOrNull { it.person.id == report.publisherPersonId } ?: return@launch
-                if (report.groupRoleAssignmentId != publisher.assignmentId) monthlyReportRepository.saveNow(report.copy(groupRoleAssignmentId = publisher.assignmentId))
+                // The officer's OWN report is deleted as it is (the server allows an officer to delete their own); another publisher's is stamped first.
+                if (report.publisherPersonId != actorPersonId && report.groupRoleAssignmentId != publisher.assignmentId) monthlyReportRepository.saveNow(report.copy(groupRoleAssignmentId = publisher.assignmentId))
             }
             monthlyReportRepository.delete(report.id)
             auditLogRepository.log(

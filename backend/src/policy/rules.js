@@ -926,7 +926,7 @@ async function writeMonthlyReports(h, { id, op, next, old, verdict }) {
     affectedKeys(next, old).every((k) => ['status', 'accessRequestReason', 'accessRequestedAt', 'lastEditedAt'].includes(k));
   if (old && old.status === 'POSTED' && mine && !accessRequestOnly) return deny('A posted report can no longer be changed');
   if (old && op === 'set' && ['SUBMITTED', 'CORRECTED', 'ACCESS_REQUESTED'].includes(old.status) && mine &&
-      !h.canManagePublisherReportsFor(old.congregationId) && !same(next, old) && !accessRequestOnly) {
+      !h.canManagePublisherReportsFor(old.congregationId) && !same(next, old) && !accessRequestOnly && !(await groupRoleMayWriteReport(h, next))) {
     return deny('A submitted report is locked: request edit access from the person in charge');
   }
   // An Overseer, Servant or Assistant of the publisher's FS Group decides an edit request: Access Requested -> Access Granted (approved) or back to Submitted (rejected), with remarks.
@@ -934,7 +934,9 @@ async function writeMonthlyReports(h, { id, op, next, old, verdict }) {
   if (op === 'set' && old && old.status === 'ACCESS_REQUESTED' && ['ACCESS_GRANTED', 'SUBMITTED'].includes(next?.status) && old.publisherPersonId !== h.me && (await officerMayDecideAccess(h, old, next))) return ok();
   const groupOk = async (rec) => groupRoleMayWriteReport(h, rec);
   if (op === 'delete') {
-    return verdict(h.sa || h.canManageReportsAsCongregationRole(old?.congregationId) || (await groupOk(old)), 'Not allowed to delete this report');
+    // An Overseer, Servant or Assistant of an FS Group who is also a publisher of that group may delete their OWN report (even a submitted one) of a month that is still open.
+    const ownAsOfficer = mine && (await officerIsPublisherOfOwnGroup(h, nul(old.congregationId)));
+    return verdict(h.sa || h.canManageReportsAsCongregationRole(old?.congregationId) || (await groupOk(old)) || ownAsOfficer, 'Not allowed to delete this report');
   }
   const reported = nul(next.hoursRendered);
   const system = nul(next.systemCalculatedHours);
@@ -954,6 +956,13 @@ async function writeMonthlyReports(h, { id, op, next, old, verdict }) {
     if (!w.open) return deny(windowMessage(w));
   }
   return verdict((next.publisherPersonId === h.me && hoursOk && publisherStatusOk) || h.canManageReportsAsCongregationRole(next.congregationId) || groupWrite, 'Not allowed to write this report');
+}
+
+/** Is the caller an Overseer, Servant or Assistant of an FS Group of [cong] who is also a publisher of that same group? */
+async function officerIsPublisherOfOwnGroup(h, cong) {
+  if (!h.actor.known || h.grant.has || typeof h.actor.list !== 'function' || !cong || !h.inMyActiveCongregation(cong)) return false;
+  const gid = await slotGroupId(h, cong);
+  return !!gid && (await publisherInGroup(h, gid, cong, h.me));
 }
 
 const ACCESS_DECISION_KEYS = ['status', 'accessGrantedByPersonId', 'accessGrantedAt', 'accessDecisionNote', 'accessDecidedByPersonId', 'accessDecidedAt', 'lastEditedByPersonId', 'lastEditedAt'];

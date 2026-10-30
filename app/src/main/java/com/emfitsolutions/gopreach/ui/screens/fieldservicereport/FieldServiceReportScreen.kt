@@ -3,6 +3,8 @@ package com.emfitsolutions.gopreach.ui.screens.fieldservicereport
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Menu
 import androidx.compose.material.icons.rounded.Add
 import com.emfitsolutions.gopreach.ui.components.ViewSegments
 import androidx.compose.foundation.clickable
@@ -286,6 +288,12 @@ fun FieldServiceReportScreen(
     }
     val allListItems by itemsFlow.collectAsStateWithLifecycle(initialValue = null)
     val listItems = if (query.isBlank() && reportFilter == 0) allListItems else allListItems?.filter { (matches(it.publisherName) || it.groupName.contains(query, ignoreCase = true)) && passes(it.report != null) }
+    // All / With Report / No Record, with how many of each (the Records menu), so the publishers still to be entered are one tap away.
+    val withReportCount = if (listView) allListItems.orEmpty().count { it.report != null } else sheets.orEmpty().sumOf { s -> s.rows.count { it.hasReport } }
+    val noReportCount = if (listView) allListItems.orEmpty().count { it.report == null } else sheets.orEmpty().sumOf { s -> s.rows.count { !it.hasReport } }
+    // Save this month's Field Service Record: for the Overseer, Servant and Assistant of an FS Group, for their OWN group and the month shown (a small bar at the bottom).
+    val snapshotSlot = com.emfitsolutions.gopreach.ui.screens.groupmodules.officerSlotOf(currentPersonId, congregationId, groupsAll)
+    val showSaveBar = !tableOnly && !coMode && !compareMode && !listView && fromMonth == toMonth && snapshotSlot != null && congregationId != null && !sendOpen
     var pendingLock by remember { mutableStateOf<FieldServiceReportListItem?>(null) }
     var pendingUnlock by remember { mutableStateOf<FieldServiceReportListItem?>(null) }
     var confirmLockAll by remember { mutableStateOf(false) }
@@ -336,6 +344,14 @@ fun FieldServiceReportScreen(
                 },
             )
         },
+        bottomBar = {
+            if (showSaveBar && snapshotSlot != null) {
+                com.emfitsolutions.gopreach.ui.screens.groupmodules.SaveSnapshotRow(
+                    slot = snapshotSlot, monthStart = fromMonth, currentPersonId = currentPersonId, report = viewModel, onOpenSnapshots = onOpenSnapshots,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+            }
+        },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -362,24 +378,7 @@ fun FieldServiceReportScreen(
                         onSelected = { pickedCongregationId = it; if (restricted) CircuitScopeStore.selectCongregation(it); selectedGroupId = ALL_GROUPS },
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Box(Modifier.weight(1f)) {
-                        SimpleDropdown(
-                            label = "FS Group",
-                            selectedLabel = if (showingAll) "All FS Groups" else groups.firstOrNull { it.id == selectedGroupId }?.name.orEmpty(),
-                            options = (if (groupScopeId == null) listOf(ALL_GROUPS to "All FS Groups") else emptyList()) + groups.map { it.id to it.name },
-                            onSelected = { selectedGroupId = it },
-                        )
-                    }
-                    if (showingAll) Box(Modifier.weight(1f)) {
-                        SimpleDropdown(
-                            label = "Group by",
-                            selectedLabel = if (groupByCongregation) "All Publishers (one report)" else "By FS Group",
-                            options = listOf("group" to "By FS Group", "congregation" to "All Publishers (one report)"),
-                            onSelected = { groupByCongregation = it == "congregation" },
-                        )
-                    }
-                }
+                // Only the month is picked here (no FS Group box): an officer sees their own group, the others see everyone, with "All Publishers / By FS Group" below.
                 if (compareMode) {
                     // Two month RANGES to compare, e.g. Feb 2025 to Oct 2025 against Mar 2026 to Sep 2026 (the same month twice = one month).
                     DualPeriodFilter(
@@ -438,22 +437,23 @@ fun FieldServiceReportScreen(
                     )
                 }
             }
-            // Save the report on screen as a permanent Monthly Report Snapshot: for the Overseer, Servant and Assistant of an FS Group, for their OWN group and the month shown.
-            val snapshotSlot = com.emfitsolutions.gopreach.ui.screens.groupmodules.officerSlotOf(currentPersonId, congregationId, groupsAll)
-            if (!tableOnly && !coMode && !compareMode && !listView && fromMonth == toMonth && snapshotSlot != null) {
-                com.emfitsolutions.gopreach.ui.screens.groupmodules.SaveSnapshotRow(
-                    slot = snapshotSlot, monthStart = fromMonth, currentPersonId = currentPersonId, report = viewModel, onOpenSnapshots = onOpenSnapshots,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                )
-            }
+            // (Saving this month's Field Service Record is the small bar at the bottom of the screen.)
             // Sending is about the whole congregation's month(s) - the panel picks its own months - so it shows in Report View and List View alike,
             // whichever FS Group, grouping or month is on screen.
-            // The module's actions in one uniform row (the same button design as every admin module): Add Record, then Send to Circuit Overseer.
-            if (!tableOnly && (editingEnabled || showSendToggle)) {
-                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (editingEnabled) com.emfitsolutions.gopreach.ui.components.co.CoButton("Add Record", { adding = true }, kind = com.emfitsolutions.gopreach.ui.components.co.CoKind.Primary, icon = Icons.Rounded.Add)
+            // The module's actions in ONE row, like the website: Records (Add Record, All / With Report / No Record), Export, then Send to Circuit Overseer.
+            val sendingNow = showSendToggle && sendOpen
+            if (!tableOnly && congregationId != null && !compareMode && !coModeEmpty(coMode, visibleMonths.size)) {
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (!sendingNow) {
+                        RecordsMenu(
+                            canAdd = editingEnabled, onAdd = { adding = true }, filter = reportFilter, onFilter = { reportFilter = it },
+                            all = withReportCount + noReportCount, withReport = withReportCount, noReport = noReportCount,
+                        )
+                    }
+                    androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                    // One Export button (Print, PDF, Excel, Word), the same as the Ministry's.
+                    if (!sendingNow) FieldServiceExportMenu(ready = ready, iconOnly = false, graphHtml = { null })
                     if (showSendToggle) {
-                        androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
                         androidx.compose.material3.Surface(
                             onClick = { sendOpen = !sendOpen }, shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp), color = Color(0xFFF2B705),
                             modifier = Modifier.size(40.dp).semantics { contentDescription = if (sendOpen) "Hide Send to Circuit Overseer" else "Send to Circuit Overseer" },
@@ -481,18 +481,6 @@ fun FieldServiceReportScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                     trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, contentDescription = "Clear search") } },
                 )
-                // All / With Report / No Report, with how many of each, so the publishers still to be entered are one tap away.
-                val withReport = if (listView) allListItems.orEmpty().count { it.report != null } else sheets.orEmpty().sumOf { s -> s.rows.count { it.hasReport } }
-                val noReport = if (listView) allListItems.orEmpty().count { it.report == null } else sheets.orEmpty().sumOf { s -> s.rows.count { !it.hasReport } }
-                Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Row(modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("All" to withReport + noReport, "With Report" to withReport, "No Report" to noReport).forEachIndexed { index, (label, n) ->
-                            androidx.compose.material3.FilterChip(selected = reportFilter == index, onClick = { reportFilter = index }, label = { Text("$label ($n)") })
-                        }
-                    }
-                    // One Export button (Print, PDF, Excel, Word), the same as the Ministry's.
-                    FieldServiceExportMenu(ready = ready, iconOnly = false, graphHtml = { null })
-                }
             }
             val current = searchedSheets
             when {
@@ -1062,6 +1050,36 @@ private fun CompareListView(labelA: String, itemsA: List<FieldServiceReportListI
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/** The Records button of the Field Service Report: Add Record, and which publishers to list (All / With Report / No Record, with how many of each) - one dropdown like Export. */
+@Composable
+private fun RecordsMenu(canAdd: Boolean, onAdd: () -> Unit, filter: Int, onFilter: (Int) -> Unit, all: Int, withReport: Int, noReport: Int) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        androidx.compose.material3.OutlinedButton(onClick = { open = true }) {
+            Icon(Icons.Rounded.Menu, contentDescription = null, modifier = Modifier.size(18.dp))
+            androidx.compose.foundation.layout.Spacer(Modifier.width(6.dp))
+            Text("Records")
+        }
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (canAdd) {
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text("Add Record") },
+                    leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null) },
+                    onClick = { open = false; onAdd() },
+                )
+                androidx.compose.material3.HorizontalDivider()
+            }
+            listOf("All" to all, "With Report" to withReport, "No Record" to noReport).forEachIndexed { index, (label, n) ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = { Text("$label ($n)", fontWeight = if (filter == index) FontWeight.Bold else FontWeight.Normal) },
+                    leadingIcon = { if (filter == index) Icon(Icons.Rounded.Check, contentDescription = "Selected") },
+                    onClick = { open = false; onFilter(index) },
+                )
             }
         }
     }
