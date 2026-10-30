@@ -389,7 +389,12 @@ fun PublisherHomeScreen(
     val meetingRoute = if (caps.canEditMeetingAssignments) Destinations.MEETING_ASSIGNMENTS else Destinations.PUBLISHER_MEETING_ASSIGNMENTS
     val allTiles = publisherModuleTiles(isPioneer, unseenAnnouncements, incomingForwards.size, incomingAssignments.size, meetingRoute)
     val tileRoutes = remember(allTiles) { allTiles.map { it.route }.toSet() }
-    val responsibilityItems: List<SideItem> = if (!hasAdminRoles) listOf(SideItem("Security & Device Management", Icons.Rounded.Security, Destinations.SECURITY)) else adminSideItems(caps, includeTabModules = true)
+    // An FS Group officer who holds no Admin-track role (an Assistant is often an ordinary publisher) still gets the officer's own modules, read from the group's slots.
+    val officerItems = buildList {
+        if (caps.isGroupOfficer) add(SideItem("Publishers Assignment", Icons.Rounded.AssignmentInd, Destinations.PUBLISHERS_ASSIGNMENT))
+        if (caps.canOpenSnapshots) add(SideItem("Monthly Report Snapshots", Icons.Rounded.History, Destinations.MONTHLY_SNAPSHOTS))
+    }
+    val responsibilityItems: List<SideItem> = if (!hasAdminRoles) listOf(SideItem("Security & Device Management", Icons.Rounded.Security, Destinations.SECURITY)) + officerItems else adminSideItems(caps, includeTabModules = true)
         .filter { it.route !in tileRoutes }
         .map { if (it.route == Destinations.MANAGE_ANNOUNCEMENTS) it.copy(label = "Manage Announcements") else it }
     val tilesById = remember(allTiles) { allTiles.associateBy { it.id } }
@@ -583,6 +588,7 @@ fun PublisherHomeScreen(
                     currentRole = null,
                     canSendToCircuit = false,
                     canManageLocks = false,
+                    onOpenSnapshots = { onNavigate(Destinations.MONTHLY_SNAPSHOTS) },
                     onBack = { mainTab = 0 },
                 )
             }
@@ -1384,13 +1390,19 @@ private fun SidePanelDrawerContent(
     scopeLabel: String,
     profileImageUrl: String?,
 ) {
-    val expanded = remember { mutableStateMapOf<NavGroup, Boolean>() }
-    val groupedResponsibilities = responsibilities.map { it.withStandardIcon() }
-    val grouped = NavGroup.entries.mapNotNull { group ->
+    // Two sections: PUBLISHER MODULES (the person's own ministry: their tiles, their own security and their own group's assignments) and CONGREGATION MANAGEMENT MODULES (what their
+    // other roles allow). A module is listed once; being listed never grants access, every screen and the server check it again.
+    val expandedOwn = remember { mutableStateMapOf<NavGroup, Boolean>() }
+    val expandedManagement = remember { mutableStateMapOf<NavGroup, Boolean>() }
+    val personalRoutes = setOf(Destinations.SECURITY)
+    val mineItems = (responsibilities.filter { it.route in personalRoutes } + SideItem("My FS Group Assignments", Icons.Rounded.AssignmentInd, Destinations.MY_GROUP_ASSIGNMENTS)).map { it.withStandardIcon() }
+    val managementItems = responsibilities.filter { it.route !in personalRoutes }.map { it.withStandardIcon() }
+    val ownGroups = NavGroup.entries.mapNotNull { group ->
         val own = tiles.filter { navGroupOf(it.id) == group }
-        val others = groupedResponsibilities.filter { navGroupOfRoute(it.route) == group }
-        if (own.isEmpty() && others.isEmpty()) null else Triple(group, own, others)
+        val extra = mineItems.filter { navGroupOfRoute(it.route) == group }
+        if (own.isEmpty() && extra.isEmpty()) null else Triple(group, own, extra)
     }
+    val managementGroups = NavGroup.entries.mapNotNull { group -> managementItems.filter { navGroupOfRoute(it.route) == group }.takeIf { it.isNotEmpty() }?.let { group to it } }
     ModalDrawerSheet {
         NavProfileHeader(
             appName = stringResource(Res.string.app_name),
@@ -1398,33 +1410,46 @@ private fun SidePanelDrawerContent(
         )
         HorizontalDivider()
         Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            if (tiles.isEmpty() && responsibilities.isEmpty()) {
+            SectionHeading("PUBLISHER MODULES")
+            if (tiles.isEmpty() && mineItems.isEmpty()) {
                 Text(
                     stringResource(Res.string.dashboard_layout_side_panel_empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(20.dp),
                 )
-            } else {
-                grouped.forEach { (group, groupTiles, groupOthers) ->
+            }
+            ownGroups.forEach { (group, groupTiles, groupOthers) ->
+                NavGroupSection(
+                    group = group,
+                    expanded = expandedOwn[group] == true,
+                    containsActive = false,
+                    itemCount = groupTiles.size + groupOthers.size,
+                    onToggle = { expandedOwn[group] = expandedOwn[group] != true },
+                ) {
+                    groupTiles.forEach { tile ->
+                        NavMenuRow(
+                            icon = tile.icon, label = tile.title, group = group, selected = false, badge = tile.badge,
+                            onClick = { onNavigate(tile.route) }, onLongClick = { onLongPressModule(tile.id) },
+                        )
+                    }
+                    groupOthers.forEach { item ->
+                        NavMenuRow(icon = item.icon, label = item.label, group = group, selected = false, onClick = { onNavigate(item.route) })
+                    }
+                }
+            }
+            if (managementGroups.isNotEmpty()) {
+                SectionHeading("CONGREGATION MANAGEMENT MODULES")
+                managementGroups.forEach { (group, groupItems) ->
                     NavGroupSection(
                         group = group,
-                        expanded = expanded[group] == true,
+                        expanded = expandedManagement[group] == true,
                         containsActive = false,
-                        itemCount = groupTiles.size + groupOthers.size,
-                        onToggle = { expanded[group] = expanded[group] != true },
+                        itemCount = groupItems.size,
+                        onToggle = { expandedManagement[group] = expandedManagement[group] != true },
                     ) {
-                        groupTiles.forEach { tile ->
-                            NavMenuRow(
-                                icon = tile.icon, label = tile.title, group = group, selected = false, badge = tile.badge,
-                                onClick = { onNavigate(tile.route) }, onLongClick = { onLongPressModule(tile.id) },
-                            )
-                        }
-                        groupOthers.forEach { item ->
-                            NavMenuRow(
-                                icon = item.icon, label = item.label, group = group, selected = false,
-                                onClick = { onNavigate(item.route) },
-                            )
+                        groupItems.forEach { item ->
+                            NavMenuRow(icon = item.icon, label = item.label, group = group, selected = false, onClick = { onNavigate(item.route) })
                         }
                     }
                 }
@@ -1446,6 +1471,14 @@ private fun SidePanelDrawerContent(
             Text(stringResource(Res.string.dashboard_layout_reset_title), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
         }
     }
+}
+
+@Composable
+private fun SectionHeading(text: String) {
+    Text(
+        text, style = MaterialTheme.typography.labelMedium, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(start = 20.dp, end = 16.dp, top = 14.dp, bottom = 4.dp),
+    )
 }
 
 private fun PublisherCategory.displayLabel(): String =

@@ -256,6 +256,11 @@ object Destinations {
     // Admin's own search-and-assign screen.
     // "Publisher Assignment" — central Admin management of Searching / Return Visit / Bible Study records and their Publisher.
     const val PUBLISHER_ASSIGNMENT = "publisher_assignment"
+    // "Publishers Assignment" - the Overseer, Servant and Assistant of an FS Group manage the assignments of their own group; the publisher reads their own.
+    const val PUBLISHERS_ASSIGNMENT = "publishers_assignment"
+    const val MY_GROUP_ASSIGNMENTS = "my_group_assignments"
+    // "Monthly Report Snapshots" - the second section of the Field Service Report module: permanent copies of an FS Group's month.
+    const val MONTHLY_SNAPSHOTS = "monthly_snapshots"
     // A Publisher's own incoming House Holder Assignment review queue.
     const val INCOMING_HOUSEHOLDER_ASSIGNMENTS = "incoming_householder_assignments"
 
@@ -361,4 +366,5 @@ private val motherForms: Set<String> = setOf(
     Destinations.CIRCUIT_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.MEETING_ATTENDANCE, Destinations.REPORT_SUBMISSION, Destinations.CONGREGATION_COMPARATIVE,
     Destinations.CONGREGATION_COMPARATIVE_SUBMITTED, Destinations.CIRCUIT_CONGREGATIONS, Destinations.CO_CONGREGATIONS, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_USERS,
     Destinations.SECURITY, Destinations.ADMIN_DEVICES, Destinations.ADMIN_SECURITY_LOG,
+    Destinations.PUBLISHERS_ASSIGNMENT, Destinations.MY_GROUP_ASSIGNMENTS, Destinations.MONTHLY_SNAPSHOTS,
 )

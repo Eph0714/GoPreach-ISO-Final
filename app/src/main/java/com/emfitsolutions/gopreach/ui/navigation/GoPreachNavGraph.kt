@@ -709,6 +709,7 @@ fun GoPreachNavGraph(
                     AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER,
                     AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY,
                 ) || session.isGroupRole,
+                onOpenSnapshots = if (com.emfitsolutions.gopreach.ui.components.AdminCapabilities.of(session).canOpenSnapshots) ({ navController.navigate(Destinations.MONTHLY_SNAPSHOTS) }) else null,
                 onBack = { navController.popBackStack() },
             )
         }
@@ -794,6 +795,29 @@ fun GoPreachNavGraph(
             MyAssignmentsScreen(
                 currentPersonName = session.person?.fullName ?: "—",
                 congregationId = ownPublisherAssignment?.congregationId ?: ownCongregationId ?: ownGroupAssignment?.congregationId,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(Destinations.PUBLISHERS_ASSIGNMENT) {
+            // The Overseer, Servant and Assistant of an FS Group: their own group's assignments (the screen derives the group from their slot).
+            com.emfitsolutions.gopreach.ui.screens.groupmodules.PublishersAssignmentScreen(
+                currentPersonId = currentPersonId,
+                currentPersonName = session.person?.fullName ?: "—",
+                congregationId = ownPublisherAssignment?.congregationId ?: ownCongregationId ?: ownGroupAssignment?.congregationId,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(Destinations.MY_GROUP_ASSIGNMENTS) {
+            com.emfitsolutions.gopreach.ui.screens.groupmodules.MyGroupAssignmentsScreen(currentPersonId = currentPersonId, onBack = { navController.popBackStack() })
+        }
+        composable(Destinations.MONTHLY_SNAPSHOTS) {
+            val snapshotCaps = androidx.compose.runtime.remember(session.person, session.roleAssignments, session.grant, session.groups) { com.emfitsolutions.gopreach.ui.components.AdminCapabilities.of(session) }
+            if (!snapshotCaps.canOpenSnapshots) { NoAccessScreen(onBack = { navController.popBackStack() }); return@composable }
+            com.emfitsolutions.gopreach.ui.screens.groupmodules.MonthlySnapshotsScreen(
+                currentPersonId = currentPersonId,
+                currentPersonName = session.person?.fullName ?: "—",
+                congregationId = if (AdminRole.SUPER_ADMIN in heldRoles) null else (ownPublisherAssignment?.congregationId ?: ownCongregationId ?: ownGroupAssignment?.congregationId),
+                readsAll = snapshotCaps.canReadAllSnapshots,
                 onBack = { navController.popBackStack() },
             )
         }

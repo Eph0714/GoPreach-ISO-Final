@@ -58,7 +58,13 @@ data class AdminCapabilities(
     val canMonitorDevices: Boolean = false,
     /** Security Audit Logs: the Super Admin only. */
     val canViewSecurityLog: Boolean = false,
+    /** Monthly Report Snapshots of the whole congregation: Admin, Coordinator Elder, Service Overseer, Secretary (and the Super Admin). */
+    val canReadAllSnapshots: Boolean = false,
+    /** The Overseer, Servant or Assistant of an FS Group (read from the group's own slots, not from a role): Publishers Assignment and saving snapshots of their own group. */
+    val isGroupOfficer: Boolean = false,
 ) {
+    /** Monthly Report Snapshots are offered to an FS Group officer (their own group) and to the congregation-wide roles (all of the congregation). */
+    val canOpenSnapshots: Boolean get() = (canReadAllSnapshots || isGroupOfficer) && !isCircuitOverseer
     /** Field Service / Attendance / Territory / Publishers: the modules of the Admin Main Form's tab strip. */
     val tabModules: Set<AdminTab>
         get() = buildSet {
@@ -108,6 +114,8 @@ data class AdminCapabilities(
         canViewSentReports = canViewSentReports || o.canViewSentReports,
         canMonitorDevices = canMonitorDevices || o.canMonitorDevices,
         canViewSecurityLog = canViewSecurityLog || o.canViewSecurityLog,
+        canReadAllSnapshots = canReadAllSnapshots || o.canReadAllSnapshots,
+        isGroupOfficer = isGroupOfficer || o.isGroupOfficer,
     )
 
     companion object {
@@ -122,8 +130,9 @@ data class AdminCapabilities(
                 val role = (assignment.resolvedRoleTypeOrNull() as? com.emfitsolutions.gopreach.data.model.RoleType.Admin)?.role ?: return@mapNotNull null
                 forRole(role, isGroupRole = groupRoleOf(assignment) != null, grantPermissions, groupCanOpen)
             }
-            if (perRole.isEmpty()) return AdminCapabilities()
-            return perRole.reduce { a, b -> a or b }
+            val officer = com.emfitsolutions.gopreach.ui.screens.groupmodules.officerSlotOf(session.person?.id.orEmpty(), session.publisherAssignment?.congregationId ?: session.primaryAdminAssignment?.congregationId, session.groups) != null
+            val merged = if (perRole.isEmpty()) AdminCapabilities() else perRole.reduce { a, b -> a or b }
+            return if (officer) merged.copy(isGroupOfficer = true) else merged
         }
 
         /** One role's capabilities - the permission matrix, in one place (it used to be re-derived on the Admin Main Form alone). */
@@ -193,6 +202,7 @@ data class AdminCapabilities(
                 canManageMeetingAttendance = manualEntry && !isGroupRole,
                 canMonitorDevices = role == AdminRole.SUPER_ADMIN || role == AdminRole.ADMIN_PER_CONGREGATION,
                 canViewSecurityLog = isSuperAdmin,
+                canReadAllSnapshots = role in setOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY),
                 canViewSentReports = role in setOf(
                     AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY,
                 ),
