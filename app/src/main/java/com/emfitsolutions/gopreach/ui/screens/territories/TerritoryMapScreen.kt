@@ -931,7 +931,7 @@ fun TerritoryMapScreen(
                         normalizePlaceName(r.name + " " + r.barangay.orEmpty() + " " + r.municipality.orEmpty() + " " + r.person.address).contains(q)
                     }.take(6)
                     Column(Modifier.fillMaxWidth()) {
-                        StandardSearchField(value = barangayQuery, onValueChange = { barangayQuery = it; searchOpen = it.isNotBlank(); if (it.isBlank() && openedFromSearch && territoryFilter != null) backFromBarangay() }, placeholder = "Search places, barangay or records", modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { searchOpen = barangayQuery.isNotBlank() }))
+                        StandardSearchField(value = barangayQuery, onValueChange = { barangayQuery = it; searchOpen = it.isNotBlank(); if (it.isBlank() && openedFromSearch && territoryFilter != null) backFromBarangay() }, placeholder = "Search places or barangay", modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { searchOpen = barangayQuery.isNotBlank() }))
                         if (searchOpen && q.isNotEmpty()) {
                             Surface(shape = RoundedCornerShape(14.dp), tonalElevation = 3.dp, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                                 Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {

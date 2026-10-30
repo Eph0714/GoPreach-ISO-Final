@@ -11,6 +11,12 @@ import androidx.compose.foundation.layout.size
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Flag
@@ -365,14 +371,28 @@ fun RoutePreviewPanel(state: TurnByTurnState, onStart: () -> Unit, onCancel: () 
     }
 }
 
-/** Current speed from the GPS (no speed-limit data is available, so none is shown); "--" until the phone reports a speed, and 0 under 1 km/h. */
+/**
+ * The current speed, large and always in the bottom panel while navigating: the GPS speed, smoothed a little so the number does not jitter (half old, half new reading), "--" when the
+ * phone reports no speed (never an invented one) and 0 under 1 km/h. Tap it to switch between km/h and mph. A speed limit is not shown: the map data has no reliable one.
+ * Walking shows the same figure a little smaller, since it matters less than when driving.
+ */
 @Composable
-private fun SpeedBadge(speedKmh: Float?) {
-    val shown = speedKmh?.let { if (it < 1f) 0 else it.roundToInt() }
-    Surface(shape = androidx.compose.foundation.shape.CircleShape, color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.padding(end = 12.dp).size(56.dp)) {
-        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Text(shown?.toString() ?: "--", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            Text("km/h", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+private fun SpeedBadge(speedKmh: Float?, walking: Boolean) {
+    var smoothed by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(speedKmh) { smoothed = if (speedKmh == null) null else smoothed?.let { it * 0.5f + speedKmh * 0.5f } ?: speedKmh }
+    var mph by rememberSaveable { mutableStateOf(false) }
+    val factor = if (mph) 0.621371f else 1f
+    val shown = smoothed?.let { v -> if (v < 1f) 0 else (v * factor).roundToInt() }
+    Surface(
+        shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier.padding(end = 12.dp).widthIn(min = if (walking) 72.dp else 92.dp).clickable { mph = !mph },
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                shown?.toString() ?: "--", fontSize = if (walking) 30.sp else 40.sp, fontWeight = FontWeight.ExtraBold, lineHeight = if (walking) 32.sp else 42.sp,
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+            )
+            Text(if (mph) "mph" else "km/h", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onPrimaryContainer)
         }
     }
 }
@@ -387,7 +407,7 @@ fun GuidancePanel(state: TurnByTurnState, onEnd: () -> Unit, modifier: Modifier 
             state.message?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             if (!state.voiceAvailable) Text("Spoken guidance is not available on this phone, so instructions are shown only.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SpeedBadge(speedKmh)
+                SpeedBadge(speedKmh, walking = state.walking)
                 Column(Modifier.weight(1f)) {
                     val remaining = p?.remainingMeters ?: r?.distanceMeters
                     val seconds = p?.remainingSeconds ?: r?.durationSeconds
