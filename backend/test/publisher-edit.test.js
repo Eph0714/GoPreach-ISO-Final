@@ -77,13 +77,24 @@ test('the group roles edit personal details of their own group only, and nothing
     // another group's publisher
     assert.equal((await edit(who, 'eld', { person: details() })).status, 403);
     // the rest of the record is not theirs
-    for (const [field, body] of [['username', { username: 'hijack.1' }], ['accountStatus', { accountStatus: 'INACTIVE' }], ['category', { category: 'REGULAR_PIONEER' }], ['group', { groupId: 'g2' }], ['congregation', { congregationId: 'congB' }], ['password', { password: 'Sneaky123' }]]) {
+    for (const [field, body] of [['accountStatus', { accountStatus: 'INACTIVE' }], ['category', { category: 'REGULAR_PIONEER' }], ['group', { groupId: 'g2' }], ['congregation', { congregationId: 'congB' }]]) {
       const r = await edit(who, 'pub1', body);
       assert.equal(r.status, 403, `${who} must not change ${field}`);
     }
   }
   assert.equal((await get('people', 'pub1')).username, 'maria.one');
   assert.equal((await get('roleAssignments', 'ra_p1')).groupId, 'g1');
+  // the sign-in of a plain publisher of their own group is theirs (username, temporary password - never kept readable), but not another group's
+  for (const who of ['ast', 'srv', 'ovr']) {
+    const r = await edit(who, 'pub1', { username: `maria.${who}`, password: 'Temp12345' });
+    assert.equal(r.status, 200, `${who}: ${JSON.stringify(r.body)}`);
+    assert.equal((await get('people', 'pub1')).username, `maria.${who}`);
+    assert.equal((await get('people', 'pub1')).temporaryPassword, null, 'the password is not kept readable');
+    assert.equal((await edit(who, 'eld', { username: 'hijack.1' })).status, 403, `${who}: an elder is not a plain publisher`);
+    assert.equal((await edit(who, 'pubB', { username: 'hijack.2' })).status, 403, `${who}: another congregation`);
+    assert.equal((await edit(who, 'pubB', { password: 'Sneaky123' })).status, 403, `${who}: another congregation's password`);
+  }
+  await edit('adm', 'pub1', { username: 'maria.one' });
 });
 
 test('the same limits hold on the ordinary sync path', async () => {
@@ -91,7 +102,8 @@ test('the same limits hold on the ordinary sync path', async () => {
   const p1 = await get('people', 'pub1'), p2 = await get('people', 'eld');
   assert.equal(await push('srv', 'pub1', { ...p1, remarks: 'via sync' }), 'ok');
   assert.equal(await push('srv', 'eld', { ...p2, remarks: 'via sync' }), 'denied', 'another group');
-  assert.equal(await push('srv', 'pub1', { ...p1, username: 'hijack.2' }), 'denied', 'a sign-in field');
+  assert.equal(await push('srv', 'pub1', { ...p1, accountStatus: 'INACTIVE' }), 'denied', 'whether the account may be used');
+  assert.equal(await push('srv', 'eld', { ...p2, username: 'hijack.2' }), 'denied', 'a sign-in field of someone who is not their plain publisher');
   assert.equal(await push('srv', 'pub1', { ...p1, activeCongregationId: 'congB' }), 'denied', 'the congregation');
   assert.equal(await push('srv', 'pub1', { ...p1, isSuperAdmin: true }), 'denied');
 });

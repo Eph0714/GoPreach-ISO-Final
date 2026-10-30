@@ -1,5 +1,5 @@
 import { loadActor, isWide, isSlotHolder, authorizeWrite, loadGrant } from './policy/index.js';
-import { canManageCredentials, GROUP_PROFILE_FIELDS } from './policy/rules.js';
+import { canManageCredentials, canManageCredentialsStrict, GROUP_PROFILE_FIELDS } from './policy/rules.js';
 import { hashPassword } from './passwords.js';
 import { newId } from './coAccess.js';
 
@@ -152,8 +152,12 @@ export function mountPublisherEdit(app, store, auth) {
         // ---- the sign-in: username, account status, a new temporary password (the credential rules decide who)
         const wantsUsername = touches('username') && String(body.username ?? '').trim() !== String(person.username ?? '');
         const wantsStatus = touches('accountStatus') && body.accountStatus !== (person.accountStatus ?? 'ACTIVE');
+        // The congregation roles manage sign-ins as before. An Overseer, Servant or Assistant of the publisher's own FS Group may change the username and set a temporary password of a plain
+        // publisher of that group (never whether the account may be used, and the password is never kept readable).
+        const strictCredentials = wantsUsername || wantsStatus || wantsPassword ? await canManageCredentialsStrict(actor, grant, id, tx.get) : false;
+        const groupCredentials = !strictCredentials && (wantsUsername || wantsPassword) && !wantsStatus ? await canManageCredentials(actor, grant, id, tx.get) : false;
         if (wantsUsername || wantsStatus || wantsPassword) {
-          if (!(await canManageCredentials(actor, grant, id, tx.get))) refuse(403, 'You may not change the sign-in of this person', wantsUsername ? 'username' : wantsStatus ? 'accountStatus' : 'password');
+          if (!strictCredentials && !groupCredentials) refuse(403, 'You may not change the sign-in of this person', wantsUsername ? 'username' : wantsStatus ? 'accountStatus' : 'password');
         }
         if (wantsUsername) {
           const username = String(body.username).trim();
@@ -171,7 +175,7 @@ export function mountPublisherEdit(app, store, auth) {
         if (wantsPassword) {
           // the person must choose their own at the next sign-in; a Super Admin's temporary password is never kept readable
           personNext.isTemporaryCredential = true;
-          personNext.temporaryPassword = sa ? null : body.password;
+          personNext.temporaryPassword = sa || groupCredentials ? null : body.password;
           log('ACCOUNT_MGMT_PASSWORD_RESET', 'temporary password set (the password itself is never recorded)');
           changed.push('password');
         }

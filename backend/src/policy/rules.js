@@ -115,6 +115,35 @@ function helpers(actor, grant, get) {
       }
       return false;
     },
+    /**
+     * An Overseer, Servant or Assistant of an FS Group manages the sign-in (username, temporary password) of the plain publishers of THEIR OWN group: someone with an active publisher
+     * role in that group and nothing above it - no admin-track role, not the Super Admin, not an officer of any FS Group (their own group's included), and never the caller. Everything is
+     * read from the database; a grant (restricted) account never qualifies.
+     */
+    async canManageGroupMemberAccount(targetId) {
+      if (!actor.known || grant.has || typeof actor.list !== 'function' || targetId == null || targetId === me) return false;
+      const cong = nul(actor.congregationId);
+      const t = live(await get('people', targetId));
+      if (!t || cong == null || nul(t.activeCongregationId) !== cong || t.isSuperAdmin === true || nul(t.activeAdminRole) != null) return false;
+      const mine = new Set();
+      for (const row of await actor.list('groups', cong)) {
+        const g = row.data ?? {};
+        if (row.deleted || nul(g.congregationId) !== cong) continue;
+        const slots = [g.overseerPersonId, g.servantPersonId, g.assistantPersonId];
+        if (slots.includes(targetId)) return false;
+        if (slots.includes(me)) mine.add(row.id);
+      }
+      if (!mine.size) return false;
+      let inMyGroup = false;
+      for (const row of await actor.list('roleAssignments', cong)) {
+        const a = row.data ?? {};
+        if (a.personId !== targetId || (a.status ?? 'ACTIVE') !== 'ACTIVE') continue;
+        const type = String(a.roleType ?? '');
+        if (type.startsWith('ADMIN:')) return false;
+        if (type.startsWith('PUBLISHER:') && type !== 'PUBLISHER:REMOVED_PUBLISHER' && mine.has(a.groupId)) inMyGroup = true;
+      }
+      return inMyGroup;
+    },
     async canManageCredentialsFor(targetId) {
       if (!actor.known) return false;
       if (sa) return true;
@@ -137,6 +166,12 @@ function helpers(actor, grant, get) {
 
 /** May [actor] reset the sign-in of [targetId]? The same rule that lets them edit that person's username. */
 export async function canManageCredentials(actor, grant, targetId, get) {
+  const h = helpers(actor, grant, get);
+  return (await h.canManageCredentialsFor(targetId)) || (await h.canManageGroupMemberAccount(targetId));
+}
+
+/** The congregation roles' reach over sign-ins only (whether an account may be used is theirs, not an FS Group officer's). */
+export async function canManageCredentialsStrict(actor, grant, targetId, get) {
   return helpers(actor, grant, get).canManageCredentialsFor(targetId);
 }
 
@@ -356,7 +391,11 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       if (id === h.me) return ok();
       if (await h.canEditPersonProfile(id)) return ok();
       if (await h.canEditGroupMemberProfile(id)) {
-        return verdict(affectedKeys(next, old).every((k) => GROUP_PROFILE_FIELDS.includes(k)), 'A group role edits personal details only');
+        const keys = affectedKeys(next, old);
+        if (keys.every((k) => GROUP_PROFILE_FIELDS.includes(k))) return ok();
+        // the sign-in of a plain publisher of the own group: the username, and the "temporary credential" flag of a password reset (the password itself is never stored on the record)
+        if (keys.every((k) => ['username', 'isTemporaryCredential', 'temporaryPassword'].includes(k)) && nul(next.temporaryPassword) == null && (await h.canManageGroupMemberAccount(id))) return ok();
+        return deny('A group role edits the personal details and the sign-in of its own publishers only');
       }
       const onlyAccount = affectedKeys(next, old).every((k) => ['username', 'accountStatus'].includes(k));
       return verdict(onlyAccount && (await h.canManageCredentialsFor(id)), 'Not allowed to edit this person');
@@ -887,6 +926,9 @@ async function writeMonthlyReports(h, { id, op, next, old, verdict }) {
       !h.canManagePublisherReportsFor(old.congregationId) && !same(next, old) && !accessRequestOnly) {
     return deny('A submitted report is locked: request edit access from the person in charge');
   }
+  // An Overseer, Servant or Assistant of the publisher's FS Group decides an edit request: Access Requested -> Access Granted (approved) or back to Submitted (rejected), with remarks.
+  // Only the decision itself is written - never the report's own figures - and never for oneself.
+  if (op === 'set' && old && old.status === 'ACCESS_REQUESTED' && ['ACCESS_GRANTED', 'SUBMITTED'].includes(next?.status) && old.publisherPersonId !== h.me && (await officerMayDecideAccess(h, old, next))) return ok();
   const groupOk = async (rec) => groupRoleMayWriteReport(h, rec);
   if (op === 'delete') {
     return verdict(h.sa || h.canManageReportsAsCongregationRole(old?.congregationId) || (await groupOk(old)), 'Not allowed to delete this report');
@@ -909,6 +951,18 @@ async function writeMonthlyReports(h, { id, op, next, old, verdict }) {
     if (!w.open) return deny(windowMessage(w));
   }
   return verdict((next.publisherPersonId === h.me && hoursOk && publisherStatusOk) || h.canManageReportsAsCongregationRole(next.congregationId) || groupWrite, 'Not allowed to write this report');
+}
+
+const ACCESS_DECISION_KEYS = ['status', 'accessGrantedByPersonId', 'accessGrantedAt', 'accessDecisionNote', 'accessDecidedByPersonId', 'accessDecidedAt', 'lastEditedByPersonId', 'lastEditedAt'];
+
+/** May the caller, as an officer of the publisher's own FS Group, write this decision on the edit request of [old]? Read from the database; only the decision keys may change. */
+async function officerMayDecideAccess(h, old, next) {
+  if (!h.actor.known || h.grant.has || typeof h.actor.list !== 'function' || !old.congregationId || !h.inMyActiveCongregation(nul(old.congregationId))) return false;
+  const gid = await slotGroupId(h, nul(old.congregationId));
+  if (!gid || !(await publisherInGroup(h, gid, nul(old.congregationId), old.publisherPersonId))) return false;
+  if (!affectedKeys(next, old).every((k) => ACCESS_DECISION_KEYS.includes(k))) return false;
+  if (next.status === 'ACCESS_GRANTED') return nul(next.accessGrantedByPersonId) === h.me;
+  return nul(next.accessDecidedByPersonId) === h.me;
 }
 
 /**
