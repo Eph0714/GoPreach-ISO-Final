@@ -96,35 +96,43 @@ fun MonthlySnapshotsScreen(
     viewModel: MonthlySnapshotsViewModel = koinViewModel(),
     report: FieldServiceReportViewModel = koinViewModel(),
 ) {
-    val context = LocalContext.current
     LaunchedEffect(Unit) { viewModel.startSync().collect { } }
     val flow = remember(currentPersonId, congregationId, readsAll) { viewModel.state(currentPersonId, congregationId, readsAll) }
     val state by flow.collectAsStateWithLifecycle(initialValue = SnapshotsState())
-    val months = remember { monthChoices() }
-    var picked by rememberSaveable { mutableStateOf(0) }
     var viewingId by rememberSaveable { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
     var fMonth by rememberSaveable { mutableStateOf(0) }
     var fYear by rememberSaveable { mutableStateOf(0) }
     var fGroup by rememberSaveable { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
-    var saving by remember { mutableStateOf(false) }
-    var confirm by remember { mutableStateOf(false) }
-    var replacing by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<FsGroupReportSnapshot?>(null) }
+    // The newest six saved months first; "Show more" adds ten at a time (like the website). A new filter starts from the first six again.
+    var visible by rememberSaveable { mutableStateOf(FIRST_RECORDS) }
+    LaunchedEffect(query, fMonth, fYear, fGroup) { visible = FIRST_RECORDS }
     val slot = state.slot
     val viewing = state.snapshots.firstOrNull { it.id == viewingId }
     BackHandler(enabled = viewing != null) { viewingId = null }
 
+    deleting?.let { target ->
+        val label = monthLabel(target.year, target.month)
+        AlertDialog(
+            onDismissRequest = { deleting = null },
+            title = { Text("Delete the saved record of $label?") },
+            text = { Text("Delete the saved Field Service Record for $label? Only this saved record is removed. The submitted reports are not affected.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    deleting = null
+                    viewModel.delete(target) { failure -> message = failure ?: "The saved Field Service Record for $label has been deleted." }
+                }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+        )
+    }
+
     if (viewing != null) {
-        SnapshotDetail(viewing, onBack = { viewingId = null })
+        SnapshotDetail(viewing, canDelete = slot != null && viewing.groupId == slot.group.id, onDelete = { deleting = viewing }, onBack = { viewingId = null })
         return
     }
-    val choice = months[picked.coerceIn(0, months.lastIndex)]
-    val live by remember(slot?.group?.id, choice.start) {
-        if (slot == null) kotlinx.coroutines.flow.flowOf(null) else viewModel.liveSheet(report, slot, choice.start)
-    }.collectAsStateWithLifecycle(initialValue = null)
-    val existing = slot?.let { s -> state.snapshots.firstOrNull { it.id == FsGroupReportSnapshot.idFor(s.group.id, choice.year, choice.month) } }
 
     Scaffold(
         topBar = {
@@ -149,35 +157,9 @@ fun MonthlySnapshotsScreen(
         val shown = state.snapshots.filter { s ->
             (query.isBlank() || s.groupName.contains(query.trim(), ignoreCase = true)) && (fMonth == 0 || s.month == fMonth) && (fYear == 0 || s.year == fYear) && (fGroup == null || s.groupId == fGroup)
         }
+        val filtered = query.isNotBlank() || fMonth != 0 || fYear != 0 || fGroup != null
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (slot != null) item {
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(slot.label.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                        Text(slot.group.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                        Choice("Reporting month", choice.label, months.mapIndexed { i, m -> i to m.label }) { picked = it }
-                        val t = live?.toSnapshotReport()?.totals
-                        if (t == null) Text("Loading the report...", style = MaterialTheme.typography.bodySmall)
-                        else {
-                            Text("Total publishers ${t.publishers} · Reports submitted ${t.participated} · Pending ${t.pending}", style = MaterialTheme.typography.bodyMedium)
-                            Text("Total reports ${t.reports} · Hours (pioneers) ${formatHours(t.hours)} · Bible studies ${t.studies}", style = MaterialTheme.typography.bodyMedium)
-                        }
-                        if (existing != null) {
-                            Text(
-                                "The Field Service Record for ${choice.label} was last saved ${stampFormat.format(Date(existing.savedAt))} by ${existing.savedByName}.",
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { viewingId = existing.id }) { Text("View Saved Field Service Record") }
-                                OutlinedButton(onClick = { replacing = true }, enabled = live != null && !saving) { Text("Update Saved Field Service Record") }
-                            }
-                        } else {
-                            Button(onClick = { confirm = true }, enabled = live != null && !saving) { Text(if (saving) "Saving..." else "Save Field Service Record") }
-                        }
-                        message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
-                    }
-                }
-            }
+            message?.let { m -> item { Text(m, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary) } }
             item {
                 if (readsAll) OutlinedTextField(value = query, onValueChange = { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), label = { Text("Search FS Group") })
             }
@@ -188,20 +170,24 @@ fun MonthlySnapshotsScreen(
                     Box { Choice("Year", if (fYear == 0) "All years" else fYear.toString(), listOf(0 to "All years") + years.map { it to it.toString() }) { fYear = it } }
                 }
             }
-            if (shown.isEmpty()) item { Text("No saved Field Service Records yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            items(shown, key = { it.id }) { s ->
+            if (shown.isEmpty()) item {
+                Text(
+                    if (filtered) "No saved Field Service Record matches that month and year." else "No saved Field Service Records yet.",
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            items(shown.take(visible), key = { it.id }) { s ->
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(monthLabel(s.year, s.month), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(s.groupName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Text("Saved ${stampFormat.format(Date(s.savedAt))} by ${s.savedByName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (readsAll) Text(s.groupName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Last saved ${stampFormat.format(Date(s.savedAt))}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (readsAll) {
                             val t = s.report.totals
                             Text("Publishers ${t.publishers} · Reports ${t.reports} · Hours ${formatHours(t.hours)} · Studies ${t.studies}", style = MaterialTheme.typography.bodySmall)
                         }
                         Row {
                             TextButton(onClick = { viewingId = s.id }) { Text("View") }
-                            TextButton(onClick = { FieldServiceReportExporter.shareExcel(context, listOf(s.toSheet())) }) { Text("Excel") }
                             if (slot != null && s.groupId == slot.group.id) {
                                 TextButton(onClick = { deleting = s }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Delete") }
                             }
@@ -209,78 +195,16 @@ fun MonthlySnapshotsScreen(
                     }
                 }
             }
+            if (shown.size > visible) item {
+                val left = shown.size - visible
+                OutlinedButton(onClick = { visible += MORE_RECORDS }, modifier = Modifier.fillMaxWidth()) { Text("SHOW MORE (${minOf(MORE_RECORDS, left)} of $left more)") }
+            }
         }
     }
-
-    deleting?.let { target ->
-        val label = monthLabel(target.year, target.month)
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text("Delete the saved record of $label?") },
-            text = { Text("Delete the saved Field Service Record for $label? Only this saved record is removed. The submitted reports are not affected.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    deleting = null
-                    viewModel.delete(target) { failure -> message = failure ?: "The saved Field Service Record for $label has been deleted." }
-                }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Delete") }
-            },
-            dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
-        )
-    }
-
-    if (replacing && slot != null && existing != null) {
-        AlertDialog(
-            onDismissRequest = { replacing = false },
-            title = { Text("Update the saved record of ${choice.label}?") },
-            text = {
-                Text(
-                    "A saved Field Service Record for ${choice.label} already exists (saved ${stampFormat.format(Date(existing.savedAt))} by ${existing.savedByName}).\n\n" +
-                        "Do you want to replace the previously saved record with the latest one? The earlier copy stays in the earlier saved copies.",
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        replacing = false
-                        saving = true
-                        viewModel.replace(report, slot, existing, "Saved again with the latest figures", currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
-                            saving = false
-                            when (result) {
-                                is SnapshotSaveResult.Saved -> { message = "Your Field Service Record for ${choice.label} has been successfully updated."; viewingId = result.snapshot.id }
-                                is SnapshotSaveResult.AlreadyExists -> message = "The saved Field Service Record for ${choice.label} was not replaced."
-                                is SnapshotSaveResult.Failed -> message = result.reason
-                            }
-                        }
-                    },
-                ) { Text("Yes") }
-            },
-            dismissButton = { TextButton(onClick = { replacing = false }) { Text("No") } },
-        )
-    }
-
-    if (confirm && slot != null) {
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = { Text("Save the Field Service Record?") },
-            text = { Text("Save the Field Service Record of ${choice.label} for ${slot.group.name}?") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirm = false
-                    saving = true
-                    viewModel.save(report, slot, choice.start, choice.year, choice.month, currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
-                        saving = false
-                        when (result) {
-                            is SnapshotSaveResult.Saved -> { message = "Your Field Service Record for ${choice.label} has been successfully saved."; viewingId = result.snapshot.id }
-                            is SnapshotSaveResult.AlreadyExists -> { message = "A saved Field Service Record for ${choice.label} already exists. It was not replaced."; viewingId = result.snapshot.id }
-                            is SnapshotSaveResult.Failed -> message = result.reason
-                        }
-                    }
-                }) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
-        )
-    }
 }
+
+private const val FIRST_RECORDS = 6
+private const val MORE_RECORDS = 10
 
 @Composable
 private fun <T> Choice(label: String, value: String, options: List<Pair<T, String>>, onPick: (T) -> Unit) {
@@ -299,7 +223,7 @@ private fun <T> Choice(label: String, value: String, options: List<Pair<T, Strin
 /** One saved snapshot, drawn from its stored values with the same table, summary, print and exports as the live report. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SnapshotDetail(s: FsGroupReportSnapshot, onBack: () -> Unit) {
+private fun SnapshotDetail(s: FsGroupReportSnapshot, canDelete: Boolean, onDelete: () -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
     // only the current saved record is shown (its earlier copies stay inside it as an internal history)
     val sheet = remember(s.id, s.version) { s.toSheet() }
@@ -329,6 +253,7 @@ private fun SnapshotDetail(s: FsGroupReportSnapshot, onBack: () -> Unit) {
                                 FieldServiceReportExporter.printPdf(context, listOf(sheet), null, snapshotFooter(s, summary))
                             }) { Text("PDF") }
                             TextButton(onClick = { FieldServiceReportExporter.shareExcel(context, listOf(sheet)) }) { Text("Excel") }
+                            if (canDelete) TextButton(onClick = onDelete, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Delete") }
                         }
                     }
                 }
