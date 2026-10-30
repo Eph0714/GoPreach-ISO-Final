@@ -61,6 +61,12 @@ data class ManualRecordInput(
 /** True when [month] starts before the current month, i.e. the publisher's status then may differ from today's. */
 fun isPreviousMonth(month: Long): Boolean = MonthBounds.of(month).startInclusive < MonthBounds.of(System.currentTimeMillis()).startInclusive
 
+/**
+ * Who may add, edit and delete publishers' Field Service Records: the roles in [ManualEntryRoles], and the Overseer, Servant and Assistant of an FS Group (a [scopeGroupId] taken from their own slot)
+ * for the publishers of that group - whatever their role or category: a Group Servant is a Ministerial Servant and a Group Assistant is often an ordinary publisher with no role at all.
+ */
+fun mayEnterRecords(actorRole: AdminRole?, scopeGroupId: String?): Boolean = scopeGroupId != null || (actorRole != null && actorRole in ManualEntryRoles)
+
 /** Roles that may enter field service records on a publisher's behalf. */
 val ManualEntryRoles = setOf(
     AdminRole.SUPER_ADMIN,
@@ -119,8 +125,9 @@ class ManualFieldServiceViewModel(
         /** Set for a Group Coordinator / Servant / Assistant: the only FS Group whose publishers they may manage. */
         scopeGroupId: String? = null,
     ): String? {
-        val groupRole = scopeGroupId != null && actorRole == AdminRole.REGULAR_ELDER
-        if (actorRole == null || (actorRole !in ManualEntryRoles && !groupRole)) return "You are not allowed to enter field service records."
+        // A scope group comes from the person's own FS Group slot (Group Overseer, Group Servant or Group Assistant, whatever their role or category: an Assistant is often an ordinary publisher).
+        val groupRole = scopeGroupId != null
+        if (!mayEnterRecords(actorRole, scopeGroupId)) return "You are not allowed to enter field service records."
         val publisher = publishersIn(scopeCongregationId, if (groupRole) scopeGroupId else null).first().firstOrNull { it.person.id == input.publisherPersonId }
             ?: return if (groupRole) "That publisher is not in your FS Group." else "That publisher is not in this congregation."
         if (input.month <= 0L) return "Choose the reporting month."
@@ -187,8 +194,8 @@ class ManualFieldServiceViewModel(
     }
 
     fun delete(report: MonthlyReport, scopeCongregationId: String, actorRole: AdminRole?, actorPersonId: String, scopeGroupId: String? = null) {
-        val groupRole = scopeGroupId != null && actorRole == AdminRole.REGULAR_ELDER
-        if (actorRole == null || (actorRole !in ManualEntryRoles && !groupRole) || report.congregationId != scopeCongregationId) return
+        val groupRole = scopeGroupId != null   // see save(): the officer of an FS Group, whatever their role
+        if (!mayEnterRecords(actorRole, scopeGroupId) || report.congregationId != scopeCongregationId) return
         viewModelScope.launch {
             if (groupRole) {
                 // Only a publisher of the group's own FS Group may be touched; the record is stamped with that publisher's role assignment first so the server can verify it.

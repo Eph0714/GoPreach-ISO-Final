@@ -173,4 +173,16 @@ class GroupModulesTest {
         assertTrue(plain.versions.isEmpty())
         assertEquals(plain, plain.atVersion(1))
     }
+
+    @Test
+    fun `the Overseer, Servant and Assistant of an FS Group may enter, edit and delete records of their group whatever their role, and nobody else gains it`() {
+        val group = "g1"
+        // Group Overseer (Regular Elder), Group Servant (Ministerial Servant), Group Assistant (an ordinary publisher: no role at all)
+        for (role in listOf(com.emfitsolutions.gopreach.data.model.AdminRole.REGULAR_ELDER, com.emfitsolutions.gopreach.data.model.AdminRole.MINISTERIAL_SERVANT, null)) {
+            assertTrue("$role", com.emfitsolutions.gopreach.ui.screens.manualreport.mayEnterRecords(role, group))
+            assertFalse("$role without a group", com.emfitsolutions.gopreach.ui.screens.manualreport.mayEnterRecords(role, null))
+        }
+        assertTrue(com.emfitsolutions.gopreach.ui.screens.manualreport.mayEnterRecords(com.emfitsolutions.gopreach.data.model.AdminRole.SECRETARY, null))
+        assertTrue(com.emfitsolutions.gopreach.ui.screens.manualreport.mayEnterRecords(com.emfitsolutions.gopreach.data.model.AdminRole.SUPER_ADMIN, null))
+    }
 }
