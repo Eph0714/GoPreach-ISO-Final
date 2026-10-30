@@ -86,3 +86,13 @@ test('when every Overpass server is down the search falls back to Photon and sti
   const dead = new PlaceSearchService({ fetchImpl: async () => { throw new Error('fetch failed'); }, urls: ['http://down'] });
   await assert.rejects(() => dead.search('hospital', 16.5, 121.2), /fetch failed/);
 });
+
+test('a slow Overpass does not hold the search up: Photon answers after the short wait', async () => {
+  const photon = { features: [{ geometry: { coordinates: [121.18, 16.52] }, properties: { name: 'Roxas Parish Church', osm_key: 'amenity', osm_value: 'place_of_worship', osm_type: 'N', osm_id: 7 } }] };
+  const fetchImpl = (url) => String(url).includes('photon') ? Promise.resolve({ ok: true, status: 200, json: async () => photon }) : new Promise(() => {});   // Overpass never answers
+  const svc = new PlaceSearchService({ fetchImpl, urls: ['http://stuck'], overpassWaitMs: 40 });
+  const t = Date.now();
+  const r = await svc.search('church', 16.52, 121.18);
+  assert.equal(r.results[0].name, 'Roxas Parish Church');
+  assert.ok(Date.now() - t < 1500, 'it did not wait for the stuck server');
+});

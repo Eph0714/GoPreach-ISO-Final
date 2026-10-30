@@ -164,8 +164,8 @@ export function rank(results, text, categories = []) {
 }
 
 export class PlaceSearchService {
-  constructor({ fetchImpl = globalThis.fetch, now = () => Date.now(), urls = OVERPASS_URLS } = {}) {
-    this.fetchImpl = fetchImpl; this.now = now; this.urls = urls; this.cache = new Map(); this.pending = new Map();
+  constructor({ fetchImpl = globalThis.fetch, now = () => Date.now(), urls = OVERPASS_URLS, overpassWaitMs = 5000 } = {}) {
+    this.fetchImpl = fetchImpl; this.now = now; this.urls = urls; this.overpassWaitMs = overpassWaitMs; this.cache = new Map(); this.pending = new Map();
   }
 
   /** Every Overpass server is asked at once and the first good answer wins: one slow or refusing server never holds the search up (12 seconds at most). */
@@ -197,6 +197,23 @@ export class PlaceSearchService {
     return photonToElements(await res.json());
   }
 
+  /**
+   * The places for a search, quickly: Photon is asked at once and Overpass (better with categories like "church in Roxas") is given 5 seconds. Overpass's answer is used when it
+   * has places; when it is slow, refuses or finds nothing, Photon's answer is used, so the person never waits for a stuck server (the apps give up after 10 seconds).
+   */
+  async elementsFor(query, q, lat, lng) {
+    const photon = this.askPhoton(q, lat, lng).then((els) => ({ els }), (err) => ({ err }));
+    let overpass = null, overpassErr = null;
+    try {
+      overpass = await Promise.race([this.ask(query), new Promise((_, no) => setTimeout(() => no(new Error('Overpass took too long')), this.overpassWaitMs))]);
+    } catch (err) { overpassErr = err; }
+    if (overpass && overpass.length) return overpass;
+    const backup = await photon;
+    if (backup.els && (backup.els.length || overpass)) return backup.els;
+    if (overpass) return overpass;
+    throw overpassErr ?? backup.err;
+  }
+
   async search(q, lat, lng) {
     const meaning = interpret(q);
     const query = buildQuery(meaning, lat, lng);
@@ -206,7 +223,7 @@ export class PlaceSearchService {
     const hit = this.cache.get(key), now = this.now();
     if (hit && now - hit.at < TTL_MS) return { results: hit.results, interpreted: meaning };
     if (!this.pending.has(key)) {
-      this.pending.set(key, this.ask(query).catch(async (err) => { try { return await this.askPhoton(q, lat, lng); } catch { throw err; } }).then((els) => {
+      this.pending.set(key, this.elementsFor(query, q, lat, lng).then((els) => {
         const results = rank(toResults(els, lat, lng), meaning.text || meaning.place, meaning.categories).slice(0, 40);
         this.cache.set(key, { at: this.now(), results });
         while (this.cache.size > MAX_CACHED) this.cache.delete(this.cache.keys().next().value);
