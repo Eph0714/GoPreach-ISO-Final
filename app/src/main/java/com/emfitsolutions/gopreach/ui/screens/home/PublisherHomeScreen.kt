@@ -393,7 +393,7 @@ fun PublisherHomeScreen(
     val officerItems = buildList {
         if (caps.isGroupOfficer && !caps.canManageHouseholderAssignment) add(SideItem("Publisher Assignment", Icons.Rounded.AssignmentInd, Destinations.PUBLISHER_ASSIGNMENT))
         if (caps.canOpenEditRequests) add(SideItem("FS Group Report Edit Requests", Icons.Rounded.History, Destinations.EDIT_REQUESTS))
-        if (caps.canOpenSnapshots) add(SideItem("Monthly Report Snapshots", Icons.Rounded.History, Destinations.MONTHLY_SNAPSHOTS))
+        if (caps.canOpenSnapshots) add(SideItem("Saved Field Service Records", Icons.Rounded.History, Destinations.MONTHLY_SNAPSHOTS))
         if (caps.isGroupOfficer) add(SideItem("Account Management", Icons.Rounded.AssignmentInd, Destinations.ACCOUNT_MANAGEMENT))
     }
     val responsibilityItems: List<SideItem> = if (!hasAdminRoles) listOf(SideItem("Security & Device Management", Icons.Rounded.Security, Destinations.SECURITY)) + officerItems else adminSideItems(caps, includeTabModules = true)

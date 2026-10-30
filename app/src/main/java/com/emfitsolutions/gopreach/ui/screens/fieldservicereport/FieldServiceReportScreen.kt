@@ -351,7 +351,7 @@ fun FieldServiceReportScreen(
             // The two sections of this module: the report itself and the permanent Monthly Report Snapshots.
             if (!tableOnly && !coMode && onOpenSnapshots != null) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 androidx.compose.material3.FilterChip(selected = true, onClick = {}, label = { Text("Field Service Reports") })
-                androidx.compose.material3.FilterChip(selected = false, onClick = onOpenSnapshots, label = { Text("Monthly Report Snapshots") })
+                androidx.compose.material3.FilterChip(selected = false, onClick = onOpenSnapshots, label = { Text("Saved Field Service Records") })
             }
             if (!fullScreenActive && !tableOnly && !(restricted && congregationId == null)) Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (fixedCongregationId == null && !restricted) {

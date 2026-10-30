@@ -125,7 +125,7 @@ fun MonthlySnapshotsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Monthly Report Snapshots") },
+                title = { Text("Saved Field Service Records") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )
         },
@@ -133,7 +133,7 @@ fun MonthlySnapshotsScreen(
         if (slot == null && !readsAll) {
             Column(Modifier.fillMaxSize().padding(padding).padding(24.dp)) {
                 Text(
-                    if (state.loaded) "Monthly Report Snapshots are saved by the Overseer, Servant and Assistant of an FS Group, and read by the Admin, Coordinator Elder, Service Overseer and Secretary."
+                    if (state.loaded) "Saved Field Service Records are saved by the Overseer, Servant and Assistant of an FS Group, and read by the Admin, Coordinator Elder, Service Overseer and Secretary."
                     else "Loading...",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -160,15 +160,15 @@ fun MonthlySnapshotsScreen(
                         }
                         if (existing != null) {
                             Text(
-                                "A snapshot of ${choice.label} was already saved by ${existing.savedByName} on ${stampFormat.format(Date(existing.savedAt))}. A saved snapshot is permanent and cannot be replaced.",
-                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
+                                "The Field Service Record for ${choice.label} was last saved ${stampFormat.format(Date(existing.savedAt))} by ${existing.savedByName}.",
+                                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedButton(onClick = { viewingId = existing.id }) { Text("View it") }
-                                OutlinedButton(onClick = { replacing = true }, enabled = live != null && !saving) { Text("Replace this snapshot") }
+                                OutlinedButton(onClick = { viewingId = existing.id }) { Text("View Saved Field Service Record") }
+                                OutlinedButton(onClick = { replacing = true }, enabled = live != null && !saving) { Text("Update Saved Field Service Record") }
                             }
                         } else {
-                            Button(onClick = { confirm = true }, enabled = live != null && !saving) { Text(if (saving) "Saving..." else "Save Monthly Snapshot") }
+                            Button(onClick = { confirm = true }, enabled = live != null && !saving) { Text(if (saving) "Saving..." else "Save Field Service Record") }
                         }
                         message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
                     }
@@ -184,13 +184,13 @@ fun MonthlySnapshotsScreen(
                     Box { Choice("Year", if (fYear == 0) "All years" else fYear.toString(), listOf(0 to "All years") + years.map { it to it.toString() }) { fYear = it } }
                 }
             }
-            if (shown.isEmpty()) item { Text("No snapshots saved yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            if (shown.isEmpty()) item { Text("No saved Field Service Records yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(shown, key = { it.id }) { s ->
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(monthLabel(s.year, s.month), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(s.groupName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Text("Saved ${stampFormat.format(Date(s.savedAt))} by ${s.savedByName}" + if (s.version > 1) " · Version ${s.version} (replaced)" else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Saved ${stampFormat.format(Date(s.savedAt))} by ${s.savedByName}" + if (s.version > 1) " · Version ${s.version} (saved again)" else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (readsAll) {
                             val t = s.report.totals
                             Text("Publishers ${t.publishers} · Reports ${t.reports} · Hours ${formatHours(t.hours)} · Studies ${t.studies}", style = MaterialTheme.typography.bodySmall)
@@ -206,53 +206,40 @@ fun MonthlySnapshotsScreen(
     }
 
     if (replacing && slot != null && existing != null) {
-        var reason by remember { mutableStateOf("") }
-        var understood by remember { mutableStateOf(false) }
         AlertDialog(
             onDismissRequest = { replacing = false },
-            title = { Text("Replace the snapshot of ${choice.label}?") },
+            title = { Text("Update the saved record of ${choice.label}?") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "The snapshot is saved again from the report as it is now. The copy it replaces is kept in the snapshot's history, unchanged, with who saved it and when: nothing is lost.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    OutlinedTextField(value = reason, onValueChange = { reason = it.take(500) }, label = { Text("Why is it replaced?") }, minLines = 2, modifier = Modifier.fillMaxWidth())
-                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                        androidx.compose.material3.Checkbox(checked = understood, onCheckedChange = { understood = it })
-                        Text(
-                            "I understand the current snapshot becomes version ${existing.version} in the history and this report becomes version ${existing.version + 1}.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
+                Text(
+                    "A saved Field Service Record for ${choice.label} already exists (saved ${stampFormat.format(Date(existing.savedAt))} by ${existing.savedByName}).\n\n" +
+                        "Do you want to replace the previously saved record with the latest one? The earlier copy stays in the earlier saved copies.",
+                )
             },
             confirmButton = {
                 TextButton(
-                    enabled = understood && reason.trim().length >= 3,
                     onClick = {
                         replacing = false
                         saving = true
-                        viewModel.replace(report, slot, existing, reason, currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
+                        viewModel.replace(report, slot, existing, "Saved again with the latest figures", currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
                             saving = false
                             when (result) {
-                                is SnapshotSaveResult.Saved -> { message = "The snapshot of ${choice.label} was replaced (version ${result.snapshot.version}). The previous copy is kept in its history."; viewingId = result.snapshot.id }
-                                is SnapshotSaveResult.AlreadyExists -> message = "A snapshot already exists for ${choice.label}."
+                                is SnapshotSaveResult.Saved -> { message = "Your Field Service Record for ${choice.label} has been successfully saved."; viewingId = result.snapshot.id }
+                                is SnapshotSaveResult.AlreadyExists -> message = "The saved Field Service Record for ${choice.label} was not replaced."
                                 is SnapshotSaveResult.Failed -> message = result.reason
                             }
                         }
                     },
-                ) { Text("Replace snapshot") }
+                ) { Text("Yes") }
             },
-            dismissButton = { TextButton(onClick = { replacing = false }) { Text("Cancel") } },
+            dismissButton = { TextButton(onClick = { replacing = false }) { Text("No") } },
         )
     }
 
     if (confirm && slot != null) {
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text("Save the snapshot?") },
-            text = { Text("Save the snapshot of ${choice.label} for ${slot.group.name}? It is a permanent copy and cannot be changed or replaced.") },
+            title = { Text("Save the Field Service Record?") },
+            text = { Text("Save the Field Service Record of ${choice.label} for ${slot.group.name}?") },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = false
@@ -260,8 +247,8 @@ fun MonthlySnapshotsScreen(
                     viewModel.save(report, slot, choice.start, choice.year, choice.month, currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
                         saving = false
                         when (result) {
-                            is SnapshotSaveResult.Saved -> { message = "The snapshot of ${choice.label} was saved. Later changes to the report do not change it."; viewingId = result.snapshot.id }
-                            is SnapshotSaveResult.AlreadyExists -> { message = "A snapshot already exists for ${choice.label}."; viewingId = result.snapshot.id }
+                            is SnapshotSaveResult.Saved -> { message = "Your Field Service Record for ${choice.label} has been successfully saved."; viewingId = result.snapshot.id }
+                            is SnapshotSaveResult.AlreadyExists -> { message = "A saved Field Service Record for ${choice.label} already exists. It was not replaced."; viewingId = result.snapshot.id }
                             is SnapshotSaveResult.Failed -> message = result.reason
                         }
                     }
@@ -300,7 +287,7 @@ private fun SnapshotDetail(whole: FsGroupReportSnapshot, viewVersion: Int?, onVe
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Snapshot · ${monthLabel(s.year, s.month)}") },
+                title = { Text("Saved Field Service Record · ${monthLabel(s.year, s.month)}") },
                 navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
             )
         },
@@ -309,9 +296,9 @@ private fun SnapshotDetail(whole: FsGroupReportSnapshot, viewVersion: Int?, onVe
             item {
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("PERMANENT SNAPSHOT · VERSION ${s.version}" + if (whole.version > 1) " OF ${whole.version}" else "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Text("SAVED FIELD SERVICE RECORD · VERSION ${s.version}" + if (whole.version > 1) " OF ${whole.version}" else "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         if (isOld) Text("This is an older copy, replaced later.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                        if (!isOld && whole.replaceReason.isNotBlank()) Text("Replaced: ${whole.replaceReason} (${whole.replacedByName}, ${stampFormat.format(Date(whole.replacedAt))})", style = MaterialTheme.typography.bodySmall)
+                        if (!isOld && whole.replaceReason.isNotBlank()) Text("Saved again: ${whole.replaceReason} (${whole.replacedByName}, ${stampFormat.format(Date(whole.replacedAt))})", style = MaterialTheme.typography.bodySmall)
                         Text("Congregation: ${s.congregationName}", style = MaterialTheme.typography.bodyMedium)
                         Text("FS Group: ${s.groupName}", style = MaterialTheme.typography.bodyMedium)
                         Text("Reporting month: ${monthLabel(s.year, s.month)}", style = MaterialTheme.typography.bodyMedium)
@@ -330,8 +317,8 @@ private fun SnapshotDetail(whole: FsGroupReportSnapshot, viewVersion: Int?, onVe
             if (whole.versions.isNotEmpty()) item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("History", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        Text("The older copies, kept exactly as they were when they were replaced.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Earlier saved copies", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text("The earlier saved copies of this record, kept exactly as they were when they were replaced.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         TextButton(onClick = { onVersion(null) }) { Text("Version ${whole.version} (current) · ${stampFormat.format(Date(whole.savedAt))} · ${whole.savedByName}") }
                         whole.versions.reversed().forEach { v ->
                             TextButton(onClick = { onVersion(v.version) }) { Text("Version ${v.version} · ${stampFormat.format(Date(v.savedAt))} · ${v.savedByName}") }
@@ -348,12 +335,12 @@ private fun SnapshotDetail(whole: FsGroupReportSnapshot, viewVersion: Int?, onVe
 private fun snapshotFooter(s: FsGroupReportSnapshot, summary: List<List<String>>): String {
     fun e(t: String) = t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     return FieldServiceSummary.html(summary) +
-        "<p style=\"margin-top:8px;font-size:11px\">Snapshot saved ${e(stampFormat.format(Date(s.savedAt)))} by ${e(s.savedByName)} · ${e(s.congregationName)} · ${e(s.groupName)} · ${e(monthLabel(s.year, s.month))}</p>"
+        "<p style=\"margin-top:8px;font-size:11px\">Field Service Record saved ${e(stampFormat.format(Date(s.savedAt)))} by ${e(s.savedByName)} · ${e(s.congregationName)} · ${e(s.groupName)} · ${e(monthLabel(s.year, s.month))}</p>"
 }
 
 /**
- * The "Save as Snapshot" row of the Field Service Report itself: the officer's OWN group's report for the month on screen, saved as a permanent Monthly Report Snapshot (or opened, when it
- * already was). The group is the person's own slot; the server checks every save again.
+ * The "Save this Field Service Record" button of the Field Service Report itself: the officer's OWN group's report for the month on screen, saved as the group's Field Service Record
+ * of that month (asking first before an earlier saved record is replaced). The group is the person's own slot; the server checks every save again.
  */
 @Composable
 fun SaveSnapshotRow(
@@ -377,38 +364,59 @@ fun SaveSnapshotRow(
     var confirm by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (existing != null) {
-            Text(
-                "Snapshot of ${monthLabel(year, month)} saved by ${existing.savedByName}" + if (existing.version > 1) " · version ${existing.version}" else "",
-                style = MaterialTheme.typography.bodySmall,
-            )
-            onOpenSnapshots?.let { open -> OutlinedButton(onClick = open) { Text("View / replace snapshot") } }
-        } else {
-            Button(onClick = { confirm = true }, enabled = !saving) { Text(if (saving) "Saving..." else "Save as Snapshot") }
-        }
-        message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
-    }
-    if (confirm) {
-        AlertDialog(
-            onDismissRequest = { confirm = false },
-            title = { Text("Save the snapshot?") },
-            text = { Text("Save the report of ${monthLabel(year, month)} for ${slot.group.name} as a permanent snapshot? It cannot be changed or replaced without keeping this copy in its history.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirm = false
+    val label = monthLabel(year, month)
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Button(
+            onClick = {
+                if (existing != null) confirm = true
+                else {
                     saving = true
                     viewModel.save(report, slot, monthStart, year, month, currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
                         saving = false
                         message = when (result) {
-                            is SnapshotSaveResult.Saved -> "The snapshot of ${monthLabel(year, month)} was saved. Later changes to the report do not change it."
-                            is SnapshotSaveResult.AlreadyExists -> "A snapshot already exists for ${monthLabel(year, month)}."
+                            is SnapshotSaveResult.Saved -> "Your Field Service Record for $label has been successfully saved."
+                            is SnapshotSaveResult.AlreadyExists -> "A saved Field Service Record for $label already exists. It was not replaced."
                             is SnapshotSaveResult.Failed -> result.reason
                         }
                     }
-                }) { Text("Save") }
+                }
             },
-            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+            enabled = !saving,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(if (saving) "Saving..." else "Save this Field Service Record for the month of $label".uppercase(), fontWeight = FontWeight.ExtraBold) }
+        if (existing != null) {
+            Text("Saved: $label was last saved ${stampFormat.format(Date(existing.savedAt))} by ${existing.savedByName}.", style = MaterialTheme.typography.bodySmall)
+            onOpenSnapshots?.let { open -> TextButton(onClick = open) { Text("View Saved Field Service Record") } }
+        } else {
+            Text("Nothing is saved yet for $label.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+    }
+    if (confirm && existing != null) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("Replace the saved record?") },
+            text = {
+                Text(
+                    "A saved Field Service Record for $label already exists (saved ${stampFormat.format(Date(existing.savedAt))} by ${existing.savedByName}).\n\n" +
+                        "Do you want to replace the previously saved record with this one?",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    saving = true
+                    viewModel.replace(report, slot, existing, "Saved again with the latest figures", currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
+                        saving = false
+                        message = when (result) {
+                            is SnapshotSaveResult.Saved -> "Your Field Service Record for $label has been successfully saved."
+                            is SnapshotSaveResult.AlreadyExists -> "The saved Field Service Record for $label was not replaced."
+                            is SnapshotSaveResult.Failed -> result.reason
+                        }
+                    }
+                }) { Text("Yes") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("No") } },
         )
     }
 }

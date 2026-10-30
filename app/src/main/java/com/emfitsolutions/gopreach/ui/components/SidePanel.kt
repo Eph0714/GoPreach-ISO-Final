@@ -417,7 +417,7 @@ fun adminSideItems(caps: AdminCapabilities, includeTabModules: Boolean = false):
             // Account Management for an FS Group officer who is not a congregation-wide manager: the plain publishers of their own group.
             if (isGroupOfficer && !canManageAccountCredentials && !isCircuitOverseer) add(SideItem(stringResource(Res.string.side_account_management), Icons.Rounded.Key, Destinations.ACCOUNT_MANAGEMENT))
             // Monthly Report Snapshots: an FS Group officer's own group, or the whole congregation for the Admin / Coordinator Elder / Service Overseer / Secretary.
-            if (canOpenSnapshots) add(SideItem("Monthly Report Snapshots", Icons.Rounded.History, Destinations.MONTHLY_SNAPSHOTS))
+            if (canOpenSnapshots) add(SideItem("Saved Field Service Records", Icons.Rounded.History, Destinations.MONTHLY_SNAPSHOTS))
             // Publisher Assignment for an FS Group officer who is not a congregation-wide manager: the same module, limited to their own group.
             if (isGroupOfficer && !canManageHouseholderAssignment && !isCircuitOverseer) add(SideItem(stringResource(Res.string.side_publisher_assignment), Icons.Rounded.AssignmentInd, Destinations.PUBLISHER_ASSIGNMENT))
             if (canViewDeletedRecords) add(SideItem("Deleted Records", Icons.Rounded.RestoreFromTrash, Destinations.DELETED_RECORDS))
