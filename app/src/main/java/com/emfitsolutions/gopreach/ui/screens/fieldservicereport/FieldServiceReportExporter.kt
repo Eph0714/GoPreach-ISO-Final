@@ -381,7 +381,7 @@ object FieldServiceReportExporter {
             context,
             "Field Service Report - " + (if (sheets.size == 1) sheets[0].groupName else "All FS Groups") + " - " + sheets.firstOrNull()?.monthLabel.orEmpty(),
             buildHtml(sheets, graphHtml, footerHtml),
-            PrintOptions(OrientationMode.LANDSCAPE),
+            PrintOptions(),   // upright or across, chosen by the fit for the paper (the person's own setting still wins)
         )
 
     // Colors approximating the sample's theme fills (orange / blue / green tints) and the yellow total row.
@@ -394,14 +394,16 @@ object FieldServiceReportExporter {
 
     fun buildHtml(sheets: List<FieldServiceReportSheet>, graphHtml: String? = null, footerHtml: String? = null): String = buildString {
         append("<html><head><meta charset=\"utf-8\"><style>")
-        append("@page{size:landscape;margin:12mm} body{font-family:sans-serif;font-size:12px;} ")
-        append("table{border-collapse:collapse;} td,th{border:1px solid #000;padding:3px 6px;text-align:center;} ")
-        append("td.l,th.l{text-align:left;} th{font-weight:bold;} .noborder td{border:none;text-align:left;padding:1px 4px;} ")
+        // No @page here: the paper, its orientation and its ONE margin are set when printing (FittedPrint), and gp-fit.js lays the tables out for that paper.
+        append("body{font-family:sans-serif;font-size:12px;margin:0} ")
+        append("table{border-collapse:collapse;} td,th{border:1px solid #000;padding:3px 6px;text-align:center;white-space:nowrap;} ")
+        append("td.l,th.l{text-align:left;} td.l:not(.nm){white-space:normal;overflow-wrap:anywhere;} th{font-weight:bold;white-space:normal;} .noborder td{border:none;text-align:left;padding:1px 4px;white-space:normal;} ")
         append("</style></head><body>")
         // Comparative Graph Report (two-period mode) gets its own page ahead of the sheets.
         graphHtml?.let { append(it) }
-        sheets.forEachIndexed { i, sheet ->
-            append("<div style=\"").append(if (i < sheets.lastIndex) "page-break-after:always" else "").append("\">")
+        // One block per FS Group: a block that fits a page is kept whole, a longer one flows over the pages (its header repeating), and no page break is forced between groups.
+        sheets.forEach { sheet ->
+            append("<div class=\"gp-sheet\" style=\"margin-bottom:14px\">")
             appendSheet(sheet)
             append("</div>")
         }
@@ -419,25 +421,25 @@ object FieldServiceReportExporter {
         append("<tr><td><b>").append(e(sheet.countLine)).append("</b></td></tr>")
         sheet.officerRows.forEach { (label, value) -> if (label.isNotBlank()) append("<tr><td>").append(e(label)).append(" ").append(e(value)).append("</td></tr>") }
         append("</table><br>")
-        append("<table><tr><th rowspan=\"2\"></th><th rowspan=\"2\">Status</th><th rowspan=\"2\" class=\"l\">Publisher's Name</th>")
+        append("<table class=\"gp-fit\"><thead><tr><th rowspan=\"2\"></th><th rowspan=\"2\">Status</th><th rowspan=\"2\" class=\"l\">Publisher's Name</th>")
         append("<th colspan=\"${rc.size}\" style=\"background:$FILL_REPORTS\">No. of Reports</th>")
         append("<th colspan=\"${hc.size}\" style=\"background:$FILL_HOURS\">Hours</th>")
         append("<th colspan=\"${rc.size}\" style=\"background:$FILL_BIBLE\">Bible Studies</th><th rowspan=\"2\">Remarks</th></tr><tr>")
         rc.forEach { append("<th style=\"background:$FILL_REPORTS\">").append(e(it.label)).append("</th>") }
         hc.forEach { append("<th style=\"background:$FILL_HOURS\">").append(e(it.label)).append("</th>") }
         rc.forEach { append("<th style=\"background:$FILL_BIBLE\">").append(e(it.label)).append("</th>") }
-        append("</tr>")
+        append("</tr></thead><tbody>")
         sheet.rows.forEach { line ->
-            append("<tr><td>").append(line.number).append("</td><td>").append(e(line.status.label)).append("</td><td class=\"l\">").append(e(line.name)).append("</td>")
+            append("<tr><td>").append(line.number).append("</td><td>").append(e(line.status.label)).append("</td><td class=\"l nm\">").append(e(line.name)).append("</td>")
             rc.forEach { s -> append("<td>").append(if (line.reported && line.status == s) line.reportsCount.toString() else "").append("</td>") }
             hc.forEach { s -> append("<td>").append(if (line.status == s) line.hours?.let { formatHours(it) }.orEmpty() else "").append("</td>") }
             rc.forEach { s -> append("<td>").append(if (line.status == s) line.bibleStudies?.toString().orEmpty() else "").append("</td>") }
             append("<td class=\"l\">").append(e(line.remarks)).append("</td></tr>")
         }
-        append("<tr style=\"background:$FILL_TOTAL;font-weight:bold\"><td></td><td></td><td class=\"l\">Total:</td>")
+        append("</tbody><tfoot><tr style=\"background:$FILL_TOTAL;font-weight:bold\"><td></td><td></td><td class=\"l nm\">Total:</td>")
         rc.forEach { append("<td>").append(sheet.reportCount(it)).append("</td>") }
         hc.forEach { append("<td>").append(formatHours(sheet.totalHours(it))).append("</td>") }
         rc.forEach { append("<td>").append(sheet.totalBibleStudies(it)).append("</td>") }
-        append("<td></td></tr></table>")
+        append("<td></td></tr></tfoot></table>")
     }
 }

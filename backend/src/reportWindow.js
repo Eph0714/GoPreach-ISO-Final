@@ -20,6 +20,12 @@ export function manilaDate(ms) {
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
 }
 
+/** 'YYYY-MM' of the service month a month start belongs to (the same tolerance as reportWindow: any instant inside the 1st, whatever zone stored it). */
+export function monthKey(periodMonth) {
+  const d = manilaDate(Number(periodMonth) + 12 * 3600_000);
+  return `${d.year}-${String(d.month).padStart(2, '0')}`;
+}
+
 export function daysInMonth(year, month) {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }

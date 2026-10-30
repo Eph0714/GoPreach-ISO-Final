@@ -46,7 +46,18 @@ object ReportPrinter {
      * [PrintLayout]. Pass `PrintOptions(LANDSCAPE)` for a wide sheet.
      */
     fun printHtml(context: Context, title: String, html: String, options: PrintOptions = PrintOptions()) {
+        // A report with tables marked for fitting (the Field Service Record) is laid out for the chosen paper by the shared fit script, with the one print margin
+        if (FittedPrint.isFitted(html)) { printFitted(context, title, html, options); return }
         handOff(context, title, PrintLayout.withPageRules(html), PrintLayout.isLandscape(context, options))
+    }
+
+    private fun printFitted(context: Context, title: String, html: String, options: PrintOptions) {
+        var c: Context? = context
+        while (c is android.content.ContextWrapper && c !is android.app.Activity) c = c.baseContext
+        val activity = c as? android.app.Activity
+        val orientation = FittedPrint.orientationOf(context, options)
+        if (activity == null || activity.isFinishing) FittedPrint.print(context, title, html, FittedPrint.paperOf(context), orientation)
+        else PrintPreviewDialog.showFitted(activity, title, html, orientation)
     }
 
     /** Every report opens the zoomable print preview first (when there is an Activity to show it in); Print then goes to the system dialog. */

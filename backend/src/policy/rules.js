@@ -13,7 +13,7 @@
  *   - Firestore `x.get('k', d)` becomes `x.k ?? d`.
  *   - Subcollections arrive as the collection path "parentCollection/parentId/sub" (e.g. interestedPeople/abc/visits).
  */
-import { reportWindow, windowMessage } from '../reportWindow.js';
+import { reportWindow, windowMessage, monthKey } from '../reportWindow.js';
 import { ok, deny, isSlotHolder } from './index.js';
 
 // Group chats of a whole congregation: Admin, Coordinator Elder, Service Overseer and Secretary (an assigned role counts, not only the active one: see roleIn).
@@ -391,7 +391,7 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
 
     case 'roleAssignments': return writeRoleAssignments(h, { next, old, isCreate, isUpdate, isDelete, verdict });
 
-    case 'monthlyReports': return writeMonthlyReports(h, { op, next, old, verdict });
+    case 'monthlyReports': return writeMonthlyReports(h, { id, op, next, old, verdict });
 
     case 'coFieldServiceMonthStatus': case 'coAttendanceMonthStatus': return writeMonthStatus(h, { id, next, old, isCreate, isUpdate, verdict });
 
@@ -854,8 +854,17 @@ function writeMonthStatus(h, { id, next, old, isCreate, isUpdate, verdict }) {
   return deny('That change to the report status is not allowed');
 }
 
-async function writeMonthlyReports(h, { op, next, old, verdict }) {
+async function writeMonthlyReports(h, { id, op, next, old, verdict }) {
   if (h.grant.has) return deny('Restricted accounts have view-only access to reports');
+  // One ACTIVE report per publisher and month. A report that was deleted (by the person in charge or the publisher's FS Group officer) no longer counts: the month is open again
+  // and the publisher sends a new one. Only a second LIVE report for the same publisher and month is refused, whatever id it comes with.
+  if (op === 'set' && !old && next && Number.isFinite(Number(next.periodMonth)) && typeof h.actor.list === 'function' && next.congregationId) {
+    const key = monthKey(next.periodMonth);
+    const rows = await h.actor.list('monthlyReports', next.congregationId);
+    if (rows.some((r) => r.id !== id && !r.deleted && r.data?.publisherPersonId === next.publisherPersonId && Number.isFinite(Number(r.data?.periodMonth)) && monthKey(r.data.periodMonth) === key)) {
+      return deny('A report for this publisher and month already exists');
+    }
+  }
   // A month submitted to the Circuit Overseer (Submitted / Received) is locked: nobody but the Super Admin changes its records.
   for (const rec of [old, op === 'delete' ? null : next]) {
     if (rec && await fsMonthLocked(h.get, rec.congregationId, rec.periodMonth)) return deny(MONTH_LOCKED);
