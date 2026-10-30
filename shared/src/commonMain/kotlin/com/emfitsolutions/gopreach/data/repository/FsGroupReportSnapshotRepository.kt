@@ -45,5 +45,22 @@ class FsGroupReportSnapshotRepository(
         }
     }
 
+    /**
+     * Replaces [existing] with [replacement] (built with FsGroupReportSnapshot.replacedBy, so it carries the next version and the old copy in its history). Written to the SERVER first,
+     * like a first save: the server refuses it if it is not exactly the next version with its history, if there is no reason, or if the person is not an officer of the group.
+     */
+    suspend fun replace(existing: FsGroupReportSnapshot, replacement: FsGroupReportSnapshot): SnapshotSaveResult {
+        val doc = replacement.copy(id = existing.id)
+        return try {
+            remote.pushNow(COLLECTION, existing.id, doc)
+            offline.cacheFromServer(COLLECTION, existing.id, doc)
+            SnapshotSaveResult.Saved(doc)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            SnapshotSaveResult.Failed(e.message?.takeIf { it.isNotBlank() } ?: "The snapshot could not be replaced. Check the connection and try again.")
+        }
+    }
+
     fun startRemoteSync(): Flow<Unit> = remote.mirror(COLLECTION, FsGroupReportSnapshot::class) { it.id }
 }

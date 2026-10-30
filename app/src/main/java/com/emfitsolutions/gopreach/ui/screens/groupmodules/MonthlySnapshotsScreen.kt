@@ -106,12 +106,14 @@ fun MonthlySnapshotsScreen(
     var message by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf(false) }
+    var replacing by remember { mutableStateOf(false) }
+    var viewVersion by rememberSaveable { mutableStateOf<Int?>(null) }
     val slot = state.slot
     val viewing = state.snapshots.firstOrNull { it.id == viewingId }
-    BackHandler(enabled = viewing != null) { viewingId = null }
+    BackHandler(enabled = viewing != null) { viewingId = null; viewVersion = null }
 
     if (viewing != null) {
-        SnapshotDetail(viewing, onBack = { viewingId = null })
+        SnapshotDetail(viewing, viewVersion, onVersion = { viewVersion = it }, onBack = { viewingId = null; viewVersion = null })
         return
     }
     val choice = months[picked.coerceIn(0, months.lastIndex)]
@@ -161,7 +163,10 @@ fun MonthlySnapshotsScreen(
                                 "A snapshot of ${choice.label} was already saved by ${existing.savedByName} on ${stampFormat.format(Date(existing.savedAt))}. A saved snapshot is permanent and cannot be replaced.",
                                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error,
                             )
-                            OutlinedButton(onClick = { viewingId = existing.id }) { Text("View the existing snapshot") }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { viewingId = existing.id }) { Text("View it") }
+                                OutlinedButton(onClick = { replacing = true }, enabled = live != null && !saving) { Text("Replace this snapshot") }
+                            }
                         } else {
                             Button(onClick = { confirm = true }, enabled = live != null && !saving) { Text(if (saving) "Saving..." else "Save Monthly Snapshot") }
                         }
@@ -185,7 +190,7 @@ fun MonthlySnapshotsScreen(
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(monthLabel(s.year, s.month), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(s.groupName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                        Text("Saved ${stampFormat.format(Date(s.savedAt))} by ${s.savedByName}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Saved ${stampFormat.format(Date(s.savedAt))} by ${s.savedByName}" + if (s.version > 1) " · Version ${s.version} (replaced)" else "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (readsAll) {
                             val t = s.report.totals
                             Text("Publishers ${t.publishers} · Reports ${t.reports} · Hours ${formatHours(t.hours)} · Studies ${t.studies}", style = MaterialTheme.typography.bodySmall)
@@ -198,6 +203,49 @@ fun MonthlySnapshotsScreen(
                 }
             }
         }
+    }
+
+    if (replacing && slot != null && existing != null) {
+        var reason by remember { mutableStateOf("") }
+        var understood by remember { mutableStateOf(false) }
+        AlertDialog(
+            onDismissRequest = { replacing = false },
+            title = { Text("Replace the snapshot of ${choice.label}?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "The snapshot is saved again from the report as it is now. The copy it replaces is kept in the snapshot's history, unchanged, with who saved it and when: nothing is lost.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    OutlinedTextField(value = reason, onValueChange = { reason = it.take(500) }, label = { Text("Why is it replaced?") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(checked = understood, onCheckedChange = { understood = it })
+                        Text(
+                            "I understand the current snapshot becomes version ${existing.version} in the history and this report becomes version ${existing.version + 1}.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = understood && reason.trim().length >= 3,
+                    onClick = {
+                        replacing = false
+                        saving = true
+                        viewModel.replace(report, slot, existing, reason, currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
+                            saving = false
+                            when (result) {
+                                is SnapshotSaveResult.Saved -> { message = "The snapshot of ${choice.label} was replaced (version ${result.snapshot.version}). The previous copy is kept in its history."; viewingId = result.snapshot.id }
+                                is SnapshotSaveResult.AlreadyExists -> message = "A snapshot already exists for ${choice.label}."
+                                is SnapshotSaveResult.Failed -> message = result.reason
+                            }
+                        }
+                    },
+                ) { Text("Replace snapshot") }
+            },
+            dismissButton = { TextButton(onClick = { replacing = false }) { Text("Cancel") } },
+        )
     }
 
     if (confirm && slot != null) {
@@ -241,11 +289,14 @@ private fun <T> Choice(label: String, value: String, options: List<Pair<T, Strin
 /** One saved snapshot, drawn from its stored values with the same table, summary, print and exports as the live report. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SnapshotDetail(s: FsGroupReportSnapshot, onBack: () -> Unit) {
+private fun SnapshotDetail(whole: FsGroupReportSnapshot, viewVersion: Int?, onVersion: (Int?) -> Unit, onBack: () -> Unit) {
     val context = LocalContext.current
-    val sheet = remember(s.id) { s.toSheet() }
+    // the current version, or an older copy kept in the history: its own values, exactly as they were when it was replaced
+    val s = remember(whole, viewVersion) { viewVersion?.let { whole.atVersion(it) } ?: whole }
+    val isOld = s.version < whole.version
+    val sheet = remember(s.id, s.version) { s.toSheet() }
     val hScroll = rememberScrollState()
-    val summary = remember(s.id) { s.summaryRows() }
+    val summary = remember(s.id, s.version) { s.summaryRows() }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -258,7 +309,9 @@ private fun SnapshotDetail(s: FsGroupReportSnapshot, onBack: () -> Unit) {
             item {
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("PERMANENT SNAPSHOT", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Text("PERMANENT SNAPSHOT · VERSION ${s.version}" + if (whole.version > 1) " OF ${whole.version}" else "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        if (isOld) Text("This is an older copy, replaced later.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        if (!isOld && whole.replaceReason.isNotBlank()) Text("Replaced: ${whole.replaceReason} (${whole.replacedByName}, ${stampFormat.format(Date(whole.replacedAt))})", style = MaterialTheme.typography.bodySmall)
                         Text("Congregation: ${s.congregationName}", style = MaterialTheme.typography.bodyMedium)
                         Text("FS Group: ${s.groupName}", style = MaterialTheme.typography.bodyMedium)
                         Text("Reporting month: ${monthLabel(s.year, s.month)}", style = MaterialTheme.typography.bodyMedium)
@@ -270,6 +323,18 @@ private fun SnapshotDetail(s: FsGroupReportSnapshot, onBack: () -> Unit) {
                                 FieldServiceReportExporter.printPdf(context, listOf(sheet), null, snapshotFooter(s, summary))
                             }) { Text("PDF") }
                             TextButton(onClick = { FieldServiceReportExporter.shareExcel(context, listOf(sheet)) }) { Text("Excel") }
+                        }
+                    }
+                }
+            }
+            if (whole.versions.isNotEmpty()) item {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("History", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text("The older copies, kept exactly as they were when they were replaced.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { onVersion(null) }) { Text("Version ${whole.version} (current) · ${stampFormat.format(Date(whole.savedAt))} · ${whole.savedByName}") }
+                        whole.versions.reversed().forEach { v ->
+                            TextButton(onClick = { onVersion(v.version) }) { Text("Version ${v.version} · ${stampFormat.format(Date(v.savedAt))} · ${v.savedByName}") }
                         }
                     }
                 }

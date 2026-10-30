@@ -134,4 +134,43 @@ class GroupModulesTest {
         assertEquals(mine, again)
         assertNotNull(again.report.sheet.lines.firstOrNull { it.personId == "sy" })
     }
+
+    @Test
+    fun `replacing a snapshot is the next version, keeps the old copy unchanged and can be viewed again`() {
+        val v1 = snapshotOf(sheet())
+        val newer = sheet().copy(rows = sheet().rows.map { it.copy(bibleStudies = it.bibleStudies?.plus(10)) })
+        val v2 = v1.replacedBy(newer.toSnapshotReport(), "  a study was corrected ", "srv", "Sam", "Group Servant", 2L, 2, 2L)
+        assertEquals(2, v2.version)
+        assertEquals("a study was corrected", v2.replaceReason)
+        assertEquals("srv", v2.replacedByPersonId)
+        assertEquals("srv", v2.savedByPersonId)
+        assertEquals(1, v2.versions.size)
+        assertEquals(v1.report, v2.versions[0].report)
+        assertEquals("Gil", v2.versions[0].savedByName)
+        assertEquals(v1.id, v2.id)
+        assertEquals(3, v1.report.totals.studies)
+        assertEquals(23, v2.report.totals.studies)
+        // the older copy is viewed with its own values; the current one is itself
+        assertEquals(v1.report, v2.atVersion(1)!!.report)
+        assertEquals("Gil", v2.atVersion(1)!!.savedByName)
+        assertEquals(v2, v2.atVersion(2))
+        assertNull(v2.atVersion(0))
+        // and again: the history only grows
+        val v3 = v2.replacedBy(v1.report, "back", "ovr", "Gil", "Group Overseer", 3L, 1, 3L)
+        assertEquals(listOf(1, 2), v3.versions.map { it.version })
+        assertEquals(v2.report, v3.versions[1].report)
+        assertEquals(v1.report, v3.atVersion(1)!!.report)
+        assertEquals(v2.report, v3.atVersion(2)!!.report)
+    }
+
+    @Test
+    fun `a replaced snapshot round-trips through the document and a never replaced one reads as version 1`() {
+        val json = Json { ignoreUnknownKeys = true; isLenient = true; encodeDefaults = true }
+        val v2 = snapshotOf(sheet()).replacedBy(sheet().toSnapshotReport(), "why", "srv", "Sam", "Group Servant", 2L, 1, 2L)
+        assertEquals(v2, json.decodeFromString(FsGroupReportSnapshot.serializer(), json.encodeToString(FsGroupReportSnapshot.serializer(), v2)))
+        val plain = json.decodeFromString(FsGroupReportSnapshot.serializer(), """{"id":"g1_202609","groupId":"g1","year":2026,"month":9}""")
+        assertEquals(1, plain.version)
+        assertTrue(plain.versions.isEmpty())
+        assertEquals(plain, plain.atVersion(1))
+    }
 }

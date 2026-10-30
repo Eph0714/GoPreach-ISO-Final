@@ -25,6 +25,9 @@ const ROLES_APP_SETTINGS = ROLES_REPORTS;
 const nul = (v) => v ?? null;
 const ELDER_ROLES = ['COORDINATOR_ELDER', 'SERVICE_OVERSEER', 'SECRETARY', 'REGULAR_ELDER'];
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/** Equal whatever the order of the keys (two apps write the same document with their own key order). */
+const sortKeys = (v) => (Array.isArray(v) ? v.map(sortKeys) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v);
+const deepSame = (a, b) => same(sortKeys(a), sortKeys(b));
 const live = (doc) => (doc && !doc.deleted ? doc.data : null);
 
 /** Keys whose value differs between two documents (Firestore `request.resource.data.diff(resource.data).affectedKeys()`). */
@@ -497,7 +500,7 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       if (isDelete) return verdict(nul(old?.publisherPersonId) === h.me, 'Only your own voice notes');
       return verdict(nul(next.publisherPersonId) === h.me && (isCreate || nul(old?.publisherPersonId) === h.me), 'Only your own voice notes');
 
-    case 'fsGroupReportSnapshots': return await writeReportSnapshot(h, { id, next, old, isCreate, verdict });
+    case 'fsGroupReportSnapshots': return isDelete ? deny('A saved snapshot is never removed') : await writeReportSnapshot(h, { id, next, old, isCreate, verdict });
 
     case 'creditHourCategories':
       if (isCreate) return verdict(h.canManageCreditHourCategories() || /^default_[a-z_]+$/.test(id), 'Only admins manage categories');
@@ -959,17 +962,38 @@ async function slotGroupId(h, cong) {
 }
 
 /**
- * Monthly Report Snapshot: one permanent copy of an FS Group's Field Service Report for one month, saved by the group's own Overseer, Servant or Assistant.
- * Its id is the group and the month, so a second one for the same period cannot exist; once saved it is never edited or removed (only the Super Admin could).
+ * Monthly Report Snapshot: one permanent copy of an FS Group's Field Service Report for one month, saved by the group's own Overseer, Servant or Assistant. Its id is the group and
+ * the month, so a second one for the same period cannot exist as a separate record. It is never removed.
+ *
+ * It can be REPLACED by an officer of the group, and only with its history kept: the document carries `version` (1 at the start) and `versions`, the older copies, which only
+ * grow. A replacement must be exactly the next version, must name a reason, must be saved as the person making it, and must append the copy it replaces - unchanged - to `versions`
+ * (all in this one document, so it is atomic: a replacement without its history is refused, and so is any change to an older copy).
  */
 async function writeReportSnapshot(h, { id, next, old, isCreate, verdict }) {
-  if (!isCreate || old) return deny('A saved snapshot is never changed or removed');
   const year = Number(next.year), month = Number(next.month);
   if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12) return deny('The snapshot does not say which month it is for');
   if (id !== `${next.groupId}_${year}${String(month).padStart(2, '0')}`) return deny('A snapshot is one per FS Group and month');
   if (nul(next.savedByPersonId) !== h.me) return deny('A snapshot is saved as yourself');
   if (!(await slotOfOwnGroup(h, nul(next.groupId), nul(next.congregationId)))) return deny('Only the officers of an FS Group save its snapshots');
-  return verdict(next.report != null && typeof next.report === 'object', 'The snapshot holds no report');
+  if (next.report == null || typeof next.report !== 'object') return deny('The snapshot holds no report');
+  if (isCreate) {
+    return verdict((next.version ?? 1) === 1 && (next.versions ?? []).length === 0, 'A new snapshot starts at version 1 with no history');
+  }
+  // a replacement
+  if (!old) return deny('Not allowed');
+  if (!['groupId', 'congregationId', 'year', 'month', 'periodMonth'].every((k) => same(next[k], old[k]))) return deny('The group and the month of a snapshot never change');
+  if (!(await slotOfOwnGroup(h, nul(old.groupId), nul(old.congregationId)))) return deny('Only the officers of an FS Group replace its snapshots');
+  const oldVersion = old.version ?? 1;
+  if (next.version !== oldVersion + 1) return deny('A replacement is the next version of the snapshot');
+  if (typeof next.replaceReason !== 'string' || next.replaceReason.trim() === '' || next.replaceReason.length > 500) return deny('A replacement needs a reason');
+  if (nul(next.replacedByPersonId) !== h.me) return deny('A snapshot is replaced as yourself');
+  const before = Array.isArray(old.versions) ? old.versions : [];
+  const after = Array.isArray(next.versions) ? next.versions : [];
+  if (after.length !== before.length + 1 || before.some((e, i) => !deepSame(e, after[i]))) return deny('The history of a snapshot only grows');
+  const kept = after[after.length - 1];
+  const copy = { version: oldVersion, savedAt: old.savedAt, savedByPersonId: old.savedByPersonId, savedByName: old.savedByName, savedByRole: old.savedByRole, report: old.report };
+  if (!['version', 'savedAt', 'savedByPersonId', 'savedByName', 'savedByRole', 'report'].every((k) => deepSame(kept[k], copy[k]))) return deny('The history must hold the copy that is replaced, unchanged');
+  return ok();
 }
 
 /**

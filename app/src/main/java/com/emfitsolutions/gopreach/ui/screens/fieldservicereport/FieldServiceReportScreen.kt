@@ -1068,6 +1068,15 @@ private fun FieldServiceExportMenu(ready: List<FieldServiceReportSheet>?, iconOn
         if (iconOnly) com.emfitsolutions.gopreach.ui.components.ActionIconButton(com.emfitsolutions.gopreach.ui.components.ActionKind.Export, onClick = { open = true }, contentDescription = "Export", enabled = ready != null)
         else com.emfitsolutions.gopreach.ui.components.ActionButton(com.emfitsolutions.gopreach.ui.components.ActionKind.Export, onClick = { open = true }, label = "Export", enabled = ready != null)
         androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            // The paper of Print and PDF, remembered (the same choice as Settings > Printing and the preview's buttons): A4 or Letter, as on the website.
+            var paper by remember { mutableStateOf(com.emfitsolutions.gopreach.data.print.FittedPrint.paperOf(context)) }
+            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Paper", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                listOf("A4" to "A4", "LETTER" to "Letter").forEach { (key, label) ->
+                    androidx.compose.material3.FilterChip(selected = paper == key, onClick = { paper = key; com.emfitsolutions.gopreach.data.print.FittedPrint.setPaper(context, key) }, label = { Text(label) })
+                }
+            }
+            androidx.compose.material3.HorizontalDivider()
             listOf("print" to "Print", "pdf" to "PDF", "excel" to "Excel", "word" to "Word").forEach { (key, label) ->
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text(label) },

@@ -27,7 +27,27 @@ data class FsGroupReportSnapshot(
     val sourceReports: Int = 0,
     val sourceVersion: Long = 0L,
     val report: SnapshotReport = SnapshotReport(),
+    /** 1 for a snapshot that was never replaced; each replacement is the next version. */
+    val version: Int = 1,
+    /** The older copies, kept unchanged when the snapshot was replaced (oldest first). Only ever grows. */
+    val versions: List<SnapshotVersion> = emptyList(),
+    val replaceReason: String = "",
+    val replacedAt: Long = 0L,
+    val replacedByPersonId: String = "",
+    val replacedByName: String = "",
 ) {
+    /** The snapshot as it was in version [v]: this one when [v] is the current version, else the older copy kept in its history (null if there is none). */
+    fun atVersion(v: Int): FsGroupReportSnapshot? =
+        if (v >= version) this
+        else versions.firstOrNull { it.version == v }?.let { copy(version = it.version, savedAt = it.savedAt, savedByPersonId = it.savedByPersonId, savedByName = it.savedByName, savedByRole = it.savedByRole, report = it.report) }
+
+    /** What this snapshot becomes when it is replaced by [report], saved by [byPersonId]: the next version, with this copy appended, unchanged, to its history. */
+    fun replacedBy(report: SnapshotReport, reason: String, byPersonId: String, byName: String, byRole: String, nowMillis: Long, sourceReports: Int, sourceVersion: Long) = copy(
+        savedByPersonId = byPersonId, savedByName = byName, savedByRole = byRole, savedAt = nowMillis, sourceReports = sourceReports, sourceVersion = sourceVersion, report = report,
+        version = version + 1, versions = versions + SnapshotVersion(version, savedAt, savedByPersonId, savedByName, savedByRole, this.report),
+        replaceReason = reason.trim(), replacedAt = nowMillis, replacedByPersonId = byPersonId, replacedByName = byName,
+    )
+
     companion object {
         fun idFor(groupId: String, year: Int, month: Int) = "${groupId}_$year${month.toString().padStart(2, '0')}"
     }
@@ -75,4 +95,15 @@ data class SnapshotTotals(
     val reports: Int = 0,
     val hours: Double = 0.0,
     val studies: Int = 0,
+)
+
+/** An older copy of a snapshot, exactly as it was when it was replaced. */
+@kotlinx.serialization.Serializable
+data class SnapshotVersion(
+    val version: Int = 1,
+    val savedAt: Long = 0L,
+    val savedByPersonId: String = "",
+    val savedByName: String = "",
+    val savedByRole: String = "",
+    val report: SnapshotReport = SnapshotReport(),
 )

@@ -42,6 +42,18 @@ class MonthlySnapshotsViewModel(
     fun liveSheet(report: FieldServiceReportViewModel, slot: OfficerSlot, monthStart: Long) =
         report.sheetsFor(listOf(slot.group), monthStart, monthStart).map { it.firstOrNull() }
 
+    /** Replaces the saved snapshot [existing] of the officer's OWN group with the report as it is now; the copy it replaces stays in its history. [onResult] runs on the main thread. */
+    fun replace(report: FieldServiceReportViewModel, slot: OfficerSlot, existing: FsGroupReportSnapshot, reason: String, byPersonId: String, byName: String, nowMillis: Long, onResult: (SnapshotSaveResult) -> Unit) {
+        viewModelScope.launch {
+            val sheet = report.sheetsFor(listOf(slot.group), existing.periodMonth, existing.periodMonth).first().firstOrNull()
+            if (sheet == null) {
+                onResult(SnapshotSaveResult.Failed("There is no report to save for this group and month."))
+                return@launch
+            }
+            onResult(snapshots.replace(existing, existing.replacedBy(sheet.toSnapshotReport(), reason, byPersonId, byName, slot.label, nowMillis, sheet.rows.count { it.hasReport }, nowMillis)))
+        }
+    }
+
     /** Freezes the live report of the officer's OWN group for [monthStart]. [onResult] runs on the main thread. */
     fun save(report: FieldServiceReportViewModel, slot: OfficerSlot, monthStart: Long, year: Int, month: Int, byPersonId: String, byName: String, nowMillis: Long, onResult: (SnapshotSaveResult) -> Unit) {
         viewModelScope.launch {
