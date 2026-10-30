@@ -31,6 +31,11 @@ test('toLandmarks drops unnamed or unclassified elements, uses way centres and k
   assert.equal(out[2].lat, 16.52);
 });
 
+test('a box that is exactly 4 x 4 whole tiles counts 16 tiles, not 25', () => {
+  const N = 2 ** 13, lng = (x) => (x / N) * 360 - 180, lat = (y) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / N))) * 180) / Math.PI;
+  assert.equal(tilesFor(lat(3800 + 4), lng(6850), lat(3800), lng(6850 + 4)).length, 16);
+});
+
 test('tilesFor covers a box with whole tiles', () => {
   assert.equal(tilesFor(16.49, 121.19, 16.51, 121.21).length >= 1, true);
   assert.equal(tilesFor(16.0, 121.0, 17.5, 122.5).length > 16, true);

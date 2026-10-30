@@ -27,7 +27,9 @@ const latOf = (y) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / 2 ** TILE_ZOO
 
 /** The tile columns and rows a box covers. */
 export function tilesFor(s, w, n, e) {
-  const x0 = tileX(w), x1 = tileX(e), y0 = tileY(n), y1 = tileY(s);
+  // a box that ends exactly on a tile edge (what the clients send for whole tiles) must not count the next tile as well
+  const EDGE = 1e-7;
+  const x0 = tileX(w), x1 = Math.max(x0, tileX(e - EDGE)), y0 = tileY(n), y1 = Math.max(y0, tileY(s + EDGE));
   const tiles = [];
   for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) tiles.push({ x, y });
   return tiles;
