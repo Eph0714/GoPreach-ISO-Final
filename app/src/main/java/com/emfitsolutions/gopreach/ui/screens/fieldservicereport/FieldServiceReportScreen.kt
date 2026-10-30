@@ -438,6 +438,14 @@ fun FieldServiceReportScreen(
                     )
                 }
             }
+            // Save the report on screen as a permanent Monthly Report Snapshot: for the Overseer, Servant and Assistant of an FS Group, for their OWN group and the month shown.
+            val snapshotSlot = com.emfitsolutions.gopreach.ui.screens.groupmodules.officerSlotOf(currentPersonId, congregationId, groupsAll)
+            if (!tableOnly && !coMode && !compareMode && !listView && fromMonth == toMonth && snapshotSlot != null) {
+                com.emfitsolutions.gopreach.ui.screens.groupmodules.SaveSnapshotRow(
+                    slot = snapshotSlot, monthStart = fromMonth, currentPersonId = currentPersonId, report = viewModel, onOpenSnapshots = onOpenSnapshots,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
             // Sending is about the whole congregation's month(s) - the panel picks its own months - so it shows in Report View and List View alike,
             // whichever FS Group, grouping or month is on screen.
             // The module's actions in one uniform row (the same button design as every admin module): Add Record, then Send to Circuit Overseer.

@@ -1,9 +1,13 @@
 package com.emfitsolutions.gopreach.data.print
 
 import android.content.Context
+import android.os.Bundle
+import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
+import android.print.PageRange
 import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
 import android.print.PrintManager
 import android.util.Log
 import android.webkit.JavascriptInterface
@@ -97,6 +101,41 @@ object FittedPrint {
             .build()
     }
 
+    /**
+     * The paper gp-fit.js knows (A4, Letter, Legal) closest to what the print dialog now asks for. The person may change the paper or the orientation in the system print dialog after
+     * the report was laid out; the page is then laid out again for the new sheet (see [FitAdapter]).
+     */
+    fun paperFor(size: PrintAttributes.MediaSize): String {
+        val w = minOf(size.widthMils, size.heightMils)
+        val h = maxOf(size.widthMils, size.heightMils)
+        val known = mapOf("A4" to (8268 to 11692), "LETTER" to (8500 to 11000), "LEGAL" to (8500 to 14000))
+        return known.minByOrNull { (_, d) -> kotlin.math.abs(d.first - w) + kotlin.math.abs(d.second - h) }!!.key
+    }
+
+    /**
+     * Wraps the WebView's print adapter so the report fits whatever sheet the person ends up printing on: before the pages are laid out - and again each time the print dialog changes
+     * the paper or the orientation - gp-fit.js lays the tables out for exactly that sheet (columns wrap, a table that is still too wide is scaled down, never past a readable size).
+     */
+    private class FitAdapter(private val web: WebView, private val inner: PrintDocumentAdapter) : PrintDocumentAdapter() {
+        override fun onStart() = inner.onStart()
+
+        override fun onLayout(oldAttributes: PrintAttributes?, newAttributes: PrintAttributes, cancellationSignal: CancellationSignal?, callback: LayoutResultCallback, extras: Bundle?) {
+            val size = newAttributes.mediaSize
+            if (size == null) {
+                inner.onLayout(oldAttributes, newAttributes, cancellationSignal, callback, extras)
+                return
+            }
+            val orientation = if (size.isPortrait) "portrait" else "landscape"
+            val script = "(function(){try{return JSON.stringify(GPFit.layout({paper:'" + paperFor(size) + "',orientation:'" + orientation + "',marginMm:" + MARGIN_MM + "}));}catch(e){return null;}})()"
+            web.evaluateJavascript(script) { inner.onLayout(oldAttributes, newAttributes, cancellationSignal, callback, extras) }
+        }
+
+        override fun onWrite(pages: Array<out PageRange>?, destination: android.os.ParcelFileDescriptor, cancellationSignal: CancellationSignal?, callback: WriteResultCallback) =
+            inner.onWrite(pages, destination, cancellationSignal, callback)
+
+        override fun onFinish() = inner.onFinish()
+    }
+
     private val inFlight = mutableSetOf<WebView>()
 
     /** Lays the report out for [paper] / [orientation] and hands it to the system print dialog (which offers "Save as PDF"). */
@@ -115,7 +154,7 @@ object FittedPrint {
             try {
                 val manager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager
                 if (manager == null) Toast.makeText(context, "Printing isn't available on this device.", Toast.LENGTH_LONG).show()
-                else manager.print(title, web.createPrintDocumentAdapter(title), attributes(layout))
+                else manager.print(title, FitAdapter(web, web.createPrintDocumentAdapter(title)), attributes(layout))
             } catch (e: Exception) {
                 Log.e("FittedPrint", "Failed to open the print dialog", e)
                 Toast.makeText(context, "Couldn't open the print dialog: ${e.localizedMessage ?: "unknown error"}", Toast.LENGTH_LONG).show()

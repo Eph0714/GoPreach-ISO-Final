@@ -350,3 +350,65 @@ private fun snapshotFooter(s: FsGroupReportSnapshot, summary: List<List<String>>
     return FieldServiceSummary.html(summary) +
         "<p style=\"margin-top:8px;font-size:11px\">Snapshot saved ${e(stampFormat.format(Date(s.savedAt)))} by ${e(s.savedByName)} · ${e(s.congregationName)} · ${e(s.groupName)} · ${e(monthLabel(s.year, s.month))}</p>"
 }
+
+/**
+ * The "Save as Snapshot" row of the Field Service Report itself: the officer's OWN group's report for the month on screen, saved as a permanent Monthly Report Snapshot (or opened, when it
+ * already was). The group is the person's own slot; the server checks every save again.
+ */
+@Composable
+fun SaveSnapshotRow(
+    slot: OfficerSlot,
+    monthStart: Long,
+    currentPersonId: String,
+    report: FieldServiceReportViewModel,
+    onOpenSnapshots: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+    viewModel: MonthlySnapshotsViewModel = koinViewModel(),
+) {
+    LaunchedEffect(Unit) { viewModel.startSync().collect { } }
+    val people by org.koin.compose.koinInject<com.emfitsolutions.gopreach.data.repository.PersonRepository>().observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
+    val currentPersonName = people.firstOrNull { it.id == currentPersonId }?.fullName.orEmpty()
+    val flow = remember(currentPersonId, slot.group.congregationId) { viewModel.state(currentPersonId, slot.group.congregationId, false) }
+    val state by flow.collectAsStateWithLifecycle(initialValue = SnapshotsState())
+    val cal = remember(monthStart) { Calendar.getInstance().apply { timeInMillis = monthStart } }
+    val year = cal.get(Calendar.YEAR)
+    val month = cal.get(Calendar.MONTH) + 1
+    val existing = state.snapshots.firstOrNull { it.id == FsGroupReportSnapshot.idFor(slot.group.id, year, month) }
+    var confirm by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (existing != null) {
+            Text(
+                "Snapshot of ${monthLabel(year, month)} saved by ${existing.savedByName}" + if (existing.version > 1) " · version ${existing.version}" else "",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            onOpenSnapshots?.let { open -> OutlinedButton(onClick = open) { Text("View / replace snapshot") } }
+        } else {
+            Button(onClick = { confirm = true }, enabled = !saving) { Text(if (saving) "Saving..." else "Save as Snapshot") }
+        }
+        message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary) }
+    }
+    if (confirm) {
+        AlertDialog(
+            onDismissRequest = { confirm = false },
+            title = { Text("Save the snapshot?") },
+            text = { Text("Save the report of ${monthLabel(year, month)} for ${slot.group.name} as a permanent snapshot? It cannot be changed or replaced without keeping this copy in its history.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirm = false
+                    saving = true
+                    viewModel.save(report, slot, monthStart, year, month, currentPersonId, currentPersonName, System.currentTimeMillis()) { result ->
+                        saving = false
+                        message = when (result) {
+                            is SnapshotSaveResult.Saved -> "The snapshot of ${monthLabel(year, month)} was saved. Later changes to the report do not change it."
+                            is SnapshotSaveResult.AlreadyExists -> "A snapshot already exists for ${monthLabel(year, month)}."
+                            is SnapshotSaveResult.Failed -> result.reason
+                        }
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { confirm = false }) { Text("Cancel") } },
+        )
+    }
+}

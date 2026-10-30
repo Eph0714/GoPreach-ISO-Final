@@ -71,6 +71,9 @@
             if (h > 0 && h <= pageH * 0.98) { s.style.breakInside = 'avoid'; s.style.pageBreakInside = 'avoid'; }
         });
         var overflow = list.some(function (t) { return t.offsetWidth * (parseFloat(t.style.zoom) || 1) > availPx + 1; });
+        // From here the size follows the page itself: the print dialog may still change the paper or the orientation, and a table that spans exactly the width it is given fits whatever sheet is used
+        // (the shrink factor stays; its width is the whole page width in any case).
+        list.forEach(function (t) { var z = parseFloat(t.style.zoom) || 1; t.style.width = z < 1 ? 'calc(100% / ' + z + ')' : '100%'; });
         return {
             paper: paper, landscape: landscape, scale: res.scale, pages: Math.ceil(res.pages - 0.01), marginMm: margin, fits: !overflow,
             pageWidthPx: availPx, pageHeightPx: pageH,
