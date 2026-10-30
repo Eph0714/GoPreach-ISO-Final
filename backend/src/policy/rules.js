@@ -13,6 +13,7 @@
  *   - Firestore `x.get('k', d)` becomes `x.k ?? d`.
  *   - Subcollections arrive as the collection path "parentCollection/parentId/sub" (e.g. interestedPeople/abc/visits).
  */
+import { reportWindow, windowMessage } from '../reportWindow.js';
 import { ok, deny, isSlotHolder } from './index.js';
 
 // Group chats of a whole congregation: Admin, Coordinator Elder, Service Overseer and Secretary (an assigned role counts, not only the active one: see roleIn).
@@ -880,6 +881,15 @@ async function writeMonthlyReports(h, { op, next, old, verdict }) {
   // never Access Granted, Reversed or Posted for themselves; the person in charge makes those moves.
   const publisherStatusOk = ['DRAFT', 'SUBMITTED', 'CORRECTED'].includes(next.status) ||
     (!!old && ['ACCESS_GRANTED', 'RETURNED'].includes(old.status) && next.status === old.status) || accessRequestOnly;
+  // Sending the report (a move into Submitted / Corrected) by the Publisher themselves is only possible on the last two days of the reporting month, by the
+  // SERVER's clock: the apps check it too, but a changed device date or a modified client can never get a report through early. The person in charge and
+  // an FS Group role acting for a publisher are not held to it (they correct records on someone's behalf).
+  const actingForSelf = next.publisherPersonId === h.me && !h.sa && !h.canManageReportsAsCongregationRole(next.congregationId) && !groupWrite;
+  if (actingForSelf && ['SUBMITTED', 'CORRECTED'].includes(next.status) && old?.status !== next.status) {
+    if (!Number.isFinite(Number(next.periodMonth))) return deny('The report does not say which month it is for');
+    const w = reportWindow(next.periodMonth, Date.now());
+    if (!w.open) return deny(windowMessage(w));
+  }
   return verdict((next.publisherPersonId === h.me && hoursOk && publisherStatusOk) || h.canManageReportsAsCongregationRole(next.congregationId) || groupWrite, 'Not allowed to write this report');
 }
 

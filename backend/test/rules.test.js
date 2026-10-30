@@ -148,7 +148,7 @@ test('roleAssignments: a group slot holder may move members, touching only the g
 // ---- monthly reports ---------------------------------------------------------------------------------------------
 
 test('monthlyReports: publishers write only their own, and posted / submitted reports are locked', async () => {
-  const draft = { congregationId: 'congA', publisherPersonId: 'pubA', status: 'DRAFT' };
+  const draft = { congregationId: 'congA', publisherPersonId: 'pubA', status: 'DRAFT', periodMonth: 1650000000000 };
   assert.equal(await set('pubA', 'monthlyReports', 'rep-pubA', { ...draft, status: 'SUBMITTED' }), true);
   assert.equal(await set('pubA2', 'monthlyReports', 'rep-pubA', { ...draft, studies: 9 }), false, 'someone else\'s report');
   assert.equal(await set('pubA2', 'monthlyReports', 'forged', { ...draft }), false, 'forging another publisher\'s report');
@@ -163,6 +163,16 @@ test('monthlyReports: publishers write only their own, and posted / submitted re
   assert.equal(await del('adminB', 'monthlyReports', 'rep-pubA'), false, 'another congregation cannot');
   assert.equal(await del('soA', 'monthlyReports', 'rep-pubA'), true, 'a congregation-wide role deletes within its own congregation');
   assert.equal(await del('sa', 'monthlyReports', 'rep-posted'), true, 'the Super Admin deletes anywhere');
+});
+
+test('monthlyReports: a publisher cannot send a report early or for a month that has not started (the server clock decides)', async () => {
+  const nextYear = Date.now() + 400 * 86400_000;
+  const base = { congregationId: 'congA', publisherPersonId: 'pubA', bibleStudiesCount: 1 };
+  assert.equal(await set('pubA', 'monthlyReports', 'win-future', { ...base, periodMonth: nextYear, status: 'SUBMITTED' }), false, 'a future month');
+  assert.equal(await set('pubA', 'monthlyReports', 'win-future', { ...base, periodMonth: nextYear, status: 'DRAFT' }), true, 'but it can be prepared and saved as a draft');
+  assert.equal(await set('pubA', 'monthlyReports', 'win-none', { ...base, status: 'SUBMITTED' }), false, 'no reporting month at all');
+  assert.equal(await set('pubA', 'monthlyReports', 'win-late', { ...base, periodMonth: 1650000000000, status: 'SUBMITTED' }), true, 'a month that has ended is still sent late');
+  assert.equal(await set('soA', 'monthlyReports', 'win-future2', { ...base, periodMonth: nextYear, status: 'SUBMITTED' }), true, 'the person in charge acting for a publisher is not held to the window');
 });
 
 test('publisher submission: submitted reports lock; access request, grant, reverse and resubmit', async () => {
