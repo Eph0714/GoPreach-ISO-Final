@@ -60,9 +60,10 @@ object FieldServiceSummary {
 
     /** The same summary as an HTML block for the PDF / print, placed after the last sheet. */
     fun html(rows: List<List<String>>): String = buildString {
-        append("<div style=\"margin-top:14px\"><h3 style=\"margin:0 0 4px 0\">Summary</h3><table>")
-        rows.drop(1).forEach { r -> append("<tr><td class=\"l\">").append(ReportPrinterEscape.escape(r[0])).append("</td><td style=\"text-align:right\">").append(ReportPrinterEscape.escape(r[1])).append("</td></tr>") }
-        append("</table></div>")
+        // the same markup as the website's Summary block; its look is the shared gp-report.css
+        append("<section class=\"fs-sheet gp-sheet\"><h3>Summary</h3><dl>")
+        rows.drop(1).forEach { r -> append("<div><dt>").append(ReportPrinterEscape.escape(r[0])).append("</dt><dd>").append(ReportPrinterEscape.escape(r[1])).append("</dd></div>") }
+        append("</dl></section>")
     }
 
     private object ReportPrinterEscape {

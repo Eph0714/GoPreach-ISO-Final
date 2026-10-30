@@ -539,7 +539,10 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       if (isDelete) return verdict(nul(old?.publisherPersonId) === h.me, 'Only your own voice notes');
       return verdict(nul(next.publisherPersonId) === h.me && (isCreate || nul(old?.publisherPersonId) === h.me), 'Only your own voice notes');
 
-    case 'fsGroupReportSnapshots': return isDelete ? deny('A saved snapshot is never removed') : await writeReportSnapshot(h, { id, next, old, isCreate, verdict });
+    // A saved Field Service Record is deleted only by an officer of its own FS Group (the person who saves and updates it); nobody else, and no other month or group is touched.
+    case 'fsGroupReportSnapshots':
+      if (isDelete) return verdict(!!old && !!(await slotOfOwnGroup(h, nul(old.groupId), nul(old.congregationId))), 'Only the officers of an FS Group delete its saved Field Service Records');
+      return await writeReportSnapshot(h, { id, next, old, isCreate, verdict });
 
     case 'creditHourCategories':
       if (isCreate) return verdict(h.canManageCreditHourCategories() || /^default_[a-z_]+$/.test(id), 'Only admins manage categories');

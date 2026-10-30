@@ -49,6 +49,11 @@ object FittedPrint {
     private fun fitScript(context: Context): String =
         scriptCache ?: context.assets.open("print/gp-fit.js").bufferedReader().use { it.readText() }.also { scriptCache = it }
 
+    /** The shared print design of the report (the same file as the website's public/css/gp-report.css). */
+    private var styleCache: String? = null
+    private fun reportStyle(context: Context): String =
+        styleCache ?: context.assets.open("print/gp-report.css").bufferedReader().use { it.readText() }.also { styleCache = it }
+
     /** Orientation for gp-fit.js: the report's own choice, else the person's setting, else Automatic. */
     fun orientationOf(context: Context, options: PrintOptions): String {
         val mode = options.orientation ?: PrintPreferences(context).orientation
@@ -65,7 +70,7 @@ object FittedPrint {
             (if (preview) "var b=document.body;b.style.boxSizing='content-box';b.style.width=Math.round(L.pageWidthPx)+'px';b.style.padding=Math.round($MARGIN_MM*96/25.4)+'px';b.style.margin='0 auto';b.style.background='#fff';document.documentElement.style.background='#e0e0e0';" else "") +
             "if(window.GPAndroid)GPAndroid.layoutDone(JSON.stringify(L));}" +
             "if(document.readyState==='complete')setTimeout(go,30);else window.addEventListener('load',function(){setTimeout(go,30);});})();"
-        val tags = "<style>@page{margin:0}</style><script>${fitScript(context)}</script><script>$bootstrap</script>"
+        val tags = "<style>${reportStyle(context)}</style><style>@page{margin:0}</style><script>${fitScript(context)}</script><script>$bootstrap</script>"
         val withRules = PrintLayout.withPageRules(html)
         val at = withRules.lastIndexOf("</body>", ignoreCase = true)
         return if (at >= 0) withRules.substring(0, at) + tags + withRules.substring(at) else withRules + tags

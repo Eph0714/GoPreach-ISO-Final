@@ -90,11 +90,22 @@ for (const [who, label] of [['ovr', 'Group Overseer'], ['srv', 'Group Servant'],
     assert.equal((await setDoc(who, 'fsGroupReportSnapshots', id, snapshot('g1', who, { month }))).status, 'ok', 'save');
     assert.equal((await setDoc(who, 'fsGroupReportSnapshots', id, snapshot('g1', who, { month, report: { totals: { hours: 99 } } }))).status, 'denied', 'a second save for the same month');
     assert.equal((await setDoc('ovr', 'fsGroupReportSnapshots', id, snapshot('g1', 'ovr', { month, report: { totals: { hours: 99 } } }))).status, 'denied', 'overwrite by another officer');
-    assert.equal((await delDoc(who, 'fsGroupReportSnapshots', id)).status, 'denied', 'delete');
+    assert.equal((await delDoc('ovr2', 'fsGroupReportSnapshots', id)).status, 'denied', 'the officer of another group cannot delete it');
+    assert.equal((await delDoc('p1', 'fsGroupReportSnapshots', id)).status, 'denied', 'a publisher cannot delete it');
     const stored = (await store.get('fsGroupReportSnapshots', id)).data;
     assert.equal(stored.report.totals.hours, 10, 'the saved values are untouched');
   });
 }
+
+test('an officer of the group deletes the saved Field Service Record of one month, and only that one', async () => {
+  const keep = 'g1_202301', gone = 'g1_202302';
+  assert.equal((await setDoc('ovr', 'fsGroupReportSnapshots', keep, snapshot('g1', 'ovr', { month: 1 }))).status, 'ok');
+  assert.equal((await setDoc('srv', 'fsGroupReportSnapshots', gone, snapshot('g1', 'srv', { month: 2 }))).status, 'ok');
+  assert.equal((await delDoc('ast', 'fsGroupReportSnapshots', gone)).status, 'ok', 'any officer of the group may delete');
+  assert.equal((await store.get('fsGroupReportSnapshots', gone))?.deleted ?? !(await store.get('fsGroupReportSnapshots', gone)), true, 'it is gone');
+  assert.equal(!!(await store.get('fsGroupReportSnapshots', keep)) && !(await store.get('fsGroupReportSnapshots', keep)).deleted, true, 'the other month is untouched');
+  assert.equal((await setDoc('srv', 'fsGroupReportSnapshots', gone, snapshot('g1', 'srv', { month: 2 }))).status, 'ok', 'the month can be saved again afterwards');
+});
 
 test('a snapshot is saved only for the own group, as oneself, with a consistent id', async () => {
   assert.equal((await setDoc('ovr', 'fsGroupReportSnapshots', 'g2_202309', snapshot('g2', 'ovr'))).status, 'denied', 'another group');

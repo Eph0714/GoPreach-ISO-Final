@@ -19,8 +19,9 @@ sealed interface SnapshotSaveResult {
 }
 
 /**
- * Monthly Report Snapshots. A snapshot is permanent, so it is written to the SERVER first and only then kept on the device: it is never half-saved, a second one for the same group and
- * month is refused (its id is the group and the month), and nothing here edits or deletes one. The server also refuses another group's snapshot and a changed or removed one.
+ * Saved Field Service Records (the stored name is still "snapshot"). One record per FS Group and month (its id is the group and the month), written to the SERVER first and only then kept
+ * on the device, so it is never half-saved. The group's officers save it, update it (the same record, the earlier copy kept inside it as an internal history) and delete it; the server
+ * refuses everyone else and every other group.
  */
 class FsGroupReportSnapshotRepository(
     private val offline: OfflineFirestoreRepository,
@@ -61,6 +62,21 @@ class FsGroupReportSnapshotRepository(
             SnapshotSaveResult.Failed(e.message?.takeIf { it.isNotBlank() } ?: "The snapshot could not be replaced. Check the connection and try again.")
         }
     }
+
+    /**
+     * Deletes the saved Field Service Record [existing] (that group and month only; the submitted reports are not touched). Deleted on the SERVER first: it refuses anyone who is not an
+     * officer of the record's own group. Returns null when it is gone, otherwise the reason it is not.
+     */
+    suspend fun delete(existing: FsGroupReportSnapshot): String? =
+        try {
+            remote.deleteNow(COLLECTION, existing.id)
+            offline.deleteFromServer(COLLECTION, existing.id)
+            null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.message?.takeIf { it.isNotBlank() } ?: "The saved Field Service Record could not be deleted. Check the connection and try again."
+        }
 
     fun startRemoteSync(): Flow<Unit> = remote.mirror(COLLECTION, FsGroupReportSnapshot::class) { it.id }
 }

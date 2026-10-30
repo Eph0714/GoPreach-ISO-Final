@@ -54,6 +54,11 @@ class MonthlySnapshotsViewModel(
         }
     }
 
+    /** Deletes the saved record [existing] (the officer's OWN group, one month). [onResult] gets null when it is gone, else the reason, on the main thread. */
+    fun delete(existing: FsGroupReportSnapshot, onResult: (String?) -> Unit) {
+        viewModelScope.launch { onResult(snapshots.delete(existing)) }
+    }
+
     /** Freezes the live report of the officer's OWN group for [monthStart]. [onResult] runs on the main thread. */
     fun save(report: FieldServiceReportViewModel, slot: OfficerSlot, monthStart: Long, year: Int, month: Int, byPersonId: String, byName: String, nowMillis: Long, onResult: (SnapshotSaveResult) -> Unit) {
         viewModelScope.launch {

@@ -1,0 +1,57 @@
+/*
+ * gp-report.css - THE print design of a GoPreach Field Service Record (the Field Service Report and a Saved Field Service Record).
+ *
+ * This is ONE file with ONE copy per platform, byte for byte the same:
+ *   website  public/css/gp-report.css   (linked with media="print" on the report pages)
+ *   Android  app/src/main/assets/print/gp-report.css   (put into the report's HTML before it is laid out and printed)
+ * Together with gp-fit.js (the fit rule: paper, orientation, how large the tables are laid out) it is the whole print specification. The report's HTML uses the same class names on
+ * both platforms (fs-sheet fs-print gp-sheet, fs-banner, fs-meta, gp-fit, fs-h-rep / fs-h-hrs / fs-h-bib, fs-total), so what is printed or saved as PDF looks the same wherever it is made.
+ *
+ * Do NOT restyle the printed report anywhere else (not in app.css, not in a script, not in Kotlin): change it here, copy the file to the other platform, and update the checksum
+ * in the parity test of BOTH projects (GroupModulesTest / PrintParityTest). A test fails when the two copies or the class names drift apart.
+ *
+ * The page itself (@page: paper, orientation, ONE margin of 8 mm) is set at print time from what gp-fit.js decided; nothing here sets a paper size or a margin.
+ */
+html, body { margin: 0 !important; padding: 0; background: #fff !important; color: #000 !important; font-family: sans-serif; font-size: 12px; line-height: 1.25; }
+@page { @bottom-center { content: "Page " counter(page) " of " counter(pages); font-size: 8pt; color: #555; } }
+.no-print, .print-head { display: none !important; }   /* the website's generic page heading: the report carries its own heading */
+.gp-printonly { display: block !important; }
+.gp-note { margin: 8px 0 0 0; font-size: 11px; }
+* { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+/* one block per FS Group (heading, details, table): kept whole when it fits a page, otherwise it flows with its header row repeated and no row split */
+.gp-sheet { margin: 0 0 5mm 0; }
+.fs-print { border: 0 !important; border-radius: 0 !important; margin: 0 0 5mm 0 !important; padding: 0 !important; background: #fff !important; box-shadow: none !important; overflow: visible !important; break-after: auto !important; page-break-after: auto !important; }
+.fs-print .fs-banner { background: #fff !important; color: #000 !important; padding: 0 0 2px 0 !important; break-after: avoid; page-break-after: avoid; }
+.fs-print .fs-banner h2 { margin: 0; font-size: 12px; text-transform: none; letter-spacing: 0; font-weight: 700; }
+.fs-print .fs-banner div { font-size: 12px; opacity: 1 !important; }
+.fs-print .fs-meta { display: block !important; padding: 2px 0 8px 0 !important; font-size: 12px; break-after: avoid; page-break-after: avoid; }
+.fs-print .fs-meta .muted { color: #000 !important; }
+.fs-print .fs-meta .font-semibold { font-weight: 600; }
+.fs-print .table-wrap { border: 0 !important; border-radius: 0 !important; overflow: visible !important; max-height: none !important; }
+
+/* the table: a black grid; numbers on one line, names stay whole, remarks wrap; the heading repeats on every page */
+.fs-print table { border-collapse: collapse; width: auto; table-layout: auto; }
+.fs-print th, .fs-print td { border: 1px solid #000 !important; padding: 3px 6px !important; text-align: center; color: #000 !important; white-space: nowrap; font-size: 12px; background-clip: border-box; position: static !important; }
+.fs-print th { font-weight: 700; }
+.fs-print th.text-left, .fs-print td.text-left { text-align: left; }
+.fs-print th.text-left, .fs-print td.text-left:not(.whitespace-nowrap) { white-space: normal !important; overflow-wrap: anywhere; word-break: normal; }
+.fs-print td.font-semibold { font-weight: 600; }
+.fs-print thead { display: table-header-group; }
+.fs-print tfoot { display: table-row-group; }
+.fs-print tr { break-inside: avoid; page-break-inside: avoid; }
+.fs-print th.fs-h-rep { background: #FBE3D6 !important; }
+.fs-print th.fs-h-hrs { background: #C1D3EA !important; }
+.fs-print th.fs-h-bib { background: #CBEBCD !important; }
+.fs-print th:not(.fs-h-rep):not(.fs-h-hrs):not(.fs-h-bib) { background: #fff !important; }
+.fs-print tbody td { background: #fff !important; }
+.fs-print .fs-total td { background: #FFFF00 !important; font-weight: 700; }
+.fs-print .muted, .fs-print a, .fs-print td * { color: #000 !important; text-decoration: none; }
+
+/* the closing Summary: a plain two-column list, never a card */
+.fs-sheet:not(.fs-print) { border: 0 !important; border-radius: 0 !important; margin: 0 0 5mm 0; padding: 0 !important; background: #fff !important; box-shadow: none !important; break-inside: avoid; page-break-inside: avoid; }
+.fs-sheet:not(.fs-print) h3 { margin: 0 0 4px 0; font-size: 12px; font-weight: 700; }
+.fs-sheet:not(.fs-print) dl { width: 22rem; max-width: 100%; margin: 0; font-size: 12px; }
+.fs-sheet:not(.fs-print) dl > div { display: flex; justify-content: space-between; gap: 1rem; border-top: 1px solid #000 !important; }
+.fs-sheet:not(.fs-print) dt, .fs-sheet:not(.fs-print) dd { margin: 0; padding: 2px 0 !important; }
+.fs-sheet:not(.fs-print) dd { font-weight: 600; }

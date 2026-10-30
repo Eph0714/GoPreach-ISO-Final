@@ -384,29 +384,19 @@ object FieldServiceReportExporter {
             PrintOptions(),   // upright or across, chosen by the fit for the paper (the person's own setting still wins)
         )
 
-    // Colors approximating the sample's theme fills (orange / blue / green tints) and the yellow total row.
-    private const val FILL_REPORTS = "#FBE3D6"
-    private const val FILL_HOURS = "#C1D3EA"
-    private const val FILL_BIBLE = "#CBEBCD"
-    private const val FILL_TOTAL = "#FFFF00"
-
     fun buildHtml(sheet: FieldServiceReportSheet): String = buildHtml(listOf(sheet))
 
+    /**
+     * The printed Field Service Record. Its LOOK is not decided here: the HTML uses the class names of the website's report page (fs-sheet fs-print gp-sheet, fs-banner, fs-meta, gp-fit,
+     * fs-h-rep / fs-h-hrs / fs-h-bib, fs-total) and the shared stylesheet assets/print/gp-report.css (the same file as the website's public/css/gp-report.css) is put into the page when it
+     * is laid out (FittedPrint), with gp-fit.js choosing paper, orientation and table size. So the website and the app print the same document.
+     */
     fun buildHtml(sheets: List<FieldServiceReportSheet>, graphHtml: String? = null, footerHtml: String? = null): String = buildString {
-        append("<html><head><meta charset=\"utf-8\"><style>")
-        // No @page here: the paper, its orientation and its ONE margin are set when printing (FittedPrint), and gp-fit.js lays the tables out for that paper.
-        append("body{font-family:sans-serif;font-size:12px;margin:0} ")
-        append("table{border-collapse:collapse;} td,th{border:1px solid #000;padding:3px 6px;text-align:center;white-space:nowrap;} ")
-        append("td.l,th.l{text-align:left;} td.l:not(.nm){white-space:normal;overflow-wrap:anywhere;} th{font-weight:bold;white-space:normal;} .noborder td{border:none;text-align:left;padding:1px 4px;white-space:normal;} ")
-        append("</style></head><body>")
+        append("<html><head><meta charset=\"utf-8\"></head><body>")
         // Comparative Graph Report (two-period mode) gets its own page ahead of the sheets.
         graphHtml?.let { append(it) }
         // One block per FS Group: a block that fits a page is kept whole, a longer one flows over the pages (its header repeating), and no page break is forced between groups.
-        sheets.forEach { sheet ->
-            append("<div class=\"gp-sheet\" style=\"margin-bottom:14px\">")
-            appendSheet(sheet)
-            append("</div>")
-        }
+        sheets.forEach { sheet -> appendSheet(sheet) }
         if (sheets.isNotEmpty()) append(FieldServiceSummary.groupedHtml(sheets))
         footerHtml?.let { append(it) }
         append("</body></html>")
@@ -416,30 +406,29 @@ object FieldServiceReportExporter {
         val rc = sheet.reportColumns
         val hc = sheet.hourColumns
         fun e(s: String) = escapeHtml(s)
-        append("<table class=\"noborder\"><tr><td><b>").append(e(sheet.groupName)).append("</b></td></tr>")
-        append("<tr><td>").append(e(sheet.titleLine)).append("</td></tr>")
-        append("<tr><td><b>").append(e(sheet.countLine)).append("</b></td></tr>")
-        sheet.officerRows.forEach { (label, value) -> if (label.isNotBlank()) append("<tr><td>").append(e(label)).append(" ").append(e(value)).append("</td></tr>") }
-        append("</table><br>")
-        append("<table class=\"gp-fit\"><thead><tr><th rowspan=\"2\"></th><th rowspan=\"2\">Status</th><th rowspan=\"2\" class=\"l\">Publisher's Name</th>")
-        append("<th colspan=\"${rc.size}\" style=\"background:$FILL_REPORTS\">No. of Reports</th>")
-        append("<th colspan=\"${hc.size}\" style=\"background:$FILL_HOURS\">Hours</th>")
-        append("<th colspan=\"${rc.size}\" style=\"background:$FILL_BIBLE\">Bible Studies</th><th rowspan=\"2\">Remarks</th></tr><tr>")
-        rc.forEach { append("<th style=\"background:$FILL_REPORTS\">").append(e(it.label)).append("</th>") }
-        hc.forEach { append("<th style=\"background:$FILL_HOURS\">").append(e(it.label)).append("</th>") }
-        rc.forEach { append("<th style=\"background:$FILL_BIBLE\">").append(e(it.label)).append("</th>") }
+        append("<section class=\"fs-sheet fs-print gp-sheet\">")
+        append("<div class=\"fs-banner\"><h2>").append(e(sheet.groupName)).append("</h2><div>").append(e(sheet.titleLine)).append("</div></div>")
+        append("<div class=\"fs-meta\"><div class=\"font-semibold\">").append(e(sheet.countLine)).append("</div>")
+        sheet.officerRows.forEach { (label, value) -> if (label.isNotBlank()) append("<div><span class=\"muted\">").append(e(label)).append("</span> ").append(e(value)).append("</div>") }
+        append("</div><div class=\"table-wrap\"><table class=\"gp-fit\"><thead><tr><th rowspan=\"2\"></th><th rowspan=\"2\">Status</th><th rowspan=\"2\" class=\"text-left\">Publisher's Name</th>")
+        append("<th colspan=\"${rc.size}\" class=\"fs-h-rep\">No. of Reports</th>")
+        if (hc.isNotEmpty()) append("<th colspan=\"${hc.size}\" class=\"fs-h-hrs\">Hours</th>")
+        append("<th colspan=\"${rc.size}\" class=\"fs-h-bib\">Bible Studies</th><th rowspan=\"2\" class=\"text-left\">Remarks</th></tr><tr>")
+        rc.forEach { append("<th class=\"fs-h-rep\">").append(e(it.label)).append("</th>") }
+        hc.forEach { append("<th class=\"fs-h-hrs\">").append(e(it.label)).append("</th>") }
+        rc.forEach { append("<th class=\"fs-h-bib\">").append(e(it.label)).append("</th>") }
         append("</tr></thead><tbody>")
         sheet.rows.forEach { line ->
-            append("<tr><td>").append(line.number).append("</td><td>").append(e(line.status.label)).append("</td><td class=\"l nm\">").append(e(line.name)).append("</td>")
+            append("<tr><td>").append(line.number).append("</td><td>").append(e(line.status.label)).append("</td><td class=\"text-left whitespace-nowrap font-semibold\">").append(e(line.name)).append("</td>")
             rc.forEach { s -> append("<td>").append(if (line.reported && line.status == s) line.reportsCount.toString() else "").append("</td>") }
             hc.forEach { s -> append("<td>").append(if (line.status == s) line.hours?.let { formatHours(it) }.orEmpty() else "").append("</td>") }
             rc.forEach { s -> append("<td>").append(if (line.status == s) line.bibleStudies?.toString().orEmpty() else "").append("</td>") }
-            append("<td class=\"l\">").append(e(line.remarks)).append("</td></tr>")
+            append("<td class=\"text-left muted\">").append(e(line.remarks)).append("</td></tr>")
         }
-        append("</tbody><tfoot><tr style=\"background:$FILL_TOTAL;font-weight:bold\"><td></td><td></td><td class=\"l nm\">Total:</td>")
+        append("</tbody><tfoot><tr class=\"fs-total\"><td></td><td></td><td class=\"text-left\">Total:</td>")
         rc.forEach { append("<td>").append(sheet.reportCount(it)).append("</td>") }
         hc.forEach { append("<td>").append(formatHours(sheet.totalHours(it))).append("</td>") }
         rc.forEach { append("<td>").append(sheet.totalBibleStudies(it)).append("</td>") }
-        append("<td></td></tr></tfoot></table>")
+        append("<td></td></tr></tfoot></table></div></section>")
     }
 }

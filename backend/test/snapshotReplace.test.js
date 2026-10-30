@@ -69,11 +69,10 @@ test('a replacement without its history, with a changed history, without a reaso
   assert.equal((await store.get('fsGroupReportSnapshots', ID)).data.version, cur.version, 'nothing changed');
 });
 
-test('only the officers of that group replace it; nobody removes a snapshot; a new one cannot start with a history', async () => {
+test('only the officers of that group replace it; only an officer of its own group removes it; a new one cannot start with a history', async () => {
   const cur = (await store.get('fsGroupReportSnapshots', ID)).data;
   for (const who of ['ovr2', 'sec']) assert.equal((await setDoc(who, ID, replacement(cur, who, { totals: {} }))).status, 'denied', who);
-  const del = (await call('ovr', '/v1/sync/push', { ops: [{ collection: 'fsGroupReportSnapshots', id: ID, op: 'delete' }] })).body.results[0];
-  assert.equal(del.status, 'denied');
+  for (const who of ['ovr2', 'sec']) assert.equal((await call(who, '/v1/sync/push', { ops: [{ collection: 'fsGroupReportSnapshots', id: ID, op: 'delete' }] })).body.results[0].status, 'denied', `${who} cannot delete`);
   assert.equal((await setDoc('ovr', 'g1_202608', first({ month: 8, version: 2, versions: [{ version: 1 }] }))).status, 'denied', 'a new snapshot with an invented history');
   assert.equal((await setDoc('ovr', 'g1_202608', first({ month: 8 }))).status, 'ok');
 });
