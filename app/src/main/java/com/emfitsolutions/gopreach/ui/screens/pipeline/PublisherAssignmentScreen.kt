@@ -100,6 +100,8 @@ fun PublisherAssignmentScreen(
     currentPersonId: String,
     onSearchCoordinates: () -> Unit,
     onBack: () -> Unit,
+    /** An Overseer, Servant or Assistant of an FS Group who is not a congregation-wide manager: the screen then works on THEIR group only (null = the whole congregation, as before). */
+    officerGroup: com.emfitsolutions.gopreach.ui.screens.groupmodules.OfficerSlot? = null,
     viewModel: PipelineViewModel = koinViewModel(),
 ) {
     var stageIndex by rememberSaveable { mutableStateOf(0) }
@@ -151,12 +153,20 @@ fun PublisherAssignmentScreen(
         return
     }
 
+    // An FS Group officer works on the publishers of their own group, the records those publishers hold and the unassigned ones: never another group's. The server refuses the rest too.
+    val roleRepository = org.koin.compose.koinInject<com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository>()
+    val groupRoles by roleRepository.observeAll().collectAsStateWithLifecycle(initialValue = emptyList())
+    val groupMembers: Set<String>? = officerGroup?.let { com.emfitsolutions.gopreach.ui.screens.groupmodules.groupMemberIds(it.group, groupRoles) }
+    val inScope = { r: InterestedPerson -> groupMembers == null || r.publisherPersonId.isBlank() || r.publisherPersonId in groupMembers }
     val recordsFlow = remember(stage, congregationId) { viewModel.recordsInCongregation(stage, congregationId) }
-    val records by recordsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val recordsAll by recordsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val records = recordsAll.filter(inScope)
     val allFlow = remember(congregationId) { viewModel.allRecordsInCongregation(congregationId) }
-    val allRecords by allFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val allRecordsAll by allFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val allRecords = allRecordsAll.filter(inScope)
     val publishersFlow = remember(congregationId) { viewModel.publishersFor(congregationId) }
-    val publishers by publishersFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val publishersAll by publishersFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val publishers = if (groupMembers == null) publishersAll else publishersAll.filter { it.id in groupMembers }
     val names by viewModel.personNames.collectAsStateWithLifecycle(initialValue = emptyMap())
     val settingsFlow = remember(congregationId) { viewModel.visibilitySettingsFor(congregationId) }
     val settings by settingsFlow.collectAsStateWithLifecycle(initialValue = PublisherVisibilitySettings.defaultsFor(congregationId))
@@ -199,7 +209,7 @@ fun PublisherAssignmentScreen(
                     navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back") } },
                     actions = {
                         IconButton(onClick = onSearchCoordinates) { Icon(Icons.Rounded.MyLocation, contentDescription = "Search Coordinates") }
-                        ActionIconButton(ActionKind.View, onClick = { showVisibility = true }, contentDescription = "Publisher visibility settings")
+                        if (officerGroup == null) ActionIconButton(ActionKind.View, onClick = { showVisibility = true }, contentDescription = "Publisher visibility settings")
                     },
                 )
                 ScrollableTabRow(selectedTabIndex = stageIndex) {
@@ -225,6 +235,11 @@ fun PublisherAssignmentScreen(
                     onSelected = { congregationFilter = it },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
                 )
+            }
+            if (officerGroup != null) Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                Text(officerGroup.label.uppercase(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                Text(officerGroup.group.name, style = MaterialTheme.typography.titleLarge, fontWeight = androidx.compose.ui.text.font.FontWeight.ExtraBold)
+                Text("You give records to the publishers of your own FS Group only.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search name, location, barangay, municipality or publisher", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp))
             Row(

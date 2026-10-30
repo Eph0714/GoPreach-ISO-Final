@@ -1,9 +1,7 @@
 package com.emfitsolutions.gopreach.ui.screens
 
-import com.emfitsolutions.gopreach.data.model.AssignmentStatus
 import com.emfitsolutions.gopreach.data.model.FsGroupReportSnapshot
 import com.emfitsolutions.gopreach.data.model.Group
-import com.emfitsolutions.gopreach.data.model.PublisherAssignment
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
 import com.emfitsolutions.gopreach.data.model.RecordStatus
 import com.emfitsolutions.gopreach.data.model.RoleAssignment
@@ -15,7 +13,6 @@ import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.StatusColumn
 import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.summaryRows
 import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.toSheet
 import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.toSnapshotReport
-import com.emfitsolutions.gopreach.ui.screens.groupmodules.filterAssignments
 import com.emfitsolutions.gopreach.ui.screens.groupmodules.groupMemberIds
 import com.emfitsolutions.gopreach.ui.screens.groupmodules.officerSlotOf
 import kotlinx.serialization.json.Json
@@ -26,7 +23,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** Publishers Assignment (own FS Group only) and Monthly Report Snapshots (the saved values, kept exactly). */
+/** The FS Group of an officer (for Publisher Assignment) and Monthly Report Snapshots (the saved values, kept exactly). */
 class GroupModulesTest {
     private val g1 = Group(id = "g1", congregationId = "c1", name = "Group One", overseerPersonId = "ovr", servantPersonId = "srv", assistantPersonId = "ast", status = RecordStatus.ACTIVE)
     private val g2 = Group(id = "g2", congregationId = "c1", name = "Group Two", overseerPersonId = "ovr2", status = RecordStatus.ACTIVE)
@@ -54,27 +51,6 @@ class GroupModulesTest {
         )
         assertEquals(setOf("ovr", "srv", "ast", "mine"), groupMemberIds(g1, roles))
         assertEquals(setOf("ovr2", "other"), groupMemberIds(g2, roles))
-    }
-
-    @Test
-    fun `assignments are searched by publisher or title and filtered by status and type`() {
-        val a = PublisherAssignment(id = "1", groupId = "g1", publisherPersonId = "mine", title = "Thursday cart", type = "CART", status = "ASSIGNED")
-        val b = PublisherAssignment(id = "2", groupId = "g1", publisherPersonId = "ast", title = "Territory 4", type = "TERRITORY", status = "COMPLETED")
-        val names = mapOf("mine" to "InGroup, Mia", "ast" to "Assistant, Ada")
-        val all = listOf(a, b)
-        assertEquals(listOf("1"), filterAssignments(all, { names[it].orEmpty() }, "mia", null, null).map { it.id })
-        assertEquals(listOf("2"), filterAssignments(all, { names[it].orEmpty() }, "territory", null, null).map { it.id })
-        assertEquals(listOf("2"), filterAssignments(all, { names[it].orEmpty() }, "", "COMPLETED", null).map { it.id })
-        assertEquals(listOf("1"), filterAssignments(all, { names[it].orEmpty() }, "", null, "CART").map { it.id })
-        assertTrue(filterAssignments(all, { names[it].orEmpty() }, "mia", "COMPLETED", null).isEmpty())
-        assertEquals(2, filterAssignments(all, { names[it].orEmpty() }, "", null, null).size)
-    }
-
-    @Test
-    fun `every status has its label and an unknown one falls back to Assigned`() {
-        assertEquals(listOf("Pending", "Assigned", "In Progress", "Completed", "Cancelled"), AssignmentStatus.entries.map { it.label })
-        assertEquals(AssignmentStatus.ASSIGNED, AssignmentStatus.of("whatever"))
-        assertEquals(AssignmentStatus.IN_PROGRESS, AssignmentStatus.of("IN_PROGRESS"))
     }
 
     private fun sheet() = FieldServiceReportSheet(

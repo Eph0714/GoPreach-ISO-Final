@@ -1,7 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.groupmodules
 
 import com.emfitsolutions.gopreach.data.model.Group
-import com.emfitsolutions.gopreach.data.model.PublisherAssignment
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
 import com.emfitsolutions.gopreach.data.model.RecordStatus
 import com.emfitsolutions.gopreach.data.model.RoleAssignment
@@ -32,20 +31,5 @@ fun groupMemberIds(group: Group, assignments: List<RoleAssignment>): Set<String>
     assignments.filter { it.groupId == group.id && it.status == RoleAssignmentStatus.ACTIVE }.forEach { a ->
         val type = a.resolvedRoleTypeOrNull() as? RoleType.Publisher ?: return@forEach
         if (type.category != PublisherCategory.REMOVED_PUBLISHER) add(a.personId)
-    }
-}
-
-/** The assignments of a group that match the search words, the status and the type (all optional). */
-fun filterAssignments(
-    all: List<PublisherAssignment>,
-    nameOf: (String) -> String,
-    query: String,
-    status: String?,
-    type: String?,
-): List<PublisherAssignment> {
-    val q = query.trim().lowercase()
-    return all.filter { a ->
-        (q.isEmpty() || nameOf(a.publisherPersonId).lowercase().contains(q) || a.publisherName.lowercase().contains(q) || a.title.lowercase().contains(q)) &&
-            (status == null || a.status == status) && (type == null || a.type == type)
     }
 }

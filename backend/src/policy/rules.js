@@ -214,7 +214,7 @@ async function slotMayCreateChat(h, id, next) {
  */
 const CONGREGATION_SCOPED_READS = new Set([
   'interestedPeople', 'monthlyReports', 'roleAssignments', 'coFieldServiceReportEvents', 'coReceivedReports', 'coAttendanceReportEvents', 'coAttendanceReports', 'publisherCategoryHistory', 'meetingAttendance', 'meetingAttendanceEvents', 'congregationComparativeReports', 'comparativeReportHistory', 'comparativeReportRemarks', 'groups', 'mapPins', 'territoryAssignments',
-  'publisherTerritoryAssignments', 'territoryAssignmentBarangays', 'publisherAssignments', 'fsGroupReportSnapshots',
+  'publisherTerritoryAssignments', 'territoryAssignmentBarangays', 'fsGroupReportSnapshots',
 ]);
 
 /** Splits "interestedPeople/abc/visits" into its parts; null for a top-level collection. */
@@ -307,8 +307,6 @@ async function baseRead(h, actor, grant, collection, id, data, get) { // match /
     case 'dashboardModuleLayouts': return id === h.me;
     // Voice notes are private: only the person who recorded them reads them, whatever their role.
     case 'voiceNotes': return nul(data.publisherPersonId) === h.me;
-    // An assignment is read by the publisher it is for and by the Overseer, Servant and Assistant of THAT FS Group: nobody else (a congregation role does not manage it).
-    case 'publisherAssignments': return nul(data.publisherPersonId) === h.me || (await slotOfOwnGroup(h, nul(data.groupId), nul(data.congregationId)));
     // A saved monthly snapshot of an FS Group: the group's own officers, and the congregation-wide roles of that congregation (Admin, Coordinator Elder, Service Overseer, Secretary).
     case 'fsGroupReportSnapshots':
       return (await slotOfOwnGroup(h, nul(data.groupId), nul(data.congregationId))) || (h.actor.known && !grant.has && h.canManageReportsAsCongregationRole(nul(data.congregationId)));
@@ -484,7 +482,8 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       }
       if (isCreate) return verdict(await h.inMyActiveCongregationByNameOrId(nul(next.congregationId)), 'Other congregation');
       if (isUpdate) {
-        return verdict((await h.inMyActiveCongregationByNameOrId(nul(old.congregationId))) || h.canManagePublisherReportsFor(nul(next.congregationId)), 'Other congregation');
+        if (!((await h.inMyActiveCongregationByNameOrId(nul(old.congregationId))) || h.canManagePublisherReportsFor(nul(next.congregationId)))) return deny('Other congregation');
+        return await guardRecordReassignment(h, old, next);
       }
       return verdict(await h.inMyActiveCongregationByNameOrId(nul(old?.congregationId)), 'Other congregation');
 
@@ -498,7 +497,6 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       if (isDelete) return verdict(nul(old?.publisherPersonId) === h.me, 'Only your own voice notes');
       return verdict(nul(next.publisherPersonId) === h.me && (isCreate || nul(old?.publisherPersonId) === h.me), 'Only your own voice notes');
 
-    case 'publisherAssignments': return await writePublisherAssignment(h, { id, next, old, isCreate, isUpdate, isDelete, verdict });
     case 'fsGroupReportSnapshots': return await writeReportSnapshot(h, { id, next, old, isCreate, verdict });
 
     case 'creditHourCategories':
@@ -933,30 +931,31 @@ async function publisherInGroup(h, groupId, cong, personId) {
   return false;
 }
 
-export const ASSIGNMENT_STATUSES = ['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'];
-
 /**
- * Publishers Assignment: the Overseer, Servant and Assistant of an FS Group create, edit, change the status of and remove the assignments of the publishers of THEIR group.
- * The group, congregation, publisher and who assigned it never change after creation, and the history only grows.
+ * Publisher Assignment (giving a Searching / Return Visit / Bible Study record to a publisher). The congregation roles and the elders assign freely; the owner of a record may hand
+ * it over, and anyone may take an unassigned one for themselves. Everyone else - an Overseer, Servant or Assistant of an FS Group included - may change who holds a record only inside
+ * THEIR OWN FS Group: the record is held by a publisher of the group (or by nobody) and goes to a publisher of the group (or to nobody). Read from the database, never from the request.
  */
-async function writePublisherAssignment(h, { next, old, isCreate, isUpdate, isDelete, verdict }) {
-  if (isDelete) return verdict(await slotOfOwnGroup(h, nul(old?.groupId), nul(old?.congregationId)), 'Only the officers of the publisher\'s FS Group remove an assignment');
-  if (!(await slotOfOwnGroup(h, nul(next.groupId), nul(next.congregationId)))) return deny('Only the officers of an FS Group manage its assignments');
-  if (!ASSIGNMENT_STATUSES.includes(next.status)) return deny('Unknown assignment status');
-  if (typeof next.title !== 'string' || next.title.trim() === '') return deny('An assignment needs a title');
-  if (isCreate) {
-    if (nul(next.assignedByPersonId) !== h.me) return deny('An assignment is made as yourself');
-    return verdict(await publisherInGroup(h, next.groupId, next.congregationId, nul(next.publisherPersonId)), 'The publisher is not in your FS Group');
+async function guardRecordReassignment(h, old, next) {
+  if (nul(old.publisherPersonId) === nul(next.publisherPersonId)) return ok();
+  const cong = nul(old.congregationId);
+  if (h.canManageReportsAsCongregationRole(cong)) return ok();
+  if (nul(old.publisherPersonId) === h.me || nul(next.publisherPersonId) === h.me) return ok();
+  const gid = h.actor.known && !h.grant.has && typeof h.actor.list === 'function' ? await slotGroupId(h, cong) : null;
+  if (!gid) return deny('Only the officers of an FS Group give records to the publishers of their own group');
+  const fromOk = !nul(old.publisherPersonId) || (await publisherInGroup(h, gid, cong, old.publisherPersonId));
+  const toOk = !nul(next.publisherPersonId) || (await publisherInGroup(h, gid, cong, next.publisherPersonId));
+  return fromOk && toOk ? ok() : deny('A record can only be given between publishers of your own FS Group');
+}
+
+/** The FS Group the caller is an Overseer, Servant or Assistant of, in this congregation (read from the groups); null when none. */
+async function slotGroupId(h, cong) {
+  for (const row of await h.actor.list('groups', cong)) {
+    const g = row.data ?? {};
+    if (row.deleted || (g.status ?? 'ACTIVE') !== 'ACTIVE' || nul(g.congregationId) !== nul(cong)) continue;
+    if ([g.overseerPersonId, g.servantPersonId, g.assistantPersonId].includes(h.me)) return g.id ?? row.id;
   }
-  if (isUpdate) {
-    const fixed = ['groupId', 'congregationId', 'publisherPersonId', 'assignedByPersonId', 'createdAt'].every((k) => same(next[k], old[k]));
-    if (!fixed) return deny('The group, publisher and owner of an assignment cannot change');
-    const before = Array.isArray(old.history) ? old.history : [];
-    const after = Array.isArray(next.history) ? next.history : [];
-    if (after.length < before.length || before.some((e, i) => !same(e, after[i]))) return deny('The history of an assignment only grows');
-    return ok();
-  }
-  return deny('Not allowed');
+  return null;
 }
 
 /**

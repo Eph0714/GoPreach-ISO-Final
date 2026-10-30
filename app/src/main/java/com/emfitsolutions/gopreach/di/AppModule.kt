@@ -92,9 +92,7 @@ import com.emfitsolutions.gopreach.data.repository.PublisherCategoryHistoryRepos
 import com.emfitsolutions.gopreach.data.repository.SavedLocationRepository
 import com.emfitsolutions.gopreach.data.repository.FavoriteRepository
 import com.emfitsolutions.gopreach.data.repository.FsGroupReportSnapshotRepository
-import com.emfitsolutions.gopreach.data.repository.PublisherAssignmentRepository
 import com.emfitsolutions.gopreach.ui.screens.groupmodules.MonthlySnapshotsViewModel
-import com.emfitsolutions.gopreach.ui.screens.groupmodules.PublishersAssignmentViewModel
 import com.emfitsolutions.gopreach.data.repository.ScheduleRepository
 import com.emfitsolutions.gopreach.data.repository.SharedLocationRepository
 import com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentRepository
@@ -398,7 +396,6 @@ val appModule = module {
     singleOf(::RoleAssignmentRepository)
     singleOf(::SavedLocationRepository)
     singleOf(::FavoriteRepository)
-    singleOf(::PublisherAssignmentRepository)
     singleOf(::FsGroupReportSnapshotRepository)
     singleOf(::ScheduleRepository)
     singleOf(::SharedLocationRepository)
@@ -516,7 +513,6 @@ val appModule = module {
     viewModelOf(::LoginViewModel)
     viewModelOf(::ManualFieldServiceViewModel)
     viewModelOf(::MeetingAssignmentsViewModel)
-    viewModelOf(::PublishersAssignmentViewModel)
     viewModelOf(::MonthlySnapshotsViewModel)
     viewModelOf(::MonthlyReportViewModel)
     viewModelOf(::MySubmittedReportsViewModel)

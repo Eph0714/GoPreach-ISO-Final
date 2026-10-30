@@ -391,7 +391,7 @@ fun PublisherHomeScreen(
     val tileRoutes = remember(allTiles) { allTiles.map { it.route }.toSet() }
     // An FS Group officer who holds no Admin-track role (an Assistant is often an ordinary publisher) still gets the officer's own modules, read from the group's slots.
     val officerItems = buildList {
-        if (caps.isGroupOfficer) add(SideItem("Publishers Assignment", Icons.Rounded.AssignmentInd, Destinations.PUBLISHERS_ASSIGNMENT))
+        if (caps.isGroupOfficer && !caps.canManageHouseholderAssignment) add(SideItem("Publisher Assignment", Icons.Rounded.AssignmentInd, Destinations.PUBLISHER_ASSIGNMENT))
         if (caps.canOpenSnapshots) add(SideItem("Monthly Report Snapshots", Icons.Rounded.History, Destinations.MONTHLY_SNAPSHOTS))
     }
     val responsibilityItems: List<SideItem> = if (!hasAdminRoles) listOf(SideItem("Security & Device Management", Icons.Rounded.Security, Destinations.SECURITY)) + officerItems else adminSideItems(caps, includeTabModules = true)
@@ -1395,7 +1395,7 @@ private fun SidePanelDrawerContent(
     val expandedOwn = remember { mutableStateMapOf<NavGroup, Boolean>() }
     val expandedManagement = remember { mutableStateMapOf<NavGroup, Boolean>() }
     val personalRoutes = setOf(Destinations.SECURITY)
-    val mineItems = (responsibilities.filter { it.route in personalRoutes } + SideItem("My FS Group Assignments", Icons.Rounded.AssignmentInd, Destinations.MY_GROUP_ASSIGNMENTS)).map { it.withStandardIcon() }
+    val mineItems = responsibilities.filter { it.route in personalRoutes }.map { it.withStandardIcon() }
     val managementItems = responsibilities.filter { it.route !in personalRoutes }.map { it.withStandardIcon() }
     val ownGroups = NavGroup.entries.mapNotNull { group ->
         val own = tiles.filter { navGroupOf(it.id) == group }

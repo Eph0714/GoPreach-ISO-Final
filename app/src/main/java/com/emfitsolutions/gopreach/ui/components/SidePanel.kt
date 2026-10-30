@@ -214,10 +214,10 @@ fun GoPreachSidePanelContent(
 internal fun navGroupOf(route: String): NavGroup = when (route) {
     Destinations.DASHBOARD_REPORTS -> NavGroup.CONTROL_PANEL
 
-    Destinations.MANUAL_FIELD_SERVICE, Destinations.MEETING_ATTENDANCE, Destinations.MEETING_ASSIGNMENTS, Destinations.PUBLISHER_ASSIGNMENT, Destinations.PUBLISHERS_ASSIGNMENT -> NavGroup.INPUT
+    Destinations.MANUAL_FIELD_SERVICE, Destinations.MEETING_ATTENDANCE, Destinations.MEETING_ASSIGNMENTS, Destinations.PUBLISHER_ASSIGNMENT -> NavGroup.INPUT
 
     Destinations.SCOPED_INTERESTED_RECORDS, Destinations.HOUSEHOLDER_VISIT_HISTORY, Destinations.FORWARD_REQUESTS, Destinations.DELETED_RECORDS,
-    Destinations.CONTACT_RECORD, Destinations.USER_LOGS, Destinations.CIRCUIT_CONGREGATIONS, Destinations.MY_GROUP_ASSIGNMENTS,
+    Destinations.CONTACT_RECORD, Destinations.USER_LOGS, Destinations.CIRCUIT_CONGREGATIONS,
     Destinations.circuitPublishers(), Destinations.circuitLeaders() -> NavGroup.RECORD
 
     Destinations.FIELD_SERVICE_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.CIRCUIT_REPORTS_INBOX, Destinations.CIRCUIT_REPORT,
@@ -414,8 +414,8 @@ fun adminSideItems(caps: AdminCapabilities, includeTabModules: Boolean = false):
             if (canViewSentReports && !isCircuitOverseer) add(SideItem("Comparative Report", Icons.Rounded.Assessment, Destinations.ADMIN_COMPARATIVE))
             // Monthly Report Snapshots: an FS Group officer's own group, or the whole congregation for the Admin / Coordinator Elder / Service Overseer / Secretary.
             if (canOpenSnapshots) add(SideItem("Monthly Report Snapshots", Icons.Rounded.History, Destinations.MONTHLY_SNAPSHOTS))
-            // Publishers Assignment: the Overseer, Servant and Assistant of an FS Group, for their own group only.
-            if (isGroupOfficer && !isCircuitOverseer) add(SideItem("Publishers Assignment", Icons.Rounded.AssignmentInd, Destinations.PUBLISHERS_ASSIGNMENT))
+            // Publisher Assignment for an FS Group officer who is not a congregation-wide manager: the same module, limited to their own group.
+            if (isGroupOfficer && !canManageHouseholderAssignment && !isCircuitOverseer) add(SideItem(stringResource(Res.string.side_publisher_assignment), Icons.Rounded.AssignmentInd, Destinations.PUBLISHER_ASSIGNMENT))
             if (canViewDeletedRecords) add(SideItem("Deleted Records", Icons.Rounded.RestoreFromTrash, Destinations.DELETED_RECORDS))
             // "Consolidate 'Forward Request' Modules for Super Admin" — one
             // entry only. For Super-Admin, GoPreachNavGraph passes

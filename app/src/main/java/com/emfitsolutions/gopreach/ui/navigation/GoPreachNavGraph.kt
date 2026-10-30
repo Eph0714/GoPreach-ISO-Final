@@ -798,18 +798,6 @@ fun GoPreachNavGraph(
                 onBack = { navController.popBackStack() },
             )
         }
-        composable(Destinations.PUBLISHERS_ASSIGNMENT) {
-            // The Overseer, Servant and Assistant of an FS Group: their own group's assignments (the screen derives the group from their slot).
-            com.emfitsolutions.gopreach.ui.screens.groupmodules.PublishersAssignmentScreen(
-                currentPersonId = currentPersonId,
-                currentPersonName = session.person?.fullName ?: "—",
-                congregationId = ownPublisherAssignment?.congregationId ?: ownCongregationId ?: ownGroupAssignment?.congregationId,
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable(Destinations.MY_GROUP_ASSIGNMENTS) {
-            com.emfitsolutions.gopreach.ui.screens.groupmodules.MyGroupAssignmentsScreen(currentPersonId = currentPersonId, onBack = { navController.popBackStack() })
-        }
         composable(Destinations.MONTHLY_SNAPSHOTS) {
             val snapshotCaps = androidx.compose.runtime.remember(session.person, session.roleAssignments, session.grant, session.groups) { com.emfitsolutions.gopreach.ui.components.AdminCapabilities.of(session) }
             if (!snapshotCaps.canOpenSnapshots) { NoAccessScreen(onBack = { navController.popBackStack() }); return@composable }
@@ -944,6 +932,9 @@ fun GoPreachNavGraph(
                 currentPersonId = currentPersonId,
                 onSearchCoordinates = { navController.navigate(Destinations.FIND_LOCATION) },
                 onBack = { navController.popBackStack() },
+                // an FS Group officer who is not a congregation-wide manager works on their own group only
+                officerGroup = if (heldRoles anyIn setOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION, AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY)) null
+                else com.emfitsolutions.gopreach.ui.screens.groupmodules.officerSlotOf(currentPersonId, ownPublisherAssignment?.congregationId ?: ownCongregationId ?: ownGroupAssignment?.congregationId, session.groups),
             )
         }
         composable(Destinations.INCOMING_HOUSEHOLDER_ASSIGNMENTS) {

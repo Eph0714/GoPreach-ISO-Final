@@ -4,8 +4,9 @@ import { MemoryStore } from '../src/memoryStore.js';
 import { createApp } from '../src/app.js';
 
 /**
- * Publishers Assignment and Monthly Report Snapshots, through the same push / pull endpoints every client uses: the Overseer, Servant and Assistant of an FS Group manage the
- * assignments and save the snapshots of THEIR OWN group only; the congregation-wide roles read every snapshot of their congregation (never of another); a saved snapshot never changes.
+ * Publisher Assignment (a Searching / Return Visit / Bible Study record given to a publisher) and Monthly Report Snapshots, through the same push / pull endpoints every client uses.
+ * The Overseer, Servant and Assistant of an FS Group give records only between the publishers of THEIR OWN group and save only THEIR group's snapshots; the congregation-wide roles
+ * read every snapshot of their congregation (never of another); a saved snapshot never changes.
  */
 let store, server, base;
 const put = (c, id, data) => store.transaction((tx) => tx.put(c, id, data, 'seed'));
@@ -21,10 +22,7 @@ const delDoc = (who, collection, id) => push(who, { collection, id, op: 'delete'
 const visible = async (who, collection, id) => (await call(who, `/v1/sync/pull?since=0&collections=${collection}`)).body.changes.some((c) => c.id === id && !c.deleted);
 
 const NOW = 1_700_000_000_000;
-const assignment = (publisher, group, by, extra = {}) => ({
-  congregationId: 'c1', groupId: group, publisherPersonId: publisher, title: 'Cart witnessing', type: 'CART', date: NOW, description: '', remarks: '', status: 'ASSIGNED',
-  assignedByPersonId: by, createdAt: NOW, updatedAt: NOW, history: [{ at: NOW, byPersonId: by, status: 'ASSIGNED', note: 'Created' }], ...extra,
-});
+const record = (owner, extra = {}) => ({ congregationId: 'c1', pipelineStage: 'SEARCHING', name: 'Someone', status: 'ACTIVE', publisherPersonId: owner, ...extra });
 const snapshot = (group, by, extra = {}) => ({
   congregationId: 'c1', congregationName: 'Alpha', groupId: group, groupName: 'Group', year: 2023, month: 9, savedByPersonId: by, savedByName: by, savedAt: NOW,
   report: { totals: { publishers: 2, hours: 10 }, lines: [] }, ...extra,
@@ -46,8 +44,8 @@ before(async () => {
   await put('people', 'adm', person('ADMIN_PER_CONGREGATION'));
   await put('people', 'elder', person('REGULAR_ELDER'));
   await put('people', 'coord2', person('COORDINATOR_ELDER', { activeCongregationId: 'c2' }));
-  await put('groups', 'g1', { congregationId: 'c1', overseerPersonId: 'ovr', servantPersonId: 'srv', assistantPersonId: 'ast', status: 'ACTIVE', name: 'Group One' });
-  await put('groups', 'g2', { congregationId: 'c1', overseerPersonId: 'ovr2', status: 'ACTIVE', name: 'Group Two' });
+  await put('groups', 'g1', { id: 'g1', congregationId: 'c1', overseerPersonId: 'ovr', servantPersonId: 'srv', assistantPersonId: 'ast', status: 'ACTIVE', name: 'Group One' });
+  await put('groups', 'g2', { id: 'g2', congregationId: 'c1', overseerPersonId: 'ovr2', status: 'ACTIVE', name: 'Group Two' });
   await put('roleAssignments', 'raP1', { personId: 'p1', congregationId: 'c1', groupId: 'g1', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
   await put('roleAssignments', 'raP2', { personId: 'p2', congregationId: 'c1', groupId: 'g2', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
   server = createApp(store, { devAuth: true }).listen(0);
@@ -56,55 +54,38 @@ before(async () => {
 after(() => server.close());
 
 for (const [who, label] of [['ovr', 'Group Overseer'], ['srv', 'Group Servant'], ['ast', 'Group Assistant']]) {
-  test(`${label}: creates, edits, changes the status of and removes the assignments of its own group`, async () => {
-    const id = `a_${who}`;
-    assert.equal((await setDoc(who, 'publisherAssignments', id, assignment('p1', 'g1', who))).status, 'ok', 'create');
-    assert.ok(await visible('p1', 'publisherAssignments', id), 'the publisher sees their own assignment');
-    const first = assignment('p1', 'g1', who);
-    const edited = { ...first, title: 'Public witnessing', status: 'IN_PROGRESS', updatedAt: NOW + 1, history: [...first.history, { at: NOW + 1, byPersonId: who, status: 'IN_PROGRESS', note: 'Started' }] };
-    assert.equal((await setDoc(who, 'publisherAssignments', id, edited)).status, 'ok', 'edit and status change');
-    assert.equal((await delDoc(who, 'publisherAssignments', id)).status, 'ok', 'remove');
-  });
-
-  test(`${label}: cannot manage the assignments of another FS Group, however the request is shaped`, async () => {
-    assert.equal((await setDoc(who, 'publisherAssignments', `x_${who}`, assignment('p2', 'g2', who))).status, 'denied', 'create in another group');
-    assert.equal((await setDoc(who, 'publisherAssignments', `x2_${who}`, assignment('p2', 'g1', who))).status, 'denied', 'a publisher of another group named in the own group');
-    assert.equal((await setDoc(who, 'publisherAssignments', `x3_${who}`, assignment('p1', 'g1', 'ovr2'))).status, 'denied', 'made in the name of someone else');
-    assert.equal((await setDoc(who, 'publisherAssignments', `x4_${who}`, assignment('p1', 'g1', who, { congregationId: 'c2' }))).status, 'denied', 'wrong congregation');
-    assert.equal((await setDoc(who, 'publisherAssignments', `x5_${who}`, assignment('p1', 'g1', who, { status: 'DONE' }))).status, 'denied', 'unknown status');
-    await setDoc('ovr2', 'publisherAssignments', `other_${who}`, assignment('p2', 'g2', 'ovr2'));
-    assert.equal((await setDoc(who, 'publisherAssignments', `other_${who}`, { ...assignment('p2', 'g2', 'ovr2'), status: 'COMPLETED' })).status, 'denied', 'edit in another group');
-    assert.equal((await delDoc(who, 'publisherAssignments', `other_${who}`)).status, 'denied', 'remove in another group');
-    assert.equal(await visible(who, 'publisherAssignments', `other_${who}`), false, 'cannot even read it');
+  test(`${label}: gives records between the publishers of its own group, and nowhere else`, async () => {
+    const id = `r_${who}`;
+    await put('interestedPeople', id, record('p1'));
+    assert.equal((await setDoc(who, 'interestedPeople', id, record('ast'))).status, 'ok', 'to another publisher of the group');
+    assert.equal((await setDoc(who, 'interestedPeople', id, record(null))).status, 'ok', 'to nobody');
+    assert.equal((await setDoc(who, 'interestedPeople', id, record('p1'))).status, 'ok', 'an unassigned record to a publisher of the group');
+    assert.equal((await setDoc(who, 'interestedPeople', id, record('p2'))).status, 'denied', 'to a publisher of another group');
+    await put('interestedPeople', id + 'x', record('p2'));
+    assert.equal((await setDoc(who, 'interestedPeople', id + 'x', record('p1'))).status, 'denied', 'a record held by another group, taken into this one');
+    assert.equal((await setDoc(who, 'interestedPeople', id + 'x', record(null))).status, 'denied', 'a record held by another group, released');
+    assert.equal((await setDoc(who, 'interestedPeople', id + 'x', record('p2', { name: 'Edited' }))).status, 'ok', 'editing a record without changing who holds it is not an assignment');
   });
 }
 
-test('a publisher, an elder or a congregation role without a slot manages no assignment; the group, publisher and owner never change; the history only grows', async () => {
-  for (const who of ['p1', 'elder', 'coord', 'sec', 'svc', 'adm']) {
-    assert.equal((await setDoc(who, 'publisherAssignments', `n_${who}`, assignment('p1', 'g1', who))).status, 'denied', who);
+test('the congregation roles still assign freely; owners hand over their own; others cannot', async () => {
+  for (const who of ['coord', 'sec', 'svc', 'adm']) {
+    await put('interestedPeople', 'free', record('p2'));
+    assert.equal((await setDoc(who, 'interestedPeople', 'free', record('p1'))).status, 'ok', who);
   }
-  await setDoc('ovr', 'publisherAssignments', 'fixed', assignment('p1', 'g1', 'ovr'));
-  assert.equal((await setDoc('ovr', 'publisherAssignments', 'fixed', assignment('p2', 'g1', 'ovr'))).status, 'denied', 'publisher cannot change');
-  assert.equal((await setDoc('ovr', 'publisherAssignments', 'fixed', assignment('p1', 'g2', 'ovr'))).status, 'denied', 'group cannot change');
-  assert.equal((await setDoc('ovr', 'publisherAssignments', 'fixed', assignment('p1', 'g1', 'srv'))).status, 'denied', 'owner cannot change');
-  assert.equal((await setDoc('ovr', 'publisherAssignments', 'fixed', assignment('p1', 'g1', 'ovr', { history: [] }))).status, 'denied', 'history cannot be erased');
-  assert.equal((await setDoc('p1', 'publisherAssignments', 'fixed', assignment('p1', 'g1', 'ovr', { status: 'COMPLETED' }))).status, 'denied', 'the publisher cannot edit their own assignment');
-  assert.equal(await visible('coord', 'publisherAssignments', 'fixed'), false, 'a congregation role does not read the group assignments');
-  assert.equal(await visible('p2', 'publisherAssignments', 'fixed'), false, 'another publisher does not read it');
-});
-
-test('a publisher who moved to another FS Group is no longer managed by the old group', async () => {
-  await put('people', 'mover', person(null));
-  await put('roleAssignments', 'raMover', { personId: 'mover', congregationId: 'c1', groupId: 'g1', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
-  assert.equal((await setDoc('ovr', 'publisherAssignments', 'mv', assignment('mover', 'g1', 'ovr'))).status, 'ok');
-  await put('roleAssignments', 'raMover', { personId: 'mover', congregationId: 'c1', groupId: 'g2', status: 'ACTIVE', roleType: 'PUBLISHER:REGULAR_PUBLISHER' });
-  assert.equal((await setDoc('ovr', 'publisherAssignments', 'mv2', assignment('mover', 'g1', 'ovr'))).status, 'denied', 'no new assignment for someone who left');
-  assert.ok(await visible('ovr', 'publisherAssignments', 'mv'), 'the history stays with the group that made it');
+  await put('interestedPeople', 'own', record('p1'));
+  assert.equal((await setDoc('p1', 'interestedPeople', 'own', record('p2'))).status, 'ok', 'an owner hands their own record to someone');
+  await put('interestedPeople', 'taken', record(null));
+  assert.equal((await setDoc('p2', 'interestedPeople', 'taken', record('p2'))).status, 'ok', 'anyone takes an unassigned record for themselves');
+  await put('interestedPeople', 'theirs', record('p1'));
+  assert.equal((await setDoc('elder', 'interestedPeople', 'theirs', record('ast'))).status, 'denied', 'a Regular Elder without a group slot does not assign');
+  assert.equal((await setDoc('p2', 'interestedPeople', 'theirs', record('ast'))).status, 'denied', 'an ordinary publisher cannot move someone elses record');
+  assert.equal((await setDoc('ovr2', 'interestedPeople', 'theirs', record('p2'))).status, 'denied', 'the officer of another group cannot take it from this group');
 });
 
 for (const [who, label] of [['ovr', 'Group Overseer'], ['srv', 'Group Servant'], ['ast', 'Group Assistant']]) {
   test(`${label}: saves the monthly snapshot of its own group once, and it can never be changed`, async () => {
-    const month = { 'ovr': 9, 'srv': 8, 'ast': 7 }[who];
+    const month = { ovr: 9, srv: 8, ast: 7 }[who];
     const id = `g1_2023${String(month).padStart(2, '0')}`;
     assert.equal((await setDoc(who, 'fsGroupReportSnapshots', id, snapshot('g1', who, { month }))).status, 'ok', 'save');
     assert.equal((await setDoc(who, 'fsGroupReportSnapshots', id, snapshot('g1', who, { month, report: { totals: { hours: 99 } } }))).status, 'denied', 'a second save for the same month');
