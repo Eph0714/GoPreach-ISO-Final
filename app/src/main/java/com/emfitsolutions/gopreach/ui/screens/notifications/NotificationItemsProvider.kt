@@ -61,6 +61,8 @@ class NotificationItemsProvider(
     private val personRepository: PersonRepository,
     private val householderAssignmentRepository: HouseholderAssignmentRepository,
     private val coReportRepository: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository,
+    private val groupRepository: com.emfitsolutions.gopreach.data.repository.GroupRepository,
+    private val roleAssignmentRepository: com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository,
 ) {
     private val periodFormat = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
 
@@ -140,6 +142,13 @@ class NotificationItemsProvider(
                 }
         }
 
+        // An edit request of a publisher (a sent report they ask to correct): the congregation roles are told of every one of their congregation.
+        if (includeMonthlyReports) {
+            bundle.reports
+                .filter { it.status == ReportStatus.ACCESS_REQUESTED && (congregationIds == null || it.congregationId in congregationIds) }
+                .forEach { report -> items += editRequestItem(report, people) }
+        }
+
         // The Circuit Overseer's decisions on a congregation's Circuit Report: received, returned for editing (with the reason), cancelled (with the reason).
         if (includeMonthlyReports) {
             bundle.circuitStatuses
@@ -191,14 +200,41 @@ class NotificationItemsProvider(
         return items.sortedByDescending { it.timestamp }.take(50)
     }
 
+    private fun editRequestItem(report: com.emfitsolutions.gopreach.data.model.MonthlyReport, people: List<Person>) = NotificationItem(
+        id = "er_" + report.id + "_" + (report.accessRequestedAt ?: 0L),
+        category = NotificationCategory.MONTHLY_REPORT,
+        title = "Edit request: " + (people.firstOrNull { it.id == report.publisherPersonId }?.fullName ?: "A publisher"),
+        subtitle = periodFormat.format(Date(report.periodMonth)) + (report.accessRequestReason?.takeIf { it.isNotBlank() }?.let { " · " + it.take(80) } ?: ""),
+        timestamp = report.accessRequestedAt ?: report.periodMonth,
+        route = Destinations.EDIT_REQUESTS,
+    )
+
+    /** The edit requests of the publishers of the FS Group [personId] is an Overseer, Servant or Assistant of (theirs only, never their own). */
+    private fun officerEditRequests(personId: String, congregationId: String?): Flow<List<NotificationItem>> =
+        combine(groupRepository.observeAll(), roleAssignmentRepository.observeAll(), monthlyReportRepository.observeAll(), personRepository.observeAll()) { groups, roles, reports, people ->
+            val slot = com.emfitsolutions.gopreach.ui.screens.groupmodules.officerSlotOf(personId, congregationId, groups) ?: return@combine emptyList()
+            val members = com.emfitsolutions.gopreach.ui.screens.groupmodules.groupMemberIds(slot.group, roles)
+            reports
+                .filter { it.status == ReportStatus.ACCESS_REQUESTED && it.publisherPersonId in members && it.publisherPersonId != personId && it.congregationId == slot.group.congregationId }
+                .map { editRequestItem(it, people) }
+        }
+
     fun itemsForPublisher(currentPersonId: String, congregationId: String?): Flow<List<NotificationItem>> =
         combine(
-            publisherForwardRequestRepository.observeAll(),
-            householderAssignmentRepository.observeAll(),
-            announcementRepository.observeAll(),
-            scheduleRepository.observeAll(),
-        ) { publisherForwards, assignments, announcements, schedules ->
+            combine(
+                publisherForwardRequestRepository.observeAll(),
+                householderAssignmentRepository.observeAll(),
+                announcementRepository.observeAll(),
+                scheduleRepository.observeAll(),
+            ) { a, b, c, d -> listOf(a, b, c, d) },
+            officerEditRequests(currentPersonId, congregationId),
+        ) { four, officerRequests ->
+            @Suppress("UNCHECKED_CAST") val publisherForwards = four[0] as List<com.emfitsolutions.gopreach.data.model.PublisherForwardRequest>
+            @Suppress("UNCHECKED_CAST") val assignments = four[1] as List<com.emfitsolutions.gopreach.data.model.HouseholderAssignment>
+            @Suppress("UNCHECKED_CAST") val announcements = four[2] as List<com.emfitsolutions.gopreach.data.model.Announcement>
+            @Suppress("UNCHECKED_CAST") val schedules = four[3] as List<com.emfitsolutions.gopreach.data.model.Schedule>
             val items = mutableListOf<NotificationItem>()
+            items += officerRequests
 
             publisherForwards
                 .filter { it.toPublisherPersonId == currentPersonId && it.status == ForwardRequestStatus.PENDING }

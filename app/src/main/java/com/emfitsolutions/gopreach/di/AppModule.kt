@@ -92,6 +92,7 @@ import com.emfitsolutions.gopreach.data.repository.PublisherCategoryHistoryRepos
 import com.emfitsolutions.gopreach.data.repository.SavedLocationRepository
 import com.emfitsolutions.gopreach.data.repository.FavoriteRepository
 import com.emfitsolutions.gopreach.data.repository.FsGroupReportSnapshotRepository
+import com.emfitsolutions.gopreach.ui.screens.groupmodules.EditRequestsViewModel
 import com.emfitsolutions.gopreach.ui.screens.groupmodules.MonthlySnapshotsViewModel
 import com.emfitsolutions.gopreach.data.repository.ScheduleRepository
 import com.emfitsolutions.gopreach.data.repository.SharedLocationRepository
@@ -514,6 +515,7 @@ val appModule = module {
     viewModelOf(::ManualFieldServiceViewModel)
     viewModelOf(::MeetingAssignmentsViewModel)
     viewModelOf(::MonthlySnapshotsViewModel)
+    viewModelOf(::EditRequestsViewModel)
     viewModelOf(::MonthlyReportViewModel)
     viewModelOf(::MySubmittedReportsViewModel)
     viewModelOf(::NotificationCenterViewModel)

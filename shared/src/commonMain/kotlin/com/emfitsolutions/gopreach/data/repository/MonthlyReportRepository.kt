@@ -74,6 +74,16 @@ class MonthlyReportRepository(
         return withId
     }
 
+    /**
+     * Writes a decision on an edit request (Access Granted / back to Submitted) to the SERVER first and only then keeps it on the device, so a refusal by the server reaches the person at once
+     * instead of staying queued. Throws the server's reason when it is refused; nothing is stored then.
+     */
+    suspend fun pushDecision(report: MonthlyReport) {
+        requireMonthOpen(report.congregationId, report.periodMonth)
+        remote.pushNow(COLLECTION, report.id, report)
+        offline.cacheFromServer(COLLECTION, report.id, report)
+    }
+
     /** One document per publisher and month: a second device (or a repeated request) submitting the
      * same month lands on the same document, so the server can recognise and reject the duplicate
      * instead of storing a second report. Falls back to a random id if either part is missing. */

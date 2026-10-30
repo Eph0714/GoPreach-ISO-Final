@@ -258,6 +258,8 @@ object Destinations {
     const val PUBLISHER_ASSIGNMENT = "publisher_assignment"
     // "Monthly Report Snapshots" - the second section of the Field Service Report module: permanent copies of an FS Group's month.
     const val MONTHLY_SNAPSHOTS = "monthly_snapshots"
+    // "FS Group Report Edit Requests" - in the Congregation Management modules: the edit requests of publishers, decided by the officers of their FS Group (own group) or the congregation roles.
+    const val EDIT_REQUESTS = "edit_requests"
     // A Publisher's own incoming House Holder Assignment review queue.
     const val INCOMING_HOUSEHOLDER_ASSIGNMENTS = "incoming_householder_assignments"
 
@@ -363,5 +365,5 @@ private val motherForms: Set<String> = setOf(
     Destinations.CIRCUIT_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.MEETING_ATTENDANCE, Destinations.REPORT_SUBMISSION, Destinations.CONGREGATION_COMPARATIVE,
     Destinations.CONGREGATION_COMPARATIVE_SUBMITTED, Destinations.CIRCUIT_CONGREGATIONS, Destinations.CO_CONGREGATIONS, Destinations.CIRCUIT_MANAGEMENT, Destinations.MANAGE_USERS,
     Destinations.SECURITY, Destinations.ADMIN_DEVICES, Destinations.ADMIN_SECURITY_LOG,
-    Destinations.MONTHLY_SNAPSHOTS,
+    Destinations.MONTHLY_SNAPSHOTS, Destinations.EDIT_REQUESTS,
 )

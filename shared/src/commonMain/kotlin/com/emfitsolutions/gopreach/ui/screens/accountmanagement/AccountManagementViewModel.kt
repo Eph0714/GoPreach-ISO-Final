@@ -90,11 +90,12 @@ class AccountManagementViewModel(
      * (spec §10's tree, one branch per role) — independent of congregation,
      * since Super-Admin's tree doesn't change per congregation, it only adds
      * the selector above it. */
-    fun availableAccountTypes(actingRole: AdminRole?): List<AccountType> = when (actingRole) {
+    fun availableAccountTypes(actingRole: AdminRole?, officerGroupId: String? = null): List<AccountType> = when (actingRole) {
         AdminRole.SUPER_ADMIN -> AccountType.entries.toList()
         AdminRole.ADMIN_PER_CONGREGATION -> listOf(AccountType.PUBLISHER, AccountType.ELDER, AccountType.MINISTERIAL_SERVANT)
         AdminRole.COORDINATOR_ELDER, AdminRole.SERVICE_OVERSEER, AdminRole.SECRETARY -> listOf(AccountType.PUBLISHER)
-        else -> emptyList()
+        // the Overseer, Servant or Assistant of an FS Group (whatever their role): the plain publishers of their own group
+        else -> if (officerGroupId != null) listOf(AccountType.PUBLISHER) else emptyList()
     }
 
     /** [congregationFilter] is the Super-Admin's own Congregation Selector
@@ -109,6 +110,9 @@ class AccountManagementViewModel(
         congregationFilter: String?,
         searchQuery: String,
         statusFilter: AccountStatus? = null,
+        /** Set for an FS Group officer who is not a congregation-wide manager: the group whose plain publishers they manage, and who they are. */
+        officerGroupId: String? = null,
+        actingPersonId: String = "",
     ): Flow<List<AccountRow>> = combine(
         personRepository.observeAll(),
         roleAssignmentRepository.observeAll(),
@@ -116,8 +120,10 @@ class AccountManagementViewModel(
         userAccessGrantRepository.observeAll(),
         groupRepository.observeAll(),
     ) { people, assignments, congregationList, grants, groups ->
-        if (actingRole == null) return@combine emptyList()
+        val officerOnly = officerGroupId != null && availableAccountTypes(actingRole).isEmpty()
+        if (actingRole == null && !officerOnly) return@combine emptyList()
         val activeAssignments = assignments.filter { it.status == RoleAssignmentStatus.ACTIVE }
+        val officerMembers = if (officerOnly) com.emfitsolutions.gopreach.domain.plainGroupMemberIds(officerGroupId!!, actingPersonId, people, assignments, groups) else emptySet()
         fun congregationNameFor(congregationId: String?) =
             congregationList.firstOrNull { it.id == congregationId }?.name ?: "Unassigned"
 
@@ -167,8 +173,9 @@ class AccountManagementViewModel(
             .map { row -> if (row.group != null) row else row.copy(group = activeAssignments.firstOrNull { a -> a.personId == row.person.id && a.groupId != null }?.let { a -> groups.firstOrNull { g -> g.id == a.groupId }?.name }) }
             .filter { statusFilter == null || it.person.accountStatus == statusFilter }
             .filter { row ->
+                if (officerOnly) return@filter row.person.id in officerMembers && row.congregationId == actingCongregationId
                 PermissionChecker.canManageCredentialsFor(
-                    actingRole = actingRole,
+                    actingRole = actingRole!!,
                     actingCongregationId = actingCongregationId,
                     targetIsPublisher = row.targetAdminRole == null,
                     targetAdminRole = row.targetAdminRole,
@@ -190,15 +197,20 @@ class AccountManagementViewModel(
     }
 
     /** Username changes, password resets and status changes recorded in the audit log, newest first: all of them for the Super Admin, otherwise those of the acting congregation. */
-    fun auditHistory(actingRole: AdminRole?, actingCongregationId: String?): Flow<List<AccountAuditRow>> = combine(
+    fun auditHistory(actingRole: AdminRole?, actingCongregationId: String?, officerGroupId: String? = null, actingPersonId: String = ""): Flow<List<AccountAuditRow>> = combine(
         auditLogRepository.observeAll(),
         personRepository.observeAll(),
-    ) { entries, people ->
-        if (actingRole == null) return@combine emptyList()
+        roleAssignmentRepository.observeAll(),
+        groupRepository.observeAll(),
+    ) { entries, people, assignments, groups ->
+        val officerOnly = officerGroupId != null && availableAccountTypes(actingRole).isEmpty()
+        if (actingRole == null && !officerOnly) return@combine emptyList()
+        val officerMembers = if (officerOnly) com.emfitsolutions.gopreach.domain.plainGroupMemberIds(officerGroupId!!, actingPersonId, people, assignments, groups) else emptySet()
         fun nameOf(id: String?) = people.firstOrNull { it.id == id }?.fullName ?: id.orEmpty().ifBlank { "-" }
         entries
             .filter { it.action.startsWith("ACCOUNT_") }
             .filter { actingRole == AdminRole.SUPER_ADMIN || (actingCongregationId != null && it.congregationId == actingCongregationId) }
+            .filter { !officerOnly || it.targetId in officerMembers }
             .sortedByDescending { it.timestamp }
             .take(300)
             .map { e ->

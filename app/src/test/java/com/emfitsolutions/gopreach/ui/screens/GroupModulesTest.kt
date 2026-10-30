@@ -13,6 +13,7 @@ import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.StatusColumn
 import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.summaryRows
 import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.toSheet
 import com.emfitsolutions.gopreach.ui.screens.fieldservicereport.toSnapshotReport
+import com.emfitsolutions.gopreach.domain.plainGroupMemberIds
 import com.emfitsolutions.gopreach.ui.screens.groupmodules.groupMemberIds
 import com.emfitsolutions.gopreach.ui.screens.groupmodules.officerSlotOf
 import kotlinx.serialization.json.Json
@@ -184,5 +185,25 @@ class GroupModulesTest {
         }
         assertTrue(com.emfitsolutions.gopreach.ui.screens.manualreport.mayEnterRecords(com.emfitsolutions.gopreach.data.model.AdminRole.SECRETARY, null))
         assertTrue(com.emfitsolutions.gopreach.ui.screens.manualreport.mayEnterRecords(com.emfitsolutions.gopreach.data.model.AdminRole.SUPER_ADMIN, null))
+    }
+
+    private fun person(id: String, role: String? = null, superAdmin: Boolean = false) =
+        com.emfitsolutions.gopreach.data.model.Person(id = id, firstName = id, lastName = "X", activeAdminRole = role, isSuperAdmin = superAdmin)
+
+    private fun adminRole(person: String, type: com.emfitsolutions.gopreach.data.model.AdminRole, group: String? = null) =
+        RoleAssignment(id = "a_$person", personId = person, roleType = RoleType.serialize(RoleType.Admin(type)), congregationId = "c1", groupId = group, status = RoleAssignmentStatus.ACTIVE)
+
+    @Test
+    fun `an officer manages the sign-in of the plain publishers of their own group only`() {
+        val people = listOf("ovr", "srv", "ast", "mine", "other", "gone", "elder", "ms", "boss").map { person(it, role = if (it == "elder") "REGULAR_ELDER" else null, superAdmin = it == "boss") }
+        val roles = listOf(
+            publisherRole("mine", "g1"), publisherRole("ast", "g1"), publisherRole("srv", "g1"), publisherRole("ovr", "g1"), publisherRole("other", "g2"),
+            publisherRole("gone", "g1", PublisherCategory.REMOVED_PUBLISHER), publisherRole("elder", "g1"), publisherRole("ms", "g1"), publisherRole("boss", "g1"),
+            adminRole("elder", com.emfitsolutions.gopreach.data.model.AdminRole.REGULAR_ELDER, "g1"), adminRole("ms", com.emfitsolutions.gopreach.data.model.AdminRole.MINISTERIAL_SERVANT, "g1"),
+        )
+        // the Assistant (ast) looks after Group One: only plain members of it - never the officers, anyone with an admin-track role, the Super Admin, a removed publisher or another group
+        assertEquals(setOf("mine"), plainGroupMemberIds("g1", "ast", people, roles, listOf(g1, g2)))
+        assertEquals(setOf("other"), plainGroupMemberIds("g2", "ovr2", people, roles, listOf(g1, g2)))
+        assertTrue(plainGroupMemberIds("g9", "ast", people, roles, listOf(g1, g2)).isEmpty())
     }
 }

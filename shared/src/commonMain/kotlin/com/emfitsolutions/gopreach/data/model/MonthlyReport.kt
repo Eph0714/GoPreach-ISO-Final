@@ -197,6 +197,9 @@ data class MonthlyReport(
     val accessGrantedByPersonId: String? = null,
     val accessGrantedAt: Long? = null,
     val accessDecisionNote: String? = null,
+    /** Who decided the edit request (approved or rejected) and when: written with the decision, never with the report's own figures. */
+    val accessDecidedByPersonId: String? = null,
+    val accessDecidedAt: Long? = null,
     /** Who first created the report and when — set for manual entries so an administrator can see who entered them. */
     val createdByPersonId: String? = null,
     val createdAt: Long? = null,

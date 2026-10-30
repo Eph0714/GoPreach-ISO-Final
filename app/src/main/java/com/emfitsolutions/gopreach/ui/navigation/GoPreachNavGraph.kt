@@ -447,9 +447,13 @@ fun GoPreachNavGraph(
             )
         }
         composable(Destinations.ACCOUNT_MANAGEMENT) {
+            // An FS Group officer who is not a congregation-wide manager manages the sign-in of the plain publishers of their own group only.
+            val accountCongregation = ownCongregationId ?: ownPublisherAssignment?.congregationId ?: ownGroupAssignment?.congregationId
+            val accountOfficer = com.emfitsolutions.gopreach.ui.screens.groupmodules.officerSlotOf(currentPersonId, accountCongregation, session.groups)
             AccountManagementScreen(
                 actingRole = currentRole,
-                actingCongregationId = ownCongregationId,
+                actingCongregationId = accountCongregation,
+                officerGroupId = accountOfficer?.group?.id,
                 currentPersonId = currentPersonId,
                 onBack = { navController.popBackStack() },
                 onCreateAccount = { navController.navigate(it) },
@@ -795,6 +799,16 @@ fun GoPreachNavGraph(
             MyAssignmentsScreen(
                 currentPersonName = session.person?.fullName ?: "—",
                 congregationId = ownPublisherAssignment?.congregationId ?: ownCongregationId ?: ownGroupAssignment?.congregationId,
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(Destinations.EDIT_REQUESTS) {
+            val editCaps = androidx.compose.runtime.remember(session.person, session.roleAssignments, session.grant, session.groups) { com.emfitsolutions.gopreach.ui.components.AdminCapabilities.of(session) }
+            if (!editCaps.canOpenEditRequests) { NoAccessScreen(onBack = { navController.popBackStack() }); return@composable }
+            com.emfitsolutions.gopreach.ui.screens.groupmodules.EditRequestsScreen(
+                currentPersonId = currentPersonId,
+                congregationId = if (AdminRole.SUPER_ADMIN in heldRoles) null else (ownPublisherAssignment?.congregationId ?: ownCongregationId ?: ownGroupAssignment?.congregationId),
+                readsAll = editCaps.canReadAllSnapshots,
                 onBack = { navController.popBackStack() },
             )
         }

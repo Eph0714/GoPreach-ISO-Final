@@ -392,7 +392,9 @@ fun PublisherHomeScreen(
     // An FS Group officer who holds no Admin-track role (an Assistant is often an ordinary publisher) still gets the officer's own modules, read from the group's slots.
     val officerItems = buildList {
         if (caps.isGroupOfficer && !caps.canManageHouseholderAssignment) add(SideItem("Publisher Assignment", Icons.Rounded.AssignmentInd, Destinations.PUBLISHER_ASSIGNMENT))
+        if (caps.canOpenEditRequests) add(SideItem("FS Group Report Edit Requests", Icons.Rounded.History, Destinations.EDIT_REQUESTS))
         if (caps.canOpenSnapshots) add(SideItem("Monthly Report Snapshots", Icons.Rounded.History, Destinations.MONTHLY_SNAPSHOTS))
+        if (caps.isGroupOfficer) add(SideItem("Account Management", Icons.Rounded.AssignmentInd, Destinations.ACCOUNT_MANAGEMENT))
     }
     val responsibilityItems: List<SideItem> = if (!hasAdminRoles) listOf(SideItem("Security & Device Management", Icons.Rounded.Security, Destinations.SECURITY)) + officerItems else adminSideItems(caps, includeTabModules = true)
         .filter { it.route !in tileRoutes }

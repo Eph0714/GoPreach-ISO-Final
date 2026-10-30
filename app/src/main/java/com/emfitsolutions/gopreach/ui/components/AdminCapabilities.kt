@@ -65,6 +65,9 @@ data class AdminCapabilities(
 ) {
     /** Monthly Report Snapshots are offered to an FS Group officer (their own group) and to the congregation-wide roles (all of the congregation). */
     val canOpenSnapshots: Boolean get() = (canReadAllSnapshots || isGroupOfficer) && !isCircuitOverseer
+
+    /** FS Group Report Edit Requests: an FS Group officer (own group) and the congregation-wide roles (the whole congregation, as they already keep). */
+    val canOpenEditRequests: Boolean get() = (canReadAllSnapshots || isGroupOfficer) && !isCircuitOverseer
     /** Field Service / Attendance / Territory / Publishers: the modules of the Admin Main Form's tab strip. */
     val tabModules: Set<AdminTab>
         get() = buildSet {

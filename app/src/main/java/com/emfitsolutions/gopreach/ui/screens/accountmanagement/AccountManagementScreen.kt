@@ -98,9 +98,12 @@ fun AccountManagementScreen(
     /** Shortcuts to the account screens that live inside this module: Circuit Overseer Accounts (Super Admin) and User Management (restricted users). */
     onOpenCircuitAccounts: (() -> Unit)? = null,
     onOpenRestrictedUsers: (() -> Unit)? = null,
+    /** An Overseer, Servant or Assistant of an FS Group who is not a congregation-wide manager: the screen then offers the plain publishers of THIS group only (username and temporary password). */
+    officerGroupId: String? = null,
     viewModel: AccountManagementViewModel = koinViewModel(),
 ) {
-    val availableTypes = remember(actingRole) { viewModel.availableAccountTypes(actingRole) }
+    val availableTypes = remember(actingRole, officerGroupId) { viewModel.availableAccountTypes(actingRole, officerGroupId) }
+    val officerOnly = officerGroupId != null && viewModel.availableAccountTypes(actingRole).isEmpty()
     var selectedType by remember(availableTypes) { mutableStateOf(availableTypes.firstOrNull()) }
     val isSuperAdmin = actingRole == AdminRole.SUPER_ADMIN
     var congregationFilter by rememberCongregationContext("account_management")
@@ -112,11 +115,11 @@ fun AccountManagementScreen(
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
 
     val type = selectedType
-    val rowsFlow = remember(actingRole, actingCongregationId, type, congregationFilter, searchQuery, needsCongregation, statusFilter) {
+    val rowsFlow = remember(actingRole, actingCongregationId, type, congregationFilter, searchQuery, needsCongregation, statusFilter, officerGroupId) {
         if (type == null || needsCongregation) flowOf(emptyList()) else
-            viewModel.rowsFor(actingRole, actingCongregationId, type, congregationFilter, searchQuery, statusFilter)
+            viewModel.rowsFor(actingRole, actingCongregationId, type, congregationFilter, searchQuery, statusFilter, officerGroupId, currentPersonId)
     }
-    val auditRows by remember(actingRole, actingCongregationId) { viewModel.auditHistory(actingRole, actingCongregationId) }.collectAsStateWithLifecycle(initialValue = emptyList())
+    val auditRows by remember(actingRole, actingCongregationId, officerGroupId) { viewModel.auditHistory(actingRole, actingCongregationId, officerGroupId, currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val enrollRoute = when (type) {
         AccountType.PUBLISHER -> Destinations.ENROLL_PUBLISHER
         AccountType.ELDER -> Destinations.ENROLL_ELDER
@@ -249,8 +252,8 @@ fun AccountManagementScreen(
                             row = row,
                             onChangeUsername = { pendingUsernameChange = row },
                             onResetPassword = { pendingResetPasswordInfo = row },
-                            onSetStatus = { status -> viewModel.setAccountStatus(row, status, currentPersonId) },
-                            onViewTemporarySignIn = { viewModel.logTemporarySignInViewed(row, currentPersonId); lookupTarget = row.person },
+                            onSetStatus = if (officerOnly) null else { status -> viewModel.setAccountStatus(row, status, currentPersonId) },
+                            onViewTemporarySignIn = if (officerOnly) null else { { viewModel.logTemporarySignInViewed(row, currentPersonId); lookupTarget = row.person } },
                         )
                     }
                 }
@@ -263,7 +266,7 @@ fun AccountManagementScreen(
     }
     lookupTarget?.let { com.emfitsolutions.gopreach.ui.components.TempCredentialLookupDialog(person = it, onDismiss = { lookupTarget = null }) }
     pendingResetPasswordInfo?.let { row ->
-        TemporaryPasswordFlow(row, viewModel, currentPersonId, showToast, keepReadable = !isSuperAdmin, onDismiss = { pendingResetPasswordInfo = null })
+        TemporaryPasswordFlow(row, viewModel, currentPersonId, showToast, keepReadable = !isSuperAdmin && !officerOnly, onDismiss = { pendingResetPasswordInfo = null })
     }
 }
 
@@ -272,8 +275,9 @@ private fun AccountRowCard(
     row: AccountRow,
     onChangeUsername: () -> Unit,
     onResetPassword: () -> Unit,
-    onSetStatus: (AccountStatus) -> Unit,
-    onViewTemporarySignIn: () -> Unit = {},
+    /** Null for an FS Group officer: whether an account may be used, and a readable temporary sign-in, are the congregation roles' (the server refuses them too). */
+    onSetStatus: ((AccountStatus) -> Unit)?,
+    onViewTemporarySignIn: (() -> Unit)? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val status = row.person.accountStatus
@@ -320,13 +324,13 @@ private fun AccountRowCard(
                         leadingIcon = { Icon(Icons.Rounded.VpnKey, contentDescription = null) },
                         onClick = { menuOpen = false; onResetPassword() },
                     )
-                    if (row.person.isTemporaryCredential) DropdownMenuItem(
+                    if (row.person.isTemporaryCredential && onViewTemporarySignIn != null) DropdownMenuItem(
                         text = { Text("View temporary sign-in") },
                         leadingIcon = { Icon(Icons.Rounded.VpnKey, contentDescription = null) },
                         onClick = { menuOpen = false; onViewTemporarySignIn() },
                     )
-                    HorizontalDivider()
-                    AccountStatus.entries.filter { it != status }.forEach { target ->
+                    if (onSetStatus != null) HorizontalDivider()
+                    if (onSetStatus != null) AccountStatus.entries.filter { it != status }.forEach { target ->
                         DropdownMenuItem(
                             text = { Text("Set ${target.name.lowercase()}") },
                             leadingIcon = {

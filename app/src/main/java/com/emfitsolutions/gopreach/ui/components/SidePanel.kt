@@ -221,7 +221,7 @@ internal fun navGroupOf(route: String): NavGroup = when (route) {
     Destinations.circuitPublishers(), Destinations.circuitLeaders() -> NavGroup.RECORD
 
     Destinations.FIELD_SERVICE_REPORT, Destinations.CIRCUIT_FS_REPORTS, Destinations.CIRCUIT_REPORTS_INBOX, Destinations.CIRCUIT_REPORT,
-    Destinations.RECEIVED_REPORTS, Destinations.MONTHLY_SNAPSHOTS, Destinations.RECEIVED_SNAPSHOTS, Destinations.SENT_REPORTS, Destinations.RECEIVED_ATTENDANCE, Destinations.ADMIN_COMPARATIVE,
+    Destinations.RECEIVED_REPORTS, Destinations.MONTHLY_SNAPSHOTS, Destinations.EDIT_REQUESTS, Destinations.RECEIVED_SNAPSHOTS, Destinations.SENT_REPORTS, Destinations.RECEIVED_ATTENDANCE, Destinations.ADMIN_COMPARATIVE,
     Destinations.REPORT_SUBMISSION, Destinations.COMPARATIVE_REPORT, Destinations.CONGREGATION_COMPARATIVE -> NavGroup.REPORTS
 
     Destinations.MANAGE_CONGREGATIONS, Destinations.MANAGE_ADMINS, Destinations.MANAGE_ELDERS, Destinations.MANAGE_MINISTERIAL_SERVANTS,
@@ -412,6 +412,10 @@ fun adminSideItems(caps: AdminCapabilities, includeTabModules: Boolean = false):
             // The Circuit Overseer reaches the Field Service Report through Received Reports (above), not as a separate module.
             if (canViewSentReports && !isCircuitOverseer) add(SideItem("My Submitted Reports", Icons.Rounded.Inbox, Destinations.SENT_REPORTS))
             if (canViewSentReports && !isCircuitOverseer) add(SideItem("Comparative Report", Icons.Rounded.Assessment, Destinations.ADMIN_COMPARATIVE))
+            // FS Group Report Edit Requests: an FS Group officer (own group) and the congregation-wide roles (the whole congregation).
+            if (canOpenEditRequests) add(SideItem("FS Group Report Edit Requests", Icons.Rounded.History, Destinations.EDIT_REQUESTS))
+            // Account Management for an FS Group officer who is not a congregation-wide manager: the plain publishers of their own group.
+            if (isGroupOfficer && !canManageAccountCredentials && !isCircuitOverseer) add(SideItem(stringResource(Res.string.side_account_management), Icons.Rounded.Key, Destinations.ACCOUNT_MANAGEMENT))
             // Monthly Report Snapshots: an FS Group officer's own group, or the whole congregation for the Admin / Coordinator Elder / Service Overseer / Secretary.
             if (canOpenSnapshots) add(SideItem("Monthly Report Snapshots", Icons.Rounded.History, Destinations.MONTHLY_SNAPSHOTS))
             // Publisher Assignment for an FS Group officer who is not a congregation-wide manager: the same module, limited to their own group.
