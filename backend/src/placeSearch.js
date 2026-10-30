@@ -168,21 +168,23 @@ export class PlaceSearchService {
     this.fetchImpl = fetchImpl; this.now = now; this.urls = urls; this.cache = new Map(); this.pending = new Map();
   }
 
+  /** Every Overpass server is asked at once and the first good answer wins: one slow or refusing server never holds the search up (12 seconds at most). */
   async ask(query) {
-    let last;
-    for (const url of this.urls) {
-      try {
-        const res = await this.fetchImpl(url, {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'GoPreach/1.0 (territory map search)' },
-          body: `data=${encodeURIComponent(query)}`,
-          signal: AbortSignal.timeout(30_000),
-        });
-        if (!res.ok) throw new Error(`Overpass answered ${res.status}`);
-        return (await res.json()).elements ?? [];
-      } catch (e) { last = e; }
+    const one = async (url) => {
+      const res = await this.fetchImpl(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'GoPreach/1.0 (territory map search)' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: AbortSignal.timeout(12_000),
+      });
+      if (!res.ok) throw new Error(`Overpass answered ${res.status}`);
+      return (await res.json()).elements ?? [];
+    };
+    try {
+      return await Promise.any(this.urls.map(one));
+    } catch (agg) {
+      throw agg.errors?.[0] ?? agg;
     }
-    throw last;
   }
 
   /** The backup: Photon, when every Overpass server is unreachable. It cannot filter by category, so it is asked the person's own words. */
@@ -190,7 +192,7 @@ export class PlaceSearchService {
     const u = new URL(PHOTON_URL);
     u.searchParams.set('q', q); u.searchParams.set('limit', '25'); u.searchParams.set('lang', 'en');
     if (Number.isFinite(lat) && Number.isFinite(lng)) { u.searchParams.set('lat', String(lat)); u.searchParams.set('lon', String(lng)); }
-    const res = await this.fetchImpl(u.toString(), { headers: { 'user-agent': 'GoPreach/1.0 (territory map search)' }, signal: AbortSignal.timeout(15_000) });
+    const res = await this.fetchImpl(u.toString(), { headers: { 'user-agent': 'GoPreach/1.0 (territory map search)' }, signal: AbortSignal.timeout(10_000) });
     if (!res.ok) throw new Error(`Photon answered ${res.status}`);
     return photonToElements(await res.json());
   }

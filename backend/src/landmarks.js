@@ -15,7 +15,7 @@ export const MAX_TILES_PER_REQUEST = 16;
 const TTL_MS = 7 * 24 * 3600_000;
 const RETRY_AFTER_FAIL_MS = 60_000;
 const MAX_TILES_CACHED = 800;
-const OVERPASS_URLS = ['https://overpass.openstreetmap.fr/api/interpreter', 'https://overpass-api.de/api/interpreter'];
+const OVERPASS_URLS = ['https://overpass.openstreetmap.fr/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
 
 const tileX = (lng) => Math.floor(((lng + 180) / 360) * 2 ** TILE_ZOOM);
 const tileY = (lat) => {
@@ -136,23 +136,22 @@ export class LandmarkService {
   async fetchTile({ x, y }) {
     const s = latOf(y + 1), n = latOf(y), w = lngOf(x), e = lngOf(x + 1);
     const query = `[out:json][timeout:25];(${QUERY_BODY});out center tags 1500;`.replace('[out:json]', `[out:json][bbox:${s},${w},${n},${e}]`);
-    let lastError;
-    for (const url of this.urls) {
-      try {
-        const res = await this.fetchImpl(url, {
-          method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'GoPreach/1.0 (territory map landmarks)' },
-          body: `data=${encodeURIComponent(query)}`,
-          signal: AbortSignal.timeout(30_000),
-        });
-        if (!res.ok) throw new Error(`Overpass answered ${res.status}`);
-        const json = await res.json();
-        return toLandmarks(json.elements);
-      } catch (err) {
-        lastError = err;
-      }
+    // every Overpass server is asked at once and the first good answer wins: a slow or refusing server never holds a tile up
+    const one = async (url) => {
+      const res = await this.fetchImpl(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded', 'user-agent': 'GoPreach/1.0 (territory map landmarks)' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: AbortSignal.timeout(25_000),
+      });
+      if (!res.ok) throw new Error(`Overpass answered ${res.status}`);
+      return toLandmarks((await res.json()).elements);
+    };
+    try {
+      return await Promise.any(this.urls.map(one));
+    } catch (agg) {
+      throw agg.errors?.[0] ?? agg;
     }
-    throw lastError;
   }
 
   /** The landmarks of one tile, or null when it could not be loaded. */
