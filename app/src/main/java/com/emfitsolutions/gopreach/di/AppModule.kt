@@ -70,6 +70,7 @@ import com.emfitsolutions.gopreach.data.repository.NotificationSeenStore
 import com.emfitsolutions.gopreach.data.repository.NotificationSoundRepository
 import com.emfitsolutions.gopreach.data.repository.OfflineAuthStore
 import com.emfitsolutions.gopreach.data.repository.OfflineSessionMarker
+import com.emfitsolutions.gopreach.data.repository.MapLandmarkRepository
 import com.emfitsolutions.gopreach.data.repository.OverpassLandmarkRepository
 import com.emfitsolutions.gopreach.data.repository.OverpassStreetRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
@@ -374,6 +375,7 @@ val appModule = module {
     singleOf(::OfflineAuthStore)
     singleOf(::OfflineSessionMarker)
     singleOf(::OverpassLandmarkRepository)
+    singleOf(::MapLandmarkRepository)
     singleOf(::PersonRepository)
     singleOf(::PhilippineLocationRepository)
     singleOf(::PlannerDayRepository)

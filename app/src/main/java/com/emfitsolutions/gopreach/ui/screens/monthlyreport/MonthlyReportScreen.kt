@@ -53,6 +53,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -461,10 +462,11 @@ private fun MonthlyReportForm(
         }
 
         if (submitBlockedByWindow) {
+            // The window says exactly which days: it follows the real calendar (30th and 31st, 29th and 30th, February's last two days)
             Text(
-                stringResource(Res.string.monthly_report_submission_window_message),
+                uiState.submissionWindow.message,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
 
@@ -559,11 +561,15 @@ private fun MonthlyReportPreview(
     var showMonthConfirmDialog by remember { mutableStateOf(false) }
     var showHoursConfirmDialog by remember { mutableStateOf(false) }
 
+    // The preview scrolls; the Edit and Send buttons sit in a bar of their own below it, so Send is always on screen (it used to be the last thing of the scrolling column,
+    // out of sight on a small phone until the person scrolled to the bottom).
+    Column(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .weight(1f)
+            .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(20.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(stringResource(Res.string.monthly_report_preview_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -602,8 +608,11 @@ private fun MonthlyReportPreview(
             colors = ButtonDefaults.outlinedButtonColors(contentColor = SolidGray),
             modifier = Modifier.fillMaxWidth(),
         ) { Text(stringResource(Res.string.monthly_report_preview_copy_button)) }
+        if (uiState.errorMessage != null) Text(uiState.errorMessage!!, color = SolidRed, style = MaterialTheme.typography.bodyMedium)
+    }
 
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.compose.material3.Surface(shadowElevation = 8.dp, modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionButton(ActionKind.Edit, onClick = onEdit, label = stringResource(Res.string.monthly_report_preview_edit_button), modifier = Modifier.weight(1f))
             Button(
                 onClick = {
@@ -619,10 +628,11 @@ private fun MonthlyReportPreview(
                 colors = ButtonDefaults.buttonColors(containerColor = SolidGreen),
                 modifier = Modifier.weight(1f),
             ) {
-                if (uiState.isSaving) CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp), color = Color.White)
-                Text(stringResource(Res.string.monthly_report_preview_send_button))
+                if (uiState.isSaving) CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp).then(Modifier.size(18.dp)), color = Color.White, strokeWidth = 2.dp)
+                Text(if (uiState.isSaving) "Sending..." else stringResource(Res.string.monthly_report_preview_send_button))
             }
         }
+    }
     }
 
     // Every submission names the month first, so a report can never go under the wrong month by accident.

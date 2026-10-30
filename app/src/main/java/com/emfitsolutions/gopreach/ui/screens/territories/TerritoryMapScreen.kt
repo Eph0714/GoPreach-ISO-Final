@@ -639,6 +639,9 @@ fun TerritoryMapScreen(
     }
     var basemap by rememberSaveable { mutableStateOf(TerritoryBasemap.STANDARD) }
     var is3d by rememberSaveable { mutableStateOf(false) }
+    // Landmarks around the map (churches, schools, clinics, bridges, rivers, ...): on by default, one tap to hide them.
+    var showLandmarks by rememberSaveable { mutableStateOf(true) }
+    var landmarkSheet by remember { mutableStateOf<com.emfitsolutions.gopreach.data.repository.MapLandmark?>(null) }
     // Driving Mode looks like a navigation app: it switches the map to 3D (tilted, heading up, the arrow low on the screen) and puts the map
     // back the way it was when driving ends. The camera tilt it keeps follows the 3D switch, so turning 3D off while driving flattens it.
     var is3dBeforeDriving by rememberSaveable { mutableStateOf<Boolean?>(null) }
@@ -1192,6 +1195,8 @@ fun TerritoryMapScreen(
                         focus = focus,
                         basemap = basemap,
                         is3d = is3d,
+                        showLandmarks = showLandmarks,
+                        onLandmarkTap = { landmarkSheet = it },
                         reloadToken = reloadToken,
                         fitKey = fitKey,
                         fitReady = fitReady,
@@ -1274,6 +1279,7 @@ fun TerritoryMapScreen(
                                         DropdownMenuItem(text = { Text(b.label, fontWeight = if (basemap == b) FontWeight.Bold else FontWeight.Normal) }, onClick = { basemap = b; styleMenu = false })
                                     }
                                     DropdownMenuItem(text = { Text("3D", fontWeight = if (is3d) FontWeight.Bold else FontWeight.Normal) }, onClick = { is3d = !is3d; styleMenu = false })
+                                    DropdownMenuItem(text = { Text("Landmarks", fontWeight = if (showLandmarks) FontWeight.Bold else FontWeight.Normal) }, onClick = { showLandmarks = !showLandmarks; styleMenu = false })
                                 }
                             }
                         } else Surface(
@@ -1284,6 +1290,7 @@ fun TerritoryMapScreen(
                             Row(modifier = Modifier.padding(3.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                                 TerritoryBasemap.entries.forEach { b -> MapStyleChip(b.label, basemap == b) { basemap = b } }
                                 MapStyleChip("3D", is3d) { is3d = !is3d }
+                                MapStyleChip("Places", showLandmarks) { showLandmarks = !showLandmarks }
                             }
                         }
                         if (!(driving.active && driving.walking)) MapToolButton(
@@ -1781,6 +1788,14 @@ fun TerritoryMapScreen(
         }
     }
 
+    landmarkSheet?.let { lm ->
+        LandmarkSheet(
+            landmark = lm,
+            onDismiss = { landmarkSheet = null },
+            onGuide = { walking -> landmarkSheet = null; startNavigation(lm.name, lm.lat, lm.lng, walking = walking) },
+        )
+    }
+
     val sheetRecord = selectedRecord
     if (sheetOpen && sheetRecord != null) {
         RecordSheet(
@@ -1789,6 +1804,46 @@ fun TerritoryMapScreen(
             onViewDetails = { sheetOpen = false; detailsPerson = sheetRecord.record.person },
             onGuide = { sheetOpen = false; startNavigation(sheetRecord.record.name, sheetRecord.record.lat, sheetRecord.record.lng) },
         )
+    }
+}
+
+/** The popup of a landmark (a place from OpenStreetMap, not a GoPreach record): what it is, where, and whatever else is mapped, with a way to go there. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LandmarkSheet(landmark: com.emfitsolutions.gopreach.data.repository.MapLandmark, onDismiss: () -> Unit, onGuide: (walking: Boolean) -> Unit) {
+    val kind = com.emfitsolutions.gopreach.ui.components.map.LandmarkKind.of(landmark.cat)
+    val context = LocalContext.current
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().keyboardPadding().padding(horizontal = 24.dp).padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(landmark.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(kind.colorHex))))
+                Text(kind.label, style = MaterialTheme.typography.titleSmall)
+            }
+            landmark.address?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+            Text("%.5f, %.5f".format(landmark.lat, landmark.lng), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            landmark.hours?.let { Text("Hours: $it", style = MaterialTheme.typography.bodyMedium) }
+            landmark.phone?.let { phone ->
+                Text(
+                    "Phone: $phone", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:" + phone.filter { it.isDigit() || it == '+' }))) } },
+                )
+            }
+            landmark.website?.let { site ->
+                Text(
+                    site, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(site))) } },
+                )
+            }
+            Text("Source: OpenStreetMap", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                Button(onClick = { onGuide(false) }, modifier = Modifier.weight(1f)) { Text("Navigate") }
+                OutlinedButton(onClick = { onGuide(true) }, modifier = Modifier.weight(1f)) { Text("Walk there") }
+            }
+        }
     }
 }
 

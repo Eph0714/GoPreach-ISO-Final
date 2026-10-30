@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -207,6 +208,9 @@ fun TerritoryMapCanvas(
     altRoutePoints: List<List<Pair<Double, Double>>> = emptyList(),
     /** Every point of every route on offer: when it changes, the camera frames all of them (the route preview). Null = leave the camera alone. */
     fitRoutePoints: List<Pair<Double, Double>>? = null,
+    /** Landmarks around the map (churches, schools, clinics, bridges, rivers, ...), loaded for the part of the map on screen. */
+    showLandmarks: Boolean = true,
+    onLandmarkTap: (com.emfitsolutions.gopreach.data.repository.MapLandmark) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val density = LocalContext.current.resources.displayMetrics.density
@@ -223,6 +227,7 @@ fun TerritoryMapCanvas(
     val latestOnLongPress = rememberUpdatedState(onLongPress)
     val latestOnPinTap = rememberUpdatedState(onPinTap)
     val latestOnStackTap = rememberUpdatedState(onStackTap)
+    val latestOnLandmarkTap = rememberUpdatedState(onLandmarkTap)
 
     MapLibreHost(
         styleUrl = maptilerStyleUrl(basemap.styleId),
@@ -309,6 +314,9 @@ fun TerritoryMapCanvas(
             } else if (drawingId != null) {
                 drawingState.selectedDrawingId = drawingId
                 true
+            } else if (showLandmarks && com.emfitsolutions.gopreach.ui.components.map.LandmarkLayer.hit(m, screen, density) != null) {
+                latestOnLandmarkTap.value(com.emfitsolutions.gopreach.ui.components.map.LandmarkLayer.hit(m, screen, density)!!)
+                true
             } else {
                 val areaId = m.queryRenderedFeatures(screen, LYR_AREA_FILL)
                     .firstNotNullOfOrNull { if (it.hasProperty("id")) it.getStringProperty("id") else null }
@@ -371,6 +379,9 @@ fun TerritoryMapCanvas(
                     PropertyFactory.textAllowOverlap(false),
                 ).also { it.minZoom = 10f },
             )
+
+            // Landmarks sit under the territory labels and the records (those win every collision and every tap).
+            com.emfitsolutions.gopreach.ui.components.map.LandmarkLayer.install(style, density, below = LYR_AREA_LABELS)
 
             // Records are CLUSTERED by MapLibre itself (one GeoJSON source, symbol/circle layers — no per-marker views):
             // zoomed out they merge into numbered clusters, zooming in separates them, and records at (almost) the same
@@ -657,6 +668,32 @@ fun TerritoryMapCanvas(
             }
         }
         style.getSourceAs<GeoJsonSource>(SRC_PINS)?.setGeoJson(FeatureCollection.fromFeatures(features))
+    }
+
+    // Landmarks: loaded for the part of the map on screen whenever the camera comes to rest (the repository asks the server only for tiles it has not got yet).
+    val landmarkRepo: com.emfitsolutions.gopreach.data.repository.MapLandmarkRepository = org.koin.compose.koinInject()
+    val landmarkScope = androidx.compose.runtime.rememberCoroutineScope()
+    var landmarks by remember { mutableStateOf<List<com.emfitsolutions.gopreach.data.repository.MapLandmark>>(emptyList()) }
+    DisposableEffect(map, showLandmarks) {
+        val m = map
+        if (m == null || !showLandmarks) return@DisposableEffect onDispose { }
+        var running: kotlinx.coroutines.Job? = null
+        val refresh = {
+            if (m.cameraPosition.zoom >= 11.5) {
+                val b = m.projection.visibleRegion.latLngBounds
+                running?.cancel()
+                running = landmarkScope.launch { landmarks = landmarkRepo.inBounds(b.latitudeSouth, b.longitudeWest, b.latitudeNorth, b.longitudeEast) }
+            }
+        }
+        val idle = MapLibreMap.OnCameraIdleListener { refresh() }
+        m.addOnCameraIdleListener(idle)
+        refresh()
+        onDispose { m.removeOnCameraIdleListener(idle); running?.cancel() }
+    }
+    LaunchedEffect(map, styleVersion, landmarks, showLandmarks) {
+        val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
+        com.emfitsolutions.gopreach.ui.components.map.LandmarkLayer.setLandmarks(style, landmarks)
+        com.emfitsolutions.gopreach.ui.components.map.LandmarkLayer.setVisible(style, showLandmarks)
     }
 
     // Driving Mode camera (does nothing unless Driving Mode is on).

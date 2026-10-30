@@ -14,6 +14,7 @@ import com.emfitsolutions.gopreach.domain.MonthlyReportCalculator
 import com.emfitsolutions.gopreach.domain.PublisherReport
 import com.emfitsolutions.gopreach.domain.PublisherReportCalculator
 import com.emfitsolutions.gopreach.domain.PublisherReportService
+import com.emfitsolutions.gopreach.domain.ReportSubmissionWindow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -39,11 +40,6 @@ private fun currentMonthStart(): Long = monthStart(0)
 /** How far back "Select Month to Report" lets a Publisher go. */
 private const val MONTHS_BACK = 12
 
-private fun daysUntilMonthEnd(): Int {
-    val cal = Calendar.getInstance()
-    return cal.getActualMaximum(Calendar.DAY_OF_MONTH) - cal.get(Calendar.DAY_OF_MONTH)
-}
-
 private fun isPioneer(category: PublisherCategory?) = MonthlyReportCalculator.isPioneerCategory(category)
 
 data class MonthlyReportUiState(
@@ -53,6 +49,8 @@ data class MonthlyReportUiState(
     val congregationId: String? = null,
     val existingReport: MonthlyReport? = null,
     val selectedPeriodMonth: Long = currentMonthStart(),
+    /** The date and time the submission window is judged by: the SERVER's clock (see [com.emfitsolutions.gopreach.data.remote.ServerClock]); the device clock only until the first server reading arrives. */
+    val clockNowMs: Long = nowMillis(),
 
     /** Pre-filled from [MonthlyReportCalculator.calculate] but, per the
      * simplified report form, still Publisher-editable — same "automatic but
@@ -143,7 +141,9 @@ data class MonthlyReportUiState(
      * there, so it's always open. Checked against the device clock, not
      * [existingReport], so it stays correct across the month-boundary reset
      * with no extra state to track. */
-    val canSubmitWindow: Boolean get() = selectedPeriodMonth != currentMonthStart() || daysUntilMonthEnd() <= 2
+    val submissionWindow: ReportSubmissionWindow.Window get() = ReportSubmissionWindow.of(selectedPeriodMonth, clockNowMs)
+
+    val canSubmitWindow: Boolean get() = submissionWindow.open
 
     val isPioneer: Boolean get() = isPioneer(category)
 
@@ -216,6 +216,7 @@ class MonthlyReportViewModel(
     private val publisherReportService: PublisherReportService,
     private val coReports: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository,
     private val auditLogRepository: com.emfitsolutions.gopreach.data.repository.AuditLogRepository,
+    private val serverClock: com.emfitsolutions.gopreach.data.remote.ServerClock,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MonthlyReportUiState())
@@ -239,7 +240,13 @@ class MonthlyReportViewModel(
     /** [useStoredValues] — an Elder correcting a report keeps its saved figures; every
      * other entry recalculates from the latest records each time (see
      * [PublisherReportService]), so a stale figure can never be submitted. */
+    /** Reads the server's date and time so the Send button follows the real calendar, not the device's. */
+    fun refreshClock() {
+        viewModelScope.launch { val reading = serverClock.read(); _uiState.value = _uiState.value.copy(clockNowMs = reading.now) }
+    }
+
     fun load(publisherPersonId: String, useStoredValues: Boolean = false) {
+        refreshClock()
         viewModelScope.launch {
             kotlinx.coroutines.flow.combine(
                 coReports.observeStatuses(),
@@ -396,8 +403,20 @@ class MonthlyReportViewModel(
         val state = _uiState.value
         if (state.isLocked && !allowEditWhenLocked) return
         if (state.monthApproved) return // a month submitted to the Circuit Overseer is locked for everyone, Elders and Admins included
+        if (state.isSaving) return // a second tap on Send while the first is still being sent never sends twice
         _uiState.value = state.copy(isSaving = true, errorMessage = null)
         viewModelScope.launch {
+            // The window is judged again, right now, by the server's clock: a wrong device date can never get a report through early (the API checks it too).
+            // An Elder or Admin sending on someone's behalf is not held to it.
+            if (!allowEditWhenLocked) {
+                val reading = serverClock.read()
+                val window = ReportSubmissionWindow.of(state.selectedPeriodMonth, reading.now)
+                _uiState.value = _uiState.value.copy(clockNowMs = reading.now)
+                if (!window.open) {
+                    _uiState.value = _uiState.value.copy(isSaving = false, errorMessage = window.message)
+                    return@launch
+                }
+            }
             val report = MonthlyReport(
                 id = state.existingReport?.id ?: "",
                 publisherPersonId = publisherPersonId,
