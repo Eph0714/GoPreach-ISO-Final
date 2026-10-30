@@ -189,6 +189,8 @@ export function mountPlaceSearch(app, auth, service = new PlaceSearchService(), 
     if (q.length < 2 || q.length > 80) return res.status(400).json({ error: 'Type at least two letters to search' });
     const lat = req.query.lat === undefined ? NaN : Number(req.query.lat), lng = req.query.lng === undefined ? NaN : Number(req.query.lng);
     if ((Number.isFinite(lat) && Math.abs(lat) > 85) || (Number.isFinite(lng) && Math.abs(lng) > 180)) return res.status(400).json({ error: 'Bad position' });
+    // without a position only a named place ("church in Roxas") can be searched: otherwise the search would cover the whole country
+    if (!(Number.isFinite(lat) && Number.isFinite(lng)) && !interpret(q).place) return res.status(400).json({ error: 'Open the map around the place you want first, or say where: for example "church in Roxas"', results: [] });
     try {
       res.set('Cache-Control', 'private, max-age=600');
       res.json(await service.search(q, lat, lng));
