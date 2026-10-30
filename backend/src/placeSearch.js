@@ -196,7 +196,9 @@ export function mountPlaceSearch(app, auth, service = new PlaceSearchService(), 
       res.json(await service.search(q, lat, lng));
     } catch (err) {
       console.error('place search failed', err?.message);
-      res.status(502).json({ error: 'Search is not available right now. Try again in a moment.', results: [] });
+      // say what the map data service answered (a status, never anything private), so a refusal can be told from a slow answer
+      const why = /^Overpass answered d+/.test(String(err?.message)) ? ` (${err.message})` : /timeout|abort/i.test(String(err?.message)) ? ' (the map data service took too long)' : '';
+      res.status(502).json({ error: `Search is not available right now${why}. Try again in a moment.`, results: [] });
     }
   });
 }
