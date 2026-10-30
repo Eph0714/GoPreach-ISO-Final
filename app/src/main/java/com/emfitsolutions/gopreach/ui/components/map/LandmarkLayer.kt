@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.LocalPolice
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Park
+import androidx.compose.material.icons.filled.Route
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Store
@@ -57,7 +58,9 @@ enum class LandmarkKind(val id: String, val label: String, val colorHex: String,
     BRIDGE("bridge", "Bridge", "#5E6B73", Icons.Filled.Waves),
     WATER("water", "River / water", "#2D7FBF", Icons.Filled.Water),
     TRANSPORT("transport", "Bus terminal", "#33708A", Icons.Filled.DirectionsBus),
-    LANDMARK("landmark", "Landmark", "#5E6B73", Icons.Filled.Flag);
+    LANDMARK("landmark", "Landmark", "#5E6B73", Icons.Filled.Flag),
+    /** Streets come from the search only; they are not drawn as landmarks. */
+    ROAD("road", "Street / road", "#6D6D6D", Icons.Filled.Route);
 
     companion object {
         fun of(id: String?) = entries.firstOrNull { it.id == id } ?: LANDMARK
@@ -72,6 +75,7 @@ enum class LandmarkKind(val id: String, val label: String, val colorHex: String,
  */
 object LandmarkLayer {
     private const val SRC = "lm-src"
+    private const val SRC_SEL = "lm-sel-src"
     private const val IMG = "lm-img-"
     private val TIERS = listOf(1 to 12f, 2 to 14f, 3 to 16f)
     private val FONT = arrayOf("Noto Sans Regular")
@@ -105,6 +109,30 @@ object LandmarkLayer {
             layer.minZoom = minZoom
             if (below != null && style.getLayer(below) != null) style.addLayerBelow(layer, below) else style.addLayer(layer)
         }
+        // The place the person chose (tapped or found by search): a ring and a larger badge with its name, above the other landmarks and never hidden by them.
+        style.addSource(GeoJsonSource(SRC_SEL, FeatureCollection.fromFeatures(emptyList<Feature>())))
+        val ring = org.maplibre.android.style.layers.CircleLayer("lm-sel-ring", SRC_SEL).withProperties(
+            PropertyFactory.circleRadius(27f), PropertyFactory.circleColor("#D93025"), PropertyFactory.circleOpacity(0.16f),
+            PropertyFactory.circleStrokeColor("#D93025"), PropertyFactory.circleStrokeWidth(2.5f),
+        )
+        val badge = SymbolLayer("lm-sel-icon", SRC_SEL).withProperties(
+            PropertyFactory.iconImage(Expression.concat(Expression.literal(IMG), Expression.get("cat"))),
+            PropertyFactory.iconSize(1.4f), PropertyFactory.iconAllowOverlap(true), PropertyFactory.iconIgnorePlacement(true),
+            PropertyFactory.textField(Expression.get("name")), PropertyFactory.textFont(FONT), PropertyFactory.textSize(13f),
+            PropertyFactory.textColor("#202124"), PropertyFactory.textHaloColor("#FFFFFF"), PropertyFactory.textHaloWidth(1.8f),
+            PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP), PropertyFactory.textOffset(arrayOf(0f, 1.9f)), PropertyFactory.textMaxWidth(9f),
+            PropertyFactory.textAllowOverlap(true), PropertyFactory.textIgnorePlacement(true),
+        )
+        listOf(ring, badge).forEach { l -> if (below != null && style.getLayer(below) != null) style.addLayerBelow(l, below) else style.addLayer(l) }
+    }
+
+    /** Marks [landmark] on the map (null clears the mark). */
+    fun setSelected(style: Style, landmark: MapLandmark?) {
+        val src = style.getSourceAs<GeoJsonSource>(SRC_SEL) ?: return
+        if (landmark == null) { src.setGeoJson(FeatureCollection.fromFeatures(emptyList<Feature>())); return }
+        src.setGeoJson(Feature.fromGeometry(Point.fromLngLat(landmark.lng, landmark.lat)).also {
+            it.addStringProperty("name", landmark.name); it.addStringProperty("cat", LandmarkKind.of(landmark.cat).id)
+        })
     }
 
     fun setLandmarks(style: Style, landmarks: List<MapLandmark>) {

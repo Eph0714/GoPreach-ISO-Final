@@ -211,6 +211,14 @@ fun TerritoryMapCanvas(
     /** Landmarks around the map (churches, schools, clinics, bridges, rivers, ...), loaded for the part of the map on screen. */
     showLandmarks: Boolean = true,
     onLandmarkTap: (com.emfitsolutions.gopreach.data.repository.MapLandmark) -> Unit = {},
+    /** The place the person chose (tapped or found by search): ringed and named on the map. */
+    markedPlace: com.emfitsolutions.gopreach.data.repository.MapLandmark? = null,
+    /** Changes when a search result is chosen: the camera then moves to [markedPlace]. */
+    placeFlyToken: Int = 0,
+    /** A tap on an empty spot of the map (it takes the mark away). */
+    onBlankTap: () -> Unit = {},
+    /** Where the map is looking, whenever it comes to rest: the search is made around it. */
+    onCenterChanged: (lat: Double, lng: Double) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     val density = LocalContext.current.resources.displayMetrics.density
@@ -228,6 +236,8 @@ fun TerritoryMapCanvas(
     val latestOnPinTap = rememberUpdatedState(onPinTap)
     val latestOnStackTap = rememberUpdatedState(onStackTap)
     val latestOnLandmarkTap = rememberUpdatedState(onLandmarkTap)
+    val latestOnBlankTap = rememberUpdatedState(onBlankTap)
+    val latestOnCenter = rememberUpdatedState(onCenterChanged)
 
     MapLibreHost(
         styleUrl = maptilerStyleUrl(basemap.styleId),
@@ -324,6 +334,7 @@ fun TerritoryMapCanvas(
                     latestOnAreaTap.value(areaId)
                     true
                 } else {
+                    latestOnBlankTap.value()
                     false
                 }
             }
@@ -694,6 +705,27 @@ fun TerritoryMapCanvas(
         val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
         com.emfitsolutions.gopreach.ui.components.map.LandmarkLayer.setLandmarks(style, landmarks)
         com.emfitsolutions.gopreach.ui.components.map.LandmarkLayer.setVisible(style, showLandmarks)
+    }
+
+    // The marked place: ringed and named; a search result also takes the camera to it.
+    LaunchedEffect(map, styleVersion, markedPlace) {
+        val style = map?.style?.takeIf { it.isFullyLoaded } ?: return@LaunchedEffect
+        com.emfitsolutions.gopreach.ui.components.map.LandmarkLayer.setSelected(style, markedPlace)
+    }
+    var lastFlyToken by remember { mutableIntStateOf(placeFlyToken) }
+    LaunchedEffect(map, placeFlyToken) {
+        val m = map ?: return@LaunchedEffect
+        if (placeFlyToken == lastFlyToken) return@LaunchedEffect
+        lastFlyToken = placeFlyToken
+        val p = markedPlace ?: return@LaunchedEffect
+        val zoom = if (p.cat == "road") 16.0 else 17.0
+        m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(p.lat, p.lng), maxOf(zoom, 15.0)), 700)
+    }
+    DisposableEffect(map) {
+        val m = map ?: return@DisposableEffect onDispose { }
+        val idle = MapLibreMap.OnCameraIdleListener { val c = m.cameraPosition.target; if (c != null) latestOnCenter.value(c.latitude, c.longitude) }
+        m.addOnCameraIdleListener(idle)
+        onDispose { m.removeOnCameraIdleListener(idle) }
     }
 
     // Driving Mode camera (does nothing unless Driving Mode is on).

@@ -32,7 +32,12 @@ data class MapLandmark(
     val phone: String? = null,
     val website: String? = null,
     val hours: String? = null,
+    /** Metres from where the search was made (search results only). */
+    val distance: Int? = null,
 )
+
+/** What a place search brought back: the places, or the reason there are none to show. */
+data class PlaceSearchOutcome(val results: List<MapLandmark>, val error: String? = null)
 
 private class LandmarkReply(val landmarks: List<MapLandmark>, val partial: Boolean)
 
@@ -44,6 +49,47 @@ class MapLandmarkRepository(private val syncApi: SyncApi) {
     private val mutex = Mutex()
     private val loadedTiles = HashSet<Long>()
     private val byId = LinkedHashMap<String, MapLandmark>()
+
+    private val searchCache = LinkedHashMap<String, List<MapLandmark>>()
+
+    /**
+     * Searches landmarks, streets and public places by name, category, barangay, municipality or province (the server's OpenStreetMap search, the same one the website
+     * uses). Answers are kept, so asking again for the same words around the same place never asks the server twice.
+     */
+    suspend fun search(query: String, lat: Double?, lng: Double?): PlaceSearchOutcome {
+        val q = query.trim()
+        if (q.length < 2) return PlaceSearchOutcome(emptyList())
+        val key = q.lowercase() + "|" + (lat?.let { "%.2f".format(it) } ?: "") + "|" + (lng?.let { "%.2f".format(it) } ?: "")
+        synchronized(searchCache) { searchCache[key] }?.let { return PlaceSearchOutcome(it) }
+        val params = buildMap { put("q", q); if (lat != null && lng != null) { put("lat", "$lat"); put("lng", "$lng") } }
+        val reply = try {
+            syncApi.callServer("GET", "/v1/map/search", params)
+        } catch (ex: kotlin.coroutines.cancellation.CancellationException) {
+            throw ex
+        } catch (ex: Exception) {
+            return PlaceSearchOutcome(emptyList(), "No connection. Try again when you are online.")
+        }
+        val root = runCatching { Json.parseToJsonElement(reply.text).jsonObject }.getOrNull()
+        if (!reply.ok) return PlaceSearchOutcome(emptyList(), (root?.get("error") as? JsonPrimitive)?.contentOrNull ?: "Search is not available right now.")
+        val list = (root?.get("results") as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::parseLandmark) }
+        synchronized(searchCache) { searchCache[key] = list; while (searchCache.size > 30) searchCache.remove(searchCache.keys.first()) }
+        return PlaceSearchOutcome(list)
+    }
+
+    /** The nearest landmarks already loaded around a spot (nearest first, within 3 km), [exceptId] left out. */
+    fun nearby(lat: Double, lng: Double, count: Int = 15, exceptId: String? = null): List<MapLandmark> {
+        val all = synchronized(byId) { byId.values.toList() }
+        return all.asSequence().filter { it.id != exceptId }
+            .map { l -> l.copy(distance = distanceMeters(lat, lng, l.lat, l.lng).toInt()) }
+            .filter { (it.distance ?: Int.MAX_VALUE) <= 3000 }
+            .sortedWith(compareBy({ it.distance }, { it.tier })).take(count).toList()
+    }
+
+    private fun distanceMeters(a: Double, b: Double, c: Double, d: Double): Double {
+        val r = Math.PI / 180
+        val x = kotlin.math.sin((c - a) * r / 2); val y = kotlin.math.sin((d - b) * r / 2)
+        return 2 * 6_371_008.8 * kotlin.math.asin(kotlin.math.min(1.0, kotlin.math.sqrt(x * x + kotlin.math.cos(a * r) * kotlin.math.cos(c * r) * y * y)))
+    }
 
     /** Makes sure the tiles under the box are loaded, then returns every known landmark inside it (at most [limit]; the most important first). */
     suspend fun inBounds(south: Double, west: Double, north: Double, east: Double, limit: Int = 1200): List<MapLandmark> {
@@ -81,17 +127,20 @@ class MapLandmarkRepository(private val syncApi: SyncApi) {
     private fun parse(text: String): LandmarkReply {
         val root = Json.parseToJsonElement(text).jsonObject
         fun JsonObject.str(k: String) = (this[k] as? JsonPrimitive)?.contentOrNull
-        val list = (root["landmarks"] as? JsonArray).orEmpty().mapNotNull { el ->
-            val o = el as? JsonObject ?: return@mapNotNull null
-            MapLandmark(
-                id = o.str("id") ?: return@mapNotNull null, name = o.str("name") ?: return@mapNotNull null, cat = o.str("cat") ?: "landmark",
-                tier = (o["tier"] as? JsonPrimitive)?.intOrNull ?: 2,
-                lat = (o["lat"] as? JsonPrimitive)?.doubleOrNull ?: return@mapNotNull null,
-                lng = (o["lng"] as? JsonPrimitive)?.doubleOrNull ?: return@mapNotNull null,
-                address = o.str("address"), phone = o.str("phone"), website = o.str("website"), hours = o.str("hours"),
-            )
-        }
+        val list = (root["landmarks"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.let(::parseLandmark) }
         return LandmarkReply(list, (root["partial"] as? JsonPrimitive)?.booleanOrNull ?: false)
+    }
+
+    private fun parseLandmark(o: JsonObject): MapLandmark? {
+        fun str(k: String) = (o[k] as? JsonPrimitive)?.contentOrNull
+        return MapLandmark(
+            id = str("id") ?: return null, name = str("name") ?: return null, cat = str("cat") ?: "landmark",
+            tier = (o["tier"] as? JsonPrimitive)?.intOrNull ?: 2,
+            lat = (o["lat"] as? JsonPrimitive)?.doubleOrNull ?: return null,
+            lng = (o["lng"] as? JsonPrimitive)?.doubleOrNull ?: return null,
+            address = str("address"), phone = str("phone"), website = str("website"), hours = str("hours"),
+            distance = (o["distance"] as? JsonPrimitive)?.intOrNull,
+        )
     }
 
     private fun key(x: Int, y: Int) = (x.toLong() shl 32) or y.toLong()

@@ -642,6 +642,11 @@ fun TerritoryMapScreen(
     // Landmarks around the map (churches, schools, clinics, bridges, rivers, ...): on by default, one tap to hide them.
     var showLandmarks by rememberSaveable { mutableStateOf(true) }
     var landmarkSheet by remember { mutableStateOf<com.emfitsolutions.gopreach.data.repository.MapLandmark?>(null) }
+    // The place that is ringed on the map (tapped or found by search); a new search result also moves the camera to it.
+    var markedPlace by remember { mutableStateOf<com.emfitsolutions.gopreach.data.repository.MapLandmark?>(null) }
+    var placeFlyToken by remember { mutableStateOf(0) }
+    var mapCenter by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    val placeRepo: com.emfitsolutions.gopreach.data.repository.MapLandmarkRepository = org.koin.compose.koinInject()
     // Driving Mode looks like a navigation app: it switches the map to 3D (tilted, heading up, the arrow low on the screen) and puts the map
     // back the way it was when driving ends. The camera tilt it keeps follows the 3D switch, so turning 3D off while driving flattens it.
     var is3dBeforeDriving by rememberSaveable { mutableStateOf<Boolean?>(null) }
@@ -909,14 +914,28 @@ fun TerritoryMapScreen(
                             else -> 9
                         }
                     }.filter { it.second < 9 }.sortedWith(compareBy({ it.second }, { it.first.barangay.lowercase() }, { it.first.municipality.lowercase() })).map { it.first }
+                    // Places: landmarks, streets and public places from OpenStreetMap through the server, asked after a pause in typing and kept for next time.
+                    var placeOutcome by remember { mutableStateOf<com.emfitsolutions.gopreach.data.repository.PlaceSearchOutcome?>(null) }
+                    var placesLoading by remember { mutableStateOf(false) }
+                    LaunchedEffect(barangayQuery) {
+                        val raw = barangayQuery.trim()
+                        placeOutcome = null
+                        if (raw.length < 2) { placesLoading = false; return@LaunchedEffect }
+                        placesLoading = true
+                        kotlinx.coroutines.delay(350)
+                        val around = myLocation ?: mapCenter
+                        placeOutcome = placeRepo.search(raw, around?.first, around?.second)
+                        placesLoading = false
+                    }
+                    val recordMatches = if (q.length < 2) emptyList() else recordsState.orEmpty().filter { r ->
+                        normalizePlaceName(r.name + " " + r.barangay.orEmpty() + " " + r.municipality.orEmpty() + " " + r.person.address).contains(q)
+                    }.take(6)
                     Column(Modifier.fillMaxWidth()) {
-                        StandardSearchField(value = barangayQuery, onValueChange = { barangayQuery = it; searchOpen = it.isNotBlank(); if (it.isBlank() && openedFromSearch && territoryFilter != null) backFromBarangay() }, placeholder = "Search Barangay", modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { searchOpen = barangayQuery.isNotBlank() }))
+                        StandardSearchField(value = barangayQuery, onValueChange = { barangayQuery = it; searchOpen = it.isNotBlank(); if (it.isBlank() && openedFromSearch && territoryFilter != null) backFromBarangay() }, placeholder = "Search places, barangay or records", modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { searchOpen = barangayQuery.isNotBlank() }))
                         if (searchOpen && q.isNotEmpty()) {
                             Surface(shape = RoundedCornerShape(14.dp), tonalElevation = 3.dp, shadowElevation = 4.dp, modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                                 Column(Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
-                                    if (found.isEmpty()) {
-                                        Text("No barangay matches \"${barangayQuery.trim()}\". Check the spelling or try a shorter name.", Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
+                                    if (found.isNotEmpty()) SearchHeading("Barangays")
                                     found.take(40).forEach { a ->
                                         Row(
                                             Modifier.fillMaxWidth().clickable {
@@ -936,6 +955,31 @@ fun TerritoryMapScreen(
                                             }
                                         }
                                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+                                    }
+                                    if (recordMatches.isNotEmpty()) {
+                                        SearchHeading("GoPreach records")
+                                        recordMatches.forEach { r ->
+                                            Row(
+                                                Modifier.fillMaxWidth().clickable { searchOpen = false; selectRecord(r.id, fly = true) }.padding(horizontal = 14.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                androidx.compose.foundation.layout.Box(Modifier.size(12.dp).background(markerColor(r.type), CircleShape))
+                                                Column(Modifier.padding(start = 12.dp)) {
+                                                    Text(r.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                                    Text(listOfNotNull(r.type.label, r.barangay?.let { "Barangay $it" }).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    SearchHeading("Places")
+                                    val outcome = placeOutcome
+                                    when {
+                                        placesLoading || (outcome == null && q.length >= 2) -> Text("Searching places...", Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        outcome?.error != null -> Text(outcome.error, Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        outcome == null || outcome.results.isEmpty() -> Text("No places found for \"${barangayQuery.trim()}\".", Modifier.padding(14.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        else -> outcome.results.take(20).forEach { p ->
+                                            PlaceResultRow(p) { searchOpen = false; markedPlace = p; placeFlyToken++; landmarkSheet = p }
+                                        }
                                     }
                                 }
                             }
@@ -1196,7 +1240,11 @@ fun TerritoryMapScreen(
                         basemap = basemap,
                         is3d = is3d,
                         showLandmarks = showLandmarks,
-                        onLandmarkTap = { landmarkSheet = it },
+                        onLandmarkTap = { landmarkSheet = it; markedPlace = it },
+                        markedPlace = markedPlace,
+                        placeFlyToken = placeFlyToken,
+                        onBlankTap = { markedPlace = null },
+                        onCenterChanged = { lat, lng -> mapCenter = lat to lng },
                         reloadToken = reloadToken,
                         fitKey = fitKey,
                         fitReady = fitReady,
@@ -1791,8 +1839,10 @@ fun TerritoryMapScreen(
     landmarkSheet?.let { lm ->
         LandmarkSheet(
             landmark = lm,
+            nearby = remember(lm.id) { placeRepo.nearby(lm.lat, lm.lng, 15, lm.id) },
             onDismiss = { landmarkSheet = null },
             onGuide = { walking -> landmarkSheet = null; startNavigation(lm.name, lm.lat, lm.lng, walking = walking) },
+            onPickNearby = { p -> markedPlace = p; placeFlyToken++; landmarkSheet = p },
         )
     }
 
@@ -1807,41 +1857,106 @@ fun TerritoryMapScreen(
     }
 }
 
-/** The popup of a landmark (a place from OpenStreetMap, not a GoPreach record): what it is, where, and whatever else is mapped, with a way to go there. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** A small heading inside the search results ("Barangays", "GoPreach records", "Places"). */
 @Composable
-private fun LandmarkSheet(landmark: com.emfitsolutions.gopreach.data.repository.MapLandmark, onDismiss: () -> Unit, onGuide: (walking: Boolean) -> Unit) {
+private fun SearchHeading(text: String) {
+    Text(text.uppercase(), Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp, bottom = 2.dp), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+private fun placeDistanceText(meters: Int): String = if (meters >= 950) "%.1f km".format(meters / 1000.0) else "${maxOf(10, (meters / 10.0).toInt() * 10)} m"
+
+/** One place in a list (search results, nearby places): its icon colour, name, kind and address, and how far it is when that is known. */
+@Composable
+private fun PlaceResultRow(place: com.emfitsolutions.gopreach.data.repository.MapLandmark, onClick: () -> Unit) {
+    val kind = com.emfitsolutions.gopreach.ui.components.map.LandmarkKind.of(place.cat)
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(12.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(kind.colorHex))))
+        Column(Modifier.padding(start = 12.dp).weight(1f)) {
+            Text(place.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Text(listOfNotNull(kind.label, place.address).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        }
+        place.distance?.let { Text(placeDistanceText(it), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary) }
+    }
+}
+
+/**
+ * The panel of a place (a landmark tapped on the map, or one found by search; a place from OpenStreetMap, not a GoPreach record): what it is, where, whatever else is mapped,
+ * and the actions that really work: Navigate, Walk there, Share, Copy coordinates, Open in Maps, Street View (Google Maps opens it; if no app can, the web page does) and
+ * the nearby places that are already loaded. Nothing is shown that cannot be done.
+ */
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun LandmarkSheet(
+    landmark: com.emfitsolutions.gopreach.data.repository.MapLandmark,
+    nearby: List<com.emfitsolutions.gopreach.data.repository.MapLandmark>,
+    onDismiss: () -> Unit,
+    onGuide: (walking: Boolean) -> Unit,
+    onPickNearby: (com.emfitsolutions.gopreach.data.repository.MapLandmark) -> Unit,
+) {
     val kind = com.emfitsolutions.gopreach.ui.components.map.LandmarkKind.of(landmark.cat)
     val context = LocalContext.current
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    var showNearby by remember(landmark.id) { mutableStateOf(false) }
+    val coordinates = "%.6f, %.6f".format(landmark.lat, landmark.lng)
+    val mapsLink = "https://www.google.com/maps/search/?api=1&query=${landmark.lat},${landmark.lng}"
+    fun open(intent: android.content.Intent, fallbackUrl: String? = null) {
+        try { context.startActivity(intent) } catch (e: Exception) {
+            if (fallbackUrl != null) runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(fallbackUrl))) }
+        }
+    }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState()) {
         Column(
-            modifier = Modifier.fillMaxWidth().keyboardPadding().padding(horizontal = 24.dp).padding(bottom = 24.dp),
+            modifier = Modifier.fillMaxWidth().keyboardPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(landmark.name, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.size(10.dp).clip(CircleShape).background(androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(kind.colorHex))))
                 Text(kind.label, style = MaterialTheme.typography.titleSmall)
+                landmark.distance?.let { Text("·  ${placeDistanceText(it)} away", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary) }
             }
             landmark.address?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-            Text("%.5f, %.5f".format(landmark.lat, landmark.lng), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(coordinates, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             landmark.hours?.let { Text("Hours: $it", style = MaterialTheme.typography.bodyMedium) }
             landmark.phone?.let { phone ->
                 Text(
                     "Phone: $phone", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:" + phone.filter { it.isDigit() || it == '+' }))) } },
+                    modifier = Modifier.clickable { open(android.content.Intent(android.content.Intent.ACTION_DIAL, android.net.Uri.parse("tel:" + phone.filter { it.isDigit() || it == '+' }))) },
                 )
             }
             landmark.website?.let { site ->
-                Text(
-                    site, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(site))) } },
-                )
+                Text(site, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, modifier = Modifier.clickable { open(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(site))) })
             }
             Text("Source: OpenStreetMap", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                 Button(onClick = { onGuide(false) }, modifier = Modifier.weight(1f)) { Text("Navigate") }
-                OutlinedButton(onClick = { onGuide(true) }, modifier = Modifier.weight(1f)) { Text("Walk there") }
+                OutlinedButton(onClick = { onGuide(true) }, modifier = Modifier.weight(1f)) { Text("Walk here") }
+            }
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                androidx.compose.material3.AssistChip(onClick = {
+                    val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                        type = "text/plain"; putExtra(android.content.Intent.EXTRA_SUBJECT, landmark.name); putExtra(android.content.Intent.EXTRA_TEXT, landmark.name + "\n" + mapsLink)
+                    }
+                    open(android.content.Intent.createChooser(send, "Share location"))
+                }, label = { Text("Share location") })
+                androidx.compose.material3.AssistChip(onClick = {
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(coordinates))
+                    android.widget.Toast.makeText(context, "Coordinates copied", android.widget.Toast.LENGTH_SHORT).show()
+                }, label = { Text("Copy coordinates") })
+                androidx.compose.material3.AssistChip(onClick = {
+                    open(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:${landmark.lat},${landmark.lng}?q=${landmark.lat},${landmark.lng}(${android.net.Uri.encode(landmark.name)})")), mapsLink)
+                }, label = { Text("Open in Maps") })
+                androidx.compose.material3.AssistChip(onClick = {
+                    open(
+                        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("google.streetview:cbll=${landmark.lat},${landmark.lng}")),
+                        "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${landmark.lat},${landmark.lng}",
+                    )
+                }, label = { Text("Street View") })
+                if (nearby.isNotEmpty()) androidx.compose.material3.AssistChip(onClick = { showNearby = !showNearby }, label = { Text(if (showNearby) "Hide nearby places" else "Nearby places") })
+            }
+            if (showNearby) {
+                SearchHeading("Near ${landmark.name}")
+                nearby.forEach { PlaceResultRow(it) { onPickNearby(it) } }
             }
         }
     }
