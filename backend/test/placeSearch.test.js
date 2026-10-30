@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { MemoryStore } from '../src/memoryStore.js';
 import { createApp } from '../src/app.js';
-import { PlaceSearchService, interpret, buildQuery, toResults, rank } from '../src/placeSearch.js';
+import { PlaceSearchService, interpret, buildQuery, toResults, rank, photonToElements } from '../src/placeSearch.js';
 
 const ELEMENTS = [
   { type: 'node', id: 1, lat: 16.5200, lon: 121.1800, tags: { name: 'Roxas Parish Church', amenity: 'place_of_worship', 'addr:city': 'Solano' } },
@@ -67,4 +67,22 @@ test('GET /v1/map/search needs a login and a text, answers ranked results and ke
   assert.equal(calls.length, n, 'the second search came from the cache');
   assert.equal((await fetch(`${base}/v1/map/search?q=a`, { headers: { 'x-dev-person': 'p1' } })).status, 400);
   assert.equal((await fetch(`${base}/v1/map/search?q=church&lat=999&lng=1`, { headers: { 'x-dev-person': 'p1' } })).status, 400);
+});
+
+test('when every Overpass server is down the search falls back to Photon and still ranks the places', async () => {
+  const photon = { features: [
+    { geometry: { coordinates: [121.18, 16.52] }, properties: { name: 'Roxas Parish Church', osm_key: 'amenity', osm_value: 'place_of_worship', osm_type: 'N', osm_id: 7, city: 'Solano', state: 'Nueva Vizcaya' } },
+    { geometry: { coordinates: [121.2, 16.5] }, properties: { name: 'Roxas', osm_key: 'place', osm_value: 'suburb', osm_type: 'N', osm_id: 8 } },
+  ] };
+  assert.equal(photonToElements(photon).length, 2);
+  const seen = [];
+  const fetchImpl = async (url) => { seen.push(String(url)); if (String(url).includes('photon')) return { ok: true, status: 200, json: async () => photon }; throw new Error('fetch failed'); };
+  const svc = new PlaceSearchService({ fetchImpl, urls: ['http://down'] });
+  const r = await svc.search('church Roxas', 16.52, 121.18);
+  assert.equal(r.results[0].name, 'Roxas Parish Church');
+  assert.equal(r.results[0].cat, 'worship');
+  assert.match(r.results[0].address, /Solano/);
+  assert.ok(seen.some((u) => u.includes('photon') && u.includes('lat=16.52')));
+  const dead = new PlaceSearchService({ fetchImpl: async () => { throw new Error('fetch failed'); }, urls: ['http://down'] });
+  await assert.rejects(() => dead.search('hospital', 16.5, 121.2), /fetch failed/);
 });

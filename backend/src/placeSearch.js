@@ -16,7 +16,8 @@ import { rateLimit } from './rateLimit.js';
  * One server asks Overpass, answers are kept for an hour and the endpoint is rate limited per person, so the phones and the website never hit the public
  * service directly.
  */
-const OVERPASS_URLS = ['https://overpass.openstreetmap.fr/api/interpreter', 'https://overpass-api.de/api/interpreter'];
+const OVERPASS_URLS = ['https://overpass.openstreetmap.fr/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+const PHOTON_URL = 'https://photon.komoot.io/api/';
 const TTL_MS = 3600_000;
 const MAX_CACHED = 400;
 const AROUND_M = 15_000;
@@ -40,6 +41,8 @@ const CATEGORY_WORDS = [
   { words: ['bus', 'terminal', 'station', 'jeepney'], filters: ['["amenity"="bus_station"]', '["public_transport"="station"]'] },
   { words: ['library', 'museum', 'attraction', 'landmark', 'monument', 'historic'], filters: ['["amenity"="library"]', '["tourism"~"^(museum|attraction|viewpoint)$"]', '["historic"]'] },
 ];
+/** The result kinds (see landmarks.js classify) each category group above stands for, in the same order. */
+const CATEGORY_CATS = [['kingdom_hall'], ['worship', 'kingdom_hall'], ['school'], ['health'], ['government'], ['police', 'fire'], ['market', 'shop'], ['park'], ['bridge'], ['water'], ['bank'], ['fuel'], ['landmark'], ['landmark'], ['transport'], ['landmark']];
 const FILLER = new Set(['in', 'at', 'near', 'nearby', 'around', 'of', 'the', 'a', 'sa', 'malapit', 'brgy', 'barangay', 'brgy.', 'city', 'municipality', 'town', 'to']);
 const PLACE_MARKERS = new Set(['in', 'at', 'near', 'sa', 'around', 'malapit']);
 
@@ -97,6 +100,24 @@ export function buildQuery({ categories, text, place }, lat, lng, radius = AROUN
 
 const SENTINEL = { cat: 'landmark', tier: 3 };
 
+/** Photon (an OpenStreetMap geocoder) answers as GeoJSON; this turns its features into the shape of Overpass elements so one code path ranks and returns them. */
+export function photonToElements(json) {
+  const out = [];
+  for (const f of json?.features ?? []) {
+    const p = f.properties ?? {}, c = f.geometry?.coordinates;
+    if (!p.name || !Array.isArray(c)) continue;
+    const tags = { name: p.name, [p.osm_key]: p.osm_value };
+    if (p.street) tags['addr:street'] = p.street;
+    if (p.housenumber) tags['addr:housenumber'] = p.housenumber;
+    if (p.district) tags['addr:suburb'] = p.district;
+    if (p.city) tags['addr:city'] = p.city;
+    if (p.county) tags['addr:municipality'] = p.county;
+    if (p.state) tags['addr:province'] = p.state;
+    out.push({ type: String(p.osm_type ?? 'N').toLowerCase().startsWith('w') ? 'way' : 'node', id: p.osm_id, lat: c[1], lon: c[0], tags });
+  }
+  return out;
+}
+
 export function toResults(elements, lat, lng) {
   const seen = new Set(), out = [];
   const has = Number.isFinite(lat) && Number.isFinite(lng);
@@ -131,11 +152,13 @@ function distanceM(a, b, c, d) {
 }
 
 /** Relevance: an exact or starting name match first, then nearer places, then the rest. */
-export function rank(results, text) {
+export function rank(results, text, categories = []) {
   const t = norm(text);
+  const wanted = new Set(categories.flatMap((i) => CATEGORY_CATS[i] ?? []));
   const score = (r) => {
     const n = norm(r.name);
-    return (t && n === t ? 0 : t && n.startsWith(t) ? 1 : t && n.split(' ').some((w) => w.startsWith(t)) ? 2 : 3) * 1e9 + (r.distance ?? 5e8) + (r.cat === 'road' ? 1e8 : 0);
+    // when a kind of place was asked for, places of another kind (a suburb named like the church) come after the ones of that kind
+    return (wanted.size && !wanted.has(r.cat) ? 4e9 : 0) + (t && n === t ? 0 : t && n.startsWith(t) ? 1 : t && n.split(' ').some((w) => w.startsWith(t)) ? 2 : 3) * 1e9 + (r.distance ?? 5e8) + (r.cat === 'road' ? 1e8 : 0);
   };
   return results.map((r) => [score(r), r]).sort((a, b) => a[0] - b[0]).map((x) => x[1]);
 }
@@ -162,6 +185,16 @@ export class PlaceSearchService {
     throw last;
   }
 
+  /** The backup: Photon, when every Overpass server is unreachable. It cannot filter by category, so it is asked the person's own words. */
+  async askPhoton(q, lat, lng) {
+    const u = new URL(PHOTON_URL);
+    u.searchParams.set('q', q); u.searchParams.set('limit', '25'); u.searchParams.set('lang', 'en');
+    if (Number.isFinite(lat) && Number.isFinite(lng)) { u.searchParams.set('lat', String(lat)); u.searchParams.set('lon', String(lng)); }
+    const res = await this.fetchImpl(u.toString(), { headers: { 'user-agent': 'GoPreach/1.0 (territory map search)' }, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new Error(`Photon answered ${res.status}`);
+    return photonToElements(await res.json());
+  }
+
   async search(q, lat, lng) {
     const meaning = interpret(q);
     const query = buildQuery(meaning, lat, lng);
@@ -171,8 +204,8 @@ export class PlaceSearchService {
     const hit = this.cache.get(key), now = this.now();
     if (hit && now - hit.at < TTL_MS) return { results: hit.results, interpreted: meaning };
     if (!this.pending.has(key)) {
-      this.pending.set(key, this.ask(query).then((els) => {
-        const results = rank(toResults(els, lat, lng), meaning.text || meaning.place).slice(0, 40);
+      this.pending.set(key, this.ask(query).catch(async (err) => { try { return await this.askPhoton(q, lat, lng); } catch { throw err; } }).then((els) => {
+        const results = rank(toResults(els, lat, lng), meaning.text || meaning.place, meaning.categories).slice(0, 40);
         this.cache.set(key, { at: this.now(), results });
         while (this.cache.size > MAX_CACHED) this.cache.delete(this.cache.keys().next().value);
         return results;
