@@ -33,6 +33,18 @@
         return w <= availPx + 0.5 ? 1 : Math.max(MIN_SCALE, availPx / w);
     }
 
+    // A table shrunk with zoom lays its text out again at the smaller size, and that never shrinks in exact proportion (type is hinted, borders and padding keep a minimum), so the table can still be
+    // a little wider than the paper after the first shrink and would be cut off at the edge. Measure it as it is NOW and shrink a little more until it really fits.
+    function settle(t, availPx, s) {
+        for (var i = 0; i < 8; i++) {
+            var shown = Math.max(t.offsetWidth, t.scrollWidth) * s;
+            if (shown <= availPx + 0.5 || s <= MIN_SCALE) break;
+            s = Math.max(MIN_SCALE, s * availPx / shown * 0.997);
+            t.style.zoom = String(s); t.style.width = (availPx / s) + 'px';
+        }
+        return s;
+    }
+
     function layout(o) {
         o = o || {};
         var paper = PAPER[String(o.paper || 'A4').toUpperCase()] ? String(o.paper || 'A4').toUpperCase() : 'A4';
@@ -44,7 +56,7 @@
             var avail = availFor(landscape), scale = 1;
             list.forEach(function (t) {
                 var s = scaleFor(t, avail);
-                if (s < 1) { t.style.zoom = String(s); t.style.width = (avail / s) + 'px'; }   // zoom shrinks the table; the width is widened to match so it still ends at the right margin
+                if (s < 1) { t.style.zoom = String(s); t.style.width = (avail / s) + 'px'; s = settle(t, avail, s); }   // zoom shrinks the table; the width is widened to match so it still ends at the right margin
                 scale = Math.min(scale, s);
             });
             // the whole printed document (heading, blocks, summary): from the top of the body to the lowest thing in it, not the height of the window around it
@@ -73,7 +85,8 @@
         var overflow = list.some(function (t) { return t.offsetWidth * (parseFloat(t.style.zoom) || 1) > availPx + 1; });
         // From here the size follows the page itself: the print dialog may still change the paper or the orientation, and a table that spans exactly the width it is given fits whatever sheet is used
         // (the shrink factor stays; its width is the whole page width in any case).
-        list.forEach(function (t) { var z = parseFloat(t.style.zoom) || 1; t.style.width = z < 1 ? 'calc(100% / ' + z + ')' : '100%'; });
+        // A shrunk table keeps its width in px (the page width divided by its zoom): a PERCENTAGE width is scaled by the zoom again by the browser, which made it wider than the paper and cut it off.
+        list.forEach(function (t) { var z = parseFloat(t.style.zoom) || 1; t.style.width = z < 1 ? (availPx / z) + 'px' : '100%'; });
         return {
             paper: paper, landscape: landscape, scale: res.scale, pages: Math.ceil(res.pages - 0.01), marginMm: margin, fits: !overflow,
             pageWidthPx: availPx, pageHeightPx: pageH,

@@ -20,8 +20,15 @@ class PrintParityTest {
 
     @Test
     fun theSharedStylesheetAndFitScriptAreTheOnesTheWebsiteHas() {
-        assertEquals("dd33394602bbe91c40e3ef03d491607a47ddcfb10e86c2e5bcb19a163a14dda7", sha(File("src/main/assets/print/gp-report.css")))
-        assertEquals("4dc4d707e558d99b7053ae22dc48c657a107175ff13e290012b4cf641284532f", sha(File("src/main/assets/print/gp-fit.js")))
+        assertEquals("47c5c97ce1ffd491dae28a09630872a58b03713a2885653a2407c284915b7c66", sha(File("src/main/assets/print/gp-report.css")))
+        assertEquals("6896e3635a934d1dc42ec32a02c71f669103fb6009d888fd2d9f38a6f0c2f99b", sha(File("src/main/assets/print/gp-fit.js")))
+    }
+
+    @Test
+    fun theFitKeepsAWideTableInsideThePaper() {
+        val fit = File("src/main/assets/print/gp-fit.js").readText()
+        assertTrue("a shrunk table is measured again and shrunk further until it really fits", fit.contains("function settle(") && fit.contains("s = settle(t, avail, s)"))
+        assertFalse("a percentage width is scaled by the zoom again by the browser: the width stays in px", fit.contains("'calc(100% / '"))
     }
 
     private fun sheet(hours: Boolean) = FieldServiceReportSheet(

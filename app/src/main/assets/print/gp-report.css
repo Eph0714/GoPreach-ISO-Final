@@ -18,6 +18,9 @@ html, body { margin: 0 !important; padding: 0; background: #fff !important; colo
 .gp-printonly { display: block !important; }
 .gp-note { margin: 8px 0 0 0; font-size: 11px; }
 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+/* The page's own wrappers (the website's sidebar layout and its padded, centred content column) take no room in print: the printable width is the WHOLE paper width inside the one @page margin,
+   which is exactly the width gp-fit.js lays the tables out for. Without this the content column's own padding made the table wider than the paper and cut it off at the right edge. */
+body, body > .min-h-screen, body > .min-h-screen > .flex-1, main { display: block !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; max-width: none !important; width: auto !important; min-width: 0 !important; }
 
 /* one block per FS Group (heading, details, table): kept whole when it fits a page, otherwise it flows with its header row repeated and no row split */
 .gp-sheet { margin: 0 0 5mm 0; }
