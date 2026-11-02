@@ -89,7 +89,17 @@ export function mountPublisherEdit(app, store, auth) {
         }
         const person = personRow.data;
         const home = person.activeCongregationId ?? null;
-        const assignmentRow = home == null ? null : (await tx.list('roleAssignments', home)).find((r) => r.data.personId === id && String(r.data.roleType ?? '').startsWith('PUBLISHER:'));
+        const publisherRoleIn = async (congId) => (await tx.list('roleAssignments', congId)).find((r) => r.data.personId === id && String(r.data.roleType ?? '').startsWith('PUBLISHER:'));
+        let assignmentRow = home == null ? null : await publisherRoleIn(home);
+        // The record's own congregation can be missing or out of step with its publisher role (an older record, a transfer): look where the caller is working and where the page found the role.
+        // Nothing is trusted from this: the roles of the caller are checked against the role's own congregation below.
+        if (!assignmentRow) {
+            const hint = typeof body.assignmentCongregationId === 'string' && ID_RE.test(body.assignmentCongregationId) ? body.assignmentCongregationId : null;
+            for (const c of new Set([hint, actor.congregationId].filter((x) => x && x !== home))) {
+                assignmentRow = await publisherRoleIn(c);
+                if (assignmentRow) break;
+            }
+        }
         if (!assignmentRow) refuse(404, 'This publisher was not found');
         const assignment = assignmentRow.data;
         const cong = assignment.congregationId;

@@ -234,3 +234,18 @@ test('an existing username the rules would not allow today (a space) is kept whe
   assert.equal((await get('people', 'pubSp')).username, 'aurora canales');
   assert.equal((await edit('adm', 'pubSp', { username: 'new name' })).status, 422, 'a real change is still checked');
 });
+
+test('a publisher whose own congregation field is empty or out of step is still found through the role, and nobody gains access by it', async () => {
+  await put('people', 'lost', person(null, null, { username: 'fallyn.b' })); await assign('ra_lost', 'lost', 'PUBLISHER:REGULAR_PUBLISHER', 'congA', 'g1');
+  await put('people', 'moved', person(null, 'congB', { username: 'moved.b' })); await assign('ra_moved', 'moved', 'PUBLISHER:REGULAR_PUBLISHER', 'congA', 'g1');
+  // the congregation-wide role works where the caller works (no hint needed), and the Super Admin through the hint the page sends
+  assert.equal((await edit('adm', 'lost', { person: details({ remarks: 'found by the Admin' }) })).status, 200);
+  assert.equal((await get('people', 'lost')).remarks, 'found by the Admin');
+  assert.equal((await edit('sa', 'lost', { person: details({ remarks: 'found by the Super Admin' }), assignmentCongregationId: 'congA' })).status, 200);
+  assert.equal((await edit('adm', 'moved', { person: details() })).status, 403); // found, but the person's own policy (another congregation) still refuses
+  // without the hint a Super Admin (no congregation of their own) still gets the plain answer, and an Admin of another congregation never reaches the record
+  assert.equal((await edit('sa', 'lost', { person: details() })).status, 404);
+  assert.equal((await edit('adm', 'pubB', { person: details() })).status, 403);
+  await put('people', 'admB', person('ADMIN_PER_CONGREGATION', 'congB')); 
+  assert.equal((await edit('admB', 'lost', { person: details(), assignmentCongregationId: 'congA' })).status, 403);
+});
