@@ -191,8 +191,7 @@ fun PublisherAssignmentScreen(
             AssignmentFilter.BY_PUBLISHER -> filterPublisherId == null || p.publisherPersonId == filterPublisherId
             AssignmentFilter.BY_STATUS -> p.status == filterStatus
         }
-        passesFilter && (query.isBlank() || listOf(p.name, p.address, p.barangay.orEmpty(), p.cityMunicipality.orEmpty(), p.province.orEmpty(), publisherName)
-            .any { it.contains(query, ignoreCase = true) })
+        passesFilter && com.emfitsolutions.gopreach.domain.NameSearch.matches(query, p.name, p.address, p.barangay, p.cityMunicipality, p.province, publisherName)
     }.sortedBy { it.name }
 
     Scaffold(

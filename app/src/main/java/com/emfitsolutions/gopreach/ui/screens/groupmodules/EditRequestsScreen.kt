@@ -59,6 +59,10 @@ fun EditRequestsScreen(
     val flow = remember(currentPersonId, congregationId, readsAll) { viewModel.state(currentPersonId, congregationId, readsAll) }
     val state by flow.collectAsStateWithLifecycle(initialValue = EditRequestsState())
     var tab by rememberSaveable { mutableStateOf(0) }
+    // Search Publisher name (the same words in any order), over the pending requests and the history
+    var query by rememberSaveable { mutableStateOf("") }
+    val pending = state.pending.filter { com.emfitsolutions.gopreach.domain.NameSearch.matches(query, state.names[it.publisherPersonId]) }
+    val history = state.history.filter { com.emfitsolutions.gopreach.domain.NameSearch.matches(query, it.publisher) }
     var deciding by remember { mutableStateOf<Pair<MonthlyReport, Boolean>?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
 
@@ -102,9 +106,10 @@ fun EditRequestsScreen(
                     FilterChip(selected = tab == 1, onClick = { tab = 1 }, label = { Text("History") })
                 }
             }
+            item { com.emfitsolutions.gopreach.ui.components.StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search Publisher name...", modifier = Modifier.fillMaxWidth()) }
             if (tab == 0) {
-                if (state.pending.isEmpty()) item { Text("No pending edit requests.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(state.pending, key = { it.id }) { r ->
+                if (pending.isEmpty()) item { Text(if (query.isBlank()) "No pending edit requests." else "No matching Publisher was found.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(pending, key = { it.id }) { r ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(state.names[r.publisherPersonId].orEmpty(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -120,8 +125,8 @@ fun EditRequestsScreen(
                     }
                 }
             } else {
-                if (state.history.isEmpty()) item { Text("No requests yet.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                items(state.history, key = { it.timestamp.toString() + it.what + it.publisher }) { h ->
+                if (history.isEmpty()) item { Text(if (query.isBlank()) "No requests yet." else "No matching Publisher was found.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                items(history, key = { it.timestamp.toString() + it.what + it.publisher }) { h ->
                     Card(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text("${h.what} · ${h.publisher}", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)

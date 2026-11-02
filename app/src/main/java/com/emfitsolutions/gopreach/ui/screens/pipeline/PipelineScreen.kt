@@ -1772,7 +1772,7 @@ private fun ForwardToPublisherDialog(
     var query by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf<Person?>(null) }
     val filtered = remember(publishers, query) {
-        if (query.isBlank()) publishers else publishers.filter { it.fullName.contains(query, ignoreCase = true) }
+        if (query.isBlank()) publishers else publishers.filter { com.emfitsolutions.gopreach.domain.NameSearch.matches(query, it.fullName) }
     }
     val showToast = rememberActionToast()
     var errorMessage by remember { mutableStateOf<String?>(null) }

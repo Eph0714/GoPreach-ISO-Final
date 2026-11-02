@@ -104,9 +104,7 @@ private fun ParticipantPicker(
     val filtered = remember(candidates, query) {
         if (query.isBlank()) candidates
         else candidates.filter {
-            it.name.contains(query, ignoreCase = true) ||
-                it.publisherName.contains(query, ignoreCase = true) ||
-                it.roleLabel.contains(query, ignoreCase = true)
+            com.emfitsolutions.gopreach.domain.NameSearch.matches(query, it.name, it.publisherName, it.roleLabel)
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

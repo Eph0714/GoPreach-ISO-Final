@@ -149,7 +149,7 @@ fun HouseHolderRecordsScreen(
     val people = remember(state.records, showInactive, query) {
         state.records
             .filter { showInactive || it.status == RecordStatus.ACTIVE }
-            .filter { p -> query.isBlank() || p.name.contains(query, ignoreCase = true) || p.address.contains(query, ignoreCase = true) }
+            .filter { p -> com.emfitsolutions.gopreach.domain.NameSearch.matches(query, p.name, p.address) }
             .sortedBy { it.name }
     }
 

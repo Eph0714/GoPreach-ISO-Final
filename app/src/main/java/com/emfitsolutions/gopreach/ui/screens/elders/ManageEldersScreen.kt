@@ -159,11 +159,7 @@ private fun ManageEldersContent(
         roleFiltered
     } else {
         roleFiltered.filter { row ->
-            row.person.fullName.contains(query, ignoreCase = true) ||
-                row.person.contact.contains(query, ignoreCase = true) ||
-                (row.person.email?.contains(query, ignoreCase = true) == true) ||
-                row.congregationName.contains(query, ignoreCase = true) ||
-                row.adminRoles.any { it.displayLabel().contains(query, ignoreCase = true) }
+            com.emfitsolutions.gopreach.domain.NameSearch.matches(query, row.person.fullName, row.person.contact, row.person.email, row.congregationName, *row.adminRoles.map { it.displayLabel() }.toTypedArray())
         }
     }
     val visibleRows = searched.filter { showInactive || it.isActive }

@@ -123,10 +123,7 @@ fun ContactRecordScreen(
             .filter { congregationFilter == null || it.congregationId == congregationFilter }
             .filter { row ->
                 query.isBlank() ||
-                    row.name.contains(query, ignoreCase = true) ||
-                    row.contact.contains(query, ignoreCase = true) ||
-                    row.congregationName.contains(query, ignoreCase = true) ||
-                    row.sourceLabels.any { it.contains(query, ignoreCase = true) }
+                    com.emfitsolutions.gopreach.domain.NameSearch.matches(query, row.name, row.contact, row.congregationName, *row.sourceLabels.toTypedArray())
             }
     }
 

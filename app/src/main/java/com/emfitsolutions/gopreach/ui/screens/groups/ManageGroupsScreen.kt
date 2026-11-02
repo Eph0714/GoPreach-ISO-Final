@@ -121,7 +121,15 @@ fun ManageGroupsScreen(
     val rowsFlow = remember(effectiveCongregationId, needsCongregation, scope) { if (needsCongregation) kotlinx.coroutines.flow.flowOf(emptyList()) else viewModel.rowsFor(effectiveCongregationId, scope) }
     val allRows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var showInactive by remember { mutableStateOf(false) }
-    val rows = allRows.filter { showInactive || it.group.status == RecordStatus.ACTIVE }
+    // Search Publisher name: a group stays when its name, its officers or any of its members match (the same words in any order), and only the matching members are listed under it.
+    var query by rememberSaveable { mutableStateOf("") }
+    val rows = allRows.filter { showInactive || it.group.status == RecordStatus.ACTIVE }.mapNotNull { r ->
+        if (query.isBlank()) r else {
+            val whole = com.emfitsolutions.gopreach.domain.NameSearch.matches(query, r.group.name, r.overseerName, r.servantName, r.assistantName)
+            val members = r.members.filter { m -> com.emfitsolutions.gopreach.domain.NameSearch.matches(query, m.name) }
+            if (whole) r else if (members.isNotEmpty()) r.copy(members = members) else null
+        }
+    }
     val context = androidx.compose.ui.platform.LocalContext.current
     val congregationName = congregations.firstOrNull { it.id == effectiveCongregationId }?.name.orEmpty()
     // The printed / exported report: every group with its officers and members, one row per person.
@@ -203,7 +211,7 @@ fun ManageGroupsScreen(
             }
         if (needsCongregation) {
             SelectCongregationPrompt()
-        } else if (rows.isEmpty()) {
+        } else if (rows.isEmpty() && query.isBlank()) {
             Column(
                 modifier = Modifier.fillMaxSize().padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -224,6 +232,8 @@ fun ManageGroupsScreen(
                         style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                item { com.emfitsolutions.gopreach.ui.components.StandardSearchField(value = query, onValueChange = { query = it }, placeholder = "Search Publisher name...", modifier = Modifier.fillMaxWidth()) }
+                if (rows.isEmpty()) item { Text("No matching Publisher was found.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 item { RecordViewToggle(viewMode) }
                 if (viewMode.table) {
                     // Table View: each group is a heading row and its members are the rows under it.

@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.publishers
 
+import com.emfitsolutions.gopreach.domain.NameSearch
 import com.emfitsolutions.gopreach.data.model.AccountStatus
 
 enum class PublisherFilterMode(val label: String) {
@@ -30,9 +31,9 @@ data class PublisherListFilter(
         return rows.filter { row ->
             when (mode) {
                 PublisherFilterMode.ALL ->
-                    q.isEmpty() || nameParts(row).any { it.contains(q) } ||
+                    q.isEmpty() || nameParts(row).any { it.contains(q) } || NameSearch.matches(q, *nameParts(row).toTypedArray()) ||
                         row.groupName.lowercase().contains(q) || statusText(row).contains(q)
-                PublisherFilterMode.NAME -> q.isEmpty() || nameParts(row).any { it.contains(q) }
+                PublisherFilterMode.NAME -> q.isEmpty() || nameParts(row).any { it.contains(q) } || NameSearch.matches(q, *nameParts(row).toTypedArray())
                 PublisherFilterMode.GROUP -> when (groupId) {
                     null -> true
                     NO_GROUP_FILTER -> row.assignment.groupId == null

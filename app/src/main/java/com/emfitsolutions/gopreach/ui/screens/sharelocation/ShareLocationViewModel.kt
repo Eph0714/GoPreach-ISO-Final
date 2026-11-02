@@ -185,11 +185,7 @@ class ShareLocationViewModel(
                     SharedLocationRow(person, location, category, groupName, congregationName)
                 }
                 .filter { row ->
-                    searchQuery.isBlank() ||
-                        row.person.fullName.contains(searchQuery, ignoreCase = true) ||
-                        row.category?.displayName?.contains(searchQuery, ignoreCase = true) == true ||
-                        row.groupName?.contains(searchQuery, ignoreCase = true) == true ||
-                        row.congregationName.contains(searchQuery, ignoreCase = true)
+                    com.emfitsolutions.gopreach.domain.NameSearch.matches(searchQuery, row.person.fullName, row.category?.displayName, row.groupName, row.congregationName)
                 }
                 .sortedBy { it.person.fullName }
         }

@@ -243,7 +243,7 @@ fun FieldServiceReportScreen(
     val metricsBState by metricsBFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val fsMetrics = remember(metricsAState, metricsBState) { fieldServiceGraphMetrics(metricsAState, metricsBState) }
     var query by rememberSaveable { mutableStateOf("") }
-    fun matches(name: String, remarks: String = "") = query.isBlank() || name.contains(query, ignoreCase = true) || remarks.contains(query, ignoreCase = true)
+    fun matches(name: String, remarks: String = "") = com.emfitsolutions.gopreach.domain.NameSearch.matches(query, name, remarks)
     // Which publishers to list: everyone, those with a report, or those with no report (to find who still needs a record entered by hand).
     var reportFilter by rememberSaveable { mutableStateOf(0) }
     fun passes(hasReport: Boolean) = reportFilter == 0 || (reportFilter == 1) == hasReport
@@ -287,7 +287,7 @@ fun FieldServiceReportScreen(
         if (reportGroups.isEmpty()) emptyFlow() else viewModel.listItemsFor(reportGroups, fromMonth, toMonth)
     }
     val allListItems by itemsFlow.collectAsStateWithLifecycle(initialValue = null)
-    val listItems = if (query.isBlank() && reportFilter == 0) allListItems else allListItems?.filter { (matches(it.publisherName) || it.groupName.contains(query, ignoreCase = true)) && passes(it.report != null) }
+    val listItems = if (query.isBlank() && reportFilter == 0) allListItems else allListItems?.filter { (com.emfitsolutions.gopreach.domain.NameSearch.matches(query, it.publisherName, it.groupName)) && passes(it.report != null) }
     // All / With Report / No Record, with how many of each (the Records menu), so the publishers still to be entered are one tap away.
     val withReportCount = if (listView) allListItems.orEmpty().count { it.report != null } else sheets.orEmpty().sumOf { s -> s.rows.count { it.hasReport } }
     val noReportCount = if (listView) allListItems.orEmpty().count { it.report == null } else sheets.orEmpty().sumOf { s -> s.rows.count { !it.hasReport } }

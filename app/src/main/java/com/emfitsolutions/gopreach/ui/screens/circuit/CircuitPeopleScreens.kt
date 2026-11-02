@@ -109,7 +109,7 @@ fun CircuitPublishersScreen(
     val rows = all
         .filter { status == null || it.status == status }
         .filter { groupName == null || it.groupName == groupName }
-        .filter { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
+        .filter { com.emfitsolutions.gopreach.domain.NameSearch.matches(query, it.name) }
         .let { if (descending) it.reversed() else it }
     val context = androidx.compose.ui.platform.LocalContext.current
     val headings by remember(currentPersonId) { viewModel.headings(currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -239,7 +239,7 @@ fun CircuitLeadersScreen(
         if (congregationId == null) kotlinx.coroutines.flow.emptyFlow() else viewModel.leaders(currentPersonId, congregationId)
     }
         .collectAsStateWithLifecycle(initialValue = emptyList<CircuitPersonRow>() to emptyList())
-    val filter: (CircuitPersonRow) -> Boolean = { query.isBlank() || it.name.contains(query.trim(), ignoreCase = true) }
+    val filter: (CircuitPersonRow) -> Boolean = { com.emfitsolutions.gopreach.domain.NameSearch.matches(query, it.name) }
     val elders = if (kind == "servants") emptyList() else leaders.first.filter(filter)
     val servants = if (kind == "elders") emptyList() else leaders.second.filter(filter)
     val listTitle = when (kind) { "elders" -> "Elders"; "servants" -> "Ministerial Servants"; else -> "Elders & Ministerial Servants" }
