@@ -241,11 +241,13 @@ test('a publisher whose own congregation field is empty or out of step is still 
   // the congregation-wide role works where the caller works (no hint needed), and the Super Admin through the hint the page sends
   assert.equal((await edit('adm', 'lost', { person: details({ remarks: 'found by the Admin' }) })).status, 200);
   assert.equal((await get('people', 'lost')).remarks, 'found by the Admin');
+  assert.equal((await get('people', 'lost')).activeCongregationId, 'congA', 'the empty congregation of the record was repaired by the save');
   assert.equal((await edit('sa', 'lost', { person: details({ remarks: 'found by the Super Admin' }), assignmentCongregationId: 'congA' })).status, 200);
   assert.equal((await edit('adm', 'moved', { person: details() })).status, 403); // found, but the person's own policy (another congregation) still refuses
   // without the hint a Super Admin (no congregation of their own) still gets the plain answer, and an Admin of another congregation never reaches the record
-  assert.equal((await edit('sa', 'lost', { person: details() })).status, 404);
+  await put('people', 'lost2', person(null, null, { username: 'lost.two' })); await assign('ra_lost2', 'lost2', 'PUBLISHER:REGULAR_PUBLISHER', 'congA', 'g1');
+  assert.equal((await edit('sa', 'lost2', { person: details() })).status, 404);
   assert.equal((await edit('adm', 'pubB', { person: details() })).status, 403);
   await put('people', 'admB', person('ADMIN_PER_CONGREGATION', 'congB')); 
-  assert.equal((await edit('admB', 'lost', { person: details(), assignmentCongregationId: 'congA' })).status, 403);
+  assert.equal((await edit('admB', 'lost2', { person: details(), assignmentCongregationId: 'congA' })).status, 403);
 });

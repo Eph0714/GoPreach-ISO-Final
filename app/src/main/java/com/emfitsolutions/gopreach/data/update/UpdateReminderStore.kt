@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit
 private const val PREFS_NAME = "gopreach_update_reminder"
 private const val KEY_SNOOZED_VERSION = "snoozed_version"
 private const val KEY_SNOOZED_UNTIL = "snoozed_until"
+private const val KEY_ACKNOWLEDGED_VERSION = "acknowledged_version"
 
 /** "Remind Me Later... show the update notification again later at an
  * appropriate time, such as: next login, after a configurable number of
@@ -45,10 +46,20 @@ class UpdateReminderStore(
         return System.currentTimeMillis() < prefs.getLong(KEY_SNOOZED_UNTIL, 0L)
     }
 
+    /** The person tapped UPDATE NOW for [version]: that exact release is not offered again by an automatic check (coming back from the installer, reopening the app, signing in again), whether or not the install finished. Only a different, newer version asks again. */
+    fun acknowledge(version: String) {
+        prefs.edit { putString(KEY_ACKNOWLEDGED_VERSION, version) }
+    }
+
+    fun isAcknowledged(version: String): Boolean = prefs.getString(KEY_ACKNOWLEDGED_VERSION, null) == version
+
     /** Clears any snooze in effect — called once an update actually
      * installs, so a fresh future version starts with no leftover snooze
      * state pointing at an old version number. */
     fun clear() {
-        prefs.edit { clear() }
+        prefs.edit {
+            remove(KEY_SNOOZED_VERSION)
+            remove(KEY_SNOOZED_UNTIL)
+        }
     }
 }

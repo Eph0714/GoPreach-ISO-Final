@@ -153,7 +153,7 @@ data class MonthlyReportUiState(
     /** What gets stored as [MonthlyReport.hoursRendered]: a Pioneer's converted hours
      * (the same figure Preview and Send as Text show), everyone else's raw hours. */
     val reportedHoursDecimal: Double
-        get() = if (isPioneer) PublisherReportCalculator.convertToHours(totalMinutes) else totalMinutes / 60.0
+        get() = if (isPioneer) PublisherReportCalculator.convertToHours(totalMinutes) else 0.0
 
     /** The finished report — the Preview text and Send as Text come from this alone. */
     val report: PublisherReport
@@ -176,8 +176,8 @@ data class MonthlyReportUiState(
 
     /** Spec §12 — non-negative, valid numbers; shown beside the relevant
      * field, and never clears what the Publisher typed. */
-    val hoursError: String? get() = if (hoursText.toIntOrNull()?.let { it >= 0 } != true) "Enter a valid number of hours" else null
-    val minutesError: String? get() = when (val m = minutesText.toIntOrNull()) {
+    val hoursError: String? get() = if (!isPioneer) null else if (hoursText.toIntOrNull()?.let { it >= 0 } != true) "Enter a valid number of hours" else null
+    val minutesError: String? get() = if (!isPioneer) null else when (val m = minutesText.toIntOrNull()) {
         null -> "Enter a valid number of minutes"
         else -> if (m !in 0..59) "Minutes must be 0–59" else null
     }

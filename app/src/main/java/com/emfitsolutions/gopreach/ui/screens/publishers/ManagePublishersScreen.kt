@@ -548,6 +548,7 @@ private fun EditPublisherDialog(
             sendGroup = true,
             groupId = form.groupId,
             congregationId = if (canChangeCongregation && movingCongregation) newCongregationId else null,
+            assignmentCongregationId = row.assignment.congregationId,
         )
         saving = true
         errorMessage = null

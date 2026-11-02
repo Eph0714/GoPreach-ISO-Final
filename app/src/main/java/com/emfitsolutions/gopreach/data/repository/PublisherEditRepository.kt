@@ -28,6 +28,8 @@ data class PublisherEdit(
     val accountStatus: String? = null,
     /** A new temporary password, or null / blank to keep the current one. It only travels in this request and is never stored by the app. */
     val password: String? = null,
+    /** The congregation the publisher role was found in (the row being edited): the server looks there when the record's own congregation is empty or out of step. */
+    val assignmentCongregationId: String? = null,
 )
 
 sealed class PublisherEditResult {
@@ -78,6 +80,7 @@ internal fun publisherEditBody(edit: PublisherEdit): JsonObject = buildJsonObjec
     edit.username?.takeIf { it.isNotBlank() }?.let { put("username", it) }
     edit.accountStatus?.let { put("accountStatus", it) }
     edit.password?.takeIf { it.isNotBlank() }?.let { put("password", it) }
+    edit.assignmentCongregationId?.takeIf { it.isNotBlank() }?.let { put("assignmentCongregationId", it) }
 }
 
 /** The personal details of a publisher record: the same keys the website sends. */

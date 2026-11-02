@@ -162,8 +162,10 @@ class UpdateViewModel(
                     // and an explicit manual check (silent = false) always
                     // shows regardless, since the user asked directly.
                     val snoozed = silent && !info.isCritical && reminderStore.isSnoozed(info.version)
+                    // A release the person already answered with UPDATE NOW is never offered again by an automatic check (a mandatory one included), so coming back from the installer does not bring the same notice back; a newer version does. The Settings check still shows it.
+                    val acknowledged = silent && reminderStore.isAcknowledged(info.version)
                     _state.value = when {
-                        isNewer && !snoozed -> UpdateCheckState.Available(info, currentVersion)
+                        isNewer && !snoozed && !acknowledged -> UpdateCheckState.Available(info, currentVersion)
                         isNewer -> UpdateCheckState.Idle
                         else -> UpdateCheckState.UpToDate(currentVersion)
                     }
@@ -232,6 +234,7 @@ class UpdateViewModel(
             ?: (_state.value as? UpdateCheckState.Failed)?.info
             ?: (_state.value as? UpdateCheckState.ReadyToInstall)?.info
             ?: return
+        reminderStore.acknowledge(info.version)
         viewModelScope.launch {
             try {
                 downloader.clearDownloads()

@@ -190,6 +190,8 @@ export function mountPublisherEdit(app, store, auth) {
           changed.push('password');
         }
         if (moving) personNext.activeCongregationId = newCong;
+        // A record with no congregation of its own is repaired by the save of someone who may change the congregation: it now says where its publisher role is.
+        else if (home == null && full) personNext.activeCongregationId = cong;
 
         // ---- every document is also checked against the rules of the ordinary write path
         const assignmentNext = { ...assignment, roleType, groupId, congregationId: newCong };

@@ -36,6 +36,11 @@ class PublisherEditBodyTest {
         assertEquals(JsonNull, d.getValue("baptismalDate"))
     }
 
+    @Test fun theRolesCongregationTravelsOnlyWhenKnown() {
+        assertEquals("congA", body(PublisherEdit(person, assignmentCongregationId = "congA")).getValue("assignmentCongregationId").jsonPrimitive.content)
+        assertEquals(setOf("person"), body(PublisherEdit(person, assignmentCongregationId = " ")).keys)
+    }
+
     @Test fun onlyWhatWasAskedToChangeIsSent() {
         val plain = body(PublisherEdit(person))
         assertEquals(setOf("person"), plain.keys)

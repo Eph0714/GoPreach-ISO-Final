@@ -395,7 +395,8 @@ private fun MonthlyReportForm(
 
         // An Elder correcting a report - or the Publisher while their own report is still a Draft - can change its figures.
         if (allowEditWhenLocked || (uiState.existingReport?.status == ReportStatus.DRAFT && !effectivelyLocked)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Only a Pioneer reports time; everyone else's hours and minutes are not asked for (and not saved).
+            if (uiState.isPioneer) Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = uiState.hoursText,
                     onValueChange = viewModel::onHoursChange,
