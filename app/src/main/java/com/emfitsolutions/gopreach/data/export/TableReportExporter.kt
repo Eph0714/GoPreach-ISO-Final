@@ -27,6 +27,8 @@ data class TableReportData(
     val generatedBy: String,
     val generatedAt: String,
     val landscape: Boolean = true,
+    /** The name of the shared file (without its extension) when the report has its own, e.g. "FS GROUP 5 Field Service Report for October 2026"; otherwise it comes from the title. */
+    val fileName: String? = null,
 )
 
 object TableReportExporter {
@@ -97,7 +99,7 @@ object TableReportExporter {
             }
         }.toByteArray()
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val label = data.title.replace(Regex("[^A-Za-z0-9]+"), "_").trim('_').ifBlank { "Report" }
+        val label = data.fileName?.replace(Regex("[\\/:*?\"<>|]+"), " ")?.trim()?.ifBlank { null } ?: data.title.replace(Regex("[^A-Za-z0-9]+"), "_").trim('_').ifBlank { "Report" }
         val file = File(dir, "$label.docx").apply { writeBytes(bytes) }
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -161,7 +163,7 @@ object TableReportExporter {
             }
         }.toByteArray()
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val label = data.title.replace(Regex("[^A-Za-z0-9]+"), "_").trim('_').ifBlank { "Report" }
+        val label = data.fileName?.replace(Regex("[\\/:*?\"<>|]+"), " ")?.trim()?.ifBlank { null } ?: data.title.replace(Regex("[^A-Za-z0-9]+"), "_").trim('_').ifBlank { "Report" }
         val file = File(dir, "$label.xlsx").apply { writeBytes(bytes) }
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {

@@ -326,11 +326,17 @@ object FieldServiceReportExporter {
     private fun fileLabel(sheets: List<FieldServiceReportSheet>): String =
         (if (sheets.size == 1) safeName(sheets[0].groupName) else "All_FS_Groups") + "_" + safeName(sheets.firstOrNull()?.monthLabel.orEmpty())
 
+    /** The title of the report and the name of its files: the group (or All FS Groups) then the month, e.g. "FS GROUP 5 Field Service Report for October 2026". */
+    fun reportTitle(sheets: List<FieldServiceReportSheet>): String {
+        val group = if (sheets.size == 1) sheets[0].groupName else "All FS Groups"
+        return "$group Field Service Report for ${sheets.firstOrNull()?.monthLabel.orEmpty()}".replace(Regex("[\\/:*?\"<>|]+"), " ").replace(Regex("\\s+"), " ").trim()
+    }
+
     /** Writes the .xlsx (one sheet per group) and hands it to the system share sheet (same FileProvider/cache
      * folder the map exports use), so it can be saved to Drive/Files, emailed, or opened in Excel. */
     fun shareExcel(context: Context, sheets: List<FieldServiceReportSheet>) {
         val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val file = File(dir, "FieldServiceReport_" + fileLabel(sheets) + ".xlsx")
+        val file = File(dir, reportTitle(sheets) + ".xlsx")
         file.writeBytes(buildXlsx(context, sheets))
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
@@ -361,7 +367,8 @@ object FieldServiceReportExporter {
             add(listOf("Total Bible Studies", sheets.sumOf { s -> s.rows.sumOf { it.bibleStudies ?: 0 } }.toString()))
         }
         return com.emfitsolutions.gopreach.data.export.TableReportData(
-            title = "Field Service Report",
+            title = reportTitle(sheets),
+            fileName = reportTitle(sheets),
             details = listOf("Groups" to (if (sheets.size == 1) sheets[0].groupName else "All FS Groups"), (if (first?.isRange == true) "Period" else "Month") to first?.monthLabel.orEmpty()),
             recordsFound = table.size.minus(1).toString(),
             table = table,
@@ -379,7 +386,7 @@ object FieldServiceReportExporter {
     fun printPdf(context: Context, sheets: List<FieldServiceReportSheet>, graphHtml: String? = null, footerHtml: String? = null) =
         ReportPrinter.printHtml(
             context,
-            "Field Service Report - " + (if (sheets.size == 1) sheets[0].groupName else "All FS Groups") + " - " + sheets.firstOrNull()?.monthLabel.orEmpty(),
+            reportTitle(sheets),
             buildHtml(sheets, graphHtml, footerHtml),
             PrintOptions(),   // upright or across, chosen by the fit for the paper (the person's own setting still wins)
         )
