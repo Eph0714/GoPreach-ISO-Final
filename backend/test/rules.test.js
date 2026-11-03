@@ -819,3 +819,21 @@ test('Field Service Record: the Assistant of an FS Group (an ordinary publisher)
   assert.equal(await set('pubA2', 'monthlyReports', 'q5', rec('pubQ', 'raQ')), false, 'an ordinary publisher of the same congregation');
   assert.equal(await set('adminA', 'monthlyReports', 'q6', rec('pubQ', 'raQ')), true, 'the Admin keeps full access');
 });
+
+test('a person changing their OWN personal details must leave the five contact details filled in; nothing else on their record is held up', async () => {
+  const complete = { ...(await stored('people', 'pubA')), firstName: 'PAT', lastName: 'PUB', address: 'PUROK 1', contact: '0917', province: 'NUEVA VIZCAYA', cityMunicipality: 'SOLANO', barangay: 'ROXAS' };
+  await put('people', 'ownNew', complete);
+  const mine = (patch) => set('ownNew', 'people', 'ownNew', { ...complete, ...patch });
+  // each of the five missing blocks a change of the personal details
+  for (const k of ['address', 'contact', 'province', 'cityMunicipality', 'barangay']) assert.equal(await mine({ [k]: '', email: 'x@example.com' }), false, k);
+  assert.equal(await mine({ email: 'x@example.com', contactPerson: 'MOM' }), true, 'complete details are saved');
+  // a record that was enrolled without them can still be opened and used: only a change of the personal details is held back
+  await put('people', 'ownEmpty', { isSuperAdmin: false, activeAdminRole: null, activeCongregationId: 'congA', firstName: 'EMPTY', lastName: 'ONE', address: null, contact: null, province: null, cityMunicipality: null, barangay: null });
+  const emptyOwn = await stored('people', 'ownEmpty');
+  assert.equal(await set('ownEmpty', 'people', 'ownEmpty', { ...emptyOwn, username: 'empty.one' }), true, 'sign-in details');
+  assert.equal(await set('ownEmpty', 'people', 'ownEmpty', { ...emptyOwn, gpsLat: 16.06, gpsLng: 120.4 }), true, 'location sharing');
+  assert.equal(await set('ownEmpty', 'people', 'ownEmpty', { ...emptyOwn, remarks: 'hello' }), false, 'a details change with the five still empty');
+  assert.equal(await set('ownEmpty', 'people', 'ownEmpty', { ...emptyOwn, address: 'A', contact: '1', province: 'P', cityMunicipality: 'C', barangay: 'B' }), true, 'completing them');
+  // someone else's rules are unchanged: the Admin of the congregation still edits a publisher whose details are empty
+  assert.equal(await set('adminA', 'people', 'pubA2', { ...(await stored('people', 'pubA2')), address: null, remarks: 'by the admin' }), true);
+});

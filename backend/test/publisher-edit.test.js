@@ -207,7 +207,8 @@ test('Province, Municipality, Barangay and Contact may be blank; every other req
   assert.equal((await edit('adm', 'pub1', { person: details({ province: 'PANGASINAN', contact: '0918' }) })).status, 200);
   assert.deepEqual([(await get('people', 'pub1')).province, (await get('people', 'pub1')).contact], ['PANGASINAN', '0918']);
   // still required
-  for (const f of ['firstName', 'lastName', 'address']) assert.equal((await edit('adm', 'pub1', { person: details({ [f]: '' }) })).status, 422, f);
+  for (const f of ['firstName', 'lastName']) assert.equal((await edit('adm', 'pub1', { person: details({ [f]: '' }) })).status, 422, f);
+  assert.equal((await edit('adm', 'pub1', { person: details({ address: '', contact: '', province: '', cityMunicipality: '', barangay: '' }) })).status, 200, 'the five contact details may be left empty by whoever edits');
   // a value that is given keeps its limits
   assert.equal((await edit('adm', 'pub1', { person: details({ contact: '9'.repeat(61) }) })).status, 422);
   assert.equal((await edit('adm', 'pub1', { person: details({ province: 'x'.repeat(101) }) })).status, 422);

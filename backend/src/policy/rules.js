@@ -197,6 +197,11 @@ const SIGNED_IN_ONLY = new Set([
 ]);
 
 const chatParticipant = (h, chat) => (chat?.participantIds ?? []).includes(h.me);
+/** The personal details a person edits on their own record, and the five that must not be empty when they do. */
+const OWN_DETAIL_FIELDS = ['firstName', 'lastName', 'middleInitial', 'extensionName', 'address', 'contact', 'province', 'cityMunicipality', 'barangay', 'contactPerson', 'contactPersonNumber', 'email', 'gender', 'remarks'];
+const OWN_REQUIRED_DETAILS = ['address', 'contact', 'province', 'cityMunicipality', 'barangay'];
+const OWN_DETAILS_MESSAGE = 'Please complete your personal details. Full Address, Contact Number, Province, Municipality, and Barangay are required.';
+
 const chatAllowsRead = (h, chat) => h.sa || chatParticipant(h, chat) || h.canManageGroupChatsFor(nul(chat?.congregationId));
 
 /**
@@ -388,7 +393,13 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
       if (isCreate) return verdict((next.isSuperAdmin ?? false) === false, 'Cannot grant Super Admin');
       if (isDelete) return ok();
       if ((next.isSuperAdmin ?? false) !== (old.isSuperAdmin ?? false)) return deny('Cannot change Super Admin');
-      if (id === h.me) return ok();
+      if (id === h.me) {
+        // A person who changes their OWN personal details must leave the five contact details filled in (what an Admin may leave blank at enrollment, the person completes). Anything else on their
+        // own record (sign-in, role in use, location sharing, availability...) is not held up by an incomplete profile.
+        const touched = OWN_DETAIL_FIELDS.some((k) => String(next[k] ?? '').trim() !== String(old[k] ?? '').trim());
+        const missing = OWN_REQUIRED_DETAILS.some((k) => String(next[k] ?? '').trim() === '');
+        return verdict(!touched || !missing, OWN_DETAILS_MESSAGE);
+      }
       if (await h.canEditPersonProfile(id)) return ok();
       if (await h.canEditGroupMemberProfile(id)) {
         const keys = affectedKeys(next, old);
