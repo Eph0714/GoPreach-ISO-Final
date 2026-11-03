@@ -44,6 +44,8 @@ enum class MidweekSection(val displayLabel: String) {
 data class MidweekMeetingSchedule(
     @field:DocumentId val id: String = "",
     val congregationId: String = "",
+    /** Which of the two Meeting and Cart Assignment modules this belongs to ([MeetingModule.code]); records made before the modules existed are the Congregation's. */
+    val meetingModule: String = MeetingModule.CONGREGATION.code,
     val weekStartDate: Long = 0L,
     val treasuresItems: List<MidweekAssignmentItem> = emptyList(),
     val fieldMinistryItems: List<MidweekAssignmentItem> = emptyList(),
@@ -79,6 +81,7 @@ data class MidweekMeetingSchedule(
 data class PublicTalkScheduleRow(
     @field:DocumentId val id: String = "",
     val congregationId: String = "",
+    val meetingModule: String = MeetingModule.CONGREGATION.code,
     val date: Long = 0L,
     val theme: String = "",
     val speaker: String = "",
@@ -106,6 +109,7 @@ data class PublicTalkScheduleRow(
 data class CartAssignmentRow(
     @field:DocumentId val id: String = "",
     val congregationId: String = "",
+    val meetingModule: String = MeetingModule.CONGREGATION.code,
     val date: Long = 0L,
     val location: String = "",
     val publishers: String = "",
@@ -147,7 +151,26 @@ fun MidweekSection.heading(language: MidweekHeadingLanguage): String = when (lan
 data class MeetingAssignmentSettings(
     @field:DocumentId val id: String = "",
     val congregationId: String = "",
+    val meetingModule: String = MeetingModule.CONGREGATION.code,
     val sectionLanguage: String = MidweekHeadingLanguage.ENGLISH.code,
     val updatedBy: String = "",
     val updatedAt: Long = 0L,
 )
+
+/**
+ * The two Meeting and Cart Assignment modules: the Congregation's own, and the Sign Language Group's. Each has the same three parts (Midweek Meeting, Public Talk and Watchtower, Cart Assignment),
+ * the same screens and the same rules; their records are kept apart by [code] on every record.
+ */
+@kotlinx.serialization.Serializable
+enum class MeetingModule(val code: String, val label: String) {
+    CONGREGATION("CONGREGATION", "Congregation"),
+    SIGN_LANGUAGE("SIGN_LANGUAGE", "Sign Language Group");
+
+    companion object {
+        fun of(code: String?): MeetingModule = entries.firstOrNull { it.code == code } ?: CONGREGATION
+    }
+}
+
+val MidweekMeetingSchedule.module: MeetingModule get() = MeetingModule.of(meetingModule)
+val PublicTalkScheduleRow.module: MeetingModule get() = MeetingModule.of(meetingModule)
+val CartAssignmentRow.module: MeetingModule get() = MeetingModule.of(meetingModule)

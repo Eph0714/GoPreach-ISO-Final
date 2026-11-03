@@ -69,6 +69,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.CartAssignmentRow
 import com.emfitsolutions.gopreach.data.model.heading
+import com.emfitsolutions.gopreach.data.model.MeetingModule
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.MidweekAssignmentItem
 import com.emfitsolutions.gopreach.data.model.MidweekMeetingSchedule
@@ -131,6 +132,8 @@ fun MeetingAssignmentsScreen(
     }
     val congregationId = fixedCongregationId ?: pickedCongregationId
     var category by remember { mutableStateOf(MeetingAssignmentCategory.MIDWEEK) }
+    var moduleCode by rememberSaveable { mutableStateOf(MeetingModule.CONGREGATION.code) }
+    val module = MeetingModule.of(moduleCode)
 
     Scaffold(
         topBar = {
@@ -153,6 +156,17 @@ fun MeetingAssignmentsScreen(
                 )
             }
 
+            // the two modules: the Congregation's and the Sign Language Group's, each with the same three parts and the same rules
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                MeetingModule.entries.forEachIndexed { index, entry ->
+                    SegmentedButton(
+                        selected = module == entry,
+                        onClick = { moduleCode = entry.code },
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = MeetingModule.entries.size),
+                    ) { Text(entry.label, maxLines = 1) }
+                }
+            }
+
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 MeetingAssignmentCategory.entries.forEachIndexed { index, entry ->
                     SegmentedButton(
@@ -170,10 +184,10 @@ fun MeetingAssignmentsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 16.dp),
                 )
-            } else when (category) {
+            } else androidx.compose.runtime.CompositionLocalProvider(LocalMeetingModule provides module) { when (category) {
                 MeetingAssignmentCategory.MIDWEEK -> MidweekMeetingScheduleTab(
                     congregationId = congregationId,
-                    congregationName = congregations.firstOrNull { it.id == congregationId }?.name ?: "—",
+                    congregationName = (congregations.firstOrNull { it.id == congregationId }?.name ?: "—") + (if (module == MeetingModule.CONGREGATION) "" else " — " + module.label),
                     readOnly = readOnly,
                     canSetLanguage = canSetLanguage,
                     currentPersonId = currentPersonId,
@@ -181,22 +195,25 @@ fun MeetingAssignmentsScreen(
                 )
                 MeetingAssignmentCategory.PUBLIC_TALK -> PublicTalkScheduleTab(
                     congregationId = congregationId,
-                    congregationName = congregations.firstOrNull { it.id == congregationId }?.name ?: "—",
+                    congregationName = (congregations.firstOrNull { it.id == congregationId }?.name ?: "—") + (if (module == MeetingModule.CONGREGATION) "" else " — " + module.label),
                     readOnly = readOnly,
                     currentPersonId = currentPersonId,
                     viewModel = viewModel,
                 )
                 MeetingAssignmentCategory.CART_ASSIGNMENT -> CartAssignmentTab(
                     congregationId = congregationId,
-                    congregationName = congregations.firstOrNull { it.id == congregationId }?.name ?: "—",
+                    congregationName = (congregations.firstOrNull { it.id == congregationId }?.name ?: "—") + (if (module == MeetingModule.CONGREGATION) "" else " — " + module.label),
                     readOnly = readOnly,
                     currentPersonId = currentPersonId,
                     viewModel = viewModel,
                 )
-            }
+            } }
         }
     }
 }
+
+/** Which of the two modules (Congregation, Sign Language Group) the tabs are showing. */
+private val LocalMeetingModule = androidx.compose.runtime.compositionLocalOf { MeetingModule.CONGREGATION }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -236,11 +253,12 @@ private fun MidweekMeetingScheduleTab(
 ) {
     val context = LocalContext.current
     var weekStart by remember { mutableStateOf(mondayOfWeek(System.currentTimeMillis())) }
-    val scheduleFlow = remember(congregationId, weekStart) { viewModel.scheduleFor(congregationId, weekStart) }
+    val module = LocalMeetingModule.current
+    val scheduleFlow = remember(congregationId, weekStart, module) { viewModel.scheduleFor(congregationId, weekStart, module) }
     val schedule by scheduleFlow.collectAsStateWithLifecycle(initialValue = null)
     var editingItem by remember { mutableStateOf<Triple<MidweekSection, Int?, MidweekAssignmentItem?>?>(null) }
     var pendingDelete by remember { mutableStateOf<Pair<MidweekSection, Int>?>(null) }
-    val languageFlow = remember(congregationId) { viewModel.headingLanguageFor(congregationId) }
+    val languageFlow = remember(congregationId, module) { viewModel.headingLanguageFor(congregationId, module) }
     val language by languageFlow.collectAsStateWithLifecycle(initialValue = com.emfitsolutions.gopreach.data.model.MidweekHeadingLanguage.ENGLISH)
 
     // "Make the week selectable, e.g. <August 31-September 6 2026>
@@ -262,7 +280,7 @@ private fun MidweekMeetingScheduleTab(
             com.emfitsolutions.gopreach.data.model.MidweekHeadingLanguage.entries.forEach { option ->
                 androidx.compose.material3.FilterChip(
                     selected = language == option,
-                    onClick = { viewModel.setHeadingLanguage(congregationId, option, currentPersonId) },
+                    onClick = { viewModel.setHeadingLanguage(congregationId, option, currentPersonId, module) },
                     label = { Text(option.label) },
                 )
             }
@@ -344,7 +362,7 @@ private fun MidweekMeetingScheduleTab(
             onSave = { newItem ->
                 val current = (schedule?.itemsFor(section) ?: emptyList()).toMutableList()
                 if (index != null) current[index] = newItem else current.add(newItem)
-                viewModel.saveSectionItems(schedule, congregationId, weekStart, section, current, currentPersonId)
+                viewModel.saveSectionItems(schedule, congregationId, weekStart, section, current, currentPersonId, module)
                 editingItem = null
             },
             onDismiss = { editingItem = null },
@@ -363,7 +381,7 @@ private fun MidweekMeetingScheduleTab(
                 ActionButton(ActionKind.Delete, onClick = {
                     val current = (schedule?.itemsFor(section) ?: emptyList()).toMutableList()
                     if (index in current.indices) current.removeAt(index)
-                    viewModel.saveSectionItems(schedule, congregationId, weekStart, section, current, currentPersonId)
+                    viewModel.saveSectionItems(schedule, congregationId, weekStart, section, current, currentPersonId, module)
                     pendingDelete = null
                 }, label = "Delete")
             },
@@ -497,7 +515,8 @@ private fun PublicTalkScheduleTab(
     viewModel: MeetingAssignmentsViewModel,
 ) {
     val context = LocalContext.current
-    val rowsFlow = remember(congregationId) { viewModel.rowsFor(congregationId) }
+    val module = LocalMeetingModule.current
+    val rowsFlow = remember(congregationId, module) { viewModel.rowsFor(congregationId, module) }
     val rows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var showAdd by remember { mutableStateOf(false) }
     var pendingEdit by remember { mutableStateOf<PublicTalkScheduleRow?>(null) }
@@ -603,6 +622,7 @@ private fun PublicTalkScheduleDialog(
     onSaved: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val meetingModuleCode = LocalMeetingModule.current.code
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val namesFlow = remember(congregationId) { viewModel.rosterNamesFor(congregationId) }
@@ -637,6 +657,7 @@ private fun PublicTalkScheduleDialog(
             val row = PublicTalkScheduleRow(
                 id = existing?.id ?: "",
                 congregationId = congregationId,
+                meetingModule = meetingModuleCode,
                 date = date!!,
                 theme = theme.trim(),
                 speaker = speaker.trim(),
@@ -733,7 +754,8 @@ private fun CartAssignmentTab(
     viewModel: MeetingAssignmentsViewModel,
 ) {
     val context = LocalContext.current
-    val rowsFlow = remember(congregationId) { viewModel.cartAssignmentsFor(congregationId) }
+    val module = LocalMeetingModule.current
+    val rowsFlow = remember(congregationId, module) { viewModel.cartAssignmentsFor(congregationId, module) }
     val rows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var showAdd by remember { mutableStateOf(false) }
     var pendingEdit by remember { mutableStateOf<CartAssignmentRow?>(null) }
@@ -832,6 +854,7 @@ private fun CartAssignmentDialog(
     onSaved: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val meetingModuleCode = LocalMeetingModule.current.code
     val context = LocalContext.current
     val namesFlow = remember(congregationId) { viewModel.rosterNamesFor(congregationId) }
     val names by namesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -854,6 +877,7 @@ private fun CartAssignmentDialog(
         val row = CartAssignmentRow(
             id = existing?.id ?: "",
             congregationId = congregationId,
+            meetingModule = meetingModuleCode,
             date = date!!,
             location = location.trim(),
             publishers = publishers.trim(),

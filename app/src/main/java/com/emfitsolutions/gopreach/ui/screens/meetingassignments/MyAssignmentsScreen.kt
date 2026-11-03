@@ -1,5 +1,6 @@
 package com.emfitsolutions.gopreach.ui.screens.meetingassignments
 
+import com.emfitsolutions.gopreach.data.model.module
 import androidx.compose.foundation.layout.Arrangement
 import com.emfitsolutions.gopreach.ui.components.RecordViewToggle
 import com.emfitsolutions.gopreach.ui.components.UniversalColumn
@@ -104,6 +105,10 @@ fun MyAssignmentsScreen(
     }
 }
 
+/** " · Sign Language Group" for an assignment of that module; nothing for the Congregation's own. */
+private fun moduleTag(module: com.emfitsolutions.gopreach.data.model.MeetingModule): String =
+    if (module == com.emfitsolutions.gopreach.data.model.MeetingModule.CONGREGATION) "" else " · " + module.label
+
 /** Stable per-row key for [LazyColumn] — each [MyAssignmentRow] variant's
  * own natural id (a Midweek row has no Firestore doc id of its own, only its
  * parent schedule's, so its section/particular is folded in too). */
@@ -119,20 +124,20 @@ private fun MyAssignmentCard(row: MyAssignmentRow, dateFormat: SimpleDateFormat)
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             when (row) {
                 is MyAssignmentRow.Midweek -> {
-                    Text("Midweek Meeting Schedule", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text("Midweek Meeting Schedule" + moduleTag(row.module), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Text(formatWeekRange(row.weekStart), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Text(row.sectionLabel, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(row.particular + formatDurationSuffix(row.durationMinutes), style = MaterialTheme.typography.bodyMedium)
                     Text("Assigned to: ${row.assignedTo}", style = MaterialTheme.typography.bodySmall)
                 }
                 is MyAssignmentRow.PublicTalk -> {
-                    Text("Public Talk and Watchtower Study", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text("Public Talk and Watchtower Study" + moduleTag(row.row.module), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Text(dateFormat.format(Date(row.row.date)), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Text("Your role: ${row.matchedRoles.joinToString(", ")}", style = MaterialTheme.typography.bodyMedium)
                     if (row.row.theme.isNotBlank()) Text("Theme: ${row.row.theme}", style = MaterialTheme.typography.bodySmall)
                 }
                 is MyAssignmentRow.Cart -> {
-                    Text("Cart Assignment", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                    Text("Cart Assignment" + moduleTag(row.row.module), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                     Text(dateFormat.format(Date(row.row.date)), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Text("Location: ${row.row.location}", style = MaterialTheme.typography.bodyMedium)
                     Text("Publishers: ${row.row.publishers}", style = MaterialTheme.typography.bodySmall)

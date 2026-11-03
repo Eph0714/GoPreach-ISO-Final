@@ -86,7 +86,7 @@ class MeetingAssignmentSettingsRepository(
     fun observeAll(): Flow<List<com.emfitsolutions.gopreach.data.model.MeetingAssignmentSettings>> = offline.observeCollection(MEETING_SETTINGS_COLLECTION)
 
     suspend fun save(settings: com.emfitsolutions.gopreach.data.model.MeetingAssignmentSettings) =
-        offline.save(MEETING_SETTINGS_COLLECTION, settings.congregationId, settings.copy(id = settings.congregationId))
+        offline.save(MEETING_SETTINGS_COLLECTION, settings.id.ifBlank { settings.congregationId }, settings.copy(id = settings.id.ifBlank { settings.congregationId }))
 
     fun startRemoteSync(): Flow<Unit> =
         remote.mirror(MEETING_SETTINGS_COLLECTION, com.emfitsolutions.gopreach.data.model.MeetingAssignmentSettings::class) { it.id }

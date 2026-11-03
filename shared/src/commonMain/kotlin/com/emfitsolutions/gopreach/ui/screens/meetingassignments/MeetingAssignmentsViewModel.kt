@@ -22,6 +22,8 @@ import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.MeetingAssignmentSettingsRepository
 import com.emfitsolutions.gopreach.data.model.MeetingAssignmentSettings
 import com.emfitsolutions.gopreach.data.model.MidweekHeadingLanguage
+import com.emfitsolutions.gopreach.data.model.MeetingModule
+import com.emfitsolutions.gopreach.data.model.module
 import com.emfitsolutions.gopreach.data.repository.MidweekMeetingScheduleRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.PublicTalkScheduleRepository
@@ -59,6 +61,7 @@ sealed interface MyAssignmentRow {
         val particular: String,
         val durationMinutes: String,
         val assignedTo: String,
+        val module: MeetingModule = MeetingModule.CONGREGATION,
     ) : MyAssignmentRow {
         override val sortKey: Long get() = weekStart
     }
@@ -144,21 +147,23 @@ class MeetingAssignmentsViewModel(
     }
 
     /** The language the three headings of [congregationId]'s Midweek Meeting are shown in (English when nobody chose one). */
-    fun headingLanguageFor(congregationId: String): Flow<MidweekHeadingLanguage> =
-        settingsRepository.observeAll().map { list -> MidweekHeadingLanguage.of(list.firstOrNull { it.congregationId == congregationId }?.sectionLanguage) }
+    fun headingLanguageFor(congregationId: String, module: MeetingModule = MeetingModule.CONGREGATION): Flow<MidweekHeadingLanguage> =
+        settingsRepository.observeAll().map { list -> MidweekHeadingLanguage.of(list.firstOrNull { it.congregationId == congregationId && MeetingModule.of(it.meetingModule) == module }?.sectionLanguage) }
 
     /** Only the Admin of the congregation and the Super Admin reach this (the screen offers it to them and the server checks it again). */
-    fun setHeadingLanguage(congregationId: String, language: MidweekHeadingLanguage, actorPersonId: String) {
+    fun setHeadingLanguage(congregationId: String, language: MidweekHeadingLanguage, actorPersonId: String, module: MeetingModule = MeetingModule.CONGREGATION) {
         viewModelScope.launch {
-            settingsRepository.save(MeetingAssignmentSettings(congregationId = congregationId, sectionLanguage = language.code, updatedBy = actorPersonId, updatedAt = nowMillis()))
+            // one document per congregation and module: the Congregation's is named by the congregation, the Sign Language Group's adds _SIGN_LANGUAGE
+            val id = if (module == MeetingModule.CONGREGATION) congregationId else congregationId + "_" + module.code
+            settingsRepository.save(MeetingAssignmentSettings(id = id, congregationId = congregationId, meetingModule = module.code, sectionLanguage = language.code, updatedBy = actorPersonId, updatedAt = nowMillis()))
         }
     }
 
     /** The one schedule doc (if any) for [congregationId]/[weekStartDate] —
      * null means nothing has been enrolled for that week yet, not an error. */
-    fun scheduleFor(congregationId: String, weekStartDate: Long): Flow<MidweekMeetingSchedule?> =
+    fun scheduleFor(congregationId: String, weekStartDate: Long, module: MeetingModule = MeetingModule.CONGREGATION): Flow<MidweekMeetingSchedule?> =
         midweekRepository.observeAll().map { list ->
-            list.firstOrNull { it.congregationId == congregationId && it.weekStartDate == weekStartDate }
+            list.firstOrNull { it.congregationId == congregationId && it.weekStartDate == weekStartDate && it.module == module }
         }
 
     /** Replaces one sub-category's whole particulars list at once — the
@@ -174,11 +179,13 @@ class MeetingAssignmentsViewModel(
         section: MidweekSection,
         items: List<MidweekAssignmentItem>,
         actorPersonId: String,
+        module: MeetingModule = MeetingModule.CONGREGATION,
     ) {
         viewModelScope.launch {
             val now = nowMillis()
             val base = existing ?: MidweekMeetingSchedule(
                 congregationId = congregationId,
+                meetingModule = module.code,
                 weekStartDate = weekStartDate,
                 createdByPersonId = actorPersonId,
                 createdAt = now,
@@ -196,9 +203,9 @@ class MeetingAssignmentsViewModel(
         }
     }
 
-    fun rowsFor(congregationId: String?): Flow<List<PublicTalkScheduleRow>> =
+    fun rowsFor(congregationId: String?, module: MeetingModule = MeetingModule.CONGREGATION): Flow<List<PublicTalkScheduleRow>> =
         publicTalkRepository.observeAll().map { list ->
-            list.filter { congregationId == null || it.congregationId == congregationId }
+            list.filter { (congregationId == null || it.congregationId == congregationId) && it.module == module }
                 .sortedBy { it.date }
         }
 
@@ -211,7 +218,7 @@ class MeetingAssignmentsViewModel(
         row: PublicTalkScheduleRow,
         actorPersonId: String,
     ): String? {
-        val duplicate = existingRows.any { it.id != row.id && it.congregationId == row.congregationId && it.date == row.date }
+        val duplicate = existingRows.any { it.id != row.id && it.congregationId == row.congregationId && it.module == row.module && it.date == row.date }
         if (duplicate) return "A schedule already exists for this date. Edit that one instead, or pick a different date."
         val now = nowMillis()
         val isNew = row.id.isBlank()
@@ -261,9 +268,9 @@ class MeetingAssignmentsViewModel(
      * same date (different locations), so a stable secondary sort by
      * [CartAssignmentRow.location] keeps same-day rows from reordering
      * against each other on every unrelated recomposition. */
-    fun cartAssignmentsFor(congregationId: String?): Flow<List<CartAssignmentRow>> =
+    fun cartAssignmentsFor(congregationId: String?, module: MeetingModule = MeetingModule.CONGREGATION): Flow<List<CartAssignmentRow>> =
         cartAssignmentRepository.observeAll().map { list ->
-            list.filter { congregationId == null || it.congregationId == congregationId }
+            list.filter { (congregationId == null || it.congregationId == congregationId) && it.module == module }
                 .sortedWith(compareBy({ it.date }, { it.location }))
         }
 
@@ -342,6 +349,7 @@ class MeetingAssignmentsViewModel(
                                 particular = item.particular,
                                 durationMinutes = item.durationMinutes,
                                 assignedTo = item.assignedTo,
+                                module = schedule.module,
                             )
                         }
                 }

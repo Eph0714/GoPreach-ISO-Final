@@ -851,3 +851,14 @@ test('the language of the Midweek Meeting headings is set only by the Admin of t
   await put('meetingAssignmentSettings', 'congA', doc('congA', 'TL', 'adminA'));
   assert.equal(await reads('pubA', 'meetingAssignmentSettings', 'congA'), true, 'everyone of the congregation reads it');
 });
+
+test('the Sign Language Group has its own heading-language document per congregation, set by the same people', async () => {
+  const sign = (cong, lang, by) => ({ congregationId: cong, meetingModule: 'SIGN_LANGUAGE', sectionLanguage: lang, updatedBy: by, updatedAt: 1 });
+  assert.equal(await set('adminA', 'meetingAssignmentSettings', 'congA_SIGN_LANGUAGE', sign('congA', 'ILO', 'adminA')), true);
+  assert.equal(await set('sa', 'meetingAssignmentSettings', 'congB_SIGN_LANGUAGE', sign('congB', 'TL', 'sa')), true);
+  assert.equal(await set('adminA', 'meetingAssignmentSettings', 'congA', sign('congA', 'ILO', 'adminA')), false, 'the module names its document');
+  assert.equal(await set('adminA', 'meetingAssignmentSettings', 'congA_SIGN_LANGUAGE', { congregationId: 'congA', sectionLanguage: 'ILO', updatedBy: 'adminA', updatedAt: 1 }), false, 'a Congregation document is not the Sign Language Group\'s');
+  assert.equal(await set('adminB', 'meetingAssignmentSettings', 'congA_SIGN_LANGUAGE', sign('congA', 'TL', 'adminB')), false, 'the Admin of another congregation');
+  assert.equal(await set('coordA', 'meetingAssignmentSettings', 'congA_SIGN_LANGUAGE', sign('congA', 'TL', 'coordA')), false, 'a Coordinator Elder');
+  assert.equal(await set('adminA', 'meetingAssignmentSettings', 'congA_SIGN_LANGUAGE', { ...sign('congA', 'TL', 'adminA'), meetingModule: 'OTHER' }), false, 'only the two modules');
+});

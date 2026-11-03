@@ -465,7 +465,10 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
     // The language the three Midweek Meeting section headings are shown in (English, Tagalog, Iloko): one document per congregation, set by its Admin or the Super Admin only.
     case 'meetingAssignmentSettings':
       return verdict(
-        !isDelete && id === next.congregationId && h.canSetMeetingLanguageFor(nul(next.congregationId)) && ['EN', 'TL', 'ILO'].includes(next.sectionLanguage) && nul(next.updatedBy) === h.me,
+        !isDelete && h.canSetMeetingLanguageFor(nul(next.congregationId)) && ['EN', 'TL', 'ILO'].includes(next.sectionLanguage) && nul(next.updatedBy) === h.me &&
+          // one document per congregation and module: the Congregation's is named by the congregation, the Sign Language Group's adds _SIGN_LANGUAGE
+          [undefined, null, 'CONGREGATION', 'SIGN_LANGUAGE'].includes(next.meetingModule) &&
+          id === (next.meetingModule === 'SIGN_LANGUAGE' ? `${next.congregationId}_SIGN_LANGUAGE` : next.congregationId),
         'Only the Admin of the congregation or the Super Admin sets the language of the Midweek Meeting headings',
       );
 
