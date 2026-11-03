@@ -371,7 +371,7 @@ private fun MidweekItemDialog(
         onConfirm = ::submit,
         confirmLabel = if (existing == null) "Add" else "Save",
         errorMessage = errorMessage,
-        maxContentHeight = 400.dp,
+        maxContentHeight = 560.dp,
         hasUnsavedChanges = particular != (existing?.particular ?: "") || duration != (existing?.durationMinutes ?: "") ||
             assignedTo != (existing?.assignedTo ?: ""),
     ) {
@@ -645,7 +645,7 @@ private fun PublicTalkScheduleDialog(
         confirmLabel = if (isSaving) "Saving…" else if (existing == null) "Add" else "Save",
         confirmEnabled = !isSaving,
         errorMessage = errorMessage,
-        maxContentHeight = 480.dp,
+        maxContentHeight = 600.dp,
         hasUnsavedChanges = date != existing?.date || theme != (existing?.theme ?: "") || speaker != (existing?.speaker ?: "") ||
             chairman != (existing?.chairman ?: "") || watchtowerConductor != (existing?.watchtowerConductor ?: "") ||
             watchtowerReader != (existing?.watchtowerReader ?: "") || micServers != (existing?.micServers ?: ""),
@@ -851,7 +851,7 @@ private fun CartAssignmentDialog(
         onConfirm = ::submit,
         confirmLabel = if (existing == null) "Add" else "Save",
         errorMessage = errorMessage,
-        maxContentHeight = 360.dp,
+        maxContentHeight = 600.dp,
         hasUnsavedChanges = date != existing?.date || location != (existing?.location ?: "") || publishers != (existing?.publishers ?: ""),
     ) {
         OutlinedButton(
@@ -1033,7 +1033,7 @@ internal fun formatDurationSuffix(raw: String): String = if (raw.isBlank()) "" e
  * string — no model/Firestore-schema change needed), so a pre-existing
  * "Eva and Lita"-style value with no comma just shows up as one chip,
  * removable or left alone, same as any other name here. */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+/** Every assignee field of this module is the same publisher checklist ([PublisherChecklistField]): checkboxes, a search, Select All / Clear and the count; the value is still one comma-separated text. */
 @Composable
 private fun PublisherAutocompleteField(
     label: String,
@@ -1041,68 +1041,4 @@ private fun PublisherAutocompleteField(
     onValueChange: (String) -> Unit,
     suggestions: List<String>,
     placeholderText: String? = null,
-) {
-    val selectedNames = remember(value) { value.split(",").map { it.trim() }.filter { it.isNotBlank() } }
-    var expanded by remember { mutableStateOf(false) }
-    var manualText by remember { mutableStateOf("") }
-
-    fun addName(name: String) {
-        val trimmed = name.trim()
-        if (trimmed.isBlank() || selectedNames.any { it.equals(trimmed, ignoreCase = true) }) return
-        onValueChange((selectedNames + trimmed).joinToString(", "))
-    }
-    fun removeName(name: String) {
-        onValueChange(selectedNames.filterNot { it == name }.joinToString(", "))
-    }
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        val available = remember(suggestions, selectedNames) {
-            suggestions.filter { s -> selectedNames.none { it.equals(s, ignoreCase = true) } }
-        }
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-            OutlinedTextField(
-                value = "",
-                onValueChange = {},
-                readOnly = true,
-                label = { Text(label) },
-                placeholder = { Text(placeholderText ?: if (selectedNames.isEmpty()) "Select from roster" else "Add another") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth().menuAnchor(),
-            )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                if (available.isEmpty()) {
-                    DropdownMenuItem(text = { Text("No more publishers in this congregation.") }, onClick = {}, enabled = false)
-                } else {
-                    available.forEach { name ->
-                        DropdownMenuItem(text = { Text(name) }, onClick = { addName(name); expanded = false })
-                    }
-                }
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedTextField(
-                value = manualText,
-                onValueChange = { manualText = it },
-                label = { Text("Add manually (not in roster)") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { addName(manualText); manualText = "" }),
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.weight(1f),
-            )
-            ActionIconButton(ActionKind.Add, onClick = { addName(manualText); manualText = "" }, contentDescription = "Add $label", enabled = manualText.isNotBlank())
-        }
-        if (selectedNames.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                selectedNames.forEach { name ->
-                    AssistChip(
-                        onClick = { removeName(name) },
-                        label = { Text(name) },
-                        trailingIcon = { Icon(Icons.Rounded.Close, contentDescription = "Remove $name") },
-                    )
-                }
-            }
-        }
-    }
-}
+) = com.emfitsolutions.gopreach.ui.components.PublisherChecklistField(label = label, value = value, onValueChange = onValueChange, roster = suggestions)
