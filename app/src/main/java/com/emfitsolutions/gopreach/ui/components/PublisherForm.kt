@@ -58,9 +58,8 @@ data class PublisherFormState(
     val province: String? = null,
     val cityMunicipality: String? = null,
     val barangay: String? = null,
-    /** Kept as text so a half-typed "14." is allowed; see [latitude]/[longitude]. */
-    val latitudeText: String = "",
-    val longitudeText: String = "",
+    /** The one Coordinate box, "Latitude, Longitude" (for example 16.0612, 120.4075), kept as text so a half-typed value is allowed; see [latitude]/[longitude]. */
+    val coordinateText: String = "",
     val email: String = "",
     val category: PublisherCategory? = null,
     val groupId: String? = null,
@@ -78,23 +77,19 @@ data class PublisherFormState(
     /** Everything that blocks saving: bad coordinates or invalid dates. */
     val formProblem: String? get() = coordinatesProblem ?: datesProblem
 
-    val latitude: Double? get() = latitudeText.trim().toDoubleOrNull()
-    val longitude: Double? get() = longitudeText.trim().toDoubleOrNull()
+    val latitude: Double? get() = com.emfitsolutions.gopreach.domain.CoordinateInput.parse(coordinateText)?.lat
+    val longitude: Double? get() = com.emfitsolutions.gopreach.domain.CoordinateInput.parse(coordinateText)?.lng
+
+    /** True when any of the five contact details a person must give in their own profile is empty. */
+    val missingOwnDetails: Boolean
+        get() = address.isBlank() || contact.isBlank() || province.isNullOrBlank() || cityMunicipality.isNullOrBlank() || barangay.isNullOrBlank()
 
     /** Null when the coordinates are blank or a valid pair; otherwise what's wrong. */
-    val coordinatesProblem: String?
-        get() {
-            if (latitudeText.isBlank() && longitudeText.isBlank()) return null
-            val lat = latitude
-            val lng = longitude
-            return when {
-                lat == null || lng == null -> "Coordinates must be numbers, e.g. 14.5995 and 120.9842."
-                lat !in -90.0..90.0 || lng !in -180.0..180.0 -> "Latitude must be -90 to 90 and longitude -180 to 180."
-                else -> null
-            }
-        }
+    val coordinatesProblem: String? get() = com.emfitsolutions.gopreach.domain.CoordinateInput.problem(coordinateText)
 
     companion object {
+        const val OWN_DETAILS_MESSAGE = "Please complete your personal details. Full Address, Contact Number, Province, Municipality, and Barangay are required."
+
         fun from(person: Person, category: PublisherCategory?, groupId: String?, congregationId: String? = null) = PublisherFormState(
             firstName = person.firstName,
             lastName = person.lastName,
@@ -108,8 +103,7 @@ data class PublisherFormState(
             province = person.province,
             cityMunicipality = person.cityMunicipality,
             barangay = person.barangay,
-            latitudeText = person.gpsLat?.toString().orEmpty(),
-            longitudeText = person.gpsLng?.toString().orEmpty(),
+            coordinateText = if (person.gpsLat != null && person.gpsLng != null) com.emfitsolutions.gopreach.domain.CoordinateInput.format(person.gpsLat!!, person.gpsLng!!) else "",
             email = person.email.orEmpty(),
             category = category,
             groupId = groupId,
@@ -135,8 +129,9 @@ data class PublisherFormState(
         province = province,
         cityMunicipality = cityMunicipality,
         barangay = barangay,
-        gpsLat = latitude,
-        gpsLng = longitude,
+        // an empty Coordinate box never wipes the coordinate that is already stored
+        gpsLat = latitude ?: person.gpsLat,
+        gpsLng = longitude ?: person.gpsLng,
         email = email.trim().ifBlank { null },
         accountStatus = accountStatus,
         remarks = remarks.trim().ifBlank { null },
@@ -176,6 +171,8 @@ fun PublisherFormFields(
     beforeAssignment: @Composable () -> Unit = {},
     /** False shows the account status as read-only: changing a sign-in is the Admin's, Coordinator Elder's, Service Overseer's and Secretary's (the server checks it again). */
     statusEnabled: Boolean = true,
+    /** A person's own profile that was refused for its missing details: the empty ones of the five are marked. */
+    showMissingOwnDetails: Boolean = false,
 ) {
     NameFieldsInOrder(
         first = {
@@ -239,6 +236,7 @@ fun PublisherFormFields(
         value = form.contact,
         onValueChange = { onChange(form.copy(contact = it.uppercase())) },
         label = { Text(if (contactOptional) "Contact (optional)" else "Contact") },
+        isError = showMissingOwnDetails && form.contact.isBlank(),
         singleLine = true,
         visualTransformation = VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
@@ -266,6 +264,7 @@ fun PublisherFormFields(
         value = form.address,
         onValueChange = { onChange(form.copy(address = it.uppercase())) },
         label = { Text("Full Address") },
+        isError = showMissingOwnDetails && form.address.isBlank(),
         visualTransformation = VisualTransformation.None,
         modifier = Modifier.fillMaxWidth(),
     )
@@ -276,29 +275,24 @@ fun PublisherFormFields(
         onChanged = { province, city, barangay -> onChange(form.copy(province = province, cityMunicipality = city, barangay = barangay)) },
         modifier = Modifier.fillMaxWidth(),
     )
-
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-        OutlinedTextField(
-            value = form.latitudeText,
-            onValueChange = { onChange(form.copy(latitudeText = it.filter { c -> c.isDigit() || c == '.' || c == '-' })) },
-            label = { Text("Latitude") },
-            singleLine = true,
-            isError = form.coordinatesProblem != null,
-            visualTransformation = VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.weight(1f),
-        )
-        OutlinedTextField(
-            value = form.longitudeText,
-            onValueChange = { onChange(form.copy(longitudeText = it.filter { c -> c.isDigit() || c == '.' || c == '-' })) },
-            label = { Text("Longitude") },
-            singleLine = true,
-            isError = form.coordinatesProblem != null,
-            visualTransformation = VisualTransformation.None,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.weight(1f),
-        )
+    if (showMissingOwnDetails) {
+        val missing = listOfNotNull("Province".takeIf { form.province.isNullOrBlank() }, "Municipality".takeIf { form.cityMunicipality.isNullOrBlank() }, "Barangay".takeIf { form.barangay.isNullOrBlank() })
+        if (missing.isNotEmpty()) Text(missing.joinToString(", ") + " required.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
     }
+
+    // one Coordinate box: "Latitude, Longitude"
+    OutlinedTextField(
+        value = form.coordinateText,
+        onValueChange = { onChange(form.copy(coordinateText = it.filter { c -> c.isDigit() || c == '.' || c == '-' || c == ',' || c == ' ' })) },
+        label = { Text("Coordinate (optional)") },
+        placeholder = { Text("16.0612, 120.4075") },
+        supportingText = { Text("Latitude, Longitude") },
+        singleLine = true,
+        isError = form.coordinatesProblem != null,
+        visualTransformation = VisualTransformation.None,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+        modifier = Modifier.fillMaxWidth(),
+    )
     form.coordinatesProblem?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
     OutlinedButton(onClick = onUseCurrentLocation, enabled = !capturingLocation, modifier = Modifier.fillMaxWidth()) {
         if (capturingLocation) {

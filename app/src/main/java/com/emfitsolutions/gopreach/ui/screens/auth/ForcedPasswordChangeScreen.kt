@@ -148,7 +148,7 @@ private fun ReviewStep(state: FirstLoginUiState, viewModel: ForcedPasswordChange
         ReviewRow("Province", form.province.orEmpty())
         ReviewRow("Municipality", form.cityMunicipality.orEmpty())
         ReviewRow("Barangay", form.barangay.orEmpty())
-        ReviewRow("Coordinates", if (form.latitudeText.isBlank() || form.longitudeText.isBlank()) "" else "${form.latitudeText}, ${form.longitudeText}")
+        ReviewRow("Coordinate", form.coordinateText.trim())
     }
     ReviewCard("Contact Information") { ReviewRow("Email", form.email) }
     state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -199,6 +199,7 @@ private fun EditStep(state: FirstLoginUiState, viewModel: ForcedPasswordChangeVi
         onChange = viewModel::onFormChange,
         groups = emptyList(),
         profileOnly = true,
+        showMissingOwnDetails = state.errorMessage == com.emfitsolutions.gopreach.ui.components.PublisherFormState.OWN_DETAILS_MESSAGE,
         capturingLocation = state.capturingLocation,
         locationError = state.locationError,
         onUseCurrentLocation = {

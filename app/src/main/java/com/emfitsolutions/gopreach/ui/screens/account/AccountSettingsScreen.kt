@@ -123,6 +123,7 @@ fun AccountSettingsScreen(
                 onChange = viewModel::onProfileChange,
                 groups = emptyList(),
                 profileOnly = true,
+                showMissingOwnDetails = uiState.profileError == com.emfitsolutions.gopreach.ui.components.PublisherFormState.OWN_DETAILS_MESSAGE,
                 capturingLocation = uiState.capturingLocation,
                 locationError = uiState.locationError,
                 onUseCurrentLocation = {

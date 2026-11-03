@@ -511,8 +511,7 @@ private fun EditPublisherDialog(
                 locationError = "Could not get a GPS fix. Make sure location is turned on and try again."
             } else {
                 form = form.copy(
-                    latitudeText = captured.lat.toString(),
-                    longitudeText = captured.lng.toString(),
+                    coordinateText = com.emfitsolutions.gopreach.domain.CoordinateInput.format(captured.lat, captured.lng),
                     province = captured.province ?: form.province,
                     cityMunicipality = captured.city ?: form.cityMunicipality,
                     barangay = captured.barangay ?: form.barangay,
@@ -526,7 +525,6 @@ private fun EditPublisherDialog(
         val message = requiredFieldsMessage(
             "First Name" to form.firstName.isNotBlank(),
             "Last Name" to form.lastName.isNotBlank(),
-            "Full Address" to form.address.isNotBlank(),
         ) ?: form.formProblem
         if (message != null) {
             errorMessage = message

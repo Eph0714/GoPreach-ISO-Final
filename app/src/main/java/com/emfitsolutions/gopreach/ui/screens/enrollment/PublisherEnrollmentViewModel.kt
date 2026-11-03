@@ -134,8 +134,7 @@ class PublisherEnrollmentViewModel(
                 it.copy(
                     isCapturingLocation = false,
                     form = it.form.copy(
-                        latitudeText = location.lat.toString(),
-                        longitudeText = location.lng.toString(),
+                        coordinateText = com.emfitsolutions.gopreach.domain.CoordinateInput.format(location.lat, location.lng),
                         province = resolved?.provinceName ?: it.form.province,
                         cityMunicipality = resolved?.muncityName ?: it.form.cityMunicipality,
                         barangay = resolved?.barangayName ?: it.form.barangay,
@@ -163,9 +162,9 @@ class PublisherEnrollmentViewModel(
             return
         }
         val form = state.form
-        // Contact, Province, Municipality/City and Barangay may be left blank; a value that is given is saved as given and nothing is filled in for a blank one.
-        if (form.lastName.isBlank() || form.firstName.isBlank() || form.address.isBlank() || form.category == null) {
-            _uiState.update { it.copy(errorMessage = "First name, last name, full address and category are required. Contact, Province, Municipality/City, Barangay and the Field Service Group are optional.") }
+        // The Admin may leave the Full Address, Contact, Province, Municipality/City and Barangay empty (the publisher completes them in their own profile); a value that is given is saved as given and nothing is filled in for a blank one.
+        if (form.lastName.isBlank() || form.firstName.isBlank() || form.category == null) {
+            _uiState.update { it.copy(errorMessage = "First name, last name and category are required. The Full Address, Contact, Province, Municipality/City, Barangay and the Field Service Group are optional.") }
             return
         }
         form.formProblem?.let { problem -> _uiState.update { it.copy(errorMessage = problem) }; return }

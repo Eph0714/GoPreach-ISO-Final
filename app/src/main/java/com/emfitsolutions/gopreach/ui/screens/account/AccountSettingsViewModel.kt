@@ -109,8 +109,7 @@ class AccountSettingsViewModel(
                 it.copy(
                     capturingLocation = false,
                     profile = it.profile.copy(
-                        latitudeText = location.lat.toString(),
-                        longitudeText = location.lng.toString(),
+                        coordinateText = com.emfitsolutions.gopreach.domain.CoordinateInput.format(location.lat, location.lng),
                         province = resolved?.provinceName ?: it.profile.province,
                         cityMunicipality = resolved?.muncityName ?: it.profile.cityMunicipality,
                         barangay = resolved?.barangayName ?: it.profile.barangay,
@@ -163,8 +162,7 @@ class AccountSettingsViewModel(
         val problem = when {
             form.firstName.isBlank() -> "First Name is required."
             form.lastName.isBlank() -> "Last Name is required."
-            form.address.isBlank() -> "Full Address is required."
-            form.contact.isBlank() -> "Contact is required."
+            form.missingOwnDetails -> PublisherFormState.OWN_DETAILS_MESSAGE
             else -> form.formProblem
         }
         if (problem != null) {
