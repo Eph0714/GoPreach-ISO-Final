@@ -78,6 +78,8 @@ function helpers(actor, grant, get) {
     canManageReportsAsCongregationRole: (cong) => roleIn(ROLES_WIDE, cong),
     canManageRoleAssignmentsFor: (cong) => roleIn(ROLES_WIDE, cong),
     canManageTerritoryAssignmentsFor: (cong) => roleIn(ROLES_WIDE, cong),
+    /** The Admin of that congregation and the Super Admin: the language of the three Midweek Meeting section headings. */
+    canSetMeetingLanguageFor: (cong) => roleIn(['ADMIN_PER_CONGREGATION'], cong),
     canManageTrashFor: (cong) => actor.known && (sa || (cong != null && inCong(cong) && ROLES_WIDE.includes(actor.adminRole))),
     canManageCreditHourCategories: () => actor.known && (sa || actor.adminRole === 'ADMIN_PER_CONGREGATION'),
     inMyActiveCongregation: (cong) => sa || (actor.known && inCong(cong)),
@@ -327,7 +329,7 @@ async function baseRead(h, actor, grant, collection, id, data, get) { // match /
       return h.isCircuitOverseerFor(nul(data.congregationId)) || (!grant.has && inCongOf(actor, data.congregationId));
     case 'meetingAttendanceEvents':
       return h.isCircuitOverseerFor(nul(data.congregationId)) || h.canManageReportsAsCongregationRole(nul(data.congregationId));
-    case 'meetingAttendanceSettings': case 'congregationMonthlyStatistics': return true;
+    case 'meetingAttendanceSettings': case 'congregationMonthlyStatistics': case 'meetingAssignmentSettings': return true;
     // Comparative Reports: the congregation-wide roles of that congregation; the Circuit Overseer only once it was sent (never a draft).
     case 'congregationComparativeReports':
       return h.canManageReportsAsCongregationRole(nul(data.congregationId)) ||
@@ -458,6 +460,13 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
         !isDelete && id === next.congregationId && h.canManageReportsAsCongregationRole(nul(next.congregationId)) &&
           ['ROUNDED', 'EXACT'].includes(next.roundingMode) && nul(next.updatedBy) === h.me,
         'Only the congregation-wide roles of that congregation set the attendance rounding',
+      );
+
+    // The language the three Midweek Meeting section headings are shown in (English, Tagalog, Iloko): one document per congregation, set by its Admin or the Super Admin only.
+    case 'meetingAssignmentSettings':
+      return verdict(
+        !isDelete && id === next.congregationId && h.canSetMeetingLanguageFor(nul(next.congregationId)) && ['EN', 'TL', 'ILO'].includes(next.sectionLanguage) && nul(next.updatedBy) === h.me,
+        'Only the Admin of the congregation or the Super Admin sets the language of the Midweek Meeting headings',
       );
 
     case 'meetingAttendanceEvents':

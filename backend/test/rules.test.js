@@ -837,3 +837,17 @@ test('a person changing their OWN personal details must leave the five contact d
   // someone else's rules are unchanged: the Admin of the congregation still edits a publisher whose details are empty
   assert.equal(await set('adminA', 'people', 'pubA2', { ...(await stored('people', 'pubA2')), address: null, remarks: 'by the admin' }), true);
 });
+
+test('the language of the Midweek Meeting headings is set only by the Admin of the congregation or the Super Admin', async () => {
+  const doc = (cong, lang, by) => ({ congregationId: cong, sectionLanguage: lang, updatedBy: by, updatedAt: 1 });
+  assert.equal(await set('adminA', 'meetingAssignmentSettings', 'congA', doc('congA', 'TL', 'adminA')), true, 'the Admin of that congregation');
+  assert.equal(await set('adminA', 'meetingAssignmentSettings', 'congA', doc('congA', 'ILO', 'adminA')), true);
+  assert.equal(await set('sa', 'meetingAssignmentSettings', 'congB', doc('congB', 'TL', 'sa')), true, 'the Super Admin in any congregation');
+  assert.equal(await set('adminB', 'meetingAssignmentSettings', 'congA', doc('congA', 'TL', 'adminB')), false, 'the Admin of another congregation');
+  for (const who of ['coordA', 'soA', 'elderA', 'pubA']) assert.equal(await set(who, 'meetingAssignmentSettings', 'congA', doc('congA', 'TL', who)), false, who);
+  assert.equal(await set('adminA', 'meetingAssignmentSettings', 'congA', doc('congA', 'FR', 'adminA')), false, 'only English, Tagalog and Iloko');
+  assert.equal(await set('adminA', 'meetingAssignmentSettings', 'congA', doc('congA', 'TL', 'someoneElse')), false, 'written as yourself');
+  assert.equal(await set('adminA', 'meetingAssignmentSettings', 'other', doc('congA', 'TL', 'adminA')), false, 'one document per congregation, named by it');
+  await put('meetingAssignmentSettings', 'congA', doc('congA', 'TL', 'adminA'));
+  assert.equal(await reads('pubA', 'meetingAssignmentSettings', 'congA'), true, 'everyone of the congregation reads it');
+});
