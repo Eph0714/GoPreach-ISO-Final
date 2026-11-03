@@ -248,6 +248,16 @@ private fun MidweekMeetingScheduleTab(
     }
 
     Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        // the heading of the printed sheet: the congregation on the left, the title on the right, a rule under them, then the week
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(congregationName.uppercase(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                Text("Midweek Meeting Schedule", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, fontFamily = androidx.compose.ui.text.font.FontFamily.Serif, textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1.2f))
+            }
+            androidx.compose.material3.HorizontalDivider(thickness = 2.dp, color = MaterialTheme.colorScheme.onSurface)
+            Text(formatWeekRange(weekStart).uppercase(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        }
+        var number = 0
         MidweekSection.entries.forEach { section ->
             val items = schedule?.itemsFor(section).orEmpty()
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -269,23 +279,25 @@ private fun MidweekMeetingScheduleTab(
                     )
                 } else {
                     items.forEachIndexed { index, item ->
+                        number++
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.Top,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Text("${index + 1}.", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    item.particular + formatDurationSuffix(item.durationMinutes),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                )
-                                Text(
-                                    "Assigned to: ${item.assignedTo}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
+                            // as on the sheet: the number and the part (with its minutes) on the left, the names in a column on the right
+                            Text("$number.", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 2.dp))
+                            Text(
+                                item.particular + formatDurationSuffix(item.durationMinutes),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1.15f),
+                            )
+                            Text(
+                                item.assignedTo,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(0.85f),
+                            )
                             if (!readOnly) {
                                 ActionIconButton(ActionKind.Edit, onClick = { editingItem = Triple(section, index, item) }, contentDescription = "Edit assignment")
                                 ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = section to index }, contentDescription = "Delete assignment")
@@ -371,7 +383,7 @@ private fun MidweekItemDialog(
         onConfirm = ::submit,
         confirmLabel = if (existing == null) "Add" else "Save",
         errorMessage = errorMessage,
-        maxContentHeight = 560.dp,
+        maxContentHeight = 400.dp,
         hasUnsavedChanges = particular != (existing?.particular ?: "") || duration != (existing?.durationMinutes ?: "") ||
             assignedTo != (existing?.assignedTo ?: ""),
     ) {
@@ -645,7 +657,7 @@ private fun PublicTalkScheduleDialog(
         confirmLabel = if (isSaving) "Saving…" else if (existing == null) "Add" else "Save",
         confirmEnabled = !isSaving,
         errorMessage = errorMessage,
-        maxContentHeight = 600.dp,
+        maxContentHeight = 480.dp,
         hasUnsavedChanges = date != existing?.date || theme != (existing?.theme ?: "") || speaker != (existing?.speaker ?: "") ||
             chairman != (existing?.chairman ?: "") || watchtowerConductor != (existing?.watchtowerConductor ?: "") ||
             watchtowerReader != (existing?.watchtowerReader ?: "") || micServers != (existing?.micServers ?: ""),
@@ -851,7 +863,7 @@ private fun CartAssignmentDialog(
         onConfirm = ::submit,
         confirmLabel = if (existing == null) "Add" else "Save",
         errorMessage = errorMessage,
-        maxContentHeight = 600.dp,
+        maxContentHeight = 360.dp,
         hasUnsavedChanges = date != existing?.date || location != (existing?.location ?: "") || publishers != (existing?.publishers ?: ""),
     ) {
         OutlinedButton(
@@ -940,9 +952,7 @@ private fun buildMidweekPrintHtml(congregationName: String, weekStart: Long, sch
                     append("<tr>")
                     append("<td class=\"num\">").append(number).append(".</td>")
                     append("<td class=\"particular\">").append(esc(item.particular)).append(esc(formatDurationSuffix(item.durationMinutes))).append("</td>")
-                    append("<td class=\"assigned\">")
-                    if (item.assignedTo.isNotBlank()) append("Assigned to: ").append(esc(item.assignedTo))
-                    append("</td>")
+                    append("<td class=\"assigned\">").append(esc(item.assignedTo)).append("</td>")
                     append("</tr>")
                 }
                 append("</table>")
@@ -951,17 +961,17 @@ private fun buildMidweekPrintHtml(congregationName: String, weekStart: Long, sch
     }
     return """
         <html><head><meta charset="utf-8"><style>
-        body{font-family:sans-serif;font-size:13px;color:#222;margin:24px;}
-        .header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #444;padding-bottom:8px;}
-        .congregation{font-style:italic;font-weight:bold;font-size:20px;color:#2b4a6f;}
-        .title{font-size:26px;font-weight:bold;text-align:right;white-space:nowrap;}
-        .week{font-style:italic;font-weight:bold;font-size:13px;letter-spacing:0.5px;margin:8px 0 16px;}
-        .section-bar{font-weight:bold;text-transform:uppercase;padding:6px 10px;margin-top:14px;margin-bottom:4px;font-size:13px;}
+        body{font-family:Calibri,Arial,sans-serif;font-size:14px;color:#111;margin:24px;}
+        .header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px double #444;padding-bottom:6px;}
+        .congregation{font-weight:bold;font-size:16px;text-transform:uppercase;max-width:40%;}
+        .title{font-family:Cambria,Georgia,serif;font-size:28px;font-weight:bold;text-align:right;white-space:nowrap;}
+        .week{font-weight:bold;font-size:14px;margin:10px 0 14px;text-transform:uppercase;}
+        .section-bar{font-weight:bold;text-transform:uppercase;padding:5px 10px;margin-top:16px;margin-bottom:6px;font-size:13px;width:58%;}
         table.items{width:100%;border-collapse:collapse;margin-bottom:4px;}
-        table.items td{padding:4px 6px;vertical-align:top;font-size:13px;}
+        table.items td{padding:5px 6px;vertical-align:top;font-size:14px;}
         td.num{width:26px;font-weight:bold;}
-        td.particular{width:65%;}
-        td.assigned{text-align:right;color:#333;white-space:nowrap;}
+        td.particular{width:50%;}
+        td.assigned{text-align:left;font-weight:600;}
         p.empty{font-style:italic;color:#777;margin:4px 0 12px 6px;}
         </style></head><body>
         <div class="header">
@@ -1033,7 +1043,10 @@ internal fun formatDurationSuffix(raw: String): String = if (raw.isBlank()) "" e
  * string — no model/Firestore-schema change needed), so a pre-existing
  * "Eva and Lita"-style value with no comma just shows up as one chip,
  * removable or left alone, same as any other name here. */
-/** Every assignee field of this module is the same publisher checklist ([PublisherChecklistField]): checkboxes, a search, Select All / Clear and the count; the value is still one comma-separated text. */
+/**
+ * Every assignee field of this module shows the chosen publishers as plain text on a button ("Select publishers" while none is chosen); tapping it opens the publisher checklist
+ * ([PublisherChecklistField]) in a popup: checkboxes, a search, Select All / Clear and the count, then SAVE. Nothing is picked inside a text box. The value is still one comma-separated text.
+ */
 @Composable
 private fun PublisherAutocompleteField(
     label: String,
@@ -1041,4 +1054,41 @@ private fun PublisherAutocompleteField(
     onValueChange: (String) -> Unit,
     suggestions: List<String>,
     placeholderText: String? = null,
-) = com.emfitsolutions.gopreach.ui.components.PublisherChecklistField(label = label, value = value, onValueChange = onValueChange, roster = suggestions)
+) {
+    var open by remember { mutableStateOf(false) }
+    val names = remember(value) { com.emfitsolutions.gopreach.domain.RosterSelection.parse(value) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Card(
+            onClick = { open = true },
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+        ) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    if (names.isEmpty()) "Select publishers" else names.joinToString(", "),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (names.isEmpty()) FontWeight.SemiBold else FontWeight.Normal,
+                    color = if (names.isEmpty()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Icon(Icons.Rounded.Edit, contentDescription = "Choose $label", tint = MaterialTheme.colorScheme.primary)
+            }
+        }
+        if (names.size > 1) Text("${names.size} selected", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+    }
+    if (open) {
+        var draft by remember { mutableStateOf(value) }
+        FormDialog(
+            onDismissRequest = { open = false },
+            title = label,
+            onConfirm = { onValueChange(draft); open = false },
+            confirmLabel = "SAVE",
+            dismissLabel = "CANCEL",
+            maxContentHeight = 560.dp,
+            hasUnsavedChanges = draft != value,
+        ) {
+            com.emfitsolutions.gopreach.ui.components.PublisherChecklistField(label = "Publishers", value = draft, onValueChange = { draft = it }, roster = suggestions)
+        }
+    }
+}
