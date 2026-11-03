@@ -9,6 +9,7 @@ import { mountPasskeys } from './passkeys.js';
 import { audit } from './coAccess.js';
 import { mountLoginApproval } from './loginApproval.js';
 import { mountSecurity } from './security.js';
+import { mountQuickLogin } from './quickLogin.js';
 
 /**
  * GoPreach's own sign-in (replaces Firebase Auth). The app still signs in with "<personId>@<domain>" and a password.
@@ -80,12 +81,43 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
 
   mountPasskeys(app, { store, auth, enabled, loginLimit, issue, startSession, refuseActive, passkeyConfig: limits.passkey ?? config.passkey });
 
+  const quick = mountQuickLogin(app, { store, auth, enabled, sec, finishSignIn: (req, res, personId, method) => finishSignIn(req, res, personId, method), limits });
+
   async function checkPassword(personId, password) {
     const account = await store.getAccount(personId);
     if (!account || account.disabled) return { ok: false, account };
     const { ok, upgrade } = await verifyPassword(password, account.pwHash, firebaseHash);
     if (ok && upgrade) await store.setPassword(personId, await hashPassword(password)); // an imported Firebase hash becomes a native one
     return { ok, account };
+  }
+
+  /**
+   * Everything after the first factor (the password, or a PIN / pattern) was right: new-device approval, the second factor, then the device session and tokens.
+   * One place, so a PIN or pattern can never skip what a password must pass.
+   */
+  async function finishSignIn(req, res, personId, firstFactor) {
+    const { device, trustedToken, approval } = req.body ?? {};
+    // An account that asks for approval of new devices: a device it has not trusted gets a login request, and NOTHING is issued (no session, no tokens) until the request is
+    // approved by one of the account's own signed-in devices or settled by an e-mail code; the approval is spent here, once. A correct password alone never opens it.
+    if (await sec.approvalRequired(personId)) {
+      const info = sec.deviceInfo(device);
+      if (!(await sec.deviceIsTrusted(personId, trustedToken, info))) {
+        const approved = approval && typeof approval === 'object' ? await approvals.redeem(personId, approval) : false;
+        if (!approved) {
+          const request = await approvals.createRequest(personId, { device: info.name, lastActiveAt: null }, { device: info, ip: req.ip });
+          if (request.tooMany) return res.set('Retry-After', String(request.retryAfter ?? 60)).status(429).json({ error: 'too-many-requests', retryAfter: request.retryAfter ?? 60 });
+          await sec.event(personId, 'LOGIN_APPROVAL_REQUESTED', { result: 'pending', deviceId: info.deviceId, notify: true, meta: { device: info.name, os: info.os, ip: request.ip ?? null, requestId: request.requestId, expiresAt: request.expiresAt } });
+          return res.status(409).json({ error: 'session-active', ...request });
+        }
+        await sec.event(personId, 'LOGIN_APPROVAL_USED', { deviceId: info.deviceId, meta: { device: info.name } });
+      }
+    }
+    // The first factor (password, PIN or pattern) is right. An account with two-factor sign-in answers 202 and the device must prove the second factor (a trusted device may skip it); nothing else is
+    // issued before that. Without 2FA the sign-in completes. Either way ANY number of devices may be signed in; each one is a session the account holder can end.
+    const gate = await sec.gate(personId, { device, ip: req.ip, trustedToken });
+    if (gate.challenge) return res.status(202).json(gate.challenge);
+    const ds = await sec.createSession(personId, gate.info, req.ip, firstFactor === 'password' ? gate.method : firstFactor);
+    return res.json({ ...(await issue(personId, Date.now(), ds.sessionId)), sessionId: ds.sessionId });
   }
 
   app.post('/v1/auth/login', enabled, sprayLimit, loginLimit, async (req, res) => {
@@ -102,27 +134,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       }
       accountFails.delete(personId);
       await store.touchLogin(personId);
-      // An account that asks for approval of new devices: a device it has not trusted gets a login request, and NOTHING is issued (no session, no tokens) until the request is
-      // approved by one of the account's own signed-in devices or settled by an e-mail code; the approval is spent here, once. A correct password alone never opens it.
-      if (await sec.approvalRequired(personId)) {
-        const info = sec.deviceInfo(device);
-        if (!(await sec.deviceIsTrusted(personId, trustedToken, info))) {
-          const approved = approval && typeof approval === 'object' ? await approvals.redeem(personId, approval) : false;
-          if (!approved) {
-            const request = await approvals.createRequest(personId, { device: info.name, lastActiveAt: null }, { device: info, ip: req.ip });
-            if (request.tooMany) return res.set('Retry-After', String(request.retryAfter ?? 60)).status(429).json({ error: 'too-many-requests', retryAfter: request.retryAfter ?? 60 });
-            await sec.event(personId, 'LOGIN_APPROVAL_REQUESTED', { result: 'pending', deviceId: info.deviceId, notify: true, meta: { device: info.name, os: info.os, ip: request.ip ?? null, requestId: request.requestId, expiresAt: request.expiresAt } });
-            return res.status(409).json({ error: 'session-active', ...request });
-          }
-          await sec.event(personId, 'LOGIN_APPROVAL_USED', { deviceId: info.deviceId, meta: { device: info.name } });
-        }
-      }
-      // The password is right. An account with two-factor sign-in answers 202 and the device must prove the second factor (a trusted device may skip it); nothing else is
-      // issued before that. Without 2FA the sign-in completes. Either way ANY number of devices may be signed in; each one is a session the account holder can end.
-      const gate = await sec.gate(personId, { device, ip: req.ip, trustedToken });
-      if (gate.challenge) return res.status(202).json(gate.challenge);
-      const ds = await sec.createSession(personId, gate.info, req.ip, gate.method);
-      res.json({ ...(await issue(personId, Date.now(), ds.sessionId)), sessionId: ds.sessionId });
+      return await finishSignIn(req, res, personId, 'password');
     } catch (e) {
       console.error('login failed', e);
       res.status(500).json({ error: 'Server error' });
@@ -192,6 +204,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       if (!(await store.getAccount(req.personId))) return res.status(404).json({ error: 'invalid-user' });
       await store.setPassword(req.personId, await hashPassword(newPassword));
       await store.deleteRefreshTokens(req.personId); // every other signed-in phone must sign in again
+      await quick.revokeAll(req.personId); // a PIN / pattern never outlives the password it was set up with
       await sec.onPasswordChanged(req.personId, req.sessionId); // their sessions end now, trusted devices are no longer trusted
       res.json(await issue(req.personId, req.authTime, req.sessionId));
     } catch (e) {

@@ -185,13 +185,13 @@ class LoginViewModel(
             .getOrNull()
         runCatching { credentialStore.dropRememberedPassword() }
         val enrolled = runCatching { credentialStore.isBiometricEnrolled() }.getOrDefault(false)
-        // Remember me: the remembered USERNAME is filled in when the screen opens (after a logout, a session expiry or a fresh launch).
-        // The password always starts empty: it is never remembered or filled in.
+        // Username first: nothing saved is shown when the screen opens (after a logout, a session expiry or a fresh launch). The person types the username; only a
+        // username that matches the remembered one ticks "Remember me" (see [onUsernameChange]). The password always starts empty: it is never remembered or filled in.
         _uiState.update {
             it.copy(
-                username = rememberedUsername.orEmpty(),
+                username = "",
                 password = "",
-                rememberMe = rememberedUsername != null,
+                rememberMe = false,
                 biometricEnrolled = enrolled,
                 // e.g. "Account Setup Complete" right after the first-time setup signed the user out.
                 notice = pendingLoginNotice.take()
@@ -203,9 +203,15 @@ class LoginViewModel(
     }
 
     fun onUsernameChange(value: String) {
-        _uiState.update { it.copy(username = value, errorMessage = null) }
+        val before = _uiState.value
+        val changedAccount = !value.trim().equals(before.username.trim(), ignoreCase = true)
+        // A different username never keeps what was typed (or filled in) for the previous one.
+        _uiState.update { it.copy(username = value, errorMessage = null, password = if (changedAccount) "" else it.password) }
+        if (changedAccount) passwordAutoFilled = false
         val remembered = rememberedUsername
         val matches = remembered != null && value.trim().equals(remembered, ignoreCase = true)
+        // "Remember me" is shown ticked only for the account this device remembered, once its username has been typed.
+        if (changedAccount) _uiState.update { it.copy(rememberMe = matches) }
         val current = _uiState.value
         if (matches && current.password.isEmpty()) {
             // Only the remembered account's own username unlocks the saved password.
