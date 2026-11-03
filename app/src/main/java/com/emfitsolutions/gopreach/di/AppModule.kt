@@ -45,6 +45,7 @@ import com.emfitsolutions.gopreach.data.repository.JwVideoRepository
 import com.emfitsolutions.gopreach.data.repository.LocationSharingSettingsRepository
 import com.emfitsolutions.gopreach.data.repository.MapPinRepository
 import com.emfitsolutions.gopreach.data.repository.MidweekMeetingScheduleRepository
+import com.emfitsolutions.gopreach.data.repository.MeetingAssignmentSettingsRepository
 import com.emfitsolutions.gopreach.data.repository.MinistryTimerSessionRepository
 import com.emfitsolutions.gopreach.data.repository.MonthlyPlannerGoalRepository
 import com.emfitsolutions.gopreach.data.repository.CongregationStatisticsBuilder
@@ -349,6 +350,7 @@ val appModule = module {
     singleOf(::LocationSharingSettingsRepository)
     singleOf(::MapPinRepository)
     singleOf(::MidweekMeetingScheduleRepository)
+    singleOf(::MeetingAssignmentSettingsRepository)
     singleOf(::MinistryTimerSessionRepository)
     singleOf(::MonthlyPlannerGoalRepository)
     singleOf(::MonthlyReportRepository)

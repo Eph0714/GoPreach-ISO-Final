@@ -19,6 +19,9 @@ import com.emfitsolutions.gopreach.data.model.RoleType
 import com.emfitsolutions.gopreach.data.repository.AuditLogRepository
 import com.emfitsolutions.gopreach.data.repository.CartAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.CongregationRepository
+import com.emfitsolutions.gopreach.data.repository.MeetingAssignmentSettingsRepository
+import com.emfitsolutions.gopreach.data.model.MeetingAssignmentSettings
+import com.emfitsolutions.gopreach.data.model.MidweekHeadingLanguage
 import com.emfitsolutions.gopreach.data.repository.MidweekMeetingScheduleRepository
 import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.PublicTalkScheduleRepository
@@ -97,6 +100,7 @@ private fun mentionsPerson(text: String, personName: String): Boolean {
  */
 class MeetingAssignmentsViewModel(
     private val midweekRepository: MidweekMeetingScheduleRepository,
+    private val settingsRepository: MeetingAssignmentSettingsRepository,
     private val publicTalkRepository: PublicTalkScheduleRepository,
     private val cartAssignmentRepository: CartAssignmentRepository,
     private val congregationRepository: CongregationRepository,
@@ -137,6 +141,17 @@ class MeetingAssignmentsViewModel(
             .map { it.fullName }
             .distinct()
             .sorted()
+    }
+
+    /** The language the three headings of [congregationId]'s Midweek Meeting are shown in (English when nobody chose one). */
+    fun headingLanguageFor(congregationId: String): Flow<MidweekHeadingLanguage> =
+        settingsRepository.observeAll().map { list -> MidweekHeadingLanguage.of(list.firstOrNull { it.congregationId == congregationId }?.sectionLanguage) }
+
+    /** Only the Admin of the congregation and the Super Admin reach this (the screen offers it to them and the server checks it again). */
+    fun setHeadingLanguage(congregationId: String, language: MidweekHeadingLanguage, actorPersonId: String) {
+        viewModelScope.launch {
+            settingsRepository.save(MeetingAssignmentSettings(congregationId = congregationId, sectionLanguage = language.code, updatedBy = actorPersonId, updatedAt = nowMillis()))
+        }
     }
 
     /** The one schedule doc (if any) for [congregationId]/[weekStartDate] —

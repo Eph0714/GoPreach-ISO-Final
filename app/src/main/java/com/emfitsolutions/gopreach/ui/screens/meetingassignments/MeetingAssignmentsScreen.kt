@@ -21,6 +21,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Close
@@ -66,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.model.CartAssignmentRow
+import com.emfitsolutions.gopreach.data.model.heading
 import com.emfitsolutions.gopreach.data.model.Congregation
 import com.emfitsolutions.gopreach.data.model.MidweekAssignmentItem
 import com.emfitsolutions.gopreach.data.model.MidweekMeetingSchedule
@@ -105,6 +108,8 @@ fun MeetingAssignmentsScreen(
     fixedCongregationId: String?,
     readOnly: Boolean,
     onBack: () -> Unit,
+    /** The Admin of the congregation and the Super Admin choose the language of the three Midweek Meeting headings. */
+    canSetLanguage: Boolean = false,
     viewModel: MeetingAssignmentsViewModel = koinViewModel(),
 ) {
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
@@ -170,6 +175,7 @@ fun MeetingAssignmentsScreen(
                     congregationId = congregationId,
                     congregationName = congregations.firstOrNull { it.id == congregationId }?.name ?: "—",
                     readOnly = readOnly,
+                    canSetLanguage = canSetLanguage,
                     currentPersonId = currentPersonId,
                     viewModel = viewModel,
                 )
@@ -224,6 +230,7 @@ private fun MidweekMeetingScheduleTab(
     congregationId: String,
     congregationName: String,
     readOnly: Boolean,
+    canSetLanguage: Boolean,
     currentPersonId: String,
     viewModel: MeetingAssignmentsViewModel,
 ) {
@@ -233,6 +240,8 @@ private fun MidweekMeetingScheduleTab(
     val schedule by scheduleFlow.collectAsStateWithLifecycle(initialValue = null)
     var editingItem by remember { mutableStateOf<Triple<MidweekSection, Int?, MidweekAssignmentItem?>?>(null) }
     var pendingDelete by remember { mutableStateOf<Pair<MidweekSection, Int>?>(null) }
+    val languageFlow = remember(congregationId) { viewModel.headingLanguageFor(congregationId) }
+    val language by languageFlow.collectAsStateWithLifecycle(initialValue = com.emfitsolutions.gopreach.data.model.MidweekHeadingLanguage.ENGLISH)
 
     // "Make the week selectable, e.g. <August 31-September 6 2026>
     // <September 7 2026-September 14 2026>" — a dropdown of actual
@@ -240,10 +249,23 @@ private fun MidweekMeetingScheduleTab(
     // raw date picker that just happened to snap to a Monday.
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(modifier = Modifier.weight(1f)) {
-            WeekPickerDropdown(weekStart = weekStart, onSelected = { weekStart = it })
+            WeekNavigator(weekStart = weekStart, onChange = { weekStart = it })
         }
-        IconButton(onClick = { ReportPrinter.printHtml(context, "Midweek Meeting Schedule — $congregationName", buildMidweekPrintHtml(congregationName, weekStart, schedule)) }) {
+        IconButton(onClick = { ReportPrinter.printHtml(context, "Midweek Meeting Schedule — $congregationName", buildMidweekPrintHtml(congregationName, weekStart, schedule, language)) }) {
             Icon(Icons.Rounded.PictureAsPdf, contentDescription = "Print Midweek Meeting Schedule")
+        }
+    }
+    if (canSetLanguage) {
+        // the Admin of the congregation and the Super Admin choose the language of the three headings
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Headings language", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            com.emfitsolutions.gopreach.data.model.MidweekHeadingLanguage.entries.forEach { option ->
+                androidx.compose.material3.FilterChip(
+                    selected = language == option,
+                    onClick = { viewModel.setHeadingLanguage(congregationId, option, currentPersonId) },
+                    label = { Text(option.label) },
+                )
+            }
         }
     }
 
@@ -262,7 +284,7 @@ private fun MidweekMeetingScheduleTab(
             val items = schedule?.itemsFor(section).orEmpty()
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    section.displayLabel,
+                    section.heading(language),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = section.textColor(),
@@ -436,43 +458,29 @@ internal fun formatWeekRange(weekStart: Long): String {
     val endCal = Calendar.getInstance().apply { timeInMillis = weekStart; add(Calendar.DAY_OF_MONTH, 6) }
     val sameMonth = startCal.get(Calendar.MONTH) == endCal.get(Calendar.MONTH) && startCal.get(Calendar.YEAR) == endCal.get(Calendar.YEAR)
     return if (sameMonth) {
-        "${SimpleDateFormat("MMMM d", Locale.getDefault()).format(startCal.time)} - ${SimpleDateFormat("d, yyyy", Locale.getDefault()).format(endCal.time)}"
+        "${SimpleDateFormat("MMMM d", Locale.getDefault()).format(startCal.time)}-${SimpleDateFormat("d, yyyy", Locale.getDefault()).format(endCal.time)}"
     } else {
-        "${SimpleDateFormat("MMMM d", Locale.getDefault()).format(startCal.time)} - ${SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(endCal.time)}"
+        "${SimpleDateFormat("MMMM d", Locale.getDefault()).format(startCal.time)}-${SimpleDateFormat("MMMM d, yyyy", Locale.getDefault()).format(endCal.time)}"
     }
 }
 
-/** "Make the week selectable, e.g. <August 31-September 6 2026>
- * <September 7 2026-September 14 2026>" — every Monday-Sunday week from 8
- * weeks ago through a year ahead, each shown as its own formatted range
- * (see [formatWeekRange]) rather than a raw calendar date picker. Widest
- * reasonable window for scheduling meetings ahead of time; still a closed
- * list (like [MonthPickerField] in Monthly Report), so there's no way to
- * land on a non-Monday week start by construction. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** The week of the Midweek Meeting: < November 2-8, 2026 >, a step back and a step forward by whole Monday-Sunday weeks (no drop-down). */
 @Composable
-private fun WeekPickerDropdown(weekStart: Long, onSelected: (Long) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    val weeks = remember {
-        val thisWeek = mondayOfWeek(System.currentTimeMillis())
-        (-8..52).map { offset -> Calendar.getInstance().apply { timeInMillis = thisWeek; add(Calendar.WEEK_OF_YEAR, offset) }.timeInMillis }
-    }
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        OutlinedTextField(
-            value = formatWeekRange(weekStart),
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Select Week") },
-            leadingIcon = { Icon(Icons.Rounded.CalendarMonth, contentDescription = null) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            visualTransformation = VisualTransformation.None,
-            modifier = Modifier.fillMaxWidth().menuAnchor(),
+private fun WeekNavigator(weekStart: Long, onChange: (Long) -> Unit) {
+    fun step(weeks: Int) = Calendar.getInstance().apply { timeInMillis = weekStart; add(Calendar.WEEK_OF_YEAR, weeks) }.timeInMillis
+    Row(
+        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(28.dp)).padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = { onChange(step(-1)) }) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = "Previous week", tint = MaterialTheme.colorScheme.primary) }
+        Text(
+            formatWeekRange(weekStart),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            modifier = Modifier.weight(1f),
         )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            weeks.forEach { week ->
-                DropdownMenuItem(text = { Text(formatWeekRange(week)) }, onClick = { onSelected(week); expanded = false })
-            }
-        }
+        IconButton(onClick = { onChange(step(1)) }) { Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "Next week", tint = MaterialTheme.colorScheme.primary) }
     }
 }
 
@@ -934,13 +942,13 @@ private fun MidweekSection.printTextColor(): String = when (this) {
  * directly — this layout has nothing in common with [ReportTable]'s plain
  * columns-and-rows shape, so it bypasses that generic path entirely instead
  * of contorting it to fit. */
-private fun buildMidweekPrintHtml(congregationName: String, weekStart: Long, schedule: MidweekMeetingSchedule?): String {
+private fun buildMidweekPrintHtml(congregationName: String, weekStart: Long, schedule: MidweekMeetingSchedule?, language: com.emfitsolutions.gopreach.data.model.MidweekHeadingLanguage): String {
     fun esc(s: String) = escapeHtml(s)
     var number = 0
     val sectionsHtml = buildString {
         MidweekSection.entries.forEach { section ->
             append("<div class=\"section-bar\" style=\"background:${section.printBarColor()};color:${section.printTextColor()};\">")
-            append(esc(section.displayLabel))
+            append(esc(section.heading(language)))
             append("</div>")
             val items = schedule?.itemsFor(section).orEmpty()
             if (items.isEmpty()) {

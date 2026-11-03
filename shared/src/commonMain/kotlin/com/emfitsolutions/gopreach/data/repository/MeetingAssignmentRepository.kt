@@ -75,3 +75,19 @@ class CartAssignmentRepository(
     fun startRemoteSync(): Flow<Unit> =
         remote.mirror(CART_ASSIGNMENT_COLLECTION, CartAssignmentRow::class) { it.id }
 }
+
+private const val MEETING_SETTINGS_COLLECTION = "meetingAssignmentSettings"
+
+/** The language of the Midweek Meeting headings, one document per congregation (the server lets only that congregation's Admin and the Super Admin write it). */
+class MeetingAssignmentSettingsRepository(
+    private val offline: OfflineFirestoreRepository,
+    private val remote: RemoteCollections,
+) {
+    fun observeAll(): Flow<List<com.emfitsolutions.gopreach.data.model.MeetingAssignmentSettings>> = offline.observeCollection(MEETING_SETTINGS_COLLECTION)
+
+    suspend fun save(settings: com.emfitsolutions.gopreach.data.model.MeetingAssignmentSettings) =
+        offline.save(MEETING_SETTINGS_COLLECTION, settings.congregationId, settings.copy(id = settings.congregationId))
+
+    fun startRemoteSync(): Flow<Unit> =
+        remote.mirror(MEETING_SETTINGS_COLLECTION, com.emfitsolutions.gopreach.data.model.MeetingAssignmentSettings::class) { it.id }
+}

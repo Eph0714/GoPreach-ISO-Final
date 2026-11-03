@@ -788,6 +788,7 @@ fun GoPreachNavGraph(
                 // fix/reasoning).
                 fixedCongregationId = if (AdminRole.SUPER_ADMIN in heldRoles) null else (ownCongregationId ?: ownGroupAssignment?.congregationId),
                 readOnly = !canEditMeetingAssignments,
+                canSetLanguage = heldRoles anyIn setOf(AdminRole.SUPER_ADMIN, AdminRole.ADMIN_PER_CONGREGATION),
                 onBack = { navController.popBackStack() },
             )
         }

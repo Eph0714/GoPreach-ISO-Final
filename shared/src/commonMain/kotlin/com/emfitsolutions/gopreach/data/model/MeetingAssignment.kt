@@ -114,3 +114,40 @@ data class CartAssignmentRow(
     val lastEditedByPersonId: String? = null,
     val lastEditedAt: Long? = null,
 )
+
+/** The language the three Midweek Meeting headings are shown in (the Admin of the congregation and the Super Admin choose it); [code] is what is stored. */
+@kotlinx.serialization.Serializable
+enum class MidweekHeadingLanguage(val code: String, val label: String) {
+    ENGLISH("EN", "English"),
+    TAGALOG("TL", "Tagalog"),
+    ILOKO("ILO", "Iloko");
+
+    companion object {
+        fun of(code: String?): MidweekHeadingLanguage = entries.firstOrNull { it.code == code } ?: ENGLISH
+    }
+}
+
+/** The heading of [this] section in [language]. */
+fun MidweekSection.heading(language: MidweekHeadingLanguage): String = when (language) {
+    MidweekHeadingLanguage.ENGLISH -> displayLabel
+    MidweekHeadingLanguage.TAGALOG -> when (this) {
+        MidweekSection.TREASURES -> "KAYAMANAN MULA SA SALITA NG DIYOS"
+        MidweekSection.FIELD_MINISTRY -> "MAGING MAHUSAY SA MINISTERYO"
+        MidweekSection.LIVING_AS_CHRISTIANS -> "PAMUMUHAY BILANG KRISTIYANO"
+    }
+    MidweekHeadingLanguage.ILOKO -> when (this) {
+        MidweekSection.TREASURES -> "GAMENG MANIPUD ITI SAO TI DIOS"
+        MidweekSection.FIELD_MINISTRY -> "AGBALIN A MAS EPEKTIBO ITI MINISTERIO"
+        MidweekSection.LIVING_AS_CHRISTIANS -> "PANAGBIAG KAS KRISTIANO"
+    }
+}
+
+/** One congregation's Meeting and Cart Assignment setting (`meetingAssignmentSettings/{congregationId}`); no document = English. */
+@kotlinx.serialization.Serializable
+data class MeetingAssignmentSettings(
+    @field:DocumentId val id: String = "",
+    val congregationId: String = "",
+    val sectionLanguage: String = MidweekHeadingLanguage.ENGLISH.code,
+    val updatedBy: String = "",
+    val updatedAt: Long = 0L,
+)
