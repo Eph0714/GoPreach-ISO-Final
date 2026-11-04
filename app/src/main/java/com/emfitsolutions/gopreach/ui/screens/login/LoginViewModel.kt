@@ -208,12 +208,13 @@ class LoginViewModel(
 
     fun onUsernameChange(value: String) {
         val before = _uiState.value
-        val changedAccount = !value.trim().equals(before.username.trim(), ignoreCase = true)
+        val changedAccount = value.trim() != before.username.trim()
         // A different username never keeps what was typed (or filled in) for the previous one.
         _uiState.update { it.copy(username = value, errorMessage = null, password = if (changedAccount) "" else it.password) }
         if (changedAccount) passwordAutoFilled = false
         val remembered = rememberedUsername
-        val matches = remembered != null && value.trim().equals(remembered, ignoreCase = true)
+        // Case-sensitive: "Ana" is not "ana", so a different spelling never brings back the remembered password.
+        val matches = remembered != null && value.trim() == remembered
         // "Remember me" is shown ticked only for the account this device remembered, once its username has been typed.
         if (changedAccount) _uiState.update { it.copy(rememberMe = matches) }
         val current = _uiState.value

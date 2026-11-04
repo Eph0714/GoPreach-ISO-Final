@@ -57,7 +57,7 @@ class CredentialStore(private val stores: KeyValueStores) {
     /** The remembered password for [username], or null if that isn't the remembered account. */
     fun rememberedPasswordFor(username: String): String? {
         val saved = prefs.getString(KEY_USERNAME, null) ?: return null
-        if (!saved.equals(username.trim(), ignoreCase = true)) return null
+        if (saved != username.trim()) return null // the username must match exactly, capital letters included
         return prefs.getString(KEY_PASSWORD, null)
     }
 
