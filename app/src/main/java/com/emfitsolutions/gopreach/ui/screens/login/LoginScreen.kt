@@ -109,6 +109,16 @@ fun LoginScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     val activity = LocalContext.current as FragmentActivity
 
+    // The phone's own autofill / password manager must not offer saved logins when a box on this screen is tapped: the login form opens empty, and the remembered
+    // password is only filled in by GoPreach itself once the remembered username has been typed. Restored when the screen is left.
+    val hostView = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(hostView) {
+        val previous = hostView.importantForAutofill
+        hostView.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+        runCatching { hostView.context.getSystemService(android.view.autofill.AutofillManager::class.java)?.cancel() }
+        onDispose { hostView.importantForAutofill = previous }
+    }
+
     // "Upon User Login... immediately after the user successfully logs in,
     // the system should check whether a newer version is available" — same
     // Activity-scoped UpdateViewModel instance MainActivity's own UpdateHost

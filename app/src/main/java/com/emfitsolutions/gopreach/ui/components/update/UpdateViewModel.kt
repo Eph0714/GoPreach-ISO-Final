@@ -128,10 +128,17 @@ class UpdateViewModel(
      * that's been running a while (biometric re-login, switching accounts)
      * where enough time has passed for a genuinely fresh check to be worth
      * it. */
-    fun checkOnLogin() = maybeAutoCheck()
+    fun checkOnLogin() {
+        // Signing in is the moment an "update later" comes back: forget the deferral and look again whatever the throttle says.
+        reminderStore.clearForLogin()
+        if (_state.value == UpdateCheckState.Checking) return
+        lastAutoCheckAtMillis = System.currentTimeMillis()
+        check(silent = true)
+    }
 
     /** The sign-in form just showed up (a fresh launch, a sign-out, a session the server ended): look for a newer release right now, whatever the 15-minute throttle says. */
     fun checkWhenLoginShows() {
+        reminderStore.clearForLogin() // the sign-in screen is a reminder moment too
         if (_state.value == UpdateCheckState.Checking) return
         lastAutoCheckAtMillis = System.currentTimeMillis()
         check(silent = true)
@@ -147,11 +154,9 @@ class UpdateViewModel(
         viewModelScope.launch {
             manifestRepository.fetchLatest()
                 .onSuccess { fetched ->
-                    // Every update is mandatory: any newer release is treated
-                    // as critical (no Remind Me Later, not dismissable),
-                    // whether it came from the API, the fallback redirect, or
-                    // the cache, and regardless of a [CRITICAL] marker.
-                    val info = fetched.copy(isCritical = true)
+                    // An update can be put off ("Update later"); only a release whose notes carry the [CRITICAL] marker is required.
+                    // The notes the dialog shows are the release's own, without that marker.
+                    val info = fetched.copy(releaseNotes = fetched.releaseNotes.replace("[CRITICAL]", "", ignoreCase = true).trim())
                     val isNewer = manifestRepository.isNewer(currentVersion, info.version)
                     // "The notification should not continuously interrupt the
                     // user after selecting Remind Me Later" — a silent/
@@ -161,7 +166,7 @@ class UpdateViewModel(
                     // updates" — nothing to honor if it was never offered),
                     // and an explicit manual check (silent = false) always
                     // shows regardless, since the user asked directly.
-                    val snoozed = silent && !info.isCritical && reminderStore.isSnoozed(info.version)
+                    val snoozed = silent && !info.isCritical && reminderStore.isDeferred(info.version)
                     // A release the person already answered with UPDATE NOW is never offered again by an automatic check (a mandatory one included), so coming back from the installer does not bring the same notice back; a newer version does. The Settings check still shows it.
                     val acknowledged = silent && reminderStore.isAcknowledged(info.version)
                     _state.value = when {
@@ -200,7 +205,7 @@ class UpdateViewModel(
     fun remindLater() {
         val info = (_state.value as? UpdateCheckState.Available)?.info ?: return
         if (info.isCritical) return
-        reminderStore.snooze(info.version)
+        reminderStore.deferUntilLogin(info.version)
         _state.value = UpdateCheckState.Idle
     }
 

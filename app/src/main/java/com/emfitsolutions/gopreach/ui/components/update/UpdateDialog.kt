@@ -98,7 +98,7 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
             // someone else in the meantime).
             AlertDialog(
                 properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
-                onDismissRequest = if (s.info.isCritical) ({}) else viewModel::dismiss,
+                onDismissRequest = if (s.info.isCritical) ({}) else viewModel::remindLater,
                 title = { Text(if (s.info.isCritical) "Update Required" else "Update Available") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -112,7 +112,11 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                         Text("Current Version: ${s.currentVersion}")
                         Text("New Version: ${s.info.version}", fontWeight = FontWeight.Bold)
                         if (s.info.releaseNotes.isNotBlank()) {
+                            Text("What's new in ${s.info.version}", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
                             Text(s.info.releaseNotes, style = MaterialTheme.typography.bodySmall)
+                        }
+                        if (!s.info.isCritical) {
+                            Text("You can update later. GoPreach will remind you again the next time you log in.", style = MaterialTheme.typography.bodySmall)
                         }
                         if (!s.info.isCritical) {
                             val shareText = viewModel.shareText(s.info)
@@ -132,7 +136,7 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                 dismissButton = {
                     // "Remind Me Later" — optional updates only (see above).
                     if (!s.info.isCritical) {
-                        OutlinedButton(onClick = viewModel::remindLater) { Text("REMIND ME LATER") }
+                        OutlinedButton(onClick = viewModel::remindLater) { Text("UPDATE LATER") }
                     }
                 },
             )
