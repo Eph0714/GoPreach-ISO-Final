@@ -97,6 +97,7 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
             // until Update Now is tapped, so there's nothing to relay to
             // someone else in the meantime).
             AlertDialog(
+                scrollBody = true,
                 properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
                 onDismissRequest = if (s.info.isCritical) ({}) else viewModel::remindLater,
                 title = { Text(if (s.info.isCritical) "Update Required" else "Update Available") },
@@ -111,9 +112,14 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                         )
                         Text("Current Version: ${s.currentVersion}")
                         Text("New Version: ${s.info.version}", fontWeight = FontWeight.Bold)
-                        if (s.info.releaseNotes.isNotBlank()) {
+                        if (s.info.releaseDate.isNotBlank()) Text("Released: ${s.info.releaseDate}", style = MaterialTheme.typography.bodySmall)
+                        // The details of the update: the release notes, with the Markdown marks tidied into plain bullets.
+                        val notes = s.info.releaseNotes.lines().joinToString("\n") { l ->
+                            l.trim().replace(Regex("^#{1,6}\\s*"), "").replace(Regex("^[-*]\\s+"), "• ").replace("**", "").replace("__", "").replace("[CRITICAL]", "", ignoreCase = true).trim()
+                        }.trim()
+                        if (notes.isNotBlank()) {
                             Text("What's new in ${s.info.version}", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
-                            Text(s.info.releaseNotes, style = MaterialTheme.typography.bodySmall)
+                            Text(notes, style = MaterialTheme.typography.bodySmall)
                         }
                         if (!s.info.isCritical) {
                             Text("You can update later. GoPreach will remind you again the next time you log in.", style = MaterialTheme.typography.bodySmall)

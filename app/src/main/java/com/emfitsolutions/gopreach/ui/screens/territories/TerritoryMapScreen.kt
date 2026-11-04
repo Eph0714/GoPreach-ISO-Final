@@ -591,8 +591,8 @@ fun TerritoryMapScreen(
     }
     // The screen stays awake while navigating, and not a moment longer.
     val hostView = androidx.compose.ui.platform.LocalView.current
-    DisposableEffect(driving.active) {
-        hostView.keepScreenOn = driving.active
+    DisposableEffect(driving.active, guidance.phase) {
+        hostView.keepScreenOn = driving.active || guidance.phase == com.emfitsolutions.gopreach.ui.components.map.GuidancePhase.PREVIEW
         onDispose { hostView.keepScreenOn = false }
     }
 
@@ -1637,20 +1637,6 @@ fun TerritoryMapScreen(
                     val here = com.emfitsolutions.gopreach.domain.map.GeoPoint(lat, lng)
                     val canDraw = !readOnly && congregationId != null && !isLoading && drawingAccess.canDrawAt(here, drawingTerritories, congregationId)
                     // Map tools: everything that is not on the clean map (Recenter, Nearest, Farthest, Filters, Full screen, GPS status).
-                    val tools = buildList<Triple<androidx.compose.ui.graphics.vector.ImageVector, String, () -> Unit>> {
-                        add(Triple(Icons.Rounded.MyLocation, "Recenter", { longPressPoint = null; onRecenterButton() }))
-                        add(Triple(Icons.Rounded.Navigation, if (driving.active && !driving.walking) "Stop driving" else "Drive", { longPressPoint = null; toggleDriving() }))
-                        add(Triple(Icons.Rounded.DirectionsWalk, if (driving.active && driving.walking) "Stop walking" else "Walk", { longPressPoint = null; toggleDriving(walking = true) }))
-                        if (!embedded) add(Triple(if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, if (fullScreenActive) "Exit full screen" else "Full screen", { longPressPoint = null; fullScreen = !fullScreen }))
-                        add(Triple(Icons.Rounded.GpsFixed, "GPS status", { longPressPoint = null; toast(if (myLocation == null) "Finding your GPS location." else "GPS is working." + (shownAccuracy?.let { " Accurate to about ${it.toInt()} m." } ?: "")) }))
-                    }
-                    LongPressSectionLabel("Map tools")
-                    tools.chunked(3).forEach { rowTools ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            rowTools.forEach { (icon, label, action) -> MapToolTile(icon, label, action, Modifier.weight(1f)) }
-                            repeat(3 - rowTools.size) { Spacer(Modifier.weight(1f)) }
-                        }
-                    }
                     // Draw is offered only where this role may draw (inside the assigned territory for group-level users,
                     // anywhere on their congregation's map for the wider roles); the map links are always available.
                     LongPressSectionLabel("Actions")
@@ -1667,6 +1653,20 @@ fun TerritoryMapScreen(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             rowTiles.forEach { (icon, label, action) -> MapToolTile(icon, label, action, Modifier.weight(1f)) }
                             repeat(actionColumns - rowTiles.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                    val tools = buildList<Triple<androidx.compose.ui.graphics.vector.ImageVector, String, () -> Unit>> {
+                        add(Triple(Icons.Rounded.MyLocation, "Recenter", { longPressPoint = null; onRecenterButton() }))
+                        add(Triple(Icons.Rounded.Navigation, if (driving.active && !driving.walking) "Stop driving" else "Drive", { longPressPoint = null; toggleDriving() }))
+                        add(Triple(Icons.Rounded.DirectionsWalk, if (driving.active && driving.walking) "Stop walking" else "Walk", { longPressPoint = null; toggleDriving(walking = true) }))
+                        if (!embedded) add(Triple(if (fullScreenActive) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen, if (fullScreenActive) "Exit full screen" else "Full screen", { longPressPoint = null; fullScreen = !fullScreen }))
+                        add(Triple(Icons.Rounded.GpsFixed, "GPS status", { longPressPoint = null; toast(if (myLocation == null) "Finding your GPS location." else "GPS is working." + (shownAccuracy?.let { " Accurate to about ${it.toInt()} m." } ?: "")) }))
+                    }
+                    LongPressSectionLabel("Map tools")
+                    tools.chunked(3).forEach { rowTools ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            rowTools.forEach { (icon, label, action) -> MapToolTile(icon, label, action, Modifier.weight(1f)) }
+                            repeat(3 - rowTools.size) { Spacer(Modifier.weight(1f)) }
                         }
                     }
                     QuietCloseButton("Close") { longPressPoint = null }

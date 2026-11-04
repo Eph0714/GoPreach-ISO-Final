@@ -1,5 +1,8 @@
 package com.emfitsolutions.gopreach.ui.components.map
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -320,7 +323,7 @@ fun GuidanceBanner(state: TurnByTurnState, modifier: Modifier = Modifier) {
 fun RoutePreviewPanel(state: TurnByTurnState, onStart: () -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier, onMode: ((walking: Boolean) -> Unit)? = null) {
     val now = nowMillis()
     Surface(modifier = modifier, shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp), color = MaterialTheme.colorScheme.surface, shadowElevation = 10.dp) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 520.dp).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(if (state.choices.size > 1) "Choose a route" else "Route found", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
@@ -340,6 +343,7 @@ fun RoutePreviewPanel(state: TurnByTurnState, onStart: () -> Unit, onCancel: () 
                     style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold,
                 )
             }
+            Column(Modifier.weight(1f, fill = false).verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             state.choices.forEachIndexed { index, choice ->
                 val selected = index == state.selectedIndex
                 val r = choice.route
@@ -366,6 +370,7 @@ fun RoutePreviewPanel(state: TurnByTurnState, onStart: () -> Unit, onCancel: () 
                 if (state.walking) "Estimated for a normal walking pace on pedestrian routes. Watch the road and follow traffic rules." else "Estimated for normal driving, not live traffic. Follow road signs and traffic rules.",
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            }
             androidx.compose.material3.Button(onClick = onStart, modifier = Modifier.fillMaxWidth()) { Text("Start navigation") }
         }
     }
