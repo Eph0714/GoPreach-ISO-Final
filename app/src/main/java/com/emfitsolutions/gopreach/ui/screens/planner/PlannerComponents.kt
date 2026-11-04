@@ -720,7 +720,7 @@ private fun PersonSection(
             PlannerRecordRow(
                 title = "Typed quantity",
                 subtitle = listOfNotNull(if (showDates) formatRecordDate(entry.dayStart) else null, entry.note?.takeIf { it.isNotBlank() }).joinToString(" · "),
-                trailing = if (locked) "Submitted · ${entry.quantity}" else "${entry.quantity}",
+                trailing = (if (entry.quantity > 0) "${entry.quantity}" else "—").let { shown -> if (locked) "Submitted · $shown" else shown },
                 onClickLabel = "Open typed quantity",
                 onClick = { if (!locked) onOpenManual?.invoke(entry) },
             )

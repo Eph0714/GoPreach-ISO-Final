@@ -104,7 +104,7 @@ class ManualCountEntryViewModel(
         val now = nowMillis()
         val base = existing ?: ManualMinistryCount(publisherPersonId = publisherPersonId, createdAt = now)
         val record = base.copy(
-            dayStart = alignedDay, stage = stage.name, quantity = quantity.coerceIn(1, ManualMinistryCount.MAX_QUANTITY),
+            dayStart = alignedDay, stage = stage.name, quantity = quantity.coerceIn(0, ManualMinistryCount.MAX_QUANTITY), // empty is allowed and saved as 0
             note = note?.trim()?.ifBlank { null }, updatedAt = now,
         )
         val noun = if (stage == PipelineStage.RETURN_VISIT) "Return Visit" else "Bible Study"

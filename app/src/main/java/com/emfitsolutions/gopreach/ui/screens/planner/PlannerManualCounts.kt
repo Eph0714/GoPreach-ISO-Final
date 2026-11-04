@@ -61,15 +61,14 @@ internal fun ManualCountDialog(
         hasUnsavedChanges = hasUnsavedChanges,
         errorMessage = errorMessage,
         onConfirm = {
-            val quantity = quantityText.toIntOrNull() ?: 0
-            errorMessage = if (quantity < 1) "Enter how many $noun (1 or more)." else null
-            if (errorMessage == null) onSave(quantity, dayStart, note)
+            // The quantity may be left empty: it is saved as 0 and adds nothing to the count until a number is typed.
+            onSave(quantityText.toIntOrNull() ?: 0, dayStart, note)
         },
     ) {
         OutlinedTextField(
             value = quantityText,
             onValueChange = { quantityText = it.filter(Char::isDigit).take(3); errorMessage = null },
-            label = { Text("Quantity") },
+            label = { Text("Quantity (optional)") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             visualTransformation = VisualTransformation.None,
