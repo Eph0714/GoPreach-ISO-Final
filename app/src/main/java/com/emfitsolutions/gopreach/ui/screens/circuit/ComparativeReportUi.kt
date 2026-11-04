@@ -65,8 +65,8 @@ fun ComparativeReport(state: CompareUi, noComparisonMessage: String, canChoose: 
                 if (group != null) {
                     if (state.groups.size > 1) Picker("Compare", group.title, state.groups.map { it.title }) { i -> viewModel.pickGroup(state.groups[i]) }
                     val labels = group.columns.map { it.label }
-                    Picker("Earlier", group.columns.firstOrNull { it.key == state.previous }?.label.orEmpty(), labels) { i -> viewModel.pickPair(group.columns[i].key, state.current) }
-                    Picker("Later", group.columns.firstOrNull { it.key == state.current }?.label.orEmpty(), labels) { i -> viewModel.pickPair(state.previous, group.columns[i].key) }
+                    com.emfitsolutions.gopreach.ui.components.ArrowListPicker(labels, group.columns.indexOfFirst { it.key == state.previous }, { i -> viewModel.pickPair(group.columns[i].key, state.current) }, title = "Earlier", compact = true)
+                    com.emfitsolutions.gopreach.ui.components.ArrowListPicker(labels, group.columns.indexOfFirst { it.key == state.current }, { i -> viewModel.pickPair(state.previous, group.columns[i].key) }, title = "Later", compact = true)
                 }
                 if (state.others.isNotEmpty()) Picker("Other file", state.other?.name ?: "Compare with another saved file...", listOf("This worksheet only") + state.others.map { it.name }) { i ->
                     viewModel.compareWith(if (i == 0) null else state.others[i - 1])

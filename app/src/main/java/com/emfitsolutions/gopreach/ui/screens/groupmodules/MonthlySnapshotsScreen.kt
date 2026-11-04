@@ -166,7 +166,7 @@ fun MonthlySnapshotsScreen(
             item {
                 Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (readsAll && groupChoices.size > 1) Box { Choice("FS Group", groupChoices.firstOrNull { it.first == fGroup }?.second ?: "All groups", listOf<Pair<String?, String>>(null to "All groups") + groupChoices) { fGroup = it } }
-                    Box { Choice("Month", if (fMonth == 0) "All months" else monthNames[fMonth - 1], listOf(0 to "All months") + monthNames.mapIndexed { i, n -> (i + 1) to n }) { fMonth = it } }
+                    com.emfitsolutions.gopreach.ui.components.ArrowListPicker(labels = listOf("All months") + monthNames, selectedIndex = fMonth, onPick = { fMonth = it }, compact = true)
                     Box { Choice("Year", if (fYear == 0) "All years" else fYear.toString(), listOf(0 to "All years") + years.map { it to it.toString() }) { fYear = it } }
                 }
             }

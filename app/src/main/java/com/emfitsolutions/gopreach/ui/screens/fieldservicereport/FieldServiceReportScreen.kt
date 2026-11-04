@@ -938,10 +938,9 @@ private fun NumberPill(label: String, value: String) {
     }
 }
 
-/** "‹ September 2026 ›": arrows to the previous / next month the report can show; tapping the name opens the full list of months. */
+/** "‹ September 2026 ›": arrows to the previous / next month the report can show (no dropdown list). */
 @Composable
 private fun MonthStepper(label: String, options: List<Pair<String, String>>, onPick: (String) -> Unit, onOlder: (() -> Unit)?, onNewer: (() -> Unit)?) {
-    var open by remember { mutableStateOf(false) }
     // A solid block in the app's colour, so the month is the first thing the eye finds on the report.
     val onTone = MaterialTheme.colorScheme.onPrimary
     androidx.compose.material3.Card(
@@ -955,12 +954,9 @@ private fun MonthStepper(label: String, options: List<Pair<String, String>>, onP
                 Icon(Icons.Rounded.ChevronLeft, contentDescription = "Previous month", tint = onTone.copy(alpha = if (onOlder != null) 1f else 0.35f))
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                androidx.compose.material3.TextButton(onClick = { open = true }, colors = androidx.compose.material3.ButtonDefaults.textButtonColors(contentColor = onTone)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.CalendarMonth, contentDescription = null, modifier = Modifier.size(20.dp))
                     Text("  " + label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold)
-                }
-                androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                    options.forEach { (key, text) -> androidx.compose.material3.DropdownMenuItem(text = { Text(text, fontWeight = if (text == label) FontWeight.Bold else FontWeight.Normal) }, onClick = { open = false; onPick(key) }) }
                 }
             }
             IconButton(enabled = onNewer != null, onClick = { onNewer?.invoke() }) {

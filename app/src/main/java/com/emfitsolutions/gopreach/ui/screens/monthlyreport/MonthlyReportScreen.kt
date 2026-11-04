@@ -695,29 +695,12 @@ private fun PreviewRow(label: String, value: String) {
  * month; there's no way to pick one outside that range in the first place.
  * The initial selection is only ever a default — an ordinary editable
  * dropdown either way. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MonthPickerField(availableMonths: List<Long>, selectedMonth: Long, onSelected: (Long) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
     val monthFormat = remember { SimpleDateFormat("MMMM yyyy", Locale.getDefault()) }
-
-    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        OutlinedTextField(
-            value = monthFormat.format(Date(selectedMonth)),
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(stringResource(Res.string.monthly_report_select_month)) },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            visualTransformation = VisualTransformation.None,
-            modifier = Modifier.fillMaxWidth().menuAnchor(),
-        )
-        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            availableMonths.forEach { month ->
-                DropdownMenuItem(
-                    text = { Text(monthFormat.format(Date(month))) },
-                    onClick = { onSelected(month); expanded = false },
-                )
-            }
-        }
-    }
+    // "‹ July 2026 ›": the arrows step through the months that can be reported; no dropdown list.
+    com.emfitsolutions.gopreach.ui.components.ArrowMonthPicker(
+        months = availableMonths, selected = selectedMonth, formatMonth = { monthFormat.format(Date(it)) }, onSelect = onSelected,
+        title = stringResource(Res.string.monthly_report_select_month),
+    )
 }

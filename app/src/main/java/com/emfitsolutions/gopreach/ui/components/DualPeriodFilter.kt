@@ -26,6 +26,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.border
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -144,28 +145,8 @@ private fun PeriodRow(title: String, range: MonthRange, months: List<Long>, form
     }
 }
 
-/** Compact month picker: a ~34dp chip that opens a scrollable list of months. */
+/** Compact "‹ Month ›" picker (replaces the old dropdown chip): the arrows step to the previous / next month in [months]. */
 @Composable
 private fun MonthChip(selected: Long, months: List<Long>, format: SimpleDateFormat, isError: Boolean, onSelect: (Long) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    Surface(
-        onClick = { expanded = true },
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-        border = BorderStroke(1.dp, if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.height(34.dp),
-    ) {
-        Row(modifier = Modifier.padding(start = 10.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(format.format(Date(selected)), fontSize = 13.sp, maxLines = 1)
-            Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Choose month", modifier = Modifier.size(18.dp))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            Column(modifier = Modifier.height(280.dp).width(150.dp).verticalScroll(rememberScrollState())) {
-                // A selected month older than the list (e.g. a restored value) is still offered so it can be re-picked.
-                (if (selected in months) months else listOf(selected) + months).forEach { month ->
-                    DropdownMenuItem(text = { Text(format.format(Date(month)), fontSize = 13.sp) }, onClick = { onSelect(month); expanded = false })
-                }
-            }
-        }
-    }
+    ArrowMonthPicker(months = months, selected = selected, formatMonth = { format.format(Date(it)) }, onSelect = onSelect, compact = true, modifier = if (isError) Modifier.border(1.dp, MaterialTheme.colorScheme.error, RoundedCornerShape(10.dp)) else Modifier)
 }

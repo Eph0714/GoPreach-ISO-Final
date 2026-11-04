@@ -81,8 +81,8 @@ fun AnalysisView(ui: AnalysisUi, compare: CompareUi, viewModel: PreviousManualRe
             if (group != null) {
                 if (a.groups.size > 1) Picker("Compare", group.title, a.groups.map { it.title }) { i -> val g = a.groups[i]; viewModel.pickAnalysis(g.id, g.recommended.previous, g.recommended.current) }
                 val labels = group.columns.map { it.label }
-                Picker("Earlier", group.columns.firstOrNull { it.key == ui.previous }?.label.orEmpty(), labels) { i -> viewModel.pickAnalysis(group.id, group.columns[i].key, ui.current) }
-                Picker("Later", group.columns.firstOrNull { it.key == ui.current }?.label.orEmpty(), labels) { i -> viewModel.pickAnalysis(group.id, ui.previous, group.columns[i].key) }
+                com.emfitsolutions.gopreach.ui.components.ArrowListPicker(labels, group.columns.indexOfFirst { it.key == ui.previous }, { i -> viewModel.pickAnalysis(group.id, group.columns[i].key, ui.current) }, title = "Earlier", compact = true)
+                com.emfitsolutions.gopreach.ui.components.ArrowListPicker(labels, group.columns.indexOfFirst { it.key == ui.current }, { i -> viewModel.pickAnalysis(group.id, ui.previous, group.columns[i].key) }, title = "Later", compact = true)
             }
             if (compare.others.isNotEmpty()) Picker("Other file", "Compare with another saved file...", listOf("This worksheet only") + compare.others.map { it.name }) { i ->
                 viewModel.compareWith(if (i == 0) null else compare.others[i - 1])
