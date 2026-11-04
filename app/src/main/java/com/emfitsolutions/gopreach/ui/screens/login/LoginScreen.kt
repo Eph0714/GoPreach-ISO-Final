@@ -114,9 +114,12 @@ fun LoginScreen(
     val hostView = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.DisposableEffect(hostView) {
         val previous = hostView.importantForAutofill
+        val root = hostView.rootView
+        val previousRoot = root.importantForAutofill
         hostView.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
+        root.importantForAutofill = android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         runCatching { hostView.context.getSystemService(android.view.autofill.AutofillManager::class.java)?.cancel() }
-        onDispose { hostView.importantForAutofill = previous }
+        onDispose { hostView.importantForAutofill = previous; root.importantForAutofill = previousRoot }
     }
 
     // "Upon User Login... immediately after the user successfully logs in,
@@ -177,7 +180,7 @@ fun LoginScreen(
 
                     OutlinedTextField(
                         value = uiState.username,
-                        onValueChange = viewModel::onUsernameChange,
+                        onValueChange = { viewModel.onUsernameChange(it.replace(". ", ".")) },
                         placeholder = { Text(stringResource(Res.string.login_username)) },
                         singleLine = true,
                         shape = FieldShape,
@@ -185,9 +188,9 @@ fun LoginScreen(
                         // Every control is disabled while a sign-in runs (fields included, so the keyboard's Done cannot submit a second request).
                         enabled = !busy,
                         leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
-                        // Plain text, never masked; KeyboardType.Password only so no keyboard auto-spaces after a period ("user.test" must stay "user.test").
+                        // Plain text, never masked. Not a Password keyboard (that makes the keyboard show its key icon / saved logins); a space typed after a period is closed up so "user.test" stays "user.test".
                         visualTransformation = VisualTransformation.None,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, autoCorrectEnabled = false),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrectEnabled = false),
                         modifier = Modifier.fillMaxWidth(),
                     )
 
@@ -201,7 +204,8 @@ fun LoginScreen(
                         enabled = !busy,
                         leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        // Masked by the dots below, but an ordinary text keyboard: a Password keyboard type shows the keyboard's key icon with the saved username and password.
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrectEnabled = false),
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !busy) {
                                 Icon(
