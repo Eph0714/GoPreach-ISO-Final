@@ -424,6 +424,13 @@
     "versionCode": 260,
     "date": "2026-11-04",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.28",
+    "versionCode": 261,
+    "date": "2026-11-04",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
