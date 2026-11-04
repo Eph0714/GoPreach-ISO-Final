@@ -57,6 +57,7 @@ class PlannerYearViewModel(
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,
     private val creditHourRecordRepository: CreditHourRecordRepository,
+    private val manualCountRepository: com.emfitsolutions.gopreach.data.repository.ManualMinistryCountRepository,
     private val yearlyGoalRepository: YearlyPlannerGoalRepository,
     private val monthlyGoalRepository: com.emfitsolutions.gopreach.data.repository.MonthlyPlannerGoalRepository,
 ) : ViewModel() {
@@ -88,7 +89,8 @@ class PlannerYearViewModel(
             creditHourRecordRepository.observeForPublisher(publisherPersonId),
             yearlyGoalRepository.observeForPublisher(publisherPersonId),
             monthlyGoalRepository.observeForPublisher(publisherPersonId),
-        ) { records, yearlyGoals, monthlyGoals -> Triple(records, yearlyGoals, monthlyGoals) }
+            manualCountRepository.observeForPublisher(publisherPersonId),
+        ) { records, yearlyGoals, monthlyGoals, manual -> listOf(records, yearlyGoals, monthlyGoals, manual) }
 
         return combine(
             _yearStart,
@@ -97,7 +99,10 @@ class PlannerYearViewModel(
             visitRepository.observeAllForPublisher(publisherPersonId),
             creditAndGoalsFlow,
         ) { yearStart, allDays, people, visits, creditAndGoals ->
-            val (creditRecords, yearlyGoals, monthlyGoals) = creditAndGoals
+            @Suppress("UNCHECKED_CAST") val creditRecords = creditAndGoals[0] as List<com.emfitsolutions.gopreach.data.model.CreditHourRecord>
+            @Suppress("UNCHECKED_CAST") val yearlyGoals = creditAndGoals[1] as List<YearlyPlannerGoal>
+            @Suppress("UNCHECKED_CAST") val monthlyGoals = creditAndGoals[2] as List<com.emfitsolutions.gopreach.data.model.MonthlyPlannerGoal>
+            @Suppress("UNCHECKED_CAST") val manualCounts = creditAndGoals[3] as List<com.emfitsolutions.gopreach.data.model.ManualMinistryCount>
             val bounds = YearBounds.of(yearStart)
             val yearDays = allDays.filter { bounds.contains(it.dayStart) }
 
@@ -125,17 +130,18 @@ class PlannerYearViewModel(
                 )
             }
 
+            val yearRecords = buildPeriodRecords(publisherPersonId, bounds, allDays, creditRecords, people, visits, manualCounts)
             val yearlyGoal = yearlyGoals.firstOrNull { it.id == YearlyPlannerGoal.idFor(publisherPersonId, year) }
 
             PlannerYearUiState(
                 yearStart = yearStart,
                 totalMinutes = yearDays.sumOf { it.totalMinutes },
                 creditHoursMinutes = creditRecords.inPeriod(bounds).sumOf { it.totalMinutes },
-                returnVisitCount = MinistryStatisticsService.getYearlyUniqueReturnVisits(publisherPersonId, people, visits, yearStart),
-                bibleStudyCount = MinistryStatisticsService.getYearlyUniqueBibleStudies(publisherPersonId, people, visits, yearStart),
+                returnVisitCount = MinistryStatisticsService.getYearlyUniqueReturnVisits(publisherPersonId, people, visits, yearStart) + yearRecords.manualReturnVisitQuantity,
+                bibleStudyCount = MinistryStatisticsService.getYearlyUniqueBibleStudies(publisherPersonId, people, visits, yearStart) + yearRecords.manualBibleStudyQuantity,
                 goalHours = yearlyGoal?.goalHours ?: 0,
                 monthRows = monthRows,
-                records = buildPeriodRecords(publisherPersonId, bounds, allDays, creditRecords, people, visits),
+                records = yearRecords,
                 isLoading = false,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PlannerYearUiState())

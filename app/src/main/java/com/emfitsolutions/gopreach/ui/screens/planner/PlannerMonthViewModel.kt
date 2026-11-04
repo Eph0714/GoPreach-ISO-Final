@@ -71,6 +71,7 @@ class PlannerMonthViewModel(
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,
     private val creditHourRecordRepository: CreditHourRecordRepository,
+    private val manualCountRepository: com.emfitsolutions.gopreach.data.repository.ManualMinistryCountRepository,
     private val monthlyGoalRepository: MonthlyPlannerGoalRepository,
 ) : ViewModel() {
 
@@ -98,7 +99,8 @@ class PlannerMonthViewModel(
         val creditAndGoalFlow = combine(
             creditHourRecordRepository.observeForPublisher(publisherPersonId),
             monthlyGoalRepository.observeForPublisher(publisherPersonId),
-        ) { records, goals -> records to goals }
+            manualCountRepository.observeForPublisher(publisherPersonId),
+        ) { records, goals, manual -> Triple(records, goals, manual) }
 
         return combine(
             _monthStart,
@@ -107,7 +109,7 @@ class PlannerMonthViewModel(
             visitRepository.observeAllForPublisher(publisherPersonId),
             creditAndGoalFlow,
         ) { monthStart, allDays, people, visits, creditAndGoal ->
-            val (creditRecords, goals) = creditAndGoal
+            val (creditRecords, goals, manualCounts) = creditAndGoal
             val bounds = MonthBounds.of(monthStart)
             val monthDays = allDays.filter { bounds.contains(it.dayStart) }
             val monthCredits = creditRecords.inPeriod(bounds)
@@ -118,8 +120,15 @@ class PlannerMonthViewModel(
             val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
 
             val monthDayStarts = (1..daysInMonth).map { day -> dayStartFor(year, month, day) }
-            val dailyReturnVisits = dailyUniquePersonCounts(publisherPersonId, people, visits, com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT, monthDayStarts)
-            val dailyBibleStudies = dailyUniquePersonCounts(publisherPersonId, people, visits, com.emfitsolutions.gopreach.data.model.PipelineStage.BIBLE_STUDY, monthDayStarts)
+            val dailyReturnVisits = mergeDailyCounts(
+                dailyUniquePersonCounts(publisherPersonId, people, visits, com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT, monthDayStarts),
+                dailyManualQuantities(manualCounts, com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT, monthDayStarts),
+            )
+            val dailyBibleStudies = mergeDailyCounts(
+                dailyUniquePersonCounts(publisherPersonId, people, visits, com.emfitsolutions.gopreach.data.model.PipelineStage.BIBLE_STUDY, monthDayStarts),
+                dailyManualQuantities(manualCounts, com.emfitsolutions.gopreach.data.model.PipelineStage.BIBLE_STUDY, monthDayStarts),
+            )
+            val monthRecords = buildPeriodRecords(publisherPersonId, bounds, allDays, creditRecords, people, visits, manualCounts)
 
             val activeDays = buildSet {
                 monthDays.filter { it.totalMinutes > 0 || !it.note.isNullOrBlank() }.forEach { add(it.dayStart) }
@@ -134,15 +143,15 @@ class PlannerMonthViewModel(
                 monthStart = monthStart,
                 totalMinutes = monthDays.sumOf { it.totalMinutes },
                 creditHoursMinutes = monthCredits.sumOf { it.totalMinutes },
-                returnVisitCount = MinistryStatisticsService.getMonthlyUniqueReturnVisits(publisherPersonId, people, visits, monthStart),
-                bibleStudyCount = MinistryStatisticsService.getMonthlyUniqueBibleStudies(publisherPersonId, people, visits, monthStart),
+                returnVisitCount = MinistryStatisticsService.getMonthlyUniqueReturnVisits(publisherPersonId, people, visits, monthStart) + monthRecords.manualReturnVisitQuantity,
+                bibleStudyCount = MinistryStatisticsService.getMonthlyUniqueBibleStudies(publisherPersonId, people, visits, monthStart) + monthRecords.manualBibleStudyQuantity,
                 goalHours = goal?.goalHours ?: 0,
                 activeDayStarts = activeDays,
                 dailyMinutes = dailyMinutes(allDays, bounds),
                 dailyCreditMinutes = dailyCreditMinutes(creditRecords, bounds),
                 dailyReturnVisits = dailyReturnVisits,
                 dailyBibleStudies = dailyBibleStudies,
-                records = buildPeriodRecords(publisherPersonId, bounds, allDays, creditRecords, people, visits),
+                records = monthRecords,
                 isLoading = false,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PlannerMonthUiState())

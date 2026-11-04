@@ -26,12 +26,11 @@ class CredentialStore(private val stores: KeyValueStores) {
     // --- Remember Login ---------------------------------------------------------
 
     /**
-     * "Remember me" remembers the USERNAME only. A password is never kept for it: the person types it each time (the fingerprint and PIN sign-ins are separate,
-     * opt-in, and forgotten at sign-out). [password] is accepted for older callers and ignored.
+     * "Remember me" keeps the username and its password in the encrypted store. The login screen opens EMPTY and shows neither: the password is only read back
+     * ([rememberedPasswordFor]) once the person has typed the remembered username.
      */
-    @Suppress("UNUSED_PARAMETER")
     fun save(username: String, password: String) {
-        prefs.edit().putString(KEY_USERNAME, username).remove(KEY_PASSWORD).apply()
+        prefs.edit().putString(KEY_USERNAME, username).putString(KEY_PASSWORD, password).apply()
     }
 
     /** An older version kept the remembered password too: drop it. */

@@ -188,7 +188,7 @@ const isPrivilegedRoleType = (roleType) => roleType === 'ADMIN:SUPER_ADMIN' || r
 /** Owner-only collections: the document's own publisherPersonId must be the caller. */
 const OWNER_ONLY = new Set([
   'bibleTextCategories', 'bibleTextRecords', 'plannerDays', 'monthlyPlannerGoals', 'weeklyPlannerGoals', 'yearlyPlannerGoals',
-  'creditHourRecords', 'ministryTimerSessions', 'favorites',
+  'creditHourRecords', 'manualMinistryCounts', 'ministryTimerSessions', 'favorites',
 ]);
 
 /** Collections docs/legacy-firebase/firestore.rules gives plain `allow read, write: if isSignedIn()` (explicitly or via the catch-all). */
@@ -582,7 +582,7 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
 
     default:
       if (OWNER_ONLY.has(collection)) {
-        if (collection === 'creditHourRecords' || collection === 'plannerDays') {
+        if (collection === 'creditHourRecords' || collection === 'manualMinistryCounts' || collection === 'plannerDays') {
           for (const rec of [old, isDelete ? null : next]) {
             if (rec && (await fsDayLocked(get, actor.congregationId, rec.dayStart))) return deny(MONTH_LOCKED);
           }

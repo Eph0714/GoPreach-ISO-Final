@@ -69,6 +69,7 @@ class PublisherReportService(
     private val plannerDayRepository: PlannerDayRepository,
     private val creditHourRecordRepository: CreditHourRecordRepository,
     private val creditHourCategoryRepository: CreditHourCategoryRepository,
+    private val manualCountRepository: com.emfitsolutions.gopreach.data.repository.ManualMinistryCountRepository,
 ) {
     /**
      * [useStoredValues] keeps the report's saved figures instead of recalculating — for
@@ -90,6 +91,7 @@ class PublisherReportService(
         creditHourRecordRepository.observeForPublisher(publisherPersonId),
         creditHourCategoryRepository.observeAll(),
         periodMonth,
+        manualCountRepository.observeForPublisher(publisherPersonId),
     ) { flows ->
         @Suppress("UNCHECKED_CAST") val people = flows[0] as List<Person>
         @Suppress("UNCHECKED_CAST") val assignments = flows[1] as List<RoleAssignment>
@@ -101,6 +103,7 @@ class PublisherReportService(
         @Suppress("UNCHECKED_CAST") val creditRecords = flows[7] as List<CreditHourRecord>
         @Suppress("UNCHECKED_CAST") val creditCategories = flows[8] as List<CreditHourCategory>
         val month = flows[9] as Long
+        @Suppress("UNCHECKED_CAST") val manualCounts = flows[10] as List<com.emfitsolutions.gopreach.data.model.ManualMinistryCount>
 
         val publisherAssignment = assignments.firstOrNull { it.resolvedRoleTypeOrNull() is RoleType.Publisher }
         val category = (publisherAssignment?.resolvedRoleTypeOrNull() as? RoleType.Publisher)?.category
@@ -121,6 +124,11 @@ class PublisherReportService(
             preachingTimeRecords = ownPreachingTimeRecords,
             periodMonthStart = month,
         )
+
+        // Return Visits / Bible Studies typed in My Planner for the month are added to the people counted from the Ministry records.
+        val monthManual = manualCounts.filter { it.publisherPersonId == publisherPersonId && bounds.contains(it.dayStart) }
+        val manualReturnVisits = monthManual.filter { it.stage == "RETURN_VISIT" }.sumOf { it.quantity }
+        val manualBibleStudies = monthManual.filter { it.stage == "BIBLE_STUDY" }.sumOf { it.quantity }
 
         val plannerMinutes = plannerDays.filter { bounds.contains(it.dayStart) }.sumOf { it.totalMinutes }
         // A Pioneer's official hours are the Preaching Time Records; if none were
@@ -150,8 +158,8 @@ class PublisherReportService(
             existingReport = existing,
             periodMonth = month,
             totalMinutes = totalMinutes,
-            bibleStudies = if (keepStored) existing!!.bibleStudiesCount else calc.bibleStudiesConducted,
-            returnVisits = if (keepStored) existing!!.returnVisitsCount else calc.returnVisitsConducted,
+            bibleStudies = if (keepStored) existing!!.bibleStudiesCount else calc.bibleStudiesConducted + manualBibleStudies,
+            returnVisits = if (keepStored) existing!!.returnVisitsCount else calc.returnVisitsConducted + manualReturnVisits,
             systemMinutes = systemMinutes,
             defaultRemarks = defaultRemarks,
         )

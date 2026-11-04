@@ -577,6 +577,9 @@ internal fun PlannerRecordSections(
     /** Opens the full Return Visit / Bible Study list (where new people
      * and visits are added). */
     onOpenPersonList: (PipelineStage) -> Unit,
+    /** Type a Return Visit / Bible Study quantity without opening a record (null hides the button). */
+    onAddManual: ((PipelineStage) -> Unit)? = null,
+    onOpenManual: ((com.emfitsolutions.gopreach.data.model.ManualMinistryCount) -> Unit)? = null,
     /** Null hides the Hours/Minutes section (the Day view edits hours with
      * its own steppers instead). */
     onOpenDay: ((Long) -> Unit)?,
@@ -656,6 +659,9 @@ internal fun PlannerRecordSections(
         showDates = showDates,
         onOpen = { onOpenPerson(PipelineStage.RETURN_VISIT, it) },
         onOpenList = { onOpenPersonList(PipelineStage.RETURN_VISIT) },
+        manual = records.manualReturnVisits,
+        onAddManual = onAddManual?.let { add -> { add(PipelineStage.RETURN_VISIT) } },
+        onOpenManual = onOpenManual,
         listLocked = periodLocked,
         labelColumnWidth = labelColumnWidth,
         valueColumnWidth = valueColumnWidth,
@@ -670,6 +676,9 @@ internal fun PlannerRecordSections(
         showDates = showDates,
         onOpen = { onOpenPerson(PipelineStage.BIBLE_STUDY, it) },
         onOpenList = { onOpenPersonList(PipelineStage.BIBLE_STUDY) },
+        manual = records.manualBibleStudies,
+        onAddManual = onAddManual?.let { add -> { add(PipelineStage.BIBLE_STUDY) } },
+        onOpenManual = onOpenManual,
         listLocked = periodLocked,
         labelColumnWidth = labelColumnWidth,
         valueColumnWidth = valueColumnWidth,
@@ -687,6 +696,9 @@ private fun PersonSection(
     showDates: Boolean,
     onOpen: (String) -> Unit,
     onOpenList: () -> Unit,
+    manual: List<com.emfitsolutions.gopreach.data.model.ManualMinistryCount> = emptyList(),
+    onAddManual: (() -> Unit)? = null,
+    onOpenManual: ((com.emfitsolutions.gopreach.data.model.ManualMinistryCount) -> Unit)? = null,
     /** The period is inside a submitted month: the full list is closed. */
     listLocked: Boolean = false,
     labelColumnWidth: Dp? = null,
@@ -696,12 +708,23 @@ private fun PersonSection(
         title = title,
         expanded = expansion.isExpanded(key),
         onToggle = { expansion.toggle(key) },
-        summary = personCountSummary(people.size),
+        summary = personCountSummary(people.size + manual.sumOf { it.quantity }),
         labelColumnWidth = labelColumnWidth,
         valueColumnWidth = valueColumnWidth,
     ) {
-        if (people.isEmpty()) PlannerEmptyHint(emptyText)
+        if (people.isEmpty() && manual.isEmpty()) PlannerEmptyHint(emptyText)
         val plannerLock = LocalPlannerLock.current
+        // Quantities typed by hand (no record behind them); counted together with the people below.
+        manual.forEach { entry ->
+            val locked = plannerLock.isLocked(entry.dayStart)
+            PlannerRecordRow(
+                title = "Typed quantity",
+                subtitle = listOfNotNull(if (showDates) formatRecordDate(entry.dayStart) else null, entry.note?.takeIf { it.isNotBlank() }).joinToString(" · "),
+                trailing = if (locked) "Submitted · ${entry.quantity}" else "${entry.quantity}",
+                onClickLabel = "Open typed quantity",
+                onClick = { if (!locked) onOpenManual?.invoke(entry) },
+            )
+        }
         people.forEach { person ->
             val count = person.periodActivities
             // A person whose visits fall in a month that was already reported stays visible for
@@ -720,6 +743,11 @@ private fun PersonSection(
                 onClickLabel = "Open ${person.name}",
                 onClick = { onOpen(person.interestedPersonId) },
             )
+        }
+        if (onAddManual != null) TextButton(onClick = onAddManual, enabled = !listLocked, contentPadding = PaddingValues(horizontal = 8.dp)) {
+            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Add quantity", style = MaterialTheme.typography.labelLarge)
         }
         TextButton(onClick = onOpenList, enabled = !listLocked, contentPadding = PaddingValues(horizontal = 8.dp)) {
             Text("Open all $title", style = MaterialTheme.typography.labelLarge)

@@ -71,6 +71,7 @@ class PlannerWeekViewModel(
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,
     private val creditHourRecordRepository: CreditHourRecordRepository,
+    private val manualCountRepository: com.emfitsolutions.gopreach.data.repository.ManualMinistryCountRepository,
     private val weeklyGoalRepository: WeeklyPlannerGoalRepository,
 ) : ViewModel() {
 
@@ -96,7 +97,8 @@ class PlannerWeekViewModel(
         val creditAndGoalFlow = combine(
             creditHourRecordRepository.observeForPublisher(publisherPersonId),
             weeklyGoalRepository.observeForPublisher(publisherPersonId),
-        ) { records, goals -> records to goals }
+            manualCountRepository.observeForPublisher(publisherPersonId),
+        ) { records, goals, manual -> Triple(records, goals, manual) }
 
         return combine(
             _weekStart,
@@ -105,7 +107,7 @@ class PlannerWeekViewModel(
             visitRepository.observeAllForPublisher(publisherPersonId),
             creditAndGoalFlow,
         ) { weekStart, allDays, people, visits, creditAndGoal ->
-            val (creditRecords, goals) = creditAndGoal
+            val (creditRecords, goals, manualCounts) = creditAndGoal
             val bounds = WeekBounds.of(weekStart)
             val weekDays = allDays.filter { bounds.contains(it.dayStart) }
             val weekCredits = creditRecords.inPeriod(bounds)
@@ -122,23 +124,26 @@ class PlannerWeekViewModel(
                     dayStart = dayStart,
                     totalMinutes = plannerDay?.totalMinutes ?: 0,
                     creditMinutes = weekCredits.inPeriod(DayBounds.of(dayStart)).sumOf { it.totalMinutes },
-                    returnVisitCount = MinistryStatisticsService.getDailyUniqueReturnVisits(publisherPersonId, people, visits, dayStart),
-                    bibleStudyCount = MinistryStatisticsService.getDailyUniqueBibleStudies(publisherPersonId, people, visits, dayStart),
+                    returnVisitCount = MinistryStatisticsService.getDailyUniqueReturnVisits(publisherPersonId, people, visits, dayStart) +
+                        manualCounts.manualInPeriod(DayBounds.of(dayStart)).forStage(com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT).sumOf { it.quantity },
+                    bibleStudyCount = MinistryStatisticsService.getDailyUniqueBibleStudies(publisherPersonId, people, visits, dayStart) +
+                        manualCounts.manualInPeriod(DayBounds.of(dayStart)).forStage(com.emfitsolutions.gopreach.data.model.PipelineStage.BIBLE_STUDY).sumOf { it.quantity },
                     isToday = dayStart == todayStart,
                 )
             }
 
             val goal = goals.firstOrNull { it.id == WeeklyPlannerGoal.idFor(publisherPersonId, weekStart) }
+            val weekRecords = buildPeriodRecords(publisherPersonId, bounds, allDays, creditRecords, people, visits, manualCounts)
 
             PlannerWeekUiState(
                 weekStart = weekStart,
                 dayRows = dayRows,
                 totalMinutes = weekDays.sumOf { it.totalMinutes },
                 creditHoursMinutes = weekCredits.sumOf { it.totalMinutes },
-                returnVisitCount = MinistryStatisticsService.getWeeklyUniqueReturnVisits(publisherPersonId, people, visits, weekStart),
-                bibleStudyCount = MinistryStatisticsService.getWeeklyUniqueBibleStudies(publisherPersonId, people, visits, weekStart),
+                returnVisitCount = MinistryStatisticsService.getWeeklyUniqueReturnVisits(publisherPersonId, people, visits, weekStart) + weekRecords.manualReturnVisitQuantity,
+                bibleStudyCount = MinistryStatisticsService.getWeeklyUniqueBibleStudies(publisherPersonId, people, visits, weekStart) + weekRecords.manualBibleStudyQuantity,
                 goalHours = goal?.goalHours ?: 0,
-                records = buildPeriodRecords(publisherPersonId, bounds, allDays, creditRecords, people, visits),
+                records = weekRecords,
                 isLoading = false,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PlannerWeekUiState())

@@ -33,6 +33,7 @@ import com.emfitsolutions.gopreach.data.repository.CongregationRepository
 import com.emfitsolutions.gopreach.data.repository.CredentialStore
 import com.emfitsolutions.gopreach.data.repository.CreditHourCategoryRepository
 import com.emfitsolutions.gopreach.data.repository.CreditHourRecordRepository
+import com.emfitsolutions.gopreach.data.repository.ManualMinistryCountRepository
 import com.emfitsolutions.gopreach.data.repository.DashboardModuleLayoutRepository
 import com.emfitsolutions.gopreach.data.repository.DrawingPermissionService
 import com.emfitsolutions.gopreach.data.repository.ElderTitleRepository
@@ -206,6 +207,7 @@ import com.emfitsolutions.gopreach.ui.screens.pipeline.HouseHolderRecordsViewMod
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PipelineViewModel
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PublisherForwardRequestsViewModel
 import com.emfitsolutions.gopreach.ui.screens.planner.CreditHourEntryViewModel
+import com.emfitsolutions.gopreach.ui.screens.planner.ManualCountEntryViewModel
 import com.emfitsolutions.gopreach.ui.screens.planner.PlannerComparativeViewModel
 import com.emfitsolutions.gopreach.ui.screens.planner.PlannerDayViewModel
 import com.emfitsolutions.gopreach.ui.screens.planner.PlannerMonthViewModel
@@ -293,11 +295,10 @@ val infraModule = module {
                 name = "$maker $model", model = model, type = if (context.resources.configuration.smallestScreenWidthDp >= 600) "tablet" else "phone",
                 os = "Android", osVersion = android.os.Build.VERSION.RELEASE, appVersion = com.emfitsolutions.gopreach.BuildConfig.VERSION_NAME,
             ),
-            // The person (or the idle timeout) signing out keeps the fingerprint and PIN/pattern sign-ins, so the next login works with one touch. A session the SERVER ended
-            // (another device, a deleted trusted device, a password change) forgets every saved password on this phone.
+            // The person (or the idle timeout) signing out keeps Remember me, the fingerprint and PIN/pattern sign-ins (none of them is shown on the login screen: the remembered
+            // password only fills in after its username is typed). A session the SERVER ended (another device, a deleted trusted device, a password change) forgets every saved password.
             onSignedOut = { endedByServer ->
                 if (endedByServer) { get<CredentialStore>().forgetPasswords(); get<com.emfitsolutions.gopreach.data.repository.QuickLoginStore>().disableAll() }
-                else get<CredentialStore>().dropRememberedPassword()
                 get<OfflineSessionMarker>().clear()
             },
         )
@@ -338,6 +339,7 @@ val appModule = module {
     singleOf(::CredentialStore)
     singleOf(::CreditHourCategoryRepository)
     singleOf(::CreditHourRecordRepository)
+    singleOf(::ManualMinistryCountRepository)
     singleOf(::DashboardModuleLayoutRepository)
     singleOf(::DrawingPermissionService)
     singleOf(::ElderTitleRepository)
@@ -526,6 +528,7 @@ val appModule = module {
     viewModelOf(::HouseHolderRecordsViewModel)
     viewModelOf(::PublisherForwardRequestsViewModel)
     viewModelOf(::CreditHourEntryViewModel)
+    viewModelOf(::ManualCountEntryViewModel)
     viewModelOf(::PlannerComparativeViewModel)
     viewModelOf(::PlannerDayViewModel)
     viewModelOf(::PlannerMonthViewModel)

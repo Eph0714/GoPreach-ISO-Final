@@ -64,6 +64,7 @@ class PlannerDayViewModel(
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,
     private val creditHourRecordRepository: CreditHourRecordRepository,
+    private val manualCountRepository: com.emfitsolutions.gopreach.data.repository.ManualMinistryCountRepository,
     private val monthlyGoalRepository: MonthlyPlannerGoalRepository,
     private val monthlyReportRepository: com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository,
 ) : ViewModel() {
@@ -89,7 +90,8 @@ class PlannerDayViewModel(
         val creditAndGoalFlow = combine(
             creditHourRecordRepository.observeForPublisher(publisherPersonId),
             monthlyGoalRepository.observeForPublisher(publisherPersonId),
-        ) { records, goals -> records to goals }
+            manualCountRepository.observeForPublisher(publisherPersonId),
+        ) { records, goals, manual -> Triple(records, goals, manual) }
 
         return combine(
             _dayStart,
@@ -98,10 +100,10 @@ class PlannerDayViewModel(
             visitRepository.observeAllForPublisher(publisherPersonId),
             creditAndGoalFlow,
         ) { dayStart, allDays, people, visits, creditAndGoal ->
-            val (creditRecords, goals) = creditAndGoal
+            val (creditRecords, goals, manualCounts) = creditAndGoal
             val plannerDayId = PlannerDay.idFor(publisherPersonId, dayStart)
             val plannerDay = allDays.firstOrNull { it.id == plannerDayId }
-            val periodRecords = buildPeriodRecords(publisherPersonId, DayBounds.of(dayStart), allDays, creditRecords, people, visits)
+            val periodRecords = buildPeriodRecords(publisherPersonId, DayBounds.of(dayStart), allDays, creditRecords, people, visits, manualCounts)
 
             val monthBounds = MonthBounds.of(dayStart)
             val calendar = Calendar.getInstance().apply { timeInMillis = dayStart }
@@ -114,8 +116,8 @@ class PlannerDayViewModel(
                 totalMinutes = plannerDay?.totalMinutes ?: 0,
                 dailyGoalHours = plannerDay?.dailyGoalHours ?: 0,
                 note = plannerDay?.note,
-                returnVisitCount = MinistryStatisticsService.getDailyUniqueReturnVisits(publisherPersonId, people, visits, dayStart),
-                bibleStudyCount = MinistryStatisticsService.getDailyUniqueBibleStudies(publisherPersonId, people, visits, dayStart),
+                returnVisitCount = MinistryStatisticsService.getDailyUniqueReturnVisits(publisherPersonId, people, visits, dayStart) + periodRecords.manualReturnVisitQuantity,
+                bibleStudyCount = MinistryStatisticsService.getDailyUniqueBibleStudies(publisherPersonId, people, visits, dayStart) + periodRecords.manualBibleStudyQuantity,
                 creditHourRecords = periodRecords.creditRecords,
                 records = periodRecords,
                 monthlyGoalHours = monthlyGoal?.goalHours ?: 0,

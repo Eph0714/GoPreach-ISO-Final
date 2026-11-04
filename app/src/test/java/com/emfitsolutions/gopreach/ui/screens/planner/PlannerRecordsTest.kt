@@ -188,4 +188,24 @@ class PlannerRecordsTest {
         val built = buildPeriodRecords(publisher, MonthBounds.of(day(2026, 9, 1)), days, emptyList(), emptyList(), emptyList())
         assertEquals(listOf("a"), built.hourDays.map { it.id })
     }
+
+    /** A quantity typed in My Planner counts for its own day / week / month / year, per kind, on top of the people from records. */
+    @Test
+    fun typedQuantitiesAreAddedPerKindAndPeriod() {
+        val d = day(2026, 9, 23)
+        val typed = listOf(
+            com.emfitsolutions.gopreach.data.model.ManualMinistryCount(id = "m1", publisherPersonId = publisher, dayStart = d, stage = "RETURN_VISIT", quantity = 3),
+            com.emfitsolutions.gopreach.data.model.ManualMinistryCount(id = "m2", publisherPersonId = publisher, dayStart = day(2026, 9, 25), stage = "RETURN_VISIT", quantity = 2),
+            com.emfitsolutions.gopreach.data.model.ManualMinistryCount(id = "m3", publisherPersonId = publisher, dayStart = d, stage = "BIBLE_STUDY", quantity = 1),
+        )
+        val month = buildPeriodRecords(publisher, MonthBounds.of(d), emptyList(), emptyList(), emptyList(), emptyList(), typed)
+        assertEquals(5, month.manualReturnVisitQuantity)
+        assertEquals(1, month.manualBibleStudyQuantity)
+        val oneDay = buildPeriodRecords(publisher, DayBounds.of(d), emptyList(), emptyList(), emptyList(), emptyList(), typed)
+        assertEquals(3, oneDay.manualReturnVisitQuantity)
+        assertEquals(0, buildPeriodRecords(publisher, MonthBounds.of(day(2026, 10, 1)), emptyList(), emptyList(), emptyList(), emptyList(), typed).manualReturnVisitQuantity)
+        val daily = dailyManualQuantities(typed, com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT, listOf(d, day(2026, 9, 24), day(2026, 9, 25)))
+        assertEquals(mapOf(d to 3, day(2026, 9, 25) to 2), daily)
+        assertEquals(mapOf(d to 5, day(2026, 9, 25) to 2), mergeDailyCounts(mapOf(d to 2), daily))
+    }
 }

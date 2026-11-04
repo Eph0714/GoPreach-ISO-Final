@@ -131,6 +131,8 @@ internal class CreditHourDialogState {
     var detail by mutableStateOf<CreditHourRecord?>(null)
     var editing by mutableStateOf<CreditHourRecord?>(null)
     var addingForDay by mutableStateOf<Long?>(null)
+    /** The typed Return Visit / Bible Study quantity dialog (new entry or an existing one being edited). */
+    var manualRequest by mutableStateOf<ManualCountRequest?>(null)
 }
 
 @Composable
@@ -154,6 +156,19 @@ internal fun CreditHourDialogsHost(
     val categoryName = rememberCategoryNamer(viewModel)
     val toast = rememberActionToast()
     LaunchedEffect(viewModel) { viewModel.messages.collect { toast(it) } }
+    val manualViewModel: ManualCountEntryViewModel = koinViewModel()
+    LaunchedEffect(manualViewModel) { manualViewModel.messages.collect { toast(it) } }
+    state.manualRequest?.let { request ->
+        ManualCountDialog(
+            request = request,
+            onDismiss = { state.manualRequest = null },
+            onSave = { quantity, dayStart, note ->
+                manualViewModel.save(currentPersonId, request.existing, request.stage, dayStart, quantity, note)
+                state.manualRequest = null
+            },
+            onDelete = request.existing?.let { entry -> { manualViewModel.delete(entry); state.manualRequest = null } },
+        )
+    }
 
     state.detail?.let { record ->
         CreditHourRecordDetailDialog(
@@ -303,6 +318,8 @@ internal fun PlannerDayContent(currentPersonId: String, viewModel: PlannerDayVie
                     categoryName = categoryName,
                     onOpenCredit = { creditDialogs.detail = it },
                     onAddCredit = { creditDialogs.addingForDay = dayStart },
+                    onAddManual = { creditDialogs.manualRequest = ManualCountRequest(it, dayStart) },
+                    onOpenManual = { creditDialogs.manualRequest = ManualCountRequest(PipelineStage.valueOf(it.stage), it.dayStart, it) },
                     periodLocked = LocalPlannerLock.current.isLocked(dayStart),
                     onOpenPerson = { stage, personId -> onNavigate(plannerPersonRoute(stage, personId)) },
                     onOpenPersonList = { onNavigate(plannerPersonListRoute(it)) },
@@ -524,6 +541,8 @@ internal fun PlannerMonthContent(
                 categoryName = categoryName,
                 onOpenCredit = { creditDialogs.detail = it },
                 onAddCredit = { creditDialogs.addingForDay = defaultEntryDay(bounds, monthStart) },
+                onAddManual = { creditDialogs.manualRequest = ManualCountRequest(it, defaultEntryDay(bounds, monthStart)) },
+                onOpenManual = { creditDialogs.manualRequest = ManualCountRequest(PipelineStage.valueOf(it.stage), it.dayStart, it) },
                 periodLocked = LocalPlannerLock.current.isLocked(monthStart),
                 onOpenPerson = onOpenPerson,
                 onOpenPersonList = onOpenPersonList,
@@ -1044,6 +1063,8 @@ internal fun PlannerYearContent(
                 categoryName = categoryName,
                 onOpenCredit = { creditDialogs.detail = it },
                 onAddCredit = { creditDialogs.addingForDay = defaultEntryDay(bounds, yearStart) },
+                onAddManual = { creditDialogs.manualRequest = ManualCountRequest(it, defaultEntryDay(bounds, yearStart)) },
+                onOpenManual = { creditDialogs.manualRequest = ManualCountRequest(PipelineStage.valueOf(it.stage), it.dayStart, it) },
                 periodLocked = false, // a year spans many months; the credit dialog still refuses submitted dates
                 onOpenPerson = onOpenPerson,
                 onOpenPersonList = onOpenPersonList,

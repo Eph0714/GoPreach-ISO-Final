@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.emfitsolutions.gopreach.data.model.CreditHourCategory
 import com.emfitsolutions.gopreach.data.model.CreditHourRecord
 import com.emfitsolutions.gopreach.data.model.InterestedPerson
+import com.emfitsolutions.gopreach.data.model.ManualMinistryCount
+import com.emfitsolutions.gopreach.data.repository.ManualMinistryCountRepository
 import com.emfitsolutions.gopreach.data.model.PipelineStage
 import com.emfitsolutions.gopreach.data.model.PlannerDay
 import com.emfitsolutions.gopreach.data.model.Visit
@@ -42,7 +44,13 @@ data class PlannerPeriodRecords(
     /** One row per unique person — `size` always equals the period's Bible
      * Study count. */
     val bibleStudies: List<PersonActivitySummary> = emptyList(),
-)
+    /** Quantities typed by hand in this period (newest first); they are added to the people above in every total. */
+    val manualReturnVisits: List<ManualMinistryCount> = emptyList(),
+    val manualBibleStudies: List<ManualMinistryCount> = emptyList(),
+) {
+    val manualReturnVisitQuantity: Int get() = manualReturnVisits.sumOf { it.quantity }
+    val manualBibleStudyQuantity: Int get() = manualBibleStudies.sumOf { it.quantity }
+}
 
 fun buildPeriodRecords(
     publisherPersonId: String,
@@ -51,18 +59,80 @@ fun buildPeriodRecords(
     creditRecords: List<CreditHourRecord>,
     people: List<InterestedPerson>,
     visits: List<Visit>,
+    manualCounts: List<ManualMinistryCount> = emptyList(),
 ): PlannerPeriodRecords = PlannerPeriodRecords(
     hourDays = allDays.filter { it.totalMinutes > 0 && bounds.contains(it.dayStart) }.sortedByDescending { it.dayStart },
     creditRecords = creditRecords.inPeriod(bounds).sortedWith(compareByDescending<CreditHourRecord> { it.resolvedDayStart() }.thenByDescending { it.createdAt }),
     returnVisits = MinistryStatisticsService.personActivitySummaries(publisherPersonId, people, visits, PipelineStage.RETURN_VISIT, bounds),
     bibleStudies = MinistryStatisticsService.personActivitySummaries(publisherPersonId, people, visits, PipelineStage.BIBLE_STUDY, bounds),
+    manualReturnVisits = manualCounts.manualInPeriod(bounds).forStage(PipelineStage.RETURN_VISIT),
+    manualBibleStudies = manualCounts.manualInPeriod(bounds).forStage(PipelineStage.BIBLE_STUDY),
 )
+
+/** Typed quantities whose own date falls in [bounds], newest first. */
+fun List<ManualMinistryCount>.manualInPeriod(bounds: TimeBounds): List<ManualMinistryCount> =
+    filter { bounds.contains(it.dayStart) }.sortedWith(compareByDescending<ManualMinistryCount> { it.dayStart }.thenByDescending { it.createdAt })
+
+fun List<ManualMinistryCount>.forStage(stage: PipelineStage): List<ManualMinistryCount> = filter { it.stage == stage.name }
+
+/** The typed quantity at [stage] for each of [dayStarts] that has any (days with none are left out, like [dailyUniquePersonCounts]). */
+fun dailyManualQuantities(manualCounts: List<ManualMinistryCount>, stage: PipelineStage, dayStarts: List<Long>): Map<Long, Int> =
+    dayStarts.associateWith { day -> manualCounts.manualInPeriod(DayBounds.of(day)).forStage(stage).sumOf { it.quantity } }.filterValues { it > 0 }
+
+/** Two per-day count maps added together (people from records + typed quantities). */
+fun mergeDailyCounts(a: Map<Long, Int>, b: Map<Long, Int>): Map<Long, Int> =
+    (a.keys + b.keys).associateWith { (a[it] ?: 0) + (b[it] ?: 0) }.filterValues { it > 0 }
 
 /** Credit Hour entries whose own date falls in [bounds] — keyed off
  * [CreditHourRecord.resolvedDayStart], so an entry counts toward its period
  * whether or not a [PlannerDay] document exists for that date. */
 fun List<CreditHourRecord>.inPeriod(bounds: TimeBounds): List<CreditHourRecord> =
     filter { bounds.contains(it.resolvedDayStart()) }
+
+/**
+ * Typed Return Visit / Bible Study quantity add/edit/delete, shared by every planner view (one write path, one month lock).
+ */
+class ManualCountEntryViewModel(
+    private val repository: ManualMinistryCountRepository,
+    private val monthlyReportRepository: com.emfitsolutions.gopreach.data.repository.MonthlyReportRepository,
+) : ViewModel() {
+    private val _messages = Channel<String>(Channel.BUFFERED)
+    val messages: Flow<String> = _messages.receiveAsFlow()
+
+    fun save(publisherPersonId: String, existing: ManualMinistryCount?, stage: PipelineStage, dayStart: Long, quantity: Int, note: String?) {
+        val alignedDay = DayBounds.of(dayStart).startInclusive
+        val now = nowMillis()
+        val base = existing ?: ManualMinistryCount(publisherPersonId = publisherPersonId, createdAt = now)
+        val record = base.copy(
+            dayStart = alignedDay, stage = stage.name, quantity = quantity.coerceIn(1, ManualMinistryCount.MAX_QUANTITY),
+            note = note?.trim()?.ifBlank { null }, updatedAt = now,
+        )
+        val noun = if (stage == PipelineStage.RETURN_VISIT) "Return Visit" else "Bible Study"
+        viewModelScope.launch {
+            if (monthlyReportRepository.isMonthSubmitted(publisherPersonId, alignedDay) ||
+                (existing != null && monthlyReportRepository.isMonthSubmitted(publisherPersonId, existing.dayStart))
+            ) {
+                _messages.trySend(SUBMITTED_MONTH_MESSAGE)
+                return@launch
+            }
+            runCatching { repository.save(record) }
+                .onSuccess { _messages.trySend(if (existing == null) "$noun quantity saved." else "$noun quantity updated.") }
+                .onFailure { _messages.trySend("Could not save the quantity: ${it.message ?: "unknown error"}") }
+        }
+    }
+
+    fun delete(record: ManualMinistryCount) {
+        viewModelScope.launch {
+            if (monthlyReportRepository.isMonthSubmitted(record.publisherPersonId, record.dayStart)) {
+                _messages.trySend(SUBMITTED_MONTH_MESSAGE)
+                return@launch
+            }
+            runCatching { repository.delete(record.id) }
+                .onSuccess { _messages.trySend("Quantity deleted.") }
+                .onFailure { _messages.trySend("Could not delete the quantity: ${it.message ?: "unknown error"}") }
+        }
+    }
+}
 
 /**
  * Credit Hour add/edit/delete plus the category list, shared by every

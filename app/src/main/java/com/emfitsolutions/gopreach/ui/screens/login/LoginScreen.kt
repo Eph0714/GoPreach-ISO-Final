@@ -237,7 +237,9 @@ fun LoginScreen(
                     val biometricTitle = stringResource(Res.string.login_biometric_prompt_title)
                     val biometricSubtitle = stringResource(Res.string.login_biometric_prompt_subtitle)
                     val biometricUsePassword = stringResource(Res.string.login_biometric_prompt_use_password)
-                    OutlinedButton(
+                    // Only the methods this device supports AND the person set up are listed; the username and password form above is always there.
+                    // (Turning one on is the person's own choice, in Account / Security settings: nothing is enrolled automatically.)
+                    if (uiState.biometricEnrolled && deviceHasBiometrics(activity)) OutlinedButton(
                         onClick = {
                             if (viewModel.onBiometricButtonClick(deviceHasBiometrics(activity))) {
                                 launchBiometricPrompt(
@@ -258,14 +260,14 @@ fun LoginScreen(
                         Icon(Icons.Rounded.Key, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
                         Text("Login with Passkey")
                     }
-                    OutlinedButton(
+                    if (uiState.pinEnrolled) OutlinedButton(
                         onClick = { viewModel.onQuickLoginClick(QuickLoginMethod.PIN) },
                         enabled = !busy, shape = FieldShape, colors = outlineColors, border = outlineBorder, modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(Icons.Rounded.Pin, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
                         Text("Login with PIN")
                     }
-                    OutlinedButton(
+                    if (uiState.patternEnrolled) OutlinedButton(
                         onClick = { viewModel.onQuickLoginClick(QuickLoginMethod.PATTERN) },
                         enabled = !busy, shape = FieldShape, colors = outlineColors, border = outlineBorder, modifier = Modifier.fillMaxWidth(),
                     ) {

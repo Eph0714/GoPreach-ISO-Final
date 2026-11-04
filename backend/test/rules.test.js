@@ -577,6 +577,9 @@ test('month lock and overseer visibility: only Received locks the records; the o
   assert.equal(await set('pubB', 'preachingTimeRecords', 'pt1', { publisherPersonId: 'pubB', congregationId: 'congB', date: day, hoursConsumed: 1 }), false, 'hours of a locked month');
   assert.equal(await set('pubB', 'preachingTimeRecords', 'pt2', { publisherPersonId: 'pubB', congregationId: 'congB', date: open, hoursConsumed: 1 }), true, 'hours of an open month');
   assert.equal(await set('pubB', 'creditHourRecords', 'ch1', { publisherPersonId: 'pubB', dayStart: day, hours: 1 }), false, 'credit hours of a locked month');
+  assert.equal(await set('pubB', 'manualMinistryCounts', 'mc1', { publisherPersonId: 'pubB', dayStart: day, stage: 'RETURN_VISIT', quantity: 2 }), false, 'a typed Return Visit / Bible Study quantity of a locked month');
+  assert.equal(await set('pubB', 'manualMinistryCounts', 'mc2', { publisherPersonId: 'pubB', dayStart: open, stage: 'BIBLE_STUDY', quantity: 1 }), true, 'and of an open month');
+  assert.equal(await set('pubA', 'manualMinistryCounts', 'mc3', { publisherPersonId: 'pubB', dayStart: open, stage: 'BIBLE_STUDY', quantity: 1 }), false, 'nobody types quantities for someone else');
   assert.equal(await set('pubB', 'plannerDays', 'pd1', { publisherPersonId: 'pubB', dayStart: day, totalMinutes: 30 }), false, 'a planner day of a locked month');
   await put('coFieldServiceMonthStatus', `congB_${month}`, { congregationId: 'congB', periodMonth: month, status: 'CANCELLED', cancelledFromStatus: 'RECEIVED', version: 1 });
   assert.equal(await set('pubB', 'monthlyReports', 'pubB_cx', rec), false, 'cancelling a RECEIVED month does not silently unlock it');

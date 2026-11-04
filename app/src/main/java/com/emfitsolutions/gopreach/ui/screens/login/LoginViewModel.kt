@@ -40,6 +40,9 @@ data class LoginUiState(
      * the device merely having a fingerprint/face — "Login with Biometrics" is always shown,
      * but only signs in when this is true. */
     val biometricEnrolled: Boolean = false,
+    /** PIN / Pattern were set up on this device by the user (the buttons are only listed for a method that is set up; nothing is ever enrolled automatically). */
+    val pinEnrolled: Boolean = false,
+    val patternEnrolled: Boolean = false,
     /** "Biometric Login Not Set Up" message after tapping the button without enrolling. */
     val showBiometricNotSetUp: Boolean = false,
     /** A title + message dialog: PIN/Pattern/Passkey tapped without being set up, or a method turned off. */
@@ -183,7 +186,6 @@ class LoginViewModel(
         rememberedUsername = runCatching { credentialStore.rememberedUsername() }
             .onFailure { Log.e(TAG, "Failed to read remembered username: ${it::class.simpleName}") }
             .getOrNull()
-        runCatching { credentialStore.dropRememberedPassword() }
         val enrolled = runCatching { credentialStore.isBiometricEnrolled() }.getOrDefault(false)
         // Username first: nothing saved is shown when the screen opens (after a logout, a session expiry or a fresh launch). The person types the username; only a
         // username that matches the remembered one ticks "Remember me" (see [onUsernameChange]). The password always starts empty: it is never remembered or filled in.
@@ -193,6 +195,8 @@ class LoginViewModel(
                 password = "",
                 rememberMe = false,
                 biometricEnrolled = enrolled,
+                pinEnrolled = runCatching { quickLoginStore.isEnrolled(QuickLoginMethod.PIN) }.getOrDefault(false),
+                patternEnrolled = runCatching { quickLoginStore.isEnrolled(QuickLoginMethod.PATTERN) }.getOrDefault(false),
                 // e.g. "Account Setup Complete" right after the first-time setup signed the user out.
                 notice = pendingLoginNotice.take()
                     ?: if (runCatching { authRepository.takeSessionEndedNotice() }.getOrDefault(false)) {
@@ -348,6 +352,8 @@ class LoginViewModel(
             is QuickLoginCheck.Locked -> _uiState.update { it.copy(quickLoginError = null, quickLoginLockedMs = check.remainingMs) }
             QuickLoginCheck.Disabled -> _uiState.update {
                 it.copy(
+                    pinEnrolled = if (method == QuickLoginMethod.PIN) false else it.pinEnrolled,
+                    patternEnrolled = if (method == QuickLoginMethod.PATTERN) false else it.patternEnrolled,
                     quickLoginMethod = null,
                     quickLoginError = null,
                     quickLoginLockedMs = 0L,
@@ -440,6 +446,8 @@ class LoginViewModel(
                                 it.copy(
                                     isLoading = false,
                                     biometricEnrolled = false,
+                                    pinEnrolled = false,
+                                    patternEnrolled = false,
                                     notice = "Login Methods Turned Off" to "Your saved sign-in is out of date, so PIN, Pattern and Biometrics were turned off. Please log in with your username and password and set them up again.",
                                 )
                             }

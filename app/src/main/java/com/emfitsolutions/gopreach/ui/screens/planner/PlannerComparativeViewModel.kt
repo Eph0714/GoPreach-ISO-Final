@@ -40,6 +40,7 @@ class PlannerComparativeViewModel(
     private val plannerDayRepository: PlannerDayRepository,
     private val interestedPersonRepository: InterestedPersonRepository,
     private val visitRepository: VisitRepository,
+    private val manualCountRepository: com.emfitsolutions.gopreach.data.repository.ManualMinistryCountRepository,
 ) : ViewModel() {
 
     private val _startMonth = MutableStateFlow(monthStartMonthsAgo(5))
@@ -68,15 +69,18 @@ class PlannerComparativeViewModel(
         _endMonth,
         plannerDayRepository.observeForPublisher(publisherPersonId),
         interestedPersonRepository.observeAll(),
-        visitRepository.observeAllForPublisher(publisherPersonId),
-    ) { start, end, allDays, people, visits ->
+        combine(visitRepository.observeAllForPublisher(publisherPersonId), manualCountRepository.observeForPublisher(publisherPersonId)) { v, m -> v to m },
+    ) { start, end, allDays, people, visitsAndManual ->
+        val (visits, manualCounts) = visitsAndManual
         val rows = monthsBetween(start, end).map { monthStart ->
             val bounds = MonthBounds.of(monthStart)
             ComparativeMonthRow(
                 monthStart = monthStart,
                 totalMinutes = allDays.filter { bounds.contains(it.dayStart) }.sumOf { it.totalMinutes },
-                returnVisitCount = MinistryStatisticsService.getMonthlyUniqueReturnVisits(publisherPersonId, people, visits, monthStart),
-                bibleStudyCount = MinistryStatisticsService.getMonthlyUniqueBibleStudies(publisherPersonId, people, visits, monthStart),
+                returnVisitCount = MinistryStatisticsService.getMonthlyUniqueReturnVisits(publisherPersonId, people, visits, monthStart) +
+                    manualCounts.manualInPeriod(bounds).forStage(com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT).sumOf { it.quantity },
+                bibleStudyCount = MinistryStatisticsService.getMonthlyUniqueBibleStudies(publisherPersonId, people, visits, monthStart) +
+                    manualCounts.manualInPeriod(bounds).forStage(com.emfitsolutions.gopreach.data.model.PipelineStage.BIBLE_STUDY).sumOf { it.quantity },
             )
         }
         PlannerComparativeUiState(startMonth = start, endMonth = end, rows = rows, isLoading = false)
@@ -87,14 +91,17 @@ class PlannerComparativeViewModel(
         plannerDayRepository.observeForPublisher(publisherPersonId),
         interestedPersonRepository.observeAll(),
         visitRepository.observeAllForPublisher(publisherPersonId),
-    ) { allDays, people, visits ->
+        manualCountRepository.observeForPublisher(publisherPersonId),
+    ) { allDays, people, visits, manualCounts ->
         range.months().map { monthStart ->
             val bounds = MonthBounds.of(monthStart)
             ComparativeMonthRow(
                 monthStart = monthStart,
                 totalMinutes = allDays.filter { bounds.contains(it.dayStart) }.sumOf { it.totalMinutes },
-                returnVisitCount = MinistryStatisticsService.getMonthlyUniqueReturnVisits(publisherPersonId, people, visits, monthStart),
-                bibleStudyCount = MinistryStatisticsService.getMonthlyUniqueBibleStudies(publisherPersonId, people, visits, monthStart),
+                returnVisitCount = MinistryStatisticsService.getMonthlyUniqueReturnVisits(publisherPersonId, people, visits, monthStart) +
+                    manualCounts.manualInPeriod(bounds).forStage(com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT).sumOf { it.quantity },
+                bibleStudyCount = MinistryStatisticsService.getMonthlyUniqueBibleStudies(publisherPersonId, people, visits, monthStart) +
+                    manualCounts.manualInPeriod(bounds).forStage(com.emfitsolutions.gopreach.data.model.PipelineStage.BIBLE_STUDY).sumOf { it.quantity },
             )
         }
     }

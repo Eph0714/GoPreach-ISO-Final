@@ -22,7 +22,7 @@ const COLLECTIONS = [
   'publisherForwardRequests', 'houseHolderAssignments', 'monthlyReports', 'deletedRecords', 'appSettings', 'sharedLocations',
   'savedLocations', 'mapPins', 'cartAssignments', 'locationSharingSettings', 'midweekMeetingSchedules', 'publicTalkSchedules',
   'announcements', 'creditHourCategories', 'creditHourRecords', 'plannerDays', 'monthlyPlannerGoals', 'weeklyPlannerGoals',
-  'yearlyPlannerGoals', 'ministryTimerSessions', 'bibleTextCategories', 'bibleTextRecords', 'preachingTimeRecords',
+  'yearlyPlannerGoals', 'manualMinistryCounts', 'ministryTimerSessions', 'bibleTextCategories', 'bibleTextRecords', 'preachingTimeRecords',
   'dashboardModuleLayouts', 'groupChats', 'territoryDrawings', 'territoryDrawingAudits', 'territoryBounds',
   // Circuit Overseer, attendance, statistics and Comparative Report workflows
   'circuitCodes', 'congregationCircuits', 'coFieldServiceMonthStatus', 'coFieldServiceReportEvents', 'coAttendanceMonthStatus', 'coAttendanceReports', 'coAttendanceReportEvents', 'meetingAttendance',

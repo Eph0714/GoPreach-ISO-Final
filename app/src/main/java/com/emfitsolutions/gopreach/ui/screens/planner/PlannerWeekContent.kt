@@ -136,6 +136,8 @@ internal fun PlannerWeekContent(
                     categoryName = categoryName,
                     onOpenCredit = { creditDialogs.detail = it },
                     onAddCredit = { creditDialogs.addingForDay = defaultEntryDay(bounds, weekStart) },
+                    onAddManual = { creditDialogs.manualRequest = ManualCountRequest(it, defaultEntryDay(bounds, weekStart)) },
+                    onOpenManual = { creditDialogs.manualRequest = ManualCountRequest(PipelineStage.valueOf(it.stage), it.dayStart, it) },
                     periodLocked = LocalPlannerLock.current.isLocked(weekStart) && LocalPlannerLock.current.isLocked(weekEnd),
                     onOpenPerson = onOpenPerson,
                     onOpenPersonList = onOpenPersonList,
