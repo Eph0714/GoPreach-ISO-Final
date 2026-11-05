@@ -178,7 +178,8 @@ private enum class GroupScope { MINE, OTHER, ALL }
 private enum class ViewMode(val label: String) { MAP("Map"), LIST("List") }
 private enum class SortOrder(val label: String) { NEAREST("Nearest"), FARTHEST("Farthest") }
 private enum class TypeFilter(val label: String, val type: RecordType?) {
-    ALL("All", null),
+    ALL("All", null),   // nothing chosen yet
+    EVERY("All", null), // the "All" chip: Searching, Return Visit and Bible Study together
     SEARCHING("Searching", RecordType.SEARCHING),
     RETURN_VISIT("Return Visit", RecordType.RETURN_VISIT),
     BIBLE_STUDY("Bible Study", RecordType.BIBLE_STUDY),
@@ -198,6 +199,34 @@ private fun haversineMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Doub
 }
 
 /** "350 m" under a kilometre, otherwise "1.4 km". */
+/** A "Nearest" / "Farthest" chip that drops down the records (name, kind, distance) in that order; [onPick] gets the position picked. */
+@Composable
+private fun DistanceDropdown(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, items: List<RecordWithDistance>, active: Boolean, canOpen: () -> Boolean, onPick: (Int) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        FilterChip(
+            selected = active, onClick = { if (canOpen()) open = true },
+            leadingIcon = { Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp)) },
+            trailingIcon = { Icon(Icons.Rounded.ArrowDropDown, contentDescription = null) },
+            label = { Text(label, style = MaterialTheme.typography.labelLarge) },
+        )
+        androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.heightIn(max = 340.dp)) {
+            if (items.isEmpty()) androidx.compose.material3.DropdownMenuItem(text = { Text("No locations to show") }, onClick = { open = false }, enabled = false)
+            items.take(60).forEachIndexed { i, item ->
+                androidx.compose.material3.DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(item.record.name, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                            Text(listOfNotNull(item.record.type.label, formatDistance(item.meters).takeIf { item.meters != null }).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    },
+                    onClick = { open = false; onPick(i) },
+                )
+            }
+        }
+    }
+}
+
 private fun formatDistance(meters: Double?): String = when {
     meters == null -> "—"
     meters < 1000 -> "${meters.roundToInt()} m"
@@ -783,7 +812,7 @@ fun TerritoryMapScreen(
     }
     val visibleRecords = recordsState.orEmpty().filter { r ->
         // Nothing is listed until Searching, Return Visit or Bible Study is chosen (the territory scope of the role shows first); a focused record or an open barangay still shows its records.
-        (if (typeFilter.type == null) (focusLat != null || territoryFilter != null) else r.type == typeFilter.type) &&
+        (if (typeFilter.type == null) (typeFilter == TypeFilter.EVERY || focusLat != null || territoryFilter != null) else r.type == typeFilter.type) &&
             (!embedded || (congregationRecords && !mineOnly) || r.person.publisherPersonId == currentPersonId) &&
             (municipalityFilter == null || normalizePlaceName(r.municipality) == normalizePlaceName(municipalityFilter)) &&
             (territoryFilter == null || (r.areaId == territoryFilter && (barangayGroupFilter == null || r.groupId == barangayGroupFilter)))
@@ -919,7 +948,7 @@ fun TerritoryMapScreen(
         if (shown) selectRecord(r.id, fly = true)
         else {
             scope = GroupScope.ALL; mineOnly = false; congregationRecords = true
-            typeFilter = TypeFilter.entries.firstOrNull { it.type == r.type } ?: TypeFilter.ALL
+            if (typeFilter != TypeFilter.EVERY) typeFilter = TypeFilter.entries.firstOrNull { it.type == r.type } ?: TypeFilter.ALL
             pendingSearchRecord = r
         }
     }
@@ -952,7 +981,7 @@ fun TerritoryMapScreen(
                     }
                     val recordMatches = if (q.length < 2) emptyList() else searchableRecords.filter { r ->
                         normalizePlaceName(r.name + " " + r.barangay.orEmpty() + " " + r.municipality.orEmpty() + " " + r.person.address).contains(q)
-                    }.sortedWith(compareBy({ it.type.ordinal }, { it.name.lowercase() })).take(40)
+                    }.filter { typeFilter.type == null || it.type == typeFilter.type }.sortedWith(compareBy({ it.type.ordinal }, { it.name.lowercase() })).take(40)
                     Column(Modifier.fillMaxWidth()) {
                         StandardSearchField(value = barangayQuery, onValueChange = { barangayQuery = it; searchOpen = it.isNotBlank(); if (it.isBlank() && openedFromSearch && territoryFilter != null) backFromBarangay() }, placeholder = "Search places, barangay or records", modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { searchOpen = barangayQuery.isNotBlank() }))
                         if (searchOpen && q.isNotEmpty()) {
@@ -1021,16 +1050,19 @@ fun TerritoryMapScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    // "All" searches and lists Searching, Return Visit and Bible Study together; each of the other chips narrows to its own kind.
                     TypeFilter.entries.filter { it != TypeFilter.ALL }.forEach { f ->
                         FilterChip(selected = typeFilter == f, onClick = { typeFilter = if (typeFilter == f) TypeFilter.ALL else f }, label = { Text(f.label, style = MaterialTheme.typography.labelLarge) })
                     }
-                    // Nearest / Farthest appear only once a category is chosen: they sort that category by distance from the current location (sorting only: it never changes a record)
-                    if (typeFilter != TypeFilter.ALL) SegmentedPair(
-                        labels = listOf("Nearest", "Farthest"),
-                        icons = listOf(Icons.Rounded.NearMe, Icons.Rounded.Explore),
-                        selected = when (stepOrder) { SortOrder.NEAREST -> 0; SortOrder.FARTHEST -> 1; else -> -1 },
-                        onSelect = { stepTo(if (it == 0) SortOrder.NEAREST else SortOrder.FARTHEST) },
-                    )
+                    // Under every option (All included) a Nearest and a Farthest dropdown list that option's records by distance from the current location; picking one opens it on the map.
+                    if (typeFilter != TypeFilter.ALL) {
+                        DistanceDropdown("Nearest", Icons.Rounded.NearMe, nearestOrdered, stepOrder == SortOrder.NEAREST, canOpen = { if (myLocation == null) { toast("Turn on your location to find the nearest or farthest."); locationRefreshKey++; false } else true }) { i ->
+                            stepOrder = SortOrder.NEAREST; stepIndex = i; selectRecord(nearestOrdered[i].record.id, fly = true)
+                        }
+                        DistanceDropdown("Farthest", Icons.Rounded.Explore, farthestOrdered, stepOrder == SortOrder.FARTHEST, canOpen = { if (myLocation == null) { toast("Turn on your location to find the nearest or farthest."); locationRefreshKey++; false } else true }) { i ->
+                            stepOrder = SortOrder.FARTHEST; stepIndex = i; selectRecord(farthestOrdered[i].record.id, fly = true)
+                        }
+                    }
                 }
             }
             if (typeFilter != TypeFilter.ALL && stepOrder != null) Text(
