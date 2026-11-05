@@ -559,7 +559,8 @@ private fun PipelineListScreen(
                     },
                 )
             }
-            HideInFullScreen(true) {
+            // Not hidden while typing: the keyboard opening used to remove the search box itself, so nothing could be typed.
+            HideInFullScreen(false) {
                 AreaFilterBar(
                     areas = areaOptions, mode = areaMode, municipality = areaMunicipality, barangay = areaBarangay,
                     onChange = { m, mun, bar -> areaMode = m; areaMunicipality = mun; areaBarangay = bar },
