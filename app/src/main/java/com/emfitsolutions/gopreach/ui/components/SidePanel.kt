@@ -465,7 +465,6 @@ fun adminSideItems(caps: AdminCapabilities, includeTabModules: Boolean = false):
             if (canEditMeetingAssignments) add(SideItem(stringResource(Res.string.home_tile_meeting_cart_assignment_title), Icons.Rounded.Event, Destinations.MEETING_ASSIGNMENTS))
             if (canManageTerritories && (isCircuitOverseer || simpleMenu)) add(SideItem(stringResource(Res.string.side_territory_map), Icons.Rounded.Map, Destinations.MANAGE_TERRITORIES_BASE))
             if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.side_share_location_settings), Icons.Rounded.LocationOn, Destinations.SHARE_LOCATION))
-            if (!isCircuitOverseer) add(SideItem(stringResource(Res.string.home_tile_find_location_title), Icons.Rounded.Navigation, Destinations.FIND_LOCATION))
             add(SideItem(stringResource(Res.string.home_tile_weather_title), Icons.Rounded.WbSunny, Destinations.WEATHER))
             add(SideItem("Offline Maps", Icons.Rounded.Map, Destinations.OFFLINE_MAPS))
             add(SideItem("Voice Notes & Minutes", Icons.Rounded.Mic, Destinations.VOICE_NOTES))

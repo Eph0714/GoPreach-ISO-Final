@@ -198,7 +198,7 @@ fun FindLocationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Find Location") },
+                title = { Text("Capture Coordinate") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")

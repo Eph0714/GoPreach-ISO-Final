@@ -130,7 +130,7 @@ enum class QuickAccessItem(
     HOUSEHOLDER_VISIT_HISTORY("Householder Visit History", "The visits made to each householder", Icons.Rounded.History, Color(0xFF00796B), false, Destinations.HOUSEHOLDER_VISIT_HISTORY),
     MEETING_CART_ASSIGNMENT("Meeting and Cart Assignment", "Meeting parts and cart witnessing assignments", Icons.Rounded.Event, Color(0xFFAD1457), false, Destinations.MEETING_ASSIGNMENTS),
     PUBLISHER_SCHEDULE("Publisher Schedule", "The days each publisher can go out (view only)", Icons.Rounded.CalendarMonth, Color(0xFF283593), false, Destinations.PUBLISHER_SCHEDULES),
-    FIND_LOCATION("Find Location", "Find a place and the records near it", Icons.Rounded.Navigation, Color(0xFF00838F), false, Destinations.FIND_LOCATION),
+    FIND_LOCATION("Capture Coordinate", "Find a place and the records near it", Icons.Rounded.Navigation, Color(0xFF00838F), false, Destinations.FIND_LOCATION),
     ANNOUNCEMENT("Announcement", "Announcements for your congregation", Icons.Rounded.Campaign, Color(0xFFE65100), false, Destinations.MANAGE_ANNOUNCEMENTS),
     MEETING_ATTENDANCE("Meeting Attendance", "Enter and review weekly meeting attendance", Icons.Rounded.HowToReg, Color(0xFF0097A7), false, Destinations.MEETING_ATTENDANCE),
     SETTINGS("Settings", "Account, appearance and app settings", Icons.Rounded.Settings, Color(0xFF616161), false, Destinations.SETTINGS),

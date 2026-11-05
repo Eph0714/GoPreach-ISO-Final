@@ -62,7 +62,7 @@
     <string name="home_tile_my_calendar_subtitle">View Schedule</string>
     <string name="home_tile_share_my_location_title">Share My Location</string>
     <string name="home_tile_share_my_location_subtitle">Share Live Location</string>
-    <string name="home_tile_find_location_title">Find Location</string>
+    <string name="home_tile_find_location_title">Capture Coordinate</string>
     <string name="home_tile_find_location_subtitle">Get Directions</string>
     <string name="home_tile_weather_title">Weather</string>
     <string name="home_tile_weather_subtitle">Forecast and conditions</string>

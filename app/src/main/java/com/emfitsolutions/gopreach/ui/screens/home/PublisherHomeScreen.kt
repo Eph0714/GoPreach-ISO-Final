@@ -607,6 +607,23 @@ fun PublisherHomeScreen(
                 // header above (see PublisherWelcomeHeader), and the header's
                 // own Online/Offline status caption already covers what
                 // SyncStatusIndicator showed here.
+                // "Capture Coordinate" (was Find Location in the side panel) — a search box
+                // at the top of My Planner; tapping it opens the same Find Location screen.
+                androidx.compose.material3.Surface(
+                    onClick = { onNavigate(Destinations.FIND_LOCATION) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Rounded.Navigation, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Capture Coordinate", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
                 if (currentPersonId.isNotBlank()) {
                     // "Merge the Dashboard and My Planner" — one unified card:
                     // header (today's date, reporting period, Planner Sections
