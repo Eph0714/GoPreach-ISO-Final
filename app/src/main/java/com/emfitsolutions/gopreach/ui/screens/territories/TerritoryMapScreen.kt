@@ -900,6 +900,29 @@ fun TerritoryMapScreen(
         selectedRecordId = r.id; sheetOpen = true; flyToRecord = r
     }
 
+    // Every record of the congregation (all FS Groups, all publishers) for the search box, whatever group or "my records only" the map shows now.
+    val searchableRecords by remember(congregationId, allAreas, areaLocator) {
+        if (congregationId == null || readOnly) flowOf(emptyList<LocationRecord>())
+        else viewModel.recordsFor(congregationId, null, allAreas, areaLocator)
+    }.collectAsStateWithLifecycle(initialValue = emptyList())
+    // A record picked from the search that the map was not showing: widen the map to every group and publisher, then open it once it has loaded.
+    var pendingSearchRecord by remember { mutableStateOf<LocationRecord?>(null) }
+    LaunchedEffect(pendingSearchRecord?.id, recordsState) {
+        val want = pendingSearchRecord ?: return@LaunchedEffect
+        val r = recordsState.orEmpty().firstOrNull { it.id == want.id } ?: return@LaunchedEffect
+        kotlinx.coroutines.delay(450)
+        selectedRecordId = r.id; sheetOpen = true; flyToRecord = r
+        pendingSearchRecord = null
+    }
+    val openSearchedRecord: (LocationRecord) -> Unit = { r ->
+        val shown = recordsWithDistance.any { it.record.id == r.id }
+        if (shown) selectRecord(r.id, fly = true)
+        else {
+            scope = GroupScope.ALL; mineOnly = false; congregationRecords = true
+            typeFilter = TypeFilter.entries.firstOrNull { it.type == r.type } ?: TypeFilter.ALL
+            pendingSearchRecord = r
+        }
+    }
     // Search Barangay, shared by the top bar and the full-screen map (the same state, so what is typed in one shows in the other).
     val barangaySearch: @Composable () -> Unit = {
                     val q = normalizePlaceName(barangayQuery.trim())
@@ -927,7 +950,7 @@ fun TerritoryMapScreen(
                         placeOutcome = placeRepo.search(raw, around?.first, around?.second)
                         placesLoading = false
                     }
-                    val recordMatches = if (q.length < 2) emptyList() else recordsState.orEmpty().filter { r ->
+                    val recordMatches = if (q.length < 2) emptyList() else searchableRecords.filter { r ->
                         normalizePlaceName(r.name + " " + r.barangay.orEmpty() + " " + r.municipality.orEmpty() + " " + r.person.address).contains(q)
                     }.sortedWith(compareBy({ it.type.ordinal }, { it.name.lowercase() })).take(40)
                     Column(Modifier.fillMaxWidth()) {
@@ -960,7 +983,7 @@ fun TerritoryMapScreen(
                                         SearchHeading("GoPreach records")
                                         recordMatches.forEach { r ->
                                             Row(
-                                                Modifier.fillMaxWidth().clickable { searchOpen = false; selectRecord(r.id, fly = true) }.padding(horizontal = 14.dp, vertical = 10.dp),
+                                                Modifier.fillMaxWidth().clickable { searchOpen = false; openSearchedRecord(r) }.padding(horizontal = 14.dp, vertical = 10.dp),
                                                 verticalAlignment = Alignment.CenterVertically,
                                             ) {
                                                 androidx.compose.foundation.layout.Box(Modifier.size(12.dp).background(markerColor(r.type), CircleShape))
