@@ -156,8 +156,10 @@ class UpdateViewModel(
                 .onSuccess { fetched ->
                     // An update can be put off ("Update later"); only a release whose notes carry the [CRITICAL] marker is required.
                     // The notes the dialog shows are the release's own, without that marker.
-                    val info = fetched.copy(releaseNotes = fetched.releaseNotes.replace("[CRITICAL]", "", ignoreCase = true).trim())
+                    var info = fetched.copy(releaseNotes = fetched.releaseNotes.replace("[CRITICAL]", "", ignoreCase = true).trim())
                     val isNewer = manifestRepository.isNewer(currentVersion, info.version)
+                    // "Show all the details of the update": when several releases were skipped, the notes of every one of them, not only the latest.
+                    if (isNewer) manifestRepository.fetchNotesSince(currentVersion)?.let { all -> info = info.copy(releaseNotes = all) }
                     // "The notification should not continuously interrupt the
                     // user after selecting Remind Me Later" — a silent/
                     // automatic check honors an active snooze for this exact

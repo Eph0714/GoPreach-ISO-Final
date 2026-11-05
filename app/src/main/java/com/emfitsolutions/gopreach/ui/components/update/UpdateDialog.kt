@@ -118,7 +118,7 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                             l.trim().replace(Regex("^#{1,6}\\s*"), "").replace(Regex("^[-*]\\s+"), "• ").replace("**", "").replace("__", "").replace("[CRITICAL]", "", ignoreCase = true).trim()
                         }.trim()
                         if (notes.isNotBlank()) {
-                            Text("What's new in ${s.info.version}", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+                            Text(if (s.info.releaseNotes.contains("\n\nVersion ")) "What's new since ${s.currentVersion}" else "What's new in ${s.info.version}", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
                             Text(notes, style = MaterialTheme.typography.bodySmall)
                         }
                         if (!s.info.isCritical) {

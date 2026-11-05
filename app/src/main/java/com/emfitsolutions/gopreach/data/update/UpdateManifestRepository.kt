@@ -109,6 +109,33 @@ class UpdateManifestRepository(
             ?: "Couldn't fetch the latest download link. Check your connection and try again."
     }
 
+    /**
+     * Every change since the installed version: the notes of each published release newer than [currentVersion], newest first, each under its own
+     * version and date, so a phone that skipped releases still sees all of what is new. Null when the list cannot be read (the dialog then keeps the
+     * latest release's own notes).
+     */
+    suspend fun fetchNotesSince(currentVersion: String): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val connection = URL("https://api.github.com/repos/Eph0714/GoPreach-ISO-Final/releases?per_page=30").openConnection() as HttpURLConnection
+            connection.setRequestProperty("Accept", "application/vnd.github+json")
+            connection.setRequestProperty("User-Agent", "GoPreach-Android")
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 15_000
+            if (connection.responseCode !in 200..299) return@runCatching null
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            if (body.trimStart().firstOrNull() != '[') return@runCatching null
+            val list = gson.fromJson(body, Array<GithubRelease>::class.java).toList()
+            val newer = list
+                .filter { r -> r.tagName?.let { isNewer(currentVersion, it.removePrefix("v")) } == true }
+                .sortedWith { x, y -> if (isNewer(x.tagName!!.removePrefix("v"), y.tagName!!.removePrefix("v"))) 1 else -1 }
+            if (newer.size < 2) return@runCatching null
+            newer.joinToString("\n\n") { r ->
+                val notes = r.body?.replace("[CRITICAL]", "", ignoreCase = true)?.trim().orEmpty().ifBlank { "Bug fixes and improvements." }
+                "Version ${r.tagName!!.removePrefix("v")}" + (r.publishedAt?.substringBefore("T")?.let { " · $it" } ?: "") + "\n" + notes
+            }
+        }.getOrNull()
+    }
+
     /** The primary path: GitHub's REST API, which also gives per-release
      * notes/date/checksum that the [stableApkUrl] redirect can't. Throws on
      * any failure rather than returning a [Result] — [fetchLatest] is what
