@@ -67,6 +67,8 @@ const DRAWING_COLLECTIONS = new Set(['territoryDrawings', 'territoryDrawingAudit
  */
 export async function canReadRow(actor, grant, row, get) {
   if (!actor.known) return false;
+  // the Ministry History is written by the server and read only through GET /v1/ministry/history
+  if (row.collection === 'ministryHistory' || row.collection === 'ministryHistoryBackfill') return false;
   if (DRAWING_COLLECTIONS.has(row.collection)) return canReadDrawing(actor, grant, row.collection, row.data);
   return canReadDoc(actor, grant, row.collection, row.id, row.data ?? {}, get);
 }
@@ -86,6 +88,7 @@ function canReadDrawing(actor, grant, collection, data) {
  */
 export async function authorizeWrite(actor, op, collection, id, data, existing, get) {
   if (!actor.known) return deny('Unknown user');
+  if (collection === 'ministryHistory' || collection === 'ministryHistoryBackfill') return deny('The Ministry History is written by the server');
   if (collection === 'territoryDrawings') return authorizeDrawingWrite(actor, op, id, data, existing, get);
   if (collection === 'territoryDrawingAudits') return authorizeAuditWrite(actor, op, data, existing, get);
   if (collection === 'territoryBounds') return authorizeBoundsWrite(actor, op, id, data, existing, get);

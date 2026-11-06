@@ -20,6 +20,25 @@ private const val AUTHENTICATORS = BiometricManager.Authenticators.BIOMETRIC_STR
 fun deviceHasBiometrics(context: Context): Boolean =
     BiometricManager.from(context).canAuthenticate(AUTHENTICATORS) == BiometricManager.BIOMETRIC_SUCCESS
 
+/** What this device can really check a person with: a fingerprint or face, or else only its screen lock (PIN, pattern or password), or nothing. Asked of Android, never assumed. */
+enum class DeviceAuthKind { BIOMETRIC, SCREEN_LOCK, NONE }
+
+fun deviceAuthKind(context: Context): DeviceAuthKind = when {
+    deviceHasBiometrics(context) -> DeviceAuthKind.BIOMETRIC
+    BiometricManager.from(context).canAuthenticate(BiometricManager.Authenticators.DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS -> DeviceAuthKind.SCREEN_LOCK
+    else -> DeviceAuthKind.NONE
+}
+
+/** True when the device can unlock GoPreach with a fingerprint, a face or its screen lock. */
+fun deviceCanAuthenticate(context: Context): Boolean = deviceAuthKind(context) != DeviceAuthKind.NONE
+
+/** The label of the sign-in button: only what the device actually offers. */
+fun deviceAuthLoginLabel(kind: DeviceAuthKind): String = when (kind) {
+    DeviceAuthKind.BIOMETRIC -> "Login with Biometrics"
+    DeviceAuthKind.SCREEN_LOCK -> "Login with Device Screen Lock"
+    DeviceAuthKind.NONE -> ""
+}
+
 /** Fires the system biometric prompt on top of [activity] and reports back through plain callbacks. */
 fun launchBiometricPrompt(
     activity: FragmentActivity,
@@ -42,12 +61,12 @@ fun launchBiometricPrompt(
             }
         },
     )
-    val promptInfo = BiometricPrompt.PromptInfo.Builder()
-        .setTitle(title)
-        .setSubtitle(subtitle)
-        .setNegativeButtonText(negativeButtonText)
-        .setAllowedAuthenticators(AUTHENTICATORS)
-        .build()
+    // A fingerprint or face where the device has one (with "Use password" as the way out); otherwise the system's own screen-lock prompt (PIN, pattern or password).
+    // Nothing is read or stored by GoPreach either way: Android only answers whether the person passed.
+    val promptInfo = BiometricPrompt.PromptInfo.Builder().setTitle(title).setSubtitle(subtitle).apply {
+        if (deviceAuthKind(activity) == DeviceAuthKind.SCREEN_LOCK) setAllowedAuthenticators(BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+        else setNegativeButtonText(negativeButtonText).setAllowedAuthenticators(AUTHENTICATORS)
+    }.build()
     prompt.authenticate(promptInfo)
 }
 
@@ -99,7 +118,7 @@ class BiometricSetupViewModel(
     private val _enrolled = MutableStateFlow(runCatching { credentialStore.isBiometricEnrolled() }.getOrDefault(false))
     val enrolled: StateFlow<Boolean> = _enrolled.asStateFlow()
 
-    val deviceSupportsBiometrics: Boolean get() = deviceHasBiometrics(context)
+    val deviceSupportsBiometrics: Boolean get() = deviceCanAuthenticate(context)
 
     /** The username that would be enrolled — the signed-in account's. */
     fun accountUsername(): String? = userSession.state.value.person?.username?.takeIf { it.isNotBlank() }

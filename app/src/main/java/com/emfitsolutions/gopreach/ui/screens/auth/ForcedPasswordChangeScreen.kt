@@ -235,7 +235,7 @@ private fun MethodsStep(state: FirstLoginUiState, viewModel: ForcedPasswordChang
         Column {
             MethodRow(
                 title = "Login with Biometrics",
-                detail = if (state.deviceHasBiometrics) "Use your fingerprint or face. Nothing about it is stored in GoPreach." else "No fingerprint or face is set up on this device.",
+                detail = if (state.deviceHasBiometrics) "Use your fingerprint, face or device screen lock. Nothing about it is stored in GoPreach." else "This device has no fingerprint, face or screen lock set up.",
                 on = state.biometricOn,
                 enabled = state.canSetUpMethods && state.deviceHasBiometrics,
                 onEnable = {

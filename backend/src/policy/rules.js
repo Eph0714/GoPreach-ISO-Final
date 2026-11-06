@@ -307,7 +307,8 @@ async function baseRead(h, actor, grant, collection, id, data, get) { // match /
     case 'userAccessGrants': return id === h.me || h.hasManageUsers();
     case 'congregations': return h.restrictedAllows('VIEW_CONGREGATIONS', id);
     case 'groups': return h.restrictedAllows('VIEW_GROUPS', nul(data.congregationId));
-    case 'deletedRecords': return nul(data.deletedByPersonId) === h.me || h.canManageTrashFor(nul(data.congregationId));
+    // the person who deleted it, the owner of a deleted Ministry record, the congregation-wide roles, and the officers of the owner's FS Group
+    case 'deletedRecords': return nul(data.deletedByPersonId) === h.me || nul(data.ownerPersonId) === h.me || h.canManageTrashFor(nul(data.congregationId)) || (await slotOfOwnGroup(h, nul(data.groupId), nul(data.congregationId)));
     case 'roleAssignments':
       // A grant-based account (Circuit Overseer) always reads its OWN role assignment: mirrors docs/legacy-firebase/firestore.rules.
       return !grant.has || h.restrictedAllows('VIEW_ELDERS', nul(data.congregationId)) || h.restrictedAllows('VIEW_PUBLISHERS', nul(data.congregationId)) || nul(data.personId) === h.me;
@@ -441,7 +442,8 @@ export async function authorizeRulesWrite(actor, grant, op, collection, id, next
     case 'deletedRecords':
       if (isCreate) return verdict(nul(next.deletedByPersonId) === h.me, 'Deleted-by must be you');
       if (isUpdate) return deny('Deleted records are never edited');
-      return verdict(nul(old?.deletedByPersonId) === h.me || h.canManageTrashFor(nul(old?.congregationId)));
+      // restoring or removing for good: the same people who may read it (the same people who may delete the record itself)
+      return verdict(nul(old?.deletedByPersonId) === h.me || nul(old?.ownerPersonId) === h.me || h.canManageTrashFor(nul(old?.congregationId)) || (await slotOfOwnGroup(h, nul(old?.groupId), nul(old?.congregationId))));
 
     case 'mapPins':
       if (isCreate) return verdict(nul(next.createdByPersonId) === h.me && h.inMyActiveCongregation(nul(next.congregationId)), 'Pins are created as yourself in your congregation');

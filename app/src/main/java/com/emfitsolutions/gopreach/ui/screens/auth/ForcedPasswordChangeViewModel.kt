@@ -15,7 +15,7 @@ import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.ui.components.PublisherFormState
 import com.emfitsolutions.gopreach.ui.screens.login.PendingLoginNotice
-import com.emfitsolutions.gopreach.ui.screens.login.deviceHasBiometrics
+import com.emfitsolutions.gopreach.ui.screens.login.deviceCanAuthenticate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -96,7 +96,7 @@ class ForcedPasswordChangeViewModel(
         val form = PublisherFormState.from(loaded, null, null)
         reviewedForm = form
         _uiState.update {
-            it.copy(isPublisher = isPublisher, form = form, newUsername = "", deviceHasBiometrics = deviceHasBiometrics(context))
+            it.copy(isPublisher = isPublisher, form = form, newUsername = "", deviceHasBiometrics = deviceCanAuthenticate(context))
         }
         when {
             !isPublisher || loaded.temporaryPassword != null -> _uiState.update { it.copy(step = SetupStep.CREDENTIALS) }

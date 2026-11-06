@@ -16,6 +16,8 @@ import { mountCoFiles } from './coFiles.js';
 import { mountCoManual } from './coManual.js';
 import { mountPublisherEdit } from './publisherEdit.js';
 import { mountDuplicates } from './duplicates.js';
+import { mountMinistryHistory, recordMinistryEvents } from './ministryHistory.js';
+import { mountAppReleases } from './appReleases.js';
 import { mountAccounts } from './accounts.js';
 import { saveGroupTerritory, removeGroupTerritory, removeAssignment, validateSave } from './territory.js';
 
@@ -46,7 +48,7 @@ const ID_RE = /^[^/\\\s][^/\\]{0,189}$/;
  * Every push op is authorized individually (role → congregation → FS Group → territory); a denied op never writes
  * and never blocks the others. Every pull is filtered to what the caller may read.
  */
-export function createApp(store, { devAuth = false, health = () => ({}), publicLimits = {}, authOptions = {}, voiceOptions = {}, landmarkService, placeSearchService } = {}) {
+export function createApp(store, { devAuth = false, health = () => ({}), publicLimits = {}, authOptions = {}, voiceOptions = {}, landmarkService, placeSearchService, appReleases = {} } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1); // Hostinger's HTTPS proxy sits in front: use the real client address for rate limiting
@@ -144,6 +146,8 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   mountAccounts(app, store, auth, authOptions);
   mountPublisherEdit(app, store, auth);
   mountDuplicates(app, store, auth);
+  mountMinistryHistory(app, store, auth);
+  mountAppReleases(app, appReleases);
 
   app.post('/v1/sync/push', auth, async (req, res) => {
     const ops = req.body?.ops;
@@ -176,9 +180,13 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
           }
           if (op.op === 'delete') {
             if (!existing || existing.deleted) return { status: 'ok', version: existing?.version ?? 0, seq: existing?.seq ?? 0 };
-            return { status: 'ok', ...(await tx.remove(collection, id, req.personId)) };
+            const removed = await tx.remove(collection, id, req.personId);
+            await recordMinistryEvents(tx, { collection, id, op: 'delete', before: existing.data, after: null, version: removed.version, actorId: req.personId });
+            return { status: 'ok', ...removed };
           }
-          return { status: 'ok', ...(await tx.put(collection, id, op.data, req.personId)) };
+          const written = await tx.put(collection, id, op.data, req.personId);
+          await recordMinistryEvents(tx, { collection, id, op: 'set', before: existing && !existing.deleted ? existing.data : null, after: op.data, version: written.version, actorId: req.personId });
+          return { status: 'ok', ...written };
         });
         results.push({ collection, id, ...result });
       } catch (e) {

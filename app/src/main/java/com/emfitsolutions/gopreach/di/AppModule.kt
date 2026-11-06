@@ -85,6 +85,7 @@ import com.emfitsolutions.gopreach.data.repository.PublisherDashboardVisibilityR
 import com.emfitsolutions.gopreach.data.repository.PublisherForwardRequestRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherEditRepository
 import com.emfitsolutions.gopreach.data.repository.DuplicateCheckRepository
+import com.emfitsolutions.gopreach.data.repository.MinistryHistoryRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherTerritoryAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherVisibilitySettingsRepository
 import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
@@ -205,6 +206,8 @@ import com.emfitsolutions.gopreach.ui.screens.notifications.NotificationCenterVi
 import com.emfitsolutions.gopreach.ui.screens.notifications.NotificationItemsProvider
 import com.emfitsolutions.gopreach.ui.screens.pipeline.ForwardRequestsViewModel
 import com.emfitsolutions.gopreach.ui.screens.pipeline.HouseHolderRecordsViewModel
+import com.emfitsolutions.gopreach.ui.screens.ministry.MinistryHistoryViewModel
+import com.emfitsolutions.gopreach.ui.screens.ministry.MinistryRecycleBinViewModel
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PipelineViewModel
 import com.emfitsolutions.gopreach.ui.screens.pipeline.PublisherForwardRequestsViewModel
 import com.emfitsolutions.gopreach.ui.screens.planner.CreditHourEntryViewModel
@@ -408,6 +411,7 @@ val appModule = module {
     singleOf(::TerritoryAssignmentRepository)
     singleOf(::PublisherEditRepository)
     singleOf(::DuplicateCheckRepository)
+    singleOf(::MinistryHistoryRepository)
     singleOf(::TerritoryBoundaryRepository)
     singleOf(::TerritoryDrawingRepository)
     singleOf(::TerritoryRepository)
@@ -527,6 +531,8 @@ val appModule = module {
     viewModelOf(::NotificationCenterViewModel)
     viewModelOf(::ForwardRequestsViewModel)
     viewModelOf(::PipelineViewModel)
+    viewModelOf(::MinistryHistoryViewModel)
+    viewModelOf(::MinistryRecycleBinViewModel)
     viewModelOf(::HouseHolderRecordsViewModel)
     viewModelOf(::PublisherForwardRequestsViewModel)
     viewModelOf(::CreditHourEntryViewModel)

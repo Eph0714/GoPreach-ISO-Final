@@ -53,6 +53,8 @@ fun DeleteChoiceDialog(
      * whole body, and [permanentConfirmLabel] on the confirm button. */
     permanentWarningTitle: String? = null,
     permanentConfirmLabel: String? = null,
+    /** Where Delete sends the record: "Deleted Records", or "Recycle Bin" for the Ministry. */
+    binName: String = "Deleted Records",
 ) {
     var showPermanentConfirm by remember { mutableStateOf(false) }
     // "Prevent Double Submission" — every Manage screen's Delete flow goes
@@ -74,7 +76,7 @@ fun DeleteChoiceDialog(
             text = {
                 Text(
                     "Move to Inactive keeps the record and its history, hidden from normal active lists, and can be restored later. " +
-                        "Delete moves the record to Deleted Records, where it can be restored or permanently deleted.",
+                        "Delete moves the record to $binName, where it can be restored or permanently deleted.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
             },
@@ -105,12 +107,12 @@ fun DeleteChoiceDialog(
         AlertDialog(
             properties = DialogProperties(dismissOnClickOutside = false, dismissOnBackPress = true),
             onDismissRequest = onDismiss,
-            title = { Text(permanentWarningTitle ?: "Move this record to Deleted Records?") },
+            title = { Text(permanentWarningTitle ?: "Move this record to $binName?") },
             text = {
                 Text(
                     permanentDeleteBlockedReason
                         ?: if (permanentWarningTitle != null) permanentDeleteImpactSummary.orEmpty() else listOfNotNull(
-                            "\"$recordLabel\" will be moved to Deleted Records. You can restore it, or delete it permanently, from there.",
+                            "\"$recordLabel\" will be moved to $binName. You can restore it, or delete it permanently, from there.",
                             permanentDeleteImpactSummary,
                         ).joinToString(" "),
                     style = MaterialTheme.typography.bodyMedium,
@@ -132,12 +134,12 @@ fun DeleteChoiceDialog(
                                 if (!hasActed) {
                                     hasActed = true
                                     onDeletePermanently()
-                                    showToast(if (permanentWarningTitle != null) "\"$recordLabel\" deleted. Their records are now unassigned." else "\"$recordLabel\" moved to Deleted Records.")
+                                    showToast(if (permanentWarningTitle != null) "\"$recordLabel\" deleted. Their records are now unassigned." else "\"$recordLabel\" moved to $binName.")
                                     onDismiss()
                                 }
                             },
                             enabled = !hasActed,
-                        ) { Text(permanentConfirmLabel ?: "Move to Deleted Records") }
+                        ) { Text(permanentConfirmLabel ?: "Move to $binName") }
                     }
                     TextButton(
                         onClick = { if (permanentDeleteBlockedReason != null) onDismiss() else showPermanentConfirm = false },

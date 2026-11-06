@@ -540,7 +540,29 @@ fun PublisherHomeScreen(
                 MinistrySubTabs(ministryStage) { ministryStage = it; ministryScope = 0 }
                 MinistryScopeButtons(ministryStage, ministryScope) { ministryScope = it }
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                    androidx.compose.runtime.key(ministryStage, ministryScope) {
+                    if (ministryShowInactive) {
+                        // The Ministry Recycle Bin: deleted and inactive records of the three lists, to restore or delete for good.
+                        com.emfitsolutions.gopreach.ui.screens.ministry.MinistryRecycleBinScreen(
+                            congregationId = ownPublisherAssignment?.congregationId.orEmpty(),
+                            currentPersonId = currentPersonId,
+                            canHandleOthers = caps.canViewDeletedRecords,
+                            onBack = { ministryShowInactive = false },
+                        )
+                    } else if (ministryStage == 3) {
+                        // History: everything done in the Ministry (enrolling, visit logs, moves, assignments, edits), newest first; a tap shows the details.
+                        com.emfitsolutions.gopreach.ui.screens.ministry.MinistryHistoryScreen(
+                            scope = ministryScope,
+                            onOpenRecord = { e ->
+                                onNavigate(
+                                    when (e.stage) {
+                                        "BIBLE_STUDY" -> Destinations.bibleStudyPerson(e.recordId)
+                                        "RETURN_VISIT" -> Destinations.returnVisitPerson(e.recordId)
+                                        else -> Destinations.searchingPerson(e.recordId)
+                                    },
+                                )
+                            },
+                        )
+                    } else androidx.compose.runtime.key(ministryStage, ministryScope) {
                         com.emfitsolutions.gopreach.ui.screens.pipeline.PipelineScreen(
                             publisherPersonId = currentPersonId,
                             currentPersonId = currentPersonId,
@@ -970,7 +992,7 @@ private fun PublisherMainTabs(selected: Int, onSelect: (Int) -> Unit, showFieldS
     }
 }
 
-private val ministryKinds = listOf("Searching", "Return Visit", "Bible Study")
+private val ministryKinds = listOf("Searching", "Return Visit", "Bible Study", "History")
 private val ministryTones = listOf(Color(0xFF212121), Color(0xFF2E7D32), Color(0xFF1565C0))
 
 /** The three sub-tabs of the Ministry tab: Searching (the first), Return Visit and Bible Study, in the colour of each list (black, green, blue). */
@@ -980,7 +1002,7 @@ private fun MinistrySubTabs(stage: Int, onStage: (Int) -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
         Row(modifier = Modifier.fillMaxWidth().horizontalScroll(androidx.compose.foundation.rememberScrollState())) {
             ministryKinds.forEachIndexed { index, label ->
-                val tone = when (index) { 1 -> Color(0xFF2E7D32); 2 -> Color(0xFF1565C0); else -> MaterialTheme.colorScheme.primary }
+                val tone = when (index) { 1 -> Color(0xFF2E7D32); 2 -> Color(0xFF1565C0); 3 -> Color(0xFF6A4FD1); else -> MaterialTheme.colorScheme.primary }
                 val on = index == stage
                 Column(
                     modifier = Modifier.clickable(role = Role.Tab) { onStage(index) }.semantics { this.selected = on },
@@ -1006,6 +1028,7 @@ private fun MinistryScopeButtons(stage: Int, scope: Int, onScope: (Int) -> Unit)
     val names = when (stage) {
         1 -> listOf("My Return Visits", "My FS Group Return Visits", "Congregation Return Visits")
         2 -> listOf("My Bible Studies", "My FS Group Bible Studies", "Congregation Bible Studies")
+        3 -> listOf("My History", "My FS Group History", "Congregation History")
         else -> listOf("My Searching", "My FS Group Searching", "Congregation Searching")
     }
     var open by remember { mutableStateOf(false) }

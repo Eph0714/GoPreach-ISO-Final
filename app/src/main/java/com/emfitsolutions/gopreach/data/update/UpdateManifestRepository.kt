@@ -1,7 +1,11 @@
 package com.emfitsolutions.gopreach.data.update
 
 import android.util.Log
+import com.emfitsolutions.gopreach.data.sync.BackendConfig
 import com.google.gson.Gson
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -137,12 +141,38 @@ class UpdateManifestRepository(
 
     private data class HistoryEntry(val version: String?, val date: String?, val notes: String?)
 
+    /** Every release as its own block, newest first: "Version 1.169.40 · 2026-11-06" and then its notes. A release with no notes still appears. Null when there is nothing newer. */
+    private fun formatNotes(releases: List<HistoryEntry>): String? {
+        if (releases.isEmpty()) return null
+        return releases.joinToString("\n\n") { e ->
+            val notes = e.notes?.replace("[CRITICAL]", "", ignoreCase = true)?.trim().orEmpty().ifBlank { "Bug fixes and improvements." }
+            "Version ${e.version}" + (e.date?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "") + "\n" + notes
+        }
+    }
+
     /**
      * Every change since the installed version, newest first, each under its own version and date. Read from the project's own release history
      * (raw.githubusercontent.com: its own limit, and reachable on networks that block api.github.com), falling back to GitHub's release list. Null
      * only when neither can be read (the dialog then keeps the latest release's own notes).
      */
     suspend fun fetchNotesSince(currentVersion: String): String? = withContext(Dispatchers.IO) {
+        // 1) GoPreach's own server (always reachable by the app, unlike GitHub on some networks), 2) the release history on GitHub, 3) GitHub's release list.
+        val fromServer = runCatching {
+            if (!BackendConfig.enabled) return@runCatching null
+            val connection = URL("${BackendConfig.baseUrl}/v1/public/app-releases?since=${java.net.URLEncoder.encode(currentVersion, "UTF-8")}").openConnection() as HttpURLConnection
+            connection.setRequestProperty("User-Agent", "GoPreach-Android")
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 15_000
+            if (connection.responseCode !in 200..299) return@runCatching null
+            val root = Json.parseToJsonElement(connection.inputStream.bufferedReader().use { it.readText() }).jsonObject
+            val releases = (root["releases"] as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { r ->
+                val o = r as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+                val version = (o["version"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+                HistoryEntry(version, (o["date"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull, (o["notes"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull)
+            }
+            formatNotes(releases.filter { isNewer(currentVersion, it.version.orEmpty()) }.sortedWith { x, y -> if (isNewer(x.version!!, y.version!!)) 1 else -1 })
+        }.getOrNull()
+        if (fromServer != null) return@withContext fromServer
         val fromHistory = runCatching {
             val connection = URL("https://raw.githubusercontent.com/Eph0714/GoPreach-ISO-Final/main/scripts/release-history.json").openConnection() as HttpURLConnection
             connection.setRequestProperty("User-Agent", "GoPreach-Android")
@@ -155,10 +185,7 @@ class UpdateManifestRepository(
                 .filter { it.version != null && isNewer(currentVersion, it.version) }
                 .sortedWith { x, y -> if (isNewer(x.version!!, y.version!!)) 1 else -1 }
             if (newer.isEmpty()) return@runCatching null
-            newer.joinToString("\n\n") { e ->
-                val notes = e.notes?.replace("[CRITICAL]", "", ignoreCase = true)?.trim().orEmpty().ifBlank { "Bug fixes and improvements." }
-                "Version ${e.version}" + (e.date?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "") + "\n" + notes
-            }
+            formatNotes(newer)
         }.getOrNull()
         fromHistory ?: fetchNotesFromApi(currentVersion)
     }

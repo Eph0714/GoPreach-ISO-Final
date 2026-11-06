@@ -1308,6 +1308,7 @@ internal fun PipelinePersonDetailScreen(
             onDismiss = { showDeleteDialog = false },
             onMoveToInactive = { viewModel.setStatus(livePerson, RecordStatus.INACTIVE, currentPersonId); showDeleteDialog = false; onBack() },
             onDeletePermanently = { viewModel.permanentlyDelete(livePerson, currentPersonId); showDeleteDialog = false; onBack() },
+            binName = "Recycle Bin",
         )
     }
 

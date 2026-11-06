@@ -272,7 +272,7 @@ class LoginViewModel(
             return false
         }
         if (!deviceHasBiometrics) {
-            _uiState.update { it.copy(errorMessage = "No fingerprint or face is set up on this device.") }
+            _uiState.update { it.copy(errorMessage = "This device has no fingerprint, face or screen lock set up.") }
             return false
         }
         return true
@@ -499,7 +499,7 @@ class LoginViewModel(
         // hasn't said "not now". The offer is shown from the nav graph, since the login
         // screen itself goes away as soon as the session is signed in.
         val offer = !viaBiometric && !result.requiresPasswordChange && runCatching {
-            deviceHasBiometrics(context) &&
+            deviceCanAuthenticate(context) &&
                 !credentialStore.biometricOfferDeclined() &&
                 !(credentialStore.isBiometricEnrolled() && credentialStore.biometricUsername().equals(username, ignoreCase = true))
         }.getOrDefault(false)

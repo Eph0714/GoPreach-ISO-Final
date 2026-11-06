@@ -113,13 +113,8 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                         Text("Current Version: ${s.currentVersion}")
                         Text("New Version: ${s.info.version}", fontWeight = FontWeight.Bold)
                         if (s.info.releaseDate.isNotBlank()) Text("Released: ${s.info.releaseDate}", style = MaterialTheme.typography.bodySmall)
-                        // The details of the update: the release notes, with the Markdown marks tidied into plain bullets.
-                        val notes = s.info.releaseNotes.lines().joinToString("\n") { l ->
-                            l.trim().replace(Regex("^#{1,6}\\s*"), "").replace(Regex("^[-*]\\s+"), "• ").replace("**", "").replace("__", "").replace("[CRITICAL]", "", ignoreCase = true).trim()
-                        }.trim().takeUnless { it.isBlank() || Regex("^GoPreach v[\\d.]+$").matches(it) } ?: "Bug fixes and improvements."
-                        // Always shown: an update never appears without its details.
-                        Text(if (s.info.releaseNotes.contains("\n\nVersion ")) "What's new since ${s.currentVersion}" else "What's new in ${s.info.version}", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
-                        Text(notes, style = MaterialTheme.typography.bodySmall)
+                        // Every change in the update, release by release, so a phone that skipped releases sees all of them. Never blank.
+                        UpdateNotes(releaseNotes = s.info.releaseNotes, version = s.info.version, date = s.info.releaseDate, installed = s.currentVersion)
                         if (!s.info.isCritical) {
                             Text("You can update later. GoPreach will remind you again the next time you log in.", style = MaterialTheme.typography.bodySmall)
                         }
@@ -270,4 +265,40 @@ private fun signingKeyDiffers(context: android.content.Context, apk: java.io.Fil
         val theirs = digests(pm.getPackageArchiveInfo(apk.path, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)?.signingInfo?.apkContentsSigners)
         mine.isNotEmpty() && theirs.isNotEmpty() && mine != theirs
     }.getOrDefault(false)
+}
+
+private data class NoteBlock(val heading: String, val lines: List<String>)
+
+/** The release notes as blocks: one per release ("Version 1.169.40 · 2026-11-06", then its bullet points), tidied from Markdown into plain bullets. */
+private fun noteBlocks(raw: String, version: String, date: String): List<NoteBlock> {
+    fun tidy(line: String) = line.trim().replace(Regex("^#{1,6}\\s*"), "").replace(Regex("^[-*•]\\s+"), "").replace("**", "").replace("__", "").replace("[CRITICAL]", "", ignoreCase = true).trim()
+    val fallback = "Bug fixes and improvements."
+    val blocks = raw.trim().split(Regex("\\n\\s*\\n(?=Version )"))
+    if (blocks.size > 1 || raw.trimStart().startsWith("Version ")) {
+        return blocks.mapNotNull { block ->
+            val lines = block.lines()
+            val head = lines.firstOrNull { it.isNotBlank() }?.trim() ?: return@mapNotNull null
+            val body = lines.drop(lines.indexOf(lines.first { it.isNotBlank() }) + 1).map(::tidy).filter { it.isNotBlank() }
+            NoteBlock(head, body.ifEmpty { listOf(fallback) })
+        }
+    }
+    val body = raw.lines().map(::tidy).filter { it.isNotBlank() }.takeUnless { it.size == 1 && Regex("^GoPreach v[\\d.]+$").matches(it[0]) }.orEmpty()
+    return listOf(NoteBlock("Version $version" + (date.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""), body.ifEmpty { listOf(fallback) }))
+}
+
+@Composable
+private fun UpdateNotes(releaseNotes: String, version: String, date: String, installed: String) {
+    val blocks = noteBlocks(releaseNotes, version, date)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+        Text(
+            if (blocks.size > 1) "What's new since $installed (${blocks.size} updates)" else "What's new in $version",
+            fontWeight = FontWeight.SemiBold,
+        )
+        blocks.forEach { block ->
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(block.heading, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                block.lines.forEach { line -> Text("•  $line", style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+    }
 }

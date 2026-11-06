@@ -1,4 +1,5 @@
-import { loadActor, isWide } from './policy/index.js';
+import { loadActor } from './policy/index.js';
+import { recordVisibility } from './ministryScope.js';
 
 /**
  * Possible duplicate persons for a Searching / Return Visit / Bible Study record that is about to be enrolled (POST /v1/duplicates/check).
@@ -18,6 +19,10 @@ export const DEFAULTS = Object.freeze({
   radiusMeters: 50,           // "nearby" coordinates
   addressWithoutCoordinates: true,   // same Province, Municipality and Barangay is enough evidence when one side has no coordinates
   nearbyWithDifferentAddress: true,  // nearby coordinates are enough evidence even if the typed address differs (a wrong or old address)
+  // Most records only hold a name and a place of origin: when the new person or the existing record has NO location at all (no coordinates, no Province / Municipality /
+  // Barangay), there is nothing to compare, so a name that is the same (or nearly) is reported as a possible duplicate to check. When both have a location, it must agree.
+  nameOnlyWhenNoLocation: true,
+  nameOnlyThreshold: 0.88,
   maxResults: 10,
 });
 
@@ -107,6 +112,8 @@ export function settingsFrom(doc) {
   if (num(d.radiusMeters) != null && d.radiusMeters > 0) s.radiusMeters = Math.min(5000, d.radiusMeters);
   if (typeof d.addressWithoutCoordinates === 'boolean') s.addressWithoutCoordinates = d.addressWithoutCoordinates;
   if (typeof d.nearbyWithDifferentAddress === 'boolean') s.nearbyWithDifferentAddress = d.nearbyWithDifferentAddress;
+  if (typeof d.nameOnlyWhenNoLocation === 'boolean') s.nameOnlyWhenNoLocation = d.nameOnlyWhenNoLocation;
+  if (num(d.nameOnlyThreshold) != null) s.nameOnlyThreshold = Math.min(1, Math.max(0.5, d.nameOnlyThreshold > 1 ? d.nameOnlyThreshold / 100 : d.nameOnlyThreshold));
   if (num(d.maxResults) != null && d.maxResults >= 1) s.maxResults = Math.min(50, Math.floor(d.maxResults));
   return s;
 }
@@ -127,6 +134,10 @@ export function compare(input, record, settings = DEFAULTS) {
   if (address && nearby) confidence = 'strong';
   else if (nearby && settings.nearbyWithDifferentAddress) confidence = 'possible';
   else if (address && !coords && settings.addressWithoutCoordinates) confidence = 'possible';
+  // one of the two has no location at all: the name is the only thing there is to compare
+  const known = (o) => hasPoint(o.lat, o.lng) || [o.province, o.cityMunicipality, o.barangay].some((v) => normalizePlace(v));
+  const noLocation = !known(input) || !known({ lat: record.gpsLat, lng: record.gpsLng, province: record.province, cityMunicipality: record.cityMunicipality, barangay: record.barangay });
+  if (!confidence && noLocation && settings.nameOnlyWhenNoLocation && similarity >= settings.nameOnlyThreshold) confidence = 'possible';
   if (!confidence) return null;
 
   const reasons = [similarity >= 0.995 ? 'Same name' : 'Similar combined name'];
@@ -134,6 +145,7 @@ export function compare(input, record, settings = DEFAULTS) {
   if (nearby) reasons.push(distance < 1 ? 'identical coordinates' : 'nearby coordinates');
   if (!address && nearby) reasons.push('the typed address differs or is incomplete');
   if (address && !coords) reasons.push('no coordinates to compare');
+  if (!address && !nearby && noLocation) reasons.push('one of the records has no saved location to compare');
   return { confidence, similarity, distanceMeters: distance == null ? null : Math.round(distance), reasons };
 }
 
@@ -157,29 +169,8 @@ export function mountDuplicates(app, store, auth) {
       if (!actor.isSuperAdmin && !congregation) return res.json({ matches: [] });
 
       const cfg = settingsFrom((await get('appSettings', 'duplicateMatching'))?.data);
-      // the same visibility the record lists use: congregation-wide roles see every record; a group role the records of its own group's publishers; a publisher their own,
-      // the unassigned ones (never a Bible Study) and what the congregation lets publishers see of the others
-      let groupMembers = null;
-      let showOthers = {};
-      const wide = actor.isSuperAdmin || isWide(actor, congregation);
-      if (!wide && actor.groupId) {
-        groupMembers = new Set([actor.personId]);
-        for (const r of await store.list('roleAssignments', congregation)) {
-          const a = r.data ?? {};
-          if (a.status === 'ACTIVE' && a.groupId === actor.groupId && String(a.roleType ?? '').startsWith('PUBLISHER')) groupMembers.add(a.personId);
-        }
-      } else if (!wide) {
-        showOthers = (await get('publisherVisibilitySettings', congregation))?.data ?? {};
-      }
-      const visible = (r) => {
-        if (wide) return true;
-        const owner = r.publisherPersonId ?? '';
-        if (groupMembers) return groupMembers.has(owner) || owner === '';
-        if (owner === actor.personId) return true;
-        const stage = r.pipelineStage ?? 'SEARCHING';
-        if (owner === '') return stage !== 'BIBLE_STUDY';
-        return showOthers[{ SEARCHING: 'showOthersSearching', RETURN_VISIT: 'showOthersReturnVisit', BIBLE_STUDY: 'showOthersBibleStudy' }[stage]] === true;
-      };
+      // the same visibility the record lists use (see ministryScope.js)
+      const { visible } = await recordVisibility(store, get, actor, congregation);
 
       const input = { name: b.name, province: b.province, cityMunicipality: b.cityMunicipality, barangay: b.barangay, lat, lng };
       const found = [];

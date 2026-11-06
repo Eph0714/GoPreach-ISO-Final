@@ -247,9 +247,9 @@ fun LoginScreen(
                     val biometricUsePassword = stringResource(Res.string.login_biometric_prompt_use_password)
                     // Only the methods this device supports AND the person set up are listed; the username and password form above is always there.
                     // (Turning one on is the person's own choice, in Account / Security settings: nothing is enrolled automatically.)
-                    if (uiState.biometricEnrolled && deviceHasBiometrics(activity)) OutlinedButton(
+                    if (uiState.biometricEnrolled && deviceCanAuthenticate(activity)) OutlinedButton(
                         onClick = {
-                            if (viewModel.onBiometricButtonClick(deviceHasBiometrics(activity))) {
+                            if (viewModel.onBiometricButtonClick(deviceCanAuthenticate(activity))) {
                                 launchBiometricPrompt(
                                     activity = activity, title = biometricTitle, subtitle = biometricSubtitle, negativeButtonText = biometricUsePassword,
                                     onSuccess = viewModel::onBiometricAuthSucceeded, onError = viewModel::onBiometricError,
@@ -259,7 +259,7 @@ fun LoginScreen(
                         enabled = !busy, shape = FieldShape, colors = outlineColors, border = outlineBorder, modifier = Modifier.fillMaxWidth(),
                     ) {
                         Icon(Icons.Rounded.Fingerprint, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-                        Text("Login with Biometrics")
+                        Text(deviceAuthLoginLabel(deviceAuthKind(activity)))
                     }
                     if (com.emfitsolutions.gopreach.data.passkey.PASSKEY_LOGIN_ENABLED) OutlinedButton(
                         onClick = { viewModel.onPasskeyClick(activity) },

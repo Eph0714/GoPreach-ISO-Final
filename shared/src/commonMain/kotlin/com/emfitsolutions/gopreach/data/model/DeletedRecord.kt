@@ -44,6 +44,8 @@ data class DeletedRecord(
     val deletedAt: Long = 0L,
     val deletedByPersonId: String = "",
     val deletedByName: String = "",
+    /** For a deleted Ministry record: the publisher it belonged to, who (with the officers of [groupId]) may find, restore or remove it besides whoever deleted it. */
+    val ownerPersonId: String? = null,
     val itemsJson: String = "[]",
 ) {
     companion object {

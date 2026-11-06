@@ -335,6 +335,9 @@ class PipelineViewModel(
                 module = "Return Visit / Bible Study",
                 label = person.name,
                 congregationId = person.congregationId,
+                // the owner and the officers of the owner's FS Group can find it in the Recycle Bin, restore it or remove it
+                groupId = roleAssignmentRepository.observeAll().first().firstOrNull { it.personId == person.publisherPersonId && it.status == com.emfitsolutions.gopreach.data.model.RoleAssignmentStatus.ACTIVE && it.groupId != null && it.congregationId == person.congregationId && it.roleType.startsWith("PUBLISHER") }?.groupId,
+                ownerPersonId = person.publisherPersonId,
                 originalCreatedAt = person.createdAt,
                 originalModifiedAt = person.updatedAt,
                 deletedByPersonId = actorPersonId,

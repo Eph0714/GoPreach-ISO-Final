@@ -77,7 +77,16 @@ test('the matching table: name + geographic evidence', () => {
   assert.notEqual(c({ name: 'Jaun Dela Cruz' }), null);                  // swapped letters still reported
   assert.notEqual(c({ name: 'Juan Dela Kruz' }), null);                  // sounds alike still reported
   assert.equal(c({}, rec({ gpsLat: null, gpsLng: null })), 'possible');  // the existing record has no coordinates
-  assert.equal(compare({ ...NEW }, rec({ province: null, cityMunicipality: null, barangay: null, gpsLat: null, gpsLng: null })), null); // nothing geographic
+  // a record with no location at all, and a new person with none: only the name is there to compare
+  const bare = { province: null, cityMunicipality: null, barangay: null, gpsLat: null, gpsLng: null };
+  const noPlace = { province: '', cityMunicipality: '', barangay: '', lat: null, lng: null };
+  assert.equal(c(noPlace, rec(bare)), 'possible');                                              // both without a location, same name
+  assert.equal(c({ ...noPlace, name: 'Jaun Dela Cruz' }, rec(bare)), 'possible');                // a typo in it
+  assert.equal(c({ ...noPlace, name: 'Maria Cruz' }, rec(bare)), null);                         // same surname only
+  assert.equal(c({ ...noPlace, name: 'Juan Dela Cruzz' }, rec()), 'possible');                  // the new one has no location, the old one has
+  assert.equal(c({}, rec(bare)), 'possible');                                                   // the new one has a location, the old one has none
+  assert.equal(c({ lat: 14.0, lng: 120.0, province: 'Cavite', cityMunicipality: 'Bacoor', barangay: 'Molino' }), null); // both have a location and they disagree
+  assert.equal(compare({ ...NEW, ...noPlace, name: 'Juana Santos' }, rec(bare)), null);         // different name
 });
 
 test('the check finds the same person across Searching, Return Visit and Bible Study, strongest first, and edits nothing', async () => {

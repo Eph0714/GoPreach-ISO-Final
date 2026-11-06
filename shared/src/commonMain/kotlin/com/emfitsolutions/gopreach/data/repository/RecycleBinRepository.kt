@@ -69,6 +69,7 @@ class RecycleBinRepository(
         originalModifiedAt: Long? = null,
         deletedByPersonId: String,
         deletedByName: String = "",
+        ownerPersonId: String? = null,
         items: List<TrashItem>,
     ): String {
         val actorName = deletedByName.ifBlank { runCatching { personRepository.get(deletedByPersonId)?.fullName }.getOrNull().orEmpty() }
@@ -89,6 +90,7 @@ class RecycleBinRepository(
                 deletedAt = nowMillis(),
                 deletedByPersonId = deletedByPersonId,
                 deletedByName = actorName,
+                ownerPersonId = ownerPersonId?.takeIf { it.isNotBlank() },
                 itemsJson = DocJson.encodeToString(ListSerializer(TrashItem.serializer()), items),
             ),
         )
@@ -103,7 +105,7 @@ class RecycleBinRepository(
         return id
     }
 
-    private fun itemsOf(record: DeletedRecord): List<TrashItem> =
+    fun itemsOf(record: DeletedRecord): List<TrashItem> =
         runCatching { DocJson.decodeFromString(ListSerializer(TrashItem.serializer()), record.itemsJson) }.getOrNull().orEmpty()
 
     /**
