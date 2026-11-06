@@ -578,6 +578,14 @@
     "date": "2026-11-06",
     "notes": "- Ministry tabs (Searching, Return Visit, Bible Study) are tidier: Add on its own row, then Export, A-Z, Favorites and Recycle Bin as four equal buttons.\n- Street View now opens Google Street View directly.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.40",
+    "versionCode": 273,
+    "date": "2026-11-06",
+    "notes": "- New History tab in the Ministry: every enrolment, visit log, move, assignment, location and edit, with its date and details when you tap it.\n- New Ministry Recycle Bin: deleted and inactive Searching, Return Visit and Bible Study records, with filters, Restore and Delete Permanently.\n- Duplicate person warning now also works for records that have no saved location.\n- Update window lists every change since your installed version, loaded from GoPreach's own server.\n- Login can use your device screen lock (PIN, pattern or password) when there is no fingerprint or face.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
