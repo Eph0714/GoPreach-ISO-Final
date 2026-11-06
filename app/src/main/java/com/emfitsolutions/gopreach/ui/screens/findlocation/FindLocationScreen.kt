@@ -453,6 +453,7 @@ fun FindLocationScreen(
             onDismiss = { enrollRequest = null },
             viewModel = pipelineViewModel,
             initialCoordinates = CoordinatesValue(request.lat, request.lng),
+            onUseExisting = { existing -> onOpenRecord(existing.pipelineStage, existing.id) },
             assignablePublishers = if (enrollmentAccess.isPublisher) null else publishers,
         )
     }

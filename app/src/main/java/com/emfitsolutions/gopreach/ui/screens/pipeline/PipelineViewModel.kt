@@ -64,7 +64,12 @@ class PipelineViewModel(
     private val recycleBinRepository: com.emfitsolutions.gopreach.data.repository.RecycleBinRepository,
     private val territoryAssignmentRepository: com.emfitsolutions.gopreach.data.repository.TerritoryAssignmentRepository,
     private val favoriteRepository: com.emfitsolutions.gopreach.data.repository.FavoriteRepository,
+    private val duplicateCheckRepository: com.emfitsolutions.gopreach.data.repository.DuplicateCheckRepository,
 ) : ViewModel() {
+
+    /** Possible duplicate persons of a record being enrolled (same server check as the website); empty when nothing is found or the check cannot be made. */
+    suspend fun possibleDuplicates(name: String, province: String?, cityMunicipality: String?, barangay: String?, lat: Double?, lng: Double?, congregationId: String?) =
+        duplicateCheckRepository.check(name, province, cityMunicipality, barangay, lat, lng, congregationId = congregationId)
 
     /** The ids of the records this person starred (kept in step with the server, so they follow the person to every device). */
     fun favoriteIds(personId: String): Flow<Set<String>> = favoriteRepository.observeRecordIds(personId)

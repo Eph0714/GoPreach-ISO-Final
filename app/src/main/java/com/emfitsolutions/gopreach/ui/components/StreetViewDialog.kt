@@ -55,6 +55,7 @@ import kotlinx.coroutines.withTimeout
 
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -79,20 +80,21 @@ fun openStreetViewExternally(context: Context, lat: Double, lng: Double) {
 
 private sealed interface StreetViewState {
     data object Checking : StreetViewState
-    data class Available(val imageId: String, val google: Boolean = false) : StreetViewState
+    data class Available(val imageId: String, val google: Boolean = false, val distanceMeters: Int = 0) : StreetViewState
     data object None : StreetViewState
     data object Failed : StreetViewState
     /** Photos were found but the viewer never showed one (it reported nothing within 15 seconds): said plainly instead of a blank black screen. */
     data object NotShown : StreetViewState
 }
 
-private data class StreetPhoto(val id: String, val isPano: Boolean, val capturedAt: Long)
+private data class StreetPhoto(val id: String, val isPano: Boolean, val capturedAt: Long, val lat: Double? = null, val lng: Double? = null)
 
 private fun parsePhotos(text: String): List<StreetPhoto> =
     Json.parseToJsonElement(text).jsonObject["data"]?.jsonArray.orEmpty().mapNotNull { e ->
         val o = e.jsonObject
         val id = o["id"]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-        StreetPhoto(id, o["is_pano"]?.jsonPrimitive?.booleanOrNull == true, o["captured_at"]?.jsonPrimitive?.longOrNull ?: 0L)
+        val coords = o["geometry"]?.jsonObject?.get("coordinates")?.jsonArray
+        StreetPhoto(id, o["is_pano"]?.jsonPrimitive?.booleanOrNull == true, o["captured_at"]?.jsonPrimitive?.longOrNull ?: 0L, coords?.getOrNull(1)?.jsonPrimitive?.doubleOrNull, coords?.getOrNull(0)?.jsonPrimitive?.doubleOrNull)
     }
 
 
@@ -113,20 +115,30 @@ private suspend fun findGooglePano(client: HttpClient, lat: Double, lng: Double)
         else -> throw IllegalStateException("Google Street View check failed: $status ${root["error_message"]}")
     }
 }
-/** The best street photo within about 60 m of the spot (a 360 photo first, then the newest), or null when there is none. */
-private suspend fun findStreetPhoto(client: HttpClient, lat: Double, lng: Double): String? {
-    val d = 0.0014 // about 150 m each way
-    val text = withTimeout(15_000L) {
-        client.get("https://graph.mapillary.com/images") {
-            parameter("access_token", BuildConfig.MAPILLARY_TOKEN)
-            parameter("fields", "id,is_pano,captured_at")
-            parameter("bbox", "${lng - d},${lat - d},${lng + d},${lat + d}")
-            parameter("limit", 50)
-        }.bodyAsText()
+/** The nearest street photo to the spot, looking further out in steps (about 150 m, 500 m, then 1.3 km) because roadside photos are often a little way from a house; null when there is none. */
+private suspend fun findStreetPhoto(client: HttpClient, lat: Double, lng: Double): Pair<String, Int>? {
+    for (d in doubleArrayOf(0.0014, 0.0045, 0.012)) {
+        val text = withTimeout(15_000L) {
+            client.get("https://graph.mapillary.com/images") {
+                parameter("access_token", BuildConfig.MAPILLARY_TOKEN)
+                parameter("fields", "id,is_pano,captured_at,geometry")
+                parameter("bbox", "${lng - d},${lat - d},${lng + d},${lat + d}")
+                parameter("limit", 100)
+            }.bodyAsText()
+        }
+        Json.parseToJsonElement(text).jsonObject["error"]?.let { throw IllegalStateException("Mapillary refused the request: $it") }
+        val images = parsePhotos(text)
+        if (images.isEmpty()) continue
+        fun meters(p: StreetPhoto): Double = if (p.lat != null && p.lng != null) {
+            val dy = (p.lat - lat) * 111_320.0
+            val dx = (p.lng - lng) * 111_320.0 * kotlin.math.cos(Math.toRadians(lat))
+            kotlin.math.sqrt(dx * dx + dy * dy)
+        } else 1e9
+        // the closest photo wins; a 360 photo is worth 40 m of distance
+        val best = images.minByOrNull { meters(it) - (if (it.isPano) 40.0 else 0.0) } ?: continue
+        return best.id to meters(best).let { if (it > 1e8) 0 else it.toInt() }
     }
-    Json.parseToJsonElement(text).jsonObject["error"]?.let { throw IllegalStateException("Mapillary refused the request: $it") }
-    val images = parsePhotos(text)
-    return images.sortedWith(compareByDescending<StreetPhoto> { it.isPano }.thenByDescending { it.capturedAt }).firstOrNull()?.id
+    return null
 }
 
 /**
@@ -157,7 +169,7 @@ fun StreetViewDialog(lat: Double, lng: Double, title: String?, onClose: () -> Un
         state = try {
             val googlePano = if (BuildConfig.GOOGLE_MAPS_API_KEY.isNotBlank()) findGooglePano(client, lat, lng) else null
             if (googlePano != null) StreetViewState.Available(googlePano, google = true)
-            else (if (BuildConfig.MAPILLARY_TOKEN.isNotBlank()) findStreetPhoto(client, lat, lng) else null)?.let { StreetViewState.Available(it) } ?: StreetViewState.None
+            else (if (BuildConfig.MAPILLARY_TOKEN.isNotBlank()) findStreetPhoto(client, lat, lng) else null)?.let { (id, away) -> StreetViewState.Available(id, distanceMeters = away) } ?: StreetViewState.None
         } catch (e: CancellationException) {
             throw e
         } catch (e: TimeoutCancellationException) {
@@ -208,6 +220,11 @@ fun StreetViewDialog(lat: Double, lng: Double, title: String?, onClose: () -> Un
                             },
                         )
                         if (viewerLoading) CircularProgressIndicator(Modifier.align(Alignment.Center), color = Color.White)
+                        if (!s.google && s.distanceMeters > 60) Text(
+                            "Nearest street photo, about ${s.distanceMeters} m from the saved spot",
+                            color = Color.White, style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(12.dp).background(Color.Black.copy(alpha = 0.55f), androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
                     }
                     StreetViewState.Checking -> {
                         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -215,7 +232,11 @@ fun StreetViewDialog(lat: Double, lng: Double, title: String?, onClose: () -> Un
                             Text("Looking for street photos...", color = Color.White, style = MaterialTheme.typography.bodyMedium)
                         }
                     }
-                    StreetViewState.None -> Message("No Street View here", "There are no street photos close to this spot.") { OpenInMapsButton(lat, lng, title) }
+                    StreetViewState.None -> Message("No street photos nearby", "No community street photos were found within about 1.3 km of this spot. Google Street View may still cover the nearest road.") {
+                        val ctx = androidx.compose.ui.platform.LocalContext.current
+                        androidx.compose.material3.Button(onClick = { openStreetViewExternally(ctx, lat, lng) }) { Text("Open Google Street View") }
+                        OpenInMapsButton(lat, lng, title)
+                    }
                     StreetViewState.NotShown -> Message("Street photo could not be displayed", "Street photos exist near this spot, but they could not be shown right now. Check your internet connection and try again, or open the standard map.") { OpenInMapsButton(lat, lng, title) }
                     StreetViewState.Failed -> Message("Street View could not be checked", "Street View needs an internet connection. Check it and try again, or open the standard map instead.") { OpenInMapsButton(lat, lng, title) }
                 }

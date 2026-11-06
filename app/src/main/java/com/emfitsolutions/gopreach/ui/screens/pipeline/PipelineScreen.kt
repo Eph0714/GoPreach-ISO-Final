@@ -108,6 +108,7 @@ import com.emfitsolutions.gopreach.data.model.PublisherForwardRequest
 import com.emfitsolutions.gopreach.data.model.RecordStatus
 import com.emfitsolutions.gopreach.data.model.SupportingImage
 import com.emfitsolutions.gopreach.data.model.Visit
+import com.emfitsolutions.gopreach.data.repository.DuplicateMatch
 import com.emfitsolutions.gopreach.data.model.VisitOutcome
 import com.emfitsolutions.gopreach.ui.components.CoordinatesValue
 import com.emfitsolutions.gopreach.ui.components.ClickableCoordinatesText
@@ -126,6 +127,7 @@ import com.emfitsolutions.gopreach.ui.components.requiredFieldsMessage
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -257,7 +259,7 @@ fun PipelineScreen(
             person = current,
             currentPersonId = currentPersonId,
             congregationName = congregationName ?: "—",
-            stage = stage,
+            stage = current.pipelineStage,
             canManageAllVisitHistory = canManageAllVisitHistory,
             canPermanentlyDelete = canPermanentlyDelete,
             onBack = { if (initialPersonId != null && current.id == initialPersonId) onBack() else selectedPerson = null },
@@ -681,6 +683,7 @@ private fun PipelineListScreen(
             onSave = { viewModel.save(it); showToast("Record added.") },
             onDismiss = { showCreateDialog = false },
             viewModel = viewModel,
+            onUseExisting = { onOpenPerson(it) },
         )
     }
 
@@ -760,6 +763,8 @@ internal fun PipelinePersonDialog(
      * Publisher creating a record); null means the record is simply owned by
      * [publisherPersonId] as before, with no assignment step. */
     assignablePublishers: List<Person>? = null,
+    /** "Use Existing Record" of the duplicate warning: opens the existing person instead of creating another. Null hides that button (View Details is always offered). */
+    onUseExisting: ((InterestedPerson) -> Unit)? = null,
 ) {
     var name by remember { mutableStateOf(existingPerson?.name.orEmpty()) }
     var spouse by remember { mutableStateOf(existingPerson?.spouse.orEmpty()) }
@@ -788,6 +793,22 @@ internal fun PipelinePersonDialog(
     }
     var coordinates by remember { mutableStateOf(originalCoordinates ?: initialCoordinates.takeIf { existingPerson == null }) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    // Possible duplicate person (a NEW record only): the server compares the combined name with the geographic evidence across Searching, Return Visit and
+    // Bible Study. Checked once when the entry has settled (never again for unchanged data), and once more just before saving. Never blocks: the person decides.
+    var dupMatches by remember { mutableStateOf<List<DuplicateMatch>>(emptyList()) }
+    var dupChecking by remember { mutableStateOf(false) }
+    var dupAcknowledged by remember { mutableStateOf(false) }
+    var dupViewing by remember { mutableStateOf<DuplicateMatch?>(null) }
+    val dupKey = listOf(name.trim().lowercase(), province, cityMunicipality, barangay, coordinates?.lat, coordinates?.lng).joinToString("|")
+    LaunchedEffect(dupKey, dupAcknowledged) {
+        if (existingPerson != null || dupAcknowledged) return@LaunchedEffect
+        if (name.count { it.isLetter() } < 4) { dupMatches = emptyList(); return@LaunchedEffect }
+        kotlinx.coroutines.delay(700)   // typing settles first
+        dupChecking = true
+        dupMatches = viewModel.possibleDuplicates(name, province, cityMunicipality, barangay, coordinates?.lat, coordinates?.lng, congregationId)
+        dupChecking = false
+    }
 
     // "It can be automatic if the publisher will capture the coordinates,
     // the system will automatically fill-up the City, Municipalities, Town
@@ -840,6 +861,22 @@ internal fun PipelinePersonDialog(
         )
         if (message != null) {
             errorMessage = message
+            return
+        }
+        if (existingPerson == null && !dupAcknowledged) {
+            // the final check, for records created by other people while this form was open
+            isSubmitted = true
+            addressScope.launch {
+                val found = viewModel.possibleDuplicates(name, province, cityMunicipality, barangay, coordinates?.lat, coordinates?.lng, congregationId)
+                isSubmitted = false
+                if (found.isNotEmpty()) {
+                    dupMatches = found
+                    errorMessage = "Possible duplicate person detected. Review it below before saving."
+                } else {
+                    dupAcknowledged = true
+                    submit()
+                }
+            }
             return
         }
         isSubmitted = true
@@ -926,6 +963,25 @@ internal fun PipelinePersonDialog(
 
                 EditSectionHeader("Personal Information")
                 OutlinedTextField(value = name, onValueChange = { name = it.uppercase() }, label = { Text("Name") }, singleLine = true, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
+                if (existingPerson == null) {
+                    DuplicateWarningPanel(
+                        matches = dupMatches,
+                        checking = dupChecking,
+                        onView = { dupViewing = it },
+                        onUseExisting = onUseExisting?.let { use ->
+                            { m: DuplicateMatch ->
+                                addressScope.launch {
+                                    val existing = viewModel.observePerson(m.id).first()
+                                    if (existing != null) { use(existing); onDismiss() } else errorMessage = "That record is not on this device yet. Try again after it syncs."
+                                }
+                                Unit
+                            }
+                        },
+                        onContinue = { dupAcknowledged = true; dupMatches = emptyList(); errorMessage = null; submit() },
+                        onCancel = onDismiss,
+                    )
+                    dupViewing?.let { DuplicateRecordDialog(it, currentPersonId, viewModel) { dupViewing = null } }
+                }
                 Row {
                     Gender.entries.forEach { g ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -2146,5 +2202,120 @@ internal fun RecycleBinChoiceDialog(recordLabel: String, canDeletePermanently: B
             confirmButton = { TextButton(onClick = onDeletePermanently) { Text("Delete permanently", color = MaterialTheme.colorScheme.error) } },
             dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
         )
+    }
+}
+
+/**
+ * "Possible Duplicate Person Detected": shown inside the enrollment form of a NEW record when the server finds an existing person with a similar combined name
+ * and matching or nearby geographic evidence (across Searching, Return Visit and Bible Study). Nothing is changed or merged; the person reviews the existing
+ * record and decides: View Details, Use Existing Record, Continue Creating New Record, or Cancel Enrollment.
+ */
+@Composable
+private fun DuplicateWarningPanel(
+    matches: List<DuplicateMatch>,
+    checking: Boolean,
+    onView: (DuplicateMatch) -> Unit,
+    onUseExisting: ((DuplicateMatch) -> Unit)?,
+    onContinue: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    if (matches.isEmpty()) {
+        if (checking) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            Text("Checking for an existing record…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        return
+    }
+    val warn = androidx.compose.ui.graphics.Color(0xFFE9A100)
+    androidx.compose.animation.AnimatedVisibility(visible = true, enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.expandVertically()) {
+        androidx.compose.material3.Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
+            colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = warn.copy(alpha = 0.12f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, warn.copy(alpha = 0.6f)),
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                    androidx.compose.foundation.layout.Box(
+                        modifier = Modifier.size(28.dp).background(warn, androidx.compose.foundation.shape.CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) { Text("!", color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.ExtraBold) }
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("Possible Duplicate Person Detected", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "The system found an existing person with a highly similar name and matching or nearby geographic location. Please review the existing record before creating a new entry.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                matches.forEach { m ->
+                    androidx.compose.material3.Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(m.name, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.clickable { onView(m) })
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                DuplicateTag(m.stageLabel, MaterialTheme.colorScheme.primary)
+                                DuplicateTag(if (m.isStrong) "Strong match" else "Possible match", if (m.isStrong) androidx.compose.ui.graphics.Color(0xFFD64545) else warn)
+                            }
+                            Text(m.place, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "Name similarity: ${m.similarity}%" + (m.distanceMeters?.let { "  ·  Distance: $it meters" } ?: "") + (m.publisherName?.let { "  ·  Publisher: $it" } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            Text(m.reasonText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
+                                androidx.compose.material3.OutlinedButton(onClick = { onView(m) }, modifier = Modifier.weight(1f)) { Text("View Details", maxLines = 1) }
+                                if (onUseExisting != null) Button(onClick = { onUseExisting(m) }, modifier = Modifier.weight(1f)) { Text("Use Existing", maxLines = 1) }
+                            }
+                        }
+                    }
+                }
+                Button(onClick = onContinue, modifier = Modifier.fillMaxWidth()) { Text("Continue Creating New Record") }
+                androidx.compose.material3.OutlinedButton(onClick = onCancel, modifier = Modifier.fillMaxWidth()) { Text("Cancel Enrollment") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DuplicateTag(text: String, color: androidx.compose.ui.graphics.Color) {
+    androidx.compose.foundation.layout.Box(
+        modifier = Modifier.background(color, androidx.compose.foundation.shape.RoundedCornerShape(999.dp)).padding(horizontal = 8.dp, vertical = 2.dp),
+    ) { Text(text, color = androidx.compose.ui.graphics.Color.White, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) }
+}
+
+/** View Details of the existing person, in the existing record screen (which applies the usual view / edit permissions); closing it returns to the untouched enrollment form. */
+@Composable
+private fun DuplicateRecordDialog(match: DuplicateMatch, currentPersonId: String, viewModel: PipelineViewModel, onClose: () -> Unit) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onClose,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+    ) {
+        androidx.compose.material3.Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            val person by remember(match.id) { viewModel.observePerson(match.id) }.collectAsStateWithLifecycle(initialValue = null)
+            val p = person
+            if (p == null) {
+                Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("${match.name} (${match.stageLabel})", fontWeight = FontWeight.Bold)
+                    Text(match.place, style = MaterialTheme.typography.bodyMedium)
+                    Text("The full record is not on this device yet. Try again after it syncs.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                    androidx.compose.material3.OutlinedButton(onClick = onClose, modifier = Modifier.padding(top = 16.dp)) { Text("Back to the form") }
+                }
+            } else {
+                val congregationName by remember(p.congregationId) { viewModel.congregationName(p.congregationId) }.collectAsStateWithLifecycle(initialValue = null)
+                PipelinePersonDetailScreen(
+                    person = p,
+                    currentPersonId = currentPersonId,
+                    congregationName = congregationName ?: "—",
+                    stage = p.pipelineStage,
+                    onBack = onClose,
+                    viewModel = viewModel,
+                )
+            }
+        }
     }
 }

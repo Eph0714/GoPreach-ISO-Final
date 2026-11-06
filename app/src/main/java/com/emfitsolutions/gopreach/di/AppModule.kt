@@ -84,6 +84,7 @@ import com.emfitsolutions.gopreach.data.repository.PublisherCongregationContext
 import com.emfitsolutions.gopreach.data.repository.PublisherDashboardVisibilityRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherForwardRequestRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherEditRepository
+import com.emfitsolutions.gopreach.data.repository.DuplicateCheckRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherTerritoryAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherVisibilitySettingsRepository
 import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
@@ -406,6 +407,7 @@ val appModule = module {
     singleOf(::SharedLocationRepository)
     singleOf(::TerritoryAssignmentRepository)
     singleOf(::PublisherEditRepository)
+    singleOf(::DuplicateCheckRepository)
     singleOf(::TerritoryBoundaryRepository)
     singleOf(::TerritoryDrawingRepository)
     singleOf(::TerritoryRepository)

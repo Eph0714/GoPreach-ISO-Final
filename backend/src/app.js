@@ -15,6 +15,7 @@ import { mountCoCongregations } from './coCongregations.js';
 import { mountCoFiles } from './coFiles.js';
 import { mountCoManual } from './coManual.js';
 import { mountPublisherEdit } from './publisherEdit.js';
+import { mountDuplicates } from './duplicates.js';
 import { mountAccounts } from './accounts.js';
 import { saveGroupTerritory, removeGroupTerritory, removeAssignment, validateSave } from './territory.js';
 
@@ -142,6 +143,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   mountCoManual(app, store, auth, { ai: authOptions.ai });
   mountAccounts(app, store, auth, authOptions);
   mountPublisherEdit(app, store, auth);
+  mountDuplicates(app, store, auth);
 
   app.post('/v1/sync/push', auth, async (req, res) => {
     const ops = req.body?.ops;
