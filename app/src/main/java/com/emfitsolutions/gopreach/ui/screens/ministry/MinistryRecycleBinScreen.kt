@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ArrowDropDown
+import androidx.compose.material.icons.rounded.ArrowDropUp
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -30,6 +31,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -236,20 +240,35 @@ fun MinistryRecycleBinScreen(
             value = query, onValueChange = { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp),
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) }, placeholder = { Text("Search by person's name") },
         )
-        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf<Pair<String?, String>>(null to "All", "SEARCHING" to "Searching", "RETURN_VISIT" to "Return Visit", "BIBLE_STUDY" to "Bible Study").forEach { (k, l) ->
-                FilterChip(selected = type == k, onClick = { type = k }, label = { Text(l) })
+        // The record type as one row of four equal segments; everything else folded under "More filters" (with how many are on, and a Reset).
+        val types = listOf<Pair<String?, String>>(null to "All", "SEARCHING" to "Searching", "RETURN_VISIT" to "Return Visit", "BIBLE_STUDY" to "Bible Study")
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            types.forEachIndexed { index, (k, l) ->
+                SegmentedButton(selected = type == k, onClick = { type = k }, shape = SegmentedButtonDefaults.itemShape(index = index, count = types.size), icon = {}) {
+                    Text(l, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
+                }
             }
         }
-        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(0 to "Any date", 1 to "Today", 7 to "Last 7 days", 30 to "Last 30 days").forEach { (d, l) ->
-                FilterChip(selected = days == d, onClick = { days = d }, label = { Text(l) })
+        var showFilters by rememberSaveable { mutableStateOf(false) }
+        val active = listOf(days != 0, province != null, municipality != null, barangay != null).count { it }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedButton(onClick = { showFilters = !showFilters }, modifier = Modifier.weight(1f).heightIn(min = 44.dp), shape = RoundedCornerShape(14.dp)) {
+                Text(if (active > 0) "More filters ($active)" else "More filters", modifier = Modifier.weight(1f), maxLines = 1)
+                Icon(if (showFilters) Icons.Rounded.ArrowDropUp else Icons.Rounded.ArrowDropDown, contentDescription = null)
             }
+            if (active > 0) TextButton(onClick = { days = 0; province = null; municipality = null; barangay = null }) { Text("Reset") }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            PlaceFilter("Province", province, options { it.province }, Modifier.weight(1f)) { province = it }
-            PlaceFilter("Municipality", municipality, options { it.municipality }, Modifier.weight(1f)) { municipality = it }
-            PlaceFilter("Barangay", barangay, options { it.barangay }, Modifier.weight(1f)) { barangay = it }
+        if (showFilters) {
+            Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "Any date", 1 to "Today", 7 to "Last 7 days", 30 to "Last 30 days").forEach { (d, l) ->
+                    FilterChip(selected = days == d, onClick = { days = d }, label = { Text(l) })
+                }
+            }
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PlaceFilter("Province", province, options { it.province }, Modifier.weight(1f)) { province = it }
+                PlaceFilter("Municipality", municipality, options { it.municipality }, Modifier.weight(1f)) { municipality = it }
+                PlaceFilter("Barangay", barangay, options { it.barangay }, Modifier.weight(1f)) { barangay = it }
+            }
         }
         Text("Record Found: ${filtered.size}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
         if (filtered.isEmpty()) {

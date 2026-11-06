@@ -39,7 +39,8 @@ export const config = {
     androidPackage: process.env.ANDROID_PACKAGE ?? 'com.emfitsolutions.gopreach',
     androidCertSha256: (process.env.ANDROID_CERT_SHA256 ?? '').split(',').map((x) => x.trim()).filter(Boolean),
     /** Origins of the GoPreach website that may use passkeys (comma-separated, e.g. https://app.gopreach.sinaglahinv.com). The site's host must end with PASSKEY_RP_ID. */
-    webOrigins: (process.env.PASSKEY_WEB_ORIGINS ?? '').split(',').map((x) => x.trim().replace(/\/+$/, '')).filter(Boolean),
+    // the GoPreach website is always allowed (PASSKEY_WEB_ORIGINS adds more); its host ends with the relying-party id
+    webOrigins: [...new Set(['https://web.gopreach.sinaglahinv.com', ...(process.env.PASSKEY_WEB_ORIGINS ?? '').split(',').map((x) => x.trim().replace(/\/+$/, '')).filter(Boolean)])],
   },
   /**
    * The free, self-hosted AI that writes the plain-language part of the Previous Manual Record summary (see docs/AI_SETUP.md). Off unless AI_PROVIDER is
