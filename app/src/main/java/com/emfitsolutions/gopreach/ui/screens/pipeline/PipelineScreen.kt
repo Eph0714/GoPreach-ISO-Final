@@ -38,6 +38,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.SortByAlpha
+import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.Forward
@@ -94,6 +96,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import org.koin.compose.viewmodel.koinViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.emfitsolutions.gopreach.data.location.LatLng
@@ -360,9 +363,40 @@ private fun MinistryToolbar(
                 others(Modifier, Arrangement.spacedBy(gap, Alignment.End))
             }
         } else {
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(gap)) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 addItem(Modifier.fillMaxWidth())
-                others(Modifier.fillMaxWidth(), Arrangement.spacedBy(gap, Alignment.Start))
+                // Export, sort, Favorites and the Recycle Bin: one tidy row of four equal tiles (icon over a short label) instead of loose buttons.
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val gold = androidx.compose.ui.graphics.Color(0xFFE6B800)
+                    androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                        MinistryToolTile(Icons.Rounded.FileDownload, "Export", enabled = hasRecords) { menu = true }
+                        androidx.compose.material3.DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            listOf("print" to "Print", "pdf" to "PDF", "excel" to "Excel", "word" to "Word").forEach { (key, label) ->
+                                androidx.compose.material3.DropdownMenuItem(text = { Text(label) }, onClick = { menu = false; onExport(key) })
+                            }
+                            Text(
+                                "Exports all $recordCount records matching the filters.",
+                                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                    androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                        MinistryToolTile(Icons.Rounded.SortByAlpha, if (sortAscending) "A–Z" else "Z–A") { sortMenu = true }
+                        androidx.compose.material3.DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                            androidx.compose.material3.DropdownMenuItem(text = { Text("Name: Ascending (A-Z)") }, onClick = { sortMenu = false; onSortChange(true) })
+                            androidx.compose.material3.DropdownMenuItem(text = { Text("Name: Descending (Z-A)") }, onClick = { sortMenu = false; onSortChange(false) })
+                        }
+                    }
+                    androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                        MinistryToolTile(
+                            if (favoritesOnly) Icons.Rounded.Star else Icons.Rounded.StarBorder, "Favorites",
+                            active = favoritesOnly, activeColor = gold, iconTint = gold,
+                        ) { onFavorites(!favoritesOnly) }
+                    }
+                    androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                        MinistryToolTile(Icons.Rounded.RestoreFromTrash, "Recycle Bin", active = showInactive, onClick = onRecycle)
+                    }
+                }
             }
         }
     }
@@ -473,7 +507,6 @@ private fun PipelineListScreen(
     // The inactive record whose "restore or delete permanently" choice is open
     var binTarget by remember { mutableStateOf<InterestedPerson?>(null) }
     // Show Street View / Show Maps: the record whose street photos are open, and the one that has no saved location to show
-    var streetViewFor by remember { mutableStateOf<InterestedPerson?>(null) }
     var noLocationFor by remember { mutableStateOf<Pair<InterestedPerson, String>?>(null) }
     val localContext = androidx.compose.ui.platform.LocalContext.current
     val showToast = rememberActionToast()
@@ -636,7 +669,7 @@ private fun PipelineListScreen(
                                             else -> com.emfitsolutions.gopreach.ui.components.openCoordinatesInMaps(localContext, c.first, c.second, person.name)
                                         }
                                     },
-                                    onStreetView = { if (person.validCoordinates() == null) noLocationFor = person to "Street View" else streetViewFor = person },
+                                    onStreetView = { person.validCoordinates().let { c -> if (c == null) noLocationFor = person to "Street View" else com.emfitsolutions.gopreach.ui.components.openStreetViewExternally(localContext, c.first, c.second) } },
                                     onPrint = {
                                         actions.print(
                                             com.emfitsolutions.gopreach.data.print.ReportTable(
@@ -687,12 +720,6 @@ private fun PipelineListScreen(
         )
     }
 
-    // Street View of the saved spot: real street photos where the provider has them, otherwise a clear message and the ordinary map (see StreetViewDialog)
-    streetViewFor?.let { p ->
-        val lat = p.gpsLat
-        val lng = p.gpsLng
-        if (lat != null && lng != null) com.emfitsolutions.gopreach.ui.components.StreetViewDialog(lat = lat, lng = lng, title = p.name, onClose = { streetViewFor = null })
-    }
     // A record with no usable coordinates: say so, and offer the details (where an owner can add or correct the location) - never a guessed spot
     noLocationFor?.let { (p, what) ->
         AlertDialog(
@@ -2316,6 +2343,35 @@ private fun DuplicateRecordDialog(match: DuplicateMatch, currentPersonId: String
                     viewModel = viewModel,
                 )
             }
+        }
+    }
+}
+
+/** One of the four equal tools under Add on the Ministry tabs: an icon over a short label; filled while its filter is on, greyed when it has nothing to act on. */
+@Composable
+private fun MinistryToolTile(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    active: Boolean = false,
+    activeColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
+    iconTint: androidx.compose.ui.graphics.Color? = null,
+    onClick: () -> Unit,
+) {
+    val container = if (active) activeColor.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant
+    val content = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+    androidx.compose.material3.Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier.fillMaxWidth().heightIn(min = 56.dp),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+        color = container,
+        border = if (active) androidx.compose.foundation.BorderStroke(1.5.dp, activeColor) else null,
+    ) {
+        Column(modifier = Modifier.padding(vertical = 8.dp, horizontal = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Icon(icon, contentDescription = null, tint = if (enabled) (iconTint ?: content) else content, modifier = Modifier.size(22.dp))
+            Text(label, color = content, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
     }
 }
