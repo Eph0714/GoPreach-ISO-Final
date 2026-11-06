@@ -41,7 +41,7 @@ if (gate.status !== 0) { console.error("\nRelease gate FAILED - nothing was publ
 if (dry) { console.log("Dry run: not publishing."); process.exit(0); }
 
 execFileSync("gh", ["release", "create", `v${versionName}`, apk, "-R", REPO, "--title", `GoPreach v${versionName}`, "--notes", notes], { stdio: "inherit" });
-history.push({ version: versionName, versionCode, date: new Date().toISOString().slice(0, 10), channel: legacy ? "direct (legacy key)" : "direct (production key)", status: "Current" });
+history.push({ version: versionName, versionCode, date: new Date().toISOString().slice(0, 10), notes: notes.trim(), channel: legacy ? "direct (legacy key)" : "direct (production key)", status: "Current" });
 history.slice(0, -1).forEach((h) => { if (h.status === "Current") h.status = "Previous"; });
 writeFileSync(historyFile, JSON.stringify(history, null, 2) + "\n");
 console.log("Published v" + versionName);

@@ -943,21 +943,24 @@ private fun PublisherMainTabs(selected: Int, onSelect: (Int) -> Unit, showFieldS
                             .weight(1f)
                             .background(if (isSelected) tab.color.copy(alpha = 0.12f) else Color.Transparent)
                             .selectable(selected = isSelected, role = Role.Tab, onClick = { onSelect(index) })
-                            .padding(top = 10.dp),
+                            .padding(top = 8.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Icon(tab.icon, contentDescription = null, tint = if (isSelected) tab.color else tab.color.copy(alpha = 0.7f), modifier = Modifier.size(24.dp))
+                        // Every label sits in the same fixed-height slot, centred, so one- and two-line labels line up and every tab ends at the same underline.
+                        Box(modifier = Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 2.dp), contentAlignment = Alignment.Center) {
                         Text(
                             tab.label,
-                            fontSize = 12.sp,
+                            fontSize = if (tabs.size > 4) 10.sp else 12.sp,
+                            lineHeight = if (tabs.size > 4) 12.sp else 14.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = if (isSelected) tab.color else MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(top = 2.dp, start = 2.dp, end = 2.dp),
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
                         Box(modifier = Modifier.fillMaxWidth().height(3.dp).background(if (isSelected) tab.color else tab.color.copy(alpha = 0.3f)))
                     }
                 }

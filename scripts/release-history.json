@@ -18,77 +18,88 @@
     "versionCode": 196,
     "date": "2026-10-08",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Update source moved to GoPreach-ISO-Final. Install this version to keep receiving updates."
   },
   {
     "version": "1.136.0",
     "versionCode": 197,
     "date": "2026-10-08",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "REQUIRED UPDATE. GoPreach is moving to a new server. Install this version to keep using GoPreach. Also: Firebase removed, Received Reports, mandatory update screen."
   },
   {
     "version": "1.137.0",
     "versionCode": 198,
     "date": "2026-10-08",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "v1.137.0: notification sounds fixed (they now ring while the app is minimized, no replay of old items after sign-in, and the Circuit Overseer hears new Field Service Reports). Received Reports with unread notifications, Firebase fully removed, and a Hostinger server label above Sync to Server."
   },
   {
     "version": "1.138.0",
     "versionCode": 199,
     "date": "2026-10-08",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "v1.138.0: an About icon in every account's header says which server this version uses (Hostinger), plus the notification sound fixes, Received Reports and the full move off Firebase from earlier versions."
   },
   {
     "version": "1.139.0",
     "versionCode": 200,
     "date": "2026-10-15",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.139.0: Circuit Attendance Report snapshots (send, receive, return, lock), simpler Send to Circuit Overseer, My Submitted Reports with attendance, Manual Field Service Record status for previous months, fixes for undone months. Requires the updated backend (rules for the new attendance collections)."
   },
   {
     "version": "1.139.1",
     "versionCode": 201,
     "date": "2026-10-15",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.139.1: fixes the app closing right after login (background sync crash in the release build) and removes the My Total Hours tile from the publisher Input group. Requires the updated backend for the attendance features."
   },
   {
     "version": "1.140.0",
     "versionCode": 202,
     "date": "2026-10-15",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.140.0: Territory Map Driving Mode (GPS-course arrow, map follow, Recenter, heading-up/north-up, GPS status, Silent/Voice switch); in-app turn-by-turn navigation with spoken guidance and rerouting; coordinates, Street View and Open in Maps on Searching / Return Visit / Bible Study records; Weather module with dashboard weather line; comparative-report and attendance improvements; fix: rotating the phone no longer restarts the app or repeats the login message."
   },
   {
     "version": "1.141.0",
     "versionCode": 203,
     "date": "2026-10-16",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.141.0: voice notes, narration, circuit attendance comparison, glass UI, PAGASA alerts"
   },
   {
     "version": "1.142.0",
     "versionCode": 204,
     "date": "2026-10-17",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Territory drawings are always drawn at 50% opacity."
   },
   {
     "version": "1.143.0",
     "versionCode": 205,
     "date": "2026-10-17",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Offline maps: choose or download the Philippines offline map file and use offline map styles and place lookup without a connection."
   },
   {
     "version": "1.144.0",
     "versionCode": 206,
     "date": "2026-10-18",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.144.0: Field Service Group quick access and members, Publisher records (grouped, all details, print/PDF/Excel), uniform table design, Field Service Report grouping and Send to CO preview, simpler All Territories list, Territory Map with one control bar and visible map styles."
   },
   {
     "version": "1.145.0",
@@ -102,391 +113,447 @@
     "versionCode": 208,
     "date": "2026-10-18",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.146.0: fixes the blank Admin dashboard and missing Territory Assignments after an update"
   },
   {
     "version": "1.147.0",
     "versionCode": 209,
     "date": "2026-10-21",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.147.0: Admin and publisher screen updates, Territory Map and turn-by-turn improvements, Account Management actions (change username, temporary password), Record area filter, backend account rules."
   },
   {
     "version": "1.148.0",
     "versionCode": 210,
     "date": "2026-10-22",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.148.0: Circuit Overseer File Manager and the new Previous Manual Record (open an Excel file as it looks, save it to a congregation, search inside it), optional FS Group when enrolling or editing a publisher, and the add icon of Searching / Return Visit / Bible Study moved to the upper left under the Ministry tab."
   },
   {
     "version": "1.149.0",
     "versionCode": 211,
     "date": "2026-10-22",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.149.0: the add icon for Searching, Return Visit and Bible Study is now at the upper left of every list (Ministry tab, the stand-alone lists and the Publisher Assignment lists)."
   },
   {
     "version": "1.150.0",
     "versionCode": 212,
     "date": "2026-10-22",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.150.0: the Circuit Overseer has a Home icon in the tab strip to go back to the main form from any module."
   },
   {
     "version": "1.151.0",
     "versionCode": 213,
     "date": "2026-10-22",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Territory Map opens clean: Filters, Hide Icons, Style and Drive only. Long-press shows map tools (Recenter, Nearest, Farthest, Filters, Full screen, GPS status) with the existing buttons."
   },
   {
     "version": "1.152.0",
     "versionCode": 214,
     "date": "2026-10-22",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Live updates across devices: lists and the map refresh by themselves when another device changes a record, and a record deleted elsewhere stays deleted. Ministerial Servant gets the Territory Map in Quick Access. Previous Manual Record sheet zooms with two fingers and has Fit."
   },
   {
     "version": "1.153.0",
     "versionCode": 215,
     "date": "2026-10-22",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Quick Access now has the 12 modules (Territory Map, Weather, Field Service Report, Publisher Account, My Assignment, Householder Visit History, Meeting and Cart Assignment, Publisher Schedule, Find Location, Announcement, Publisher Assignment, Field Service Group), each only for the roles that already have the module. My Assignment and Publisher Schedule now also work for admins and elders in their own congregation."
   },
   {
     "version": "1.154.0",
     "versionCode": 216,
     "date": "2026-10-22",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Walking Mode on the Territory Map with the same features as Driving (walking person marker, pedestrian routes). Ministerial Servant Quick Access now shows Weather, My Assignment, Meeting and Cart Assignment (view only), Publisher Schedule and Announcement. Comparative Report: full-screen viewer with compact icons and listen controls, tables with a fixed heading row."
   },
   {
     "version": "1.155.0",
     "versionCode": 217,
     "date": "2026-10-23",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Search Barangay in the Territory Map (the barangay you open returns to the same search results when closed). FS Group chat: the Overseer, Servant and Assistant of a group manage that group's chat and its participants, for their own group only. A Ministerial Servant in a group role sees and edits their group's Field Service Report. Walking and Driving estimates (duration and ETA) in the route preview, walking from pedestrian routes. Territory Map Walking Mode, Ministerial Servant Quick Access, and the Comparative Report full-screen viewer."
   },
   {
     "version": "1.156.0",
     "versionCode": 218,
     "date": "2026-10-23",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Super Admin: CO File Management, account management for Circuit Overseers and all accounts, no-readable password resets, FS Group drawing message"
   },
   {
     "version": "1.157.0",
     "versionCode": 219,
     "date": "2026-10-23",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Summary: comparative report from your Excel records (periods, visits, congregations, saved files) with a Voice button; Territory Map rights follow the assigned Coordinator Elder, Secretary or Service Overseer role; Home button in every Circuit Overseer module; Publisher Record: username, classification, status and temporary sign-in now live inside Edit"
   },
   {
     "version": "1.158.0",
     "versionCode": 220,
     "date": "2026-10-23",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "One active session per account (Account Already Active prompt, other device signed out), sign-in 429 fix, unified Publisher Edit, Received Reports and comparative report improvements"
   },
   {
     "version": "1.159.0",
     "versionCode": 221,
     "date": "2026-10-23",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Received Reports Excel exports now include the Total and the end-of-report summary; Previous Manual Record: Excel-only full screen, verified comparative analysis with bar graphs, findings and optional free AI wording"
   },
   {
     "version": "1.160.0",
     "versionCode": 222,
     "date": "2026-10-23",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Add and Edit Publisher: Province, Municipality, Barangay and Contact are now optional; a publisher can be saved without changing the username"
   },
   {
     "version": "1.161.0",
     "versionCode": 223,
     "date": "2026-10-23",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Account Management is now one module: publishers, FS Group, status filter, Audit History, Create Account, View temporary sign-in. Circuit Overseer Accounts and User Management are reached from it."
   },
   {
     "version": "1.162.0",
     "versionCode": 224,
     "date": "2026-10-23",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "New login screen. Account Management: type the temporary password yourself (or leave it empty for a random one), View temporary sign-in, one module for every account."
   },
   {
     "version": "1.163.0",
     "versionCode": 225,
     "date": "2026-10-24",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Previous Manual Record: download the uploaded Excel file with its original name. File Manager: PDF, Excel and Word only."
   },
   {
     "version": "1.164.0",
     "versionCode": 226,
     "date": "2026-10-24",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Back to Homepage on every main form. Signing in on a second device now needs the signed-in device to approve it (Yes, It's Me / No, Deny Access) or an e-mailed code. Favorites for Searching, Return Visit and Bible Study. Find Location can read coordinates from a picture. Long-press on the Territory Map no longer presses buttons by accident."
   },
   {
     "version": "1.165.0",
     "versionCode": 227,
     "date": "2026-10-28",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.165.0: security and device management (two-factor, new-device approval, instant sign-out), Territory Map and Ministry full-screen forms, Field Service Report export menu and category choice, group chat roles."
   },
   {
     "version": "1.166.0",
     "versionCode": 228,
     "date": "2026-10-28",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.166.0: account recovery for a lost password and authenticator (e-mail code, 24-hour wait, cancel), a phone whose session the server ended now returns to the login screen, Field Service Report export and category choice, security notification centre and history filters."
   },
   {
     "version": "1.167.0",
     "versionCode": 229,
     "date": "2026-10-28",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.167.0: the approval prompt for a new device is back on the signed-in phone, a merged Devices list (rename or remove a device), account recovery, instant sign-out on all devices."
   },
   {
     "version": "1.167.1",
     "versionCode": 230,
     "date": "2026-10-28",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.167.1: a closed Security Notice stays closed (and notices are marked seen on the server)."
   },
   {
     "version": "1.167.2",
     "versionCode": 231,
     "date": "2026-10-28",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.167.2: fixes the Security notice that could not be closed; checks for an update when the sign-in form shows."
   },
   {
     "version": "1.168.0",
     "versionCode": 232,
     "date": "2026-10-29",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.168.0: Super Admin sign-in limits module"
   },
   {
     "version": "1.169.0",
     "versionCode": 233,
     "date": "2026-10-29",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.169.0: Driving Mode arrow in the lowest position and always facing forward; territory drawings show a finished / to continue / to do date, details inside the drawing"
   },
   {
     "version": "1.169.1",
     "versionCode": 234,
     "date": "2026-10-29",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Ministry: Recycle Bin shows only deleted records and they can be restored; sort by name A-Z or Z-A; consistent colour codes under each record; Place of Origin is no longer required when enrolling."
   },
   {
     "version": "1.169.2",
     "versionCode": 235,
     "date": "2026-10-29",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "FS Group chat: the Group Overseer, Servant and Assistant can create, rename and delete chats of their own FS Group. The monthly report shows the publisher name."
   },
   {
     "version": "1.169.3",
     "versionCode": 236,
     "date": "2026-10-29",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Group chat: a Delete button in the chat's top bar for the Group Overseer, Servant and Assistant (and chat managers)."
   },
   {
     "version": "1.169.4",
     "versionCode": 237,
     "date": "2026-10-29",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Group chat: removed the Open the chat button that brought a deleted FS Group chat back."
   },
   {
     "version": "1.169.5",
     "versionCode": 238,
     "date": "2026-10-29",
     "channel": "direct (legacy key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.169.5: the navigation arrow and camera follow the road; walking has its own turn warnings and off-route tolerance; current speed shown; optional own routing server"
   },
   {
     "version": "1.169.6",
     "versionCode": 239,
     "date": "2026-10-29",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.169.6: Print button on every Ministry record; first build signed with the GoPreach production key (uninstall the old app once, then install this one)"
   },
   {
     "version": "1.169.7",
     "versionCode": 240,
     "date": "2026-10-29",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.169.7: no square lines inside barangay boundaries and drawings; Draw button on the Territory Map; the arrow stays on the road in Drive and Walk without a destination; clearer reinstall notice when an update uses a new signing key"
   },
   {
     "version": "1.169.8",
     "versionCode": 241,
     "date": "2026-10-29",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.169.8: Congregation Management for the Circuit Overseer; send photos in Group Chat (gallery or camera, optimized, full-screen view); Back to Home on every form; redesigned long-press menu; flat Ministry tabs and toolbar; arrow in the lower middle of the screen with only the remaining route; fingerprint login kept after sign-out"
   },
   {
     "version": "1.169.9",
     "versionCode": 242,
     "date": "2026-10-29",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "v1.169.9: fixes missing barangay boundaries on the Territory Map after a fresh sign-in"
   },
   {
     "version": "1.169.16",
     "versionCode": 249,
     "date": "2026-11-03",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.169.16: the Admin can enroll a Publisher without the full address, contact, province, municipality and barangay; a person's own profile requires them; the Coordinate is one box (Latitude, Longitude); Publisher name search in more lists; Field Service Report exports named with the group and month; Publisher edit finds records with an empty congregation; My Report hides hours for non-pioneers; the update notice is not repeated for an acknowledged version."
   },
   {
     "version": "1.169.17",
     "versionCode": 250,
     "date": "2026-11-03",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.169.17: Meeting and Cart Assignment now picks publishers from a checkbox list with search, Select All, Clear Selection and a count; the Admin can enroll a Publisher without the contact details and a person completes them in their own profile; the Coordinate is one box (Latitude, Longitude)."
   },
   {
     "version": "1.169.18",
     "versionCode": 251,
     "date": "2026-11-03",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.169.18: the Midweek Meeting Schedule is laid out like the printed sheet (congregation and title, week, coloured bars, numbered parts with minutes, names in a column on the right) on screen and when printed; publishers are chosen in a popup checklist (search, Select All, Clear, count) opened from a Select publishers button, no longer inside a text box."
   },
   {
     "version": "1.169.19",
     "versionCode": 252,
     "date": "2026-11-03",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.169.19: the week of the Midweek Meeting is shown as < November 2-8, 2026 > with arrows instead of a drop-down; the Admin and the Super Admin can set the language of the three Midweek headings to English, Tagalog or Iloko; the Midweek Meeting Schedule is laid out like the printed sheet and publishers are chosen in a popup checklist."
   },
   {
     "version": "1.169.20",
     "versionCode": 253,
     "date": "2026-11-03",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "GoPreach v1.169.20: Meeting and Cart Assignment now has two modules, the Congregation and the Sign Language Group, each with Midweek Meeting, Public Talk and Watchtower and Cart Assignment and the same rules; the heading language is set per module; the week is shown as < November 2-8, 2026 >."
   },
   {
     "version": "1.169.21",
     "versionCode": 254,
     "date": "2026-11-03",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Username-first login; PIN, Pattern and Biometrics sign-in and Session Expired on the website"
   },
   {
     "version": "1.169.22",
     "versionCode": 255,
     "date": "2026-11-04",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Remember me fills the password after the remembered username; Return Visit / Bible Study quantities can be typed in My Planner; login methods listed only when available and set up"
   },
   {
     "version": "1.169.23",
     "versionCode": 256,
     "date": "2026-11-04",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "- You can now put an update off with UPDATE LATER; GoPreach reminds you again the next time you log in.\n- The update notice shows what is new in each version.\n- The login screen no longer lets the phone's autofill offer your saved username and password.\n- Return Visit and Bible Study quantities can be typed in My Planner.\n- Remember me fills the password only after you type the remembered username."
   },
   {
     "version": "1.169.24",
     "versionCode": 257,
     "date": "2026-11-04",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "- The username must match exactly, capital letters included, before Remember me fills in the password.\n- The Lost your authenticator link is no longer on the login screen."
   },
   {
     "version": "1.169.25",
     "versionCode": 258,
     "date": "2026-11-04",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "- The Return Visit and Bible Study quantity in My Planner can now be left empty and still be saved."
   },
   {
     "version": "1.169.26",
     "versionCode": 259,
     "date": "2026-11-04",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "- The login screen no longer shows the keyboard's key icon with your saved username and password when you tap the username or password box."
   },
   {
     "version": "1.169.27",
     "versionCode": 260,
     "date": "2026-11-04",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "- Month selection is now < Month > with arrows instead of a dropdown list (Monthly Report, comparisons, snapshots and more)."
   },
   {
     "version": "1.169.28",
     "versionCode": 261,
     "date": "2026-11-04",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "- Territory Map: the screen stays on while you choose a route and while navigating.\n- Territory Map: Start navigation is always reachable; the route panel scrolls and the button stays pinned.\n- Long-press menu: Actions (Draw, Create a Pin, Start navigation, Walk there) now come before Map tools.\n- Update dialog: scrolls for long notes, shows the release date and cleaner What's new details."
   },
   {
     "version": "1.169.29",
     "versionCode": 262,
     "date": "2026-11-05",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Find Location is now Capture Coordinate: a search box at the top of My Planner"
   },
   {
     "version": "1.169.30",
     "versionCode": 263,
     "date": "2026-11-05",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Fixed the Ministry search box; Territory Map search now lists all matching Searching, Return Visit and Bible Study records"
   },
   {
     "version": "1.169.31",
     "versionCode": 264,
     "date": "2026-11-05",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Territory Map search now finds every record of the congregation, including other FS Groups and publishers"
   },
   {
     "version": "1.169.32",
     "versionCode": 265,
     "date": "2026-11-05",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Territory Map: new All option; Nearest and Farthest are dropdown lists under every option; search follows the chosen option"
   },
   {
     "version": "1.169.33",
     "versionCode": 266,
     "date": "2026-11-05",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "- The update notice now lists every change since your installed version, newest first, each under its own version and date.\n- Territory Map: new All option, and Nearest / Farthest are dropdown lists under every option.\n- Territory Map search finds every record of the congregation and follows the chosen option.\n- Fixed the Ministry search box disappearing while typing."
   },
   {
     "version": "1.169.34",
     "versionCode": 267,
     "date": "2026-11-06",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "Capture Coordinate shows which record a saved coordinate is enrolled to, with Add Visit Log or View Record. Territory Map has a My / FS Group / Congregation dropdown under Searching, Return Visit and Bible Study."
   },
   {
     "version": "1.169.35",
     "versionCode": 268,
     "date": "2026-11-06",
     "channel": "direct (production key)",
-    "status": "Previous"
+    "status": "Previous",
+    "notes": "The update window now always shows what is new in the update. If a release has no details, it says bug fixes and improvements."
   },
   {
     "version": "1.169.36",
     "versionCode": 269,
     "date": "2026-11-06",
     "channel": "direct (production key)",
-    "status": "Current"
+    "status": "Current",
+    "notes": "Territory Map filters are tidier: one row for All, Searching, Return Visit and Bible Study, a single My / FS Group / Congregation dropdown, and Nearest and Farthest side by side."
   }
 ]

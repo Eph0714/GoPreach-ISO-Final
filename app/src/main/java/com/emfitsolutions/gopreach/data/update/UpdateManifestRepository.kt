@@ -114,7 +114,7 @@ class UpdateManifestRepository(
      * version and date, so a phone that skipped releases still sees all of what is new. Null when the list cannot be read (the dialog then keeps the
      * latest release's own notes).
      */
-    suspend fun fetchNotesSince(currentVersion: String): String? = withContext(Dispatchers.IO) {
+    private suspend fun fetchNotesFromApi(currentVersion: String): String? = withContext(Dispatchers.IO) {
         runCatching {
             val connection = URL("https://api.github.com/repos/Eph0714/GoPreach-ISO-Final/releases?per_page=30").openConnection() as HttpURLConnection
             connection.setRequestProperty("Accept", "application/vnd.github+json")
@@ -128,12 +128,39 @@ class UpdateManifestRepository(
             val newer = list
                 .filter { r -> r.tagName?.let { isNewer(currentVersion, it.removePrefix("v")) } == true }
                 .sortedWith { x, y -> if (isNewer(x.tagName!!.removePrefix("v"), y.tagName!!.removePrefix("v"))) 1 else -1 }
-            if (newer.size < 2) return@runCatching null
             newer.joinToString("\n\n") { r ->
                 val notes = r.body?.replace("[CRITICAL]", "", ignoreCase = true)?.trim().orEmpty().ifBlank { "Bug fixes and improvements." }
                 "Version ${r.tagName!!.removePrefix("v")}" + (r.publishedAt?.substringBefore("T")?.let { " · $it" } ?: "") + "\n" + notes
             }
         }.getOrNull()
+    }
+
+    private data class HistoryEntry(val version: String?, val date: String?, val notes: String?)
+
+    /**
+     * Every change since the installed version, newest first, each under its own version and date. Read from the project's own release history
+     * (raw.githubusercontent.com: its own limit, and reachable on networks that block api.github.com), falling back to GitHub's release list. Null
+     * only when neither can be read (the dialog then keeps the latest release's own notes).
+     */
+    suspend fun fetchNotesSince(currentVersion: String): String? = withContext(Dispatchers.IO) {
+        val fromHistory = runCatching {
+            val connection = URL("https://raw.githubusercontent.com/Eph0714/GoPreach-ISO-Final/main/scripts/release-history.json").openConnection() as HttpURLConnection
+            connection.setRequestProperty("User-Agent", "GoPreach-Android")
+            connection.connectTimeout = 15_000
+            connection.readTimeout = 15_000
+            if (connection.responseCode !in 200..299) return@runCatching null
+            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            if (body.trimStart().firstOrNull() != '[') return@runCatching null
+            val newer = gson.fromJson(body, Array<HistoryEntry>::class.java).toList()
+                .filter { it.version != null && isNewer(currentVersion, it.version) }
+                .sortedWith { x, y -> if (isNewer(x.version!!, y.version!!)) 1 else -1 }
+            if (newer.isEmpty()) return@runCatching null
+            newer.joinToString("\n\n") { e ->
+                val notes = e.notes?.replace("[CRITICAL]", "", ignoreCase = true)?.trim().orEmpty().ifBlank { "Bug fixes and improvements." }
+                "Version ${e.version}" + (e.date?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "") + "\n" + notes
+            }
+        }.getOrNull()
+        fromHistory ?: fetchNotesFromApi(currentVersion)
     }
 
     /** The primary path: GitHub's REST API, which also gives per-release
