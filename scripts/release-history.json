@@ -610,6 +610,14 @@
     "date": "2026-11-06",
     "notes": "Sign-in fixes: PIN and Pattern login on the website no longer hits 'too many requests', and a drawn pattern now matches reliably. Bug fixes and improvements.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.44",
+    "versionCode": 277,
+    "date": "2026-11-06",
+    "notes": "New: Territory Map work reminders. When a To Do or To Continue drawing of your FS Group is dated tomorrow or today, you get a notification (with a sound) when you sign in. Bug fixes and improvements.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
