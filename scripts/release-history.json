@@ -602,6 +602,14 @@
     "date": "2026-11-06",
     "notes": "- The Delete and Delete Permanently buttons are now solid red with white text, so they can be read. This covers the Ministry Recycle Bin and the Territory Map delete buttons.\n- Restore and Delete Permanently in the Ministry Recycle Bin use the same buttons as the rest of the app.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.43",
+    "versionCode": 276,
+    "date": "2026-11-06",
+    "notes": "Sign-in fixes: PIN and Pattern login on the website no longer hits 'too many requests', and a drawn pattern now matches reliably. Bug fixes and improvements.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
