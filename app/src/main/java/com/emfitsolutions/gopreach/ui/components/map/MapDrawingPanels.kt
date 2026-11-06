@@ -324,11 +324,7 @@ fun DrawingInfoPanel(
                         }
                     }
                 }
-                OutlinedButton(
-                    onClick = actions.onDelete,
-                    modifier = Modifier.fillMaxWidth(),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
-                ) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                com.emfitsolutions.gopreach.ui.components.ActionButton(com.emfitsolutions.gopreach.ui.components.ActionKind.Delete, onClick = actions.onDelete, modifier = Modifier.fillMaxWidth())
             }
         }
     }

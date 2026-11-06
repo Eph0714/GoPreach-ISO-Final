@@ -65,6 +65,8 @@ import com.emfitsolutions.gopreach.data.repository.PersonRepository
 import com.emfitsolutions.gopreach.data.repository.RecycleBinRepository
 import com.emfitsolutions.gopreach.data.repository.RestoreResult
 import com.emfitsolutions.gopreach.data.repository.VisitRepository
+import com.emfitsolutions.gopreach.ui.components.ActionButton
+import com.emfitsolutions.gopreach.ui.components.ActionKind
 import com.emfitsolutions.gopreach.ui.components.AlertDialog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -288,8 +290,8 @@ fun MinistryRecycleBinScreen(
             onDismissRequest = { confirmRestore = null },
             title = { Text("Restore this record?") },
             text = { Text("Restore \"${e.name}\" to ${e.typeLabel}, with all its original information${if ((e.visits ?: 0) > 0) " and visit logs" else ""}?") },
-            confirmButton = { TextButton(onClick = { confirmRestore = null; viewModel.restore(e, currentPersonId) }) { Text("Restore") } },
-            dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text("Cancel") } },
+            confirmButton = { ActionButton(ActionKind.Refresh, onClick = { confirmRestore = null; viewModel.restore(e, currentPersonId) }, label = "Restore") },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmRestore = null }, label = "Cancel") },
         )
     }
     confirmPurge?.let { e ->
@@ -297,8 +299,8 @@ fun MinistryRecycleBinScreen(
             onDismissRequest = { confirmPurge = null },
             title = { Text("Delete Permanently?") },
             text = { Text("Are you sure you want to permanently delete this record? This action cannot be undone.") },
-            confirmButton = { TextButton(onClick = { confirmPurge = null; viewModel.deletePermanently(e, currentPersonId) }) { Text("Delete Permanently", color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { confirmPurge = null }) { Text("Cancel") } },
+            confirmButton = { ActionButton(ActionKind.Delete, onClick = { confirmPurge = null; viewModel.deletePermanently(e, currentPersonId) }, label = "Delete Permanently") },
+            dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmPurge = null }, label = "Cancel") },
         )
     }
     message?.let { m ->
@@ -346,8 +348,8 @@ private fun RecycleCard(e: RecycleEntry, onRestore: () -> Unit, onPurge: () -> U
             )
             extra.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
-                Button(onClick = onRestore, modifier = Modifier.weight(1f)) { Text("Restore", maxLines = 1) }
-                OutlinedButton(onClick = onPurge, modifier = Modifier.weight(1f), colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Delete Permanently", maxLines = 1, fontSize = 12.sp) }
+                ActionButton(ActionKind.Refresh, onClick = onRestore, label = "Restore", compact = true, modifier = Modifier.weight(0.8f))
+                ActionButton(ActionKind.Delete, onClick = onPurge, label = "Delete Permanently", compact = true, modifier = Modifier.weight(1.2f))
             }
         }
     }

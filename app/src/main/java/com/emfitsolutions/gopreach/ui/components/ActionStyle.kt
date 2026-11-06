@@ -108,6 +108,8 @@ fun ActionButton(
     label: String = kind.label,
     enabled: Boolean = true,
     loading: Boolean = false,
+    /** Tighter padding, for a long label (such as "Delete Permanently") in a row of two buttons. */
+    compact: Boolean = false,
 ) {
     Button(
         onClick = { if (!loading) onClick() },
@@ -120,14 +122,14 @@ fun ActionButton(
             disabledContainerColor = kind.color.copy(alpha = 0.45f),
             disabledContentColor = Color.White.copy(alpha = 0.8f),
         ),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = if (compact) 8.dp else 16.dp, vertical = 8.dp),
     ) {
         if (loading) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
         } else {
             Icon(kind.icon, contentDescription = null, modifier = Modifier.size(18.dp))
         }
-        Text(label, modifier = Modifier.padding(start = ActionSpacing.IconGap), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(label, modifier = Modifier.padding(start = if (compact) 4.dp else ActionSpacing.IconGap), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

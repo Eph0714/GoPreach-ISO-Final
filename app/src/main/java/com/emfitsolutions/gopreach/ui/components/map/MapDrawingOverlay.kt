@@ -312,14 +312,14 @@ fun BoxScope.MapDrawingOverlay(
             text = { Text("This drawing will be permanently removed from the map.") },
             dismissButton = { ActionButton(ActionKind.Cancel, onClick = { confirmDelete = null }, label = "Cancel") },
             confirmButton = {
-                TextButton(onClick = {
+                ActionButton(ActionKind.Delete, onClick = {
                     confirmDelete = null
                     scope.launch {
                         runCatching { viewModel.delete(access, d) }
                             .onSuccess { state.selectedDrawingId = null; toast("Deleted.") }
                             .onFailure { toast("Couldn't delete it.") }
                     }
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                }, label = "Delete")
             },
         )
     }
