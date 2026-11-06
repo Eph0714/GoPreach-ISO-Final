@@ -553,7 +553,15 @@
     "versionCode": 269,
     "date": "2026-11-06",
     "channel": "direct (production key)",
-    "status": "Current",
+    "status": "Previous",
     "notes": "Territory Map filters are tidier: one row for All, Searching, Return Visit and Bible Study, a single My / FS Group / Congregation dropdown, and Nearest and Farthest side by side."
+  },
+  {
+    "version": "1.169.37",
+    "versionCode": 270,
+    "date": "2026-11-06",
+    "notes": "- The update window now shows the specific changes of every release since your installed version, not just 'bug fixes and improvements'. The details load from a source that also works on networks that block GitHub's API.\n- Main Form tabs are now equal in size and perfectly aligned: icons, labels and underlines line up on every tab.",
+    "channel": "direct (production key)",
+    "status": "Current"
   }
 ]
