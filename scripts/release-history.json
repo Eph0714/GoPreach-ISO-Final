@@ -570,6 +570,14 @@
     "date": "2026-11-06",
     "notes": "- New: when you enroll a Searching, Return Visit or Bible Study record, the app warns you if the same person may already exist (similar name plus the same or a nearby location), and lets you view the existing record, use it, or continue.\n- Street View now finds the nearest street photo (up to about 1.3 km) and offers Google Street View when there are none nearby.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.39",
+    "versionCode": 272,
+    "date": "2026-11-06",
+    "notes": "- Ministry tabs (Searching, Return Visit, Bible Study) are tidier: Add on its own row, then Export, A-Z, Favorites and Recycle Bin as four equal buttons.\n- Street View now opens Google Street View directly.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
