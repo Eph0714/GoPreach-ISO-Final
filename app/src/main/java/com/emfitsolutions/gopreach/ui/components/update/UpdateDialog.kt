@@ -116,11 +116,10 @@ fun UpdateHost(viewModel: UpdateViewModel = koinViewModel()) {
                         // The details of the update: the release notes, with the Markdown marks tidied into plain bullets.
                         val notes = s.info.releaseNotes.lines().joinToString("\n") { l ->
                             l.trim().replace(Regex("^#{1,6}\\s*"), "").replace(Regex("^[-*]\\s+"), "• ").replace("**", "").replace("__", "").replace("[CRITICAL]", "", ignoreCase = true).trim()
-                        }.trim()
-                        if (notes.isNotBlank()) {
-                            Text(if (s.info.releaseNotes.contains("\n\nVersion ")) "What's new since ${s.currentVersion}" else "What's new in ${s.info.version}", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
-                            Text(notes, style = MaterialTheme.typography.bodySmall)
-                        }
+                        }.trim().takeUnless { it.isBlank() || Regex("^GoPreach v[\\d.]+$").matches(it) } ?: "Bug fixes and improvements."
+                        // Always shown: an update never appears without its details.
+                        Text(if (s.info.releaseNotes.contains("\n\nVersion ")) "What's new since ${s.currentVersion}" else "What's new in ${s.info.version}", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+                        Text(notes, style = MaterialTheme.typography.bodySmall)
                         if (!s.info.isCritical) {
                             Text("You can update later. GoPreach will remind you again the next time you log in.", style = MaterialTheme.typography.bodySmall)
                         }

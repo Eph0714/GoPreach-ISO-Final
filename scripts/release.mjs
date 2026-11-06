@@ -24,7 +24,8 @@ const historyFile = join(here, "release-history.json");
 const history = JSON.parse(readFileSync(historyFile, "utf8"));
 const previous = Math.max(0, ...history.map((h) => h.versionCode));
 
-const notes = process.argv.find((a) => a.startsWith("--notes="))?.slice(8) || `GoPreach v${versionName}`;
+const notes = process.argv.find((a) => a.startsWith("--notes="))?.slice(8) || "";
+if (!dry && notes.trim().length < 15) { console.error("Release notes are required: pass --notes=\"what changed\" - the update dialog shows them to every user."); process.exit(1); }
 console.log(`Releasing GoPreach ${versionName} (code ${versionCode}); previous code ${previous}${legacy ? "  [LEGACY debug-key mode]" : ""}`);
 
 const win = process.platform === "win32";
