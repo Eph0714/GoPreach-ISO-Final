@@ -134,6 +134,7 @@ fun FindLocationScreen(
     currentPersonId: String,
     enrollmentAccess: FindLocationEnrollmentAccess,
     onLookAround: (lat: Double, lng: Double) -> Unit,
+    onOpenRecord: (stage: PipelineStage, personId: String) -> Unit = { _, _ -> },
     onBack: () -> Unit,
     viewModel: FindLocationViewModel = koinViewModel(),
     pipelineViewModel: PipelineViewModel = koinViewModel(),
@@ -276,13 +277,30 @@ fun FindLocationScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         LocationPreviewMap(lat = lat, lng = lng, modifier = Modifier.padding(vertical = 8.dp))
+                        val matchFlow = remember(lat, lng, enrollmentAccess.congregationId, enrollmentAccess.isSuperAdmin) {
+                            viewModel.recordAt(lat, lng, if (enrollmentAccess.isSuperAdmin) null else enrollmentAccess.congregationId)
+                        }
+                        val enrolledTo by matchFlow.collectAsStateWithLifecycle(initialValue = null)
+                        enrolledTo?.let { rec ->
+                            val isMine = rec.publisherPersonId == currentPersonId
+                            val canLog = rec.pipelineStage != PipelineStage.BIBLE_STUDY || isMine
+                            Text(
+                                "The coordinate is enrolled to '${rec.name}' (${rec.pipelineStage.assignLabel()}).",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            Button(onClick = { onOpenRecord(rec.pipelineStage, rec.id) }, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (canLog) "Add Visit Log" else "View Record")
+                            }
+                        }
                         // "Enroll to …" opens the existing enrollment form with
                         // this coordinate (and its detected Current Address)
                         // already filled in; "Look Around" only views the
                         // spot and never creates anything. Enrollment isn't
                         // offered to roles with no congregation to enroll
                         // into (see [FindLocationEnrollmentAccess]).
-                        if (enrollmentAccess.canEnroll) {
+                        if (enrollmentAccess.canEnroll && enrolledTo == null) {
                             PipelineStage.entries.forEach { stage ->
                                 Button(
                                     onClick = {

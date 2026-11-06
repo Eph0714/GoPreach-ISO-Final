@@ -78,6 +78,31 @@ class FindLocationViewModel(
                 .sortedBy { it.name }
         }
 
+    /** The active Searching / Return Visit / Bible Study record whose saved coordinate is the one just found (within
+     * [MATCH_METERS]) — "The coordinate is enrolled to '…'". [congregationId] limits the match to the caller's own
+     * congregation; null (Super-Admin) looks at every record. */
+    fun recordAt(lat: Double, lng: Double, congregationId: String?): Flow<InterestedPerson?> =
+        interestedPersonRepository.observeAll().map { list ->
+            list.filter { p ->
+                p.status == RecordStatus.ACTIVE && p.gpsLat != null && p.gpsLng != null &&
+                    (congregationId.isNullOrBlank() || p.congregationId == congregationId) &&
+                    metersBetween(lat, lng, p.gpsLat!!, p.gpsLng!!) <= MATCH_METERS
+            }.minByOrNull { metersBetween(lat, lng, it.gpsLat!!, it.gpsLng!!) }
+        }
+
+    private fun metersBetween(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+        val r = 6371000.0
+        fun rad(d: Double) = d * kotlin.math.PI / 180.0
+        val sLat = kotlin.math.sin(rad(lat2 - lat1) / 2)
+        val sLng = kotlin.math.sin(rad(lng2 - lng1) / 2)
+        val a = sLat * sLat + kotlin.math.cos(rad(lat1)) * kotlin.math.cos(rad(lat2)) * sLng * sLng
+        return 2 * r * kotlin.math.asin(kotlin.math.sqrt(a))
+    }
+
+    private companion object {
+        const val MATCH_METERS = 15.0
+    }
+
     /** Assigns the found coordinate onto an existing Searching/Return Visit/
      * Bible Study record — same fields
      * [com.emfitsolutions.gopreach.ui.screens.pipeline.PipelineViewModel

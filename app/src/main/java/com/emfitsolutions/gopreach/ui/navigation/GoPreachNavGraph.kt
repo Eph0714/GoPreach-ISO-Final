@@ -1030,6 +1030,15 @@ fun GoPreachNavGraph(
                     groupId = ownGroupAssignment?.groupId,
                 ),
                 onLookAround = { lat, lng -> navController.navigate(Destinations.territoryMapFocusedOn(lat, lng, "Found location")) },
+                onOpenRecord = { stage, id ->
+                    navController.navigate(
+                        when (stage) {
+                            com.emfitsolutions.gopreach.data.model.PipelineStage.BIBLE_STUDY -> Destinations.bibleStudyPerson(id)
+                            com.emfitsolutions.gopreach.data.model.PipelineStage.RETURN_VISIT -> Destinations.returnVisitPerson(id)
+                            com.emfitsolutions.gopreach.data.model.PipelineStage.SEARCHING -> Destinations.searchingPerson(id)
+                        },
+                    )
+                },
                 onBack = { navController.popBackStack() },
             )
         }

@@ -629,8 +629,8 @@ fun TerritoryMapScreen(
     var typeFilter by rememberSaveable { mutableStateOf(TypeFilter.ALL) }
     // Publisher's map (hosted in the Ministry tab): "Show my Ministry Record Only" starts ticked, so only the publisher's own pins show; unticked, the
     // Congregation drop-down is offered too and picks the congregation's records.
-    var mineOnly by rememberSaveable { mutableStateOf(true) }
-    var congregationRecords by rememberSaveable { mutableStateOf(false) }
+    var recordScope by rememberSaveable { mutableIntStateOf(0) }   // 0 = My, 1 = FS Group, 2 = Congregation: always My when a category is picked
+    val groupMembers by remember(currentPersonId) { pipelineViewModel.groupMembersOf(currentPersonId) }.collectAsStateWithLifecycle(initialValue = setOf(currentPersonId))
     // Nothing is auto-selected on load. "Show Next Nearest/Farthest" steps through the
     // current (filtered) records by distance; stepping restarts whenever a filter changes.
     var stepOrder by remember(datasetKey, typeFilter, municipalityFilter, territoryFilter) { mutableStateOf<SortOrder?>(null) }
@@ -813,7 +813,7 @@ fun TerritoryMapScreen(
     val visibleRecords = recordsState.orEmpty().filter { r ->
         // Nothing is listed until Searching, Return Visit or Bible Study is chosen (the territory scope of the role shows first); a focused record or an open barangay still shows its records.
         (if (typeFilter.type == null) (typeFilter == TypeFilter.EVERY || focusLat != null || territoryFilter != null) else r.type == typeFilter.type) &&
-            (!embedded || (congregationRecords && !mineOnly) || r.person.publisherPersonId == currentPersonId) &&
+            (typeFilter == TypeFilter.ALL || recordScope == 2 || (if (recordScope == 1) r.person.publisherPersonId in groupMembers else r.person.publisherPersonId == currentPersonId)) &&
             (municipalityFilter == null || normalizePlaceName(r.municipality) == normalizePlaceName(municipalityFilter)) &&
             (territoryFilter == null || (r.areaId == territoryFilter && (barangayGroupFilter == null || r.groupId == barangayGroupFilter)))
     }
@@ -924,7 +924,7 @@ fun TerritoryMapScreen(
     LaunchedEffect(focusedRecord?.id) {
         val r = focusedRecord ?: return@LaunchedEffect
         typeFilter = TypeFilter.entries.firstOrNull { it.type == r.type } ?: TypeFilter.ALL
-        if (embedded && r.person.publisherPersonId != currentPersonId) { mineOnly = false; congregationRecords = true }
+        if (r.person.publisherPersonId != currentPersonId) recordScope = 2
         kotlinx.coroutines.delay(450)   // after the filter change has settled (it clears the selection)
         selectedRecordId = r.id; sheetOpen = true; flyToRecord = r
     }
@@ -947,7 +947,7 @@ fun TerritoryMapScreen(
         val shown = recordsWithDistance.any { it.record.id == r.id }
         if (shown) selectRecord(r.id, fly = true)
         else {
-            scope = GroupScope.ALL; mineOnly = false; congregationRecords = true
+            scope = GroupScope.ALL; recordScope = 2
             if (typeFilter != TypeFilter.EVERY) typeFilter = TypeFilter.entries.firstOrNull { it.type == r.type } ?: TypeFilter.ALL
             pendingSearchRecord = r
         }
@@ -1052,7 +1052,31 @@ fun TerritoryMapScreen(
                 ) {
                     // "All" searches and lists Searching, Return Visit and Bible Study together; each of the other chips narrows to its own kind.
                     TypeFilter.entries.filter { it != TypeFilter.ALL }.forEach { f ->
-                        FilterChip(selected = typeFilter == f, onClick = { typeFilter = if (typeFilter == f) TypeFilter.ALL else f }, label = { Text(f.label, style = MaterialTheme.typography.labelLarge) })
+                        FilterChip(selected = typeFilter == f, onClick = { typeFilter = if (typeFilter == f) TypeFilter.ALL else f; recordScope = 0 }, label = { Text(f.label, style = MaterialTheme.typography.labelLarge) })
+                    }
+                    // Whose records the chosen category shows: My (the start), FS Group or Congregation — the same drop-down as the Ministry tab.
+                    if (typeFilter != TypeFilter.ALL && !readOnly) {
+                        val kind = if (typeFilter == TypeFilter.EVERY) "Records" else typeFilter.label
+                        val scopeNames = listOf("My $kind", "FS Group $kind", "Congregation $kind")
+                        var scopeOpen by remember { mutableStateOf(false) }
+                        Box {
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = { scopeOpen = true },
+                                modifier = Modifier.semantics { contentDescription = "Whose records to show: ${scopeNames[recordScope]}" },
+                                shape = RoundedCornerShape(12.dp),
+                            ) {
+                                Text(scopeNames[recordScope], maxLines = 1)
+                                Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+                            }
+                            androidx.compose.material3.DropdownMenu(expanded = scopeOpen, onDismissRequest = { scopeOpen = false }) {
+                                scopeNames.forEachIndexed { index, label ->
+                                    androidx.compose.material3.DropdownMenuItem(
+                                        text = { Text(label, fontWeight = if (index == recordScope) FontWeight.Bold else FontWeight.Normal) },
+                                        onClick = { scopeOpen = false; recordScope = index },
+                                    )
+                                }
+                            }
+                        }
                     }
                     // Under every option (All included) a Nearest and a Farthest dropdown list that option's records by distance from the current location; picking one opens it on the map.
                     if (typeFilter != TypeFilter.ALL) {
@@ -1150,14 +1174,6 @@ fun TerritoryMapScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    // A publisher's own-or-congregation records (the one scope choice that is not a category)
-                    if (embedded) Row(
-                        modifier = Modifier.clickable { mineOnly = !mineOnly; congregationRecords = !mineOnly },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        androidx.compose.material3.Checkbox(checked = mineOnly, onCheckedChange = { mineOnly = it; congregationRecords = !it })
-                        Text("Show my Ministry Record Only", style = MaterialTheme.typography.labelLarge)
-                    }
                     val provinces = allAreas.map { it.provinceName }.filter { it.isNotBlank() }.distinct()
                     if (provinces.size > 1) DropdownChip(
                         label = "Province", value = provinceFilter, placeholder = "Province",
@@ -1206,7 +1222,7 @@ fun TerritoryMapScreen(
                 TextButton(onClick = {
                     // Back to how the map first opened for this role: its own territory scope, no category, no place filters, nothing selected.
                     typeFilter = TypeFilter.ALL; provinceFilter = null; municipalityFilter = null; barangayGroupFilter = null
-                    stepOrder = null; barangayQuery = ""; searchOpen = false; mineOnly = true; congregationRecords = false
+                    stepOrder = null; barangayQuery = ""; searchOpen = false; recordScope = 0
                     otherGroupId = null; selectedRecordId = null
                     if (territoryFilter != null) backFromBarangay() else selectedAreaId = null
                     scope = if (readOnly || fixedCongregationId == null) GroupScope.ALL else GroupScope.MINE
