@@ -16,7 +16,7 @@ before(async () => {
   await put('people', 'adminB', person('ADMIN_PER_CONGREGATION', 'congB'));
   await put('people', 'sa', { isSuperAdmin: true, activeAdminRole: 'SUPER_ADMIN', activeCongregationId: null });
   await put('people', 'maria', { ...person(null), username: 'maria.santos', createdByPersonId: 'adminA', firstName: 'Maria' });
-  const app = createApp(store, { devAuth: true, publicLimits: { lookup: { max: 6 }, reset: { max: 3 } } });
+  const app = createApp(store, { devAuth: true, publicLimits: { lookup: { max: 6 }, lookupSweep: { max: 25 }, reset: { max: 3 } } });
   await new Promise((res) => { server = app.listen(0, res); });
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -158,10 +158,13 @@ test('username lookup needs no login, returns the person with their id, and says
   assert.equal((await post('/v1/public/lookup-username', {})).status, 400);
 });
 
-test('username lookup is rate limited per client', async () => {
+test('username lookup is rate limited per client and username, and per client overall', async () => {
   let last;
-  for (let i = 0; i < 8; i++) last = await post('/v1/public/lookup-username', { username: 'x' + i });
+  for (let i = 0; i < 8; i++) last = await post('/v1/public/lookup-username', { username: 'same' });
   assert.equal(last.status, 429);
+  assert.notEqual((await post('/v1/public/lookup-username', { username: 'someone-else' })).status, 429, 'one username does not lock out another');
+  for (let i = 0; i < 30; i++) last = await post("/v1/public/lookup-username", { username: "x" + i });
+  assert.equal(last.status, 429, 'sweeping many usernames from one address is still capped');
 });
 
 test('a password reset request is built by the server and never reveals whether the username exists', async () => {

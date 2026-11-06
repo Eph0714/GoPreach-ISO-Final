@@ -75,7 +75,11 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
   // Firestore let anyone read `people` and create password-reset requests, because a person cannot sign in before the app
   // has turned their username into a sign-in identity. These two endpoints replace that, rate limited per IP.
   const usernameOk = (u) => typeof u === 'string' && u.length > 0 && u.length <= 100;
-  const lookupLimit = rateLimit({ windowMs: 10 * 60_000, max: 30, ...publicLimits.lookup });
+  // The website calls from ONE server address for every visitor, so the cap is per address AND username (one person typing cannot lock out the rest),
+  // with a much looser per-address cap against one address sweeping many usernames.
+  const lookupPerName = rateLimit({ windowMs: 10 * 60_000, max: 30, key: (req) => `${req.ip}|${String(req.body?.username ?? '').toLowerCase().slice(0, 100)}`, ...publicLimits.lookup });
+  const lookupSweep = rateLimit({ windowMs: 10 * 60_000, max: 1500, ...publicLimits.lookupSweep });
+  const lookupLimit = (req, res, next) => lookupSweep(req, res, (err) => (err ? next(err) : lookupPerName(req, res, next)));
   const resetLimit = rateLimit({ windowMs: 60 * 60_000, max: 5, ...publicLimits.reset });
 
   /** POST { username } -> { person: { id, ...fields } | null }. The same person record Firestore returned to the sign-in screen. */
