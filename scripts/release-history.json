@@ -562,6 +562,14 @@
     "date": "2026-11-06",
     "notes": "- The update window now shows the specific changes of every release since your installed version, not just 'bug fixes and improvements'. The details load from a source that also works on networks that block GitHub's API.\n- Main Form tabs are now equal in size and perfectly aligned: icons, labels and underlines line up on every tab.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.38",
+    "versionCode": 271,
+    "date": "2026-11-06",
+    "notes": "- New: when you enroll a Searching, Return Visit or Bible Study record, the app warns you if the same person may already exist (similar name plus the same or a nearby location), and lets you view the existing record, use it, or continue.\n- Street View now finds the nearest street photo (up to about 1.3 km) and offers Google Street View when there are none nearby.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
