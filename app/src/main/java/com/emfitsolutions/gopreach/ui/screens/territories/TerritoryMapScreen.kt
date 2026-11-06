@@ -62,6 +62,7 @@ import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.Streetview
 import com.emfitsolutions.gopreach.ui.components.AlertDialog
+import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -201,7 +202,7 @@ private fun haversineMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Doub
 /** "350 m" under a kilometre, otherwise "1.4 km". */
 /** A "Nearest" / "Farthest" chip that drops down the records (name, kind, distance) in that order; [onPick] gets the position picked. */
 @Composable
-private fun DistanceDropdown(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, items: List<RecordWithDistance>, active: Boolean, canOpen: () -> Boolean, onPick: (Int) -> Unit) {
+private fun DistanceDropdown(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, items: List<RecordWithDistance>, active: Boolean, modifier: Modifier = Modifier, canOpen: () -> Boolean, onPick: (Int) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         FilterChip(
@@ -1044,47 +1045,53 @@ fun TerritoryMapScreen(
     val territoryFilters: @Composable () -> Unit = {
         Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             barangaySearch()
-            Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f), shadowElevation = 2.dp) {
-                androidx.compose.foundation.layout.FlowRow(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    // "All" searches and lists Searching, Return Visit and Bible Study together; each of the other chips narrows to its own kind.
-                    TypeFilter.entries.filter { it != TypeFilter.ALL }.forEach { f ->
-                        FilterChip(selected = typeFilter == f, onClick = { typeFilter = if (typeFilter == f) TypeFilter.ALL else f; recordScope = 0 }, label = { Text(f.label, style = MaterialTheme.typography.labelLarge) })
+            Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f), shadowElevation = 3.dp) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // One tidy row for the category: All / Searching / Return Visit / Bible Study ("All" lists the three together). Tap the chosen one again to clear it.
+                    val cats = TypeFilter.entries.filter { it != TypeFilter.ALL }
+                    androidx.compose.material3.SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        cats.forEachIndexed { index, f ->
+                            SegmentedButton(
+                                selected = typeFilter == f,
+                                onClick = { typeFilter = if (typeFilter == f) TypeFilter.ALL else f; recordScope = 0 },
+                                shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = index, count = cats.size),
+                                icon = {},
+                            ) { Text(f.label, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false) }
+                        }
                     }
-                    // Whose records the chosen category shows: My (the start), FS Group or Congregation — the same drop-down as the Ministry tab.
-                    if (typeFilter != TypeFilter.ALL && !readOnly) {
-                        val kind = if (typeFilter == TypeFilter.EVERY) "Records" else typeFilter.label
-                        val scopeNames = listOf("My $kind", "FS Group $kind", "Congregation $kind")
-                        var scopeOpen by remember { mutableStateOf(false) }
-                        Box {
-                            androidx.compose.material3.OutlinedButton(
-                                onClick = { scopeOpen = true },
-                                modifier = Modifier.semantics { contentDescription = "Whose records to show: ${scopeNames[recordScope]}" },
-                                shape = RoundedCornerShape(12.dp),
-                            ) {
-                                Text(scopeNames[recordScope], maxLines = 1)
-                                Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
-                            }
-                            androidx.compose.material3.DropdownMenu(expanded = scopeOpen, onDismissRequest = { scopeOpen = false }) {
-                                scopeNames.forEachIndexed { index, label ->
-                                    androidx.compose.material3.DropdownMenuItem(
-                                        text = { Text(label, fontWeight = if (index == recordScope) FontWeight.Bold else FontWeight.Normal) },
-                                        onClick = { scopeOpen = false; recordScope = index },
-                                    )
+                    if (typeFilter != TypeFilter.ALL) {
+                        // Whose records the chosen category shows: My (the start), FS Group or Congregation — the same drop-down as the Ministry tab.
+                        if (!readOnly) {
+                            val kind = if (typeFilter == TypeFilter.EVERY) "Records" else typeFilter.label
+                            val scopeNames = listOf("My $kind", "FS Group $kind", "Congregation $kind")
+                            var scopeOpen by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                androidx.compose.material3.OutlinedButton(
+                                    onClick = { scopeOpen = true },
+                                    modifier = Modifier.fillMaxWidth().heightIn(min = 44.dp).semantics { contentDescription = "Whose records to show: ${scopeNames[recordScope]}" },
+                                    shape = RoundedCornerShape(14.dp),
+                                ) {
+                                    Text(scopeNames[recordScope], modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Icon(Icons.Rounded.ArrowDropDown, contentDescription = null)
+                                }
+                                androidx.compose.material3.DropdownMenu(expanded = scopeOpen, onDismissRequest = { scopeOpen = false }) {
+                                    scopeNames.forEachIndexed { index, label ->
+                                        androidx.compose.material3.DropdownMenuItem(
+                                            text = { Text(label, fontWeight = if (index == recordScope) FontWeight.Bold else FontWeight.Normal) },
+                                            onClick = { scopeOpen = false; recordScope = index },
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                    // Under every option (All included) a Nearest and a Farthest dropdown list that option's records by distance from the current location; picking one opens it on the map.
-                    if (typeFilter != TypeFilter.ALL) {
-                        DistanceDropdown("Nearest", Icons.Rounded.NearMe, nearestOrdered, stepOrder == SortOrder.NEAREST, canOpen = { if (myLocation == null) { toast("Turn on your location to find the nearest or farthest."); locationRefreshKey++; false } else true }) { i ->
-                            stepOrder = SortOrder.NEAREST; stepIndex = i; selectRecord(nearestOrdered[i].record.id, fly = true)
-                        }
-                        DistanceDropdown("Farthest", Icons.Rounded.Explore, farthestOrdered, stepOrder == SortOrder.FARTHEST, canOpen = { if (myLocation == null) { toast("Turn on your location to find the nearest or farthest."); locationRefreshKey++; false } else true }) { i ->
-                            stepOrder = SortOrder.FARTHEST; stepIndex = i; selectRecord(farthestOrdered[i].record.id, fly = true)
+                        // Nearest and Farthest side by side: they list the chosen option's records by distance from the current location; picking one opens it on the map.
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            DistanceDropdown("Nearest", Icons.Rounded.NearMe, nearestOrdered, stepOrder == SortOrder.NEAREST, Modifier.weight(1f), canOpen = { if (myLocation == null) { toast("Turn on your location to find the nearest or farthest."); locationRefreshKey++; false } else true }) { i ->
+                                stepOrder = SortOrder.NEAREST; stepIndex = i; selectRecord(nearestOrdered[i].record.id, fly = true)
+                            }
+                            DistanceDropdown("Farthest", Icons.Rounded.Explore, farthestOrdered, stepOrder == SortOrder.FARTHEST, Modifier.weight(1f), canOpen = { if (myLocation == null) { toast("Turn on your location to find the nearest or farthest."); locationRefreshKey++; false } else true }) { i ->
+                                stepOrder = SortOrder.FARTHEST; stepIndex = i; selectRecord(farthestOrdered[i].record.id, fly = true)
+                            }
                         }
                     }
                 }
