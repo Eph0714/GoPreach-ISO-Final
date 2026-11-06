@@ -161,6 +161,23 @@ class NotificationSoundCoordinator(
             }
         }.launchIn(appScope)
 
+        // Territory Map work reminders (To Do / To Continue drawings dated tomorrow or today) are dated by the day they fall on, not by when they were created, so the
+        // "new since the last emission" rule above can never ring for them. They ring instead the first time each one shows up on this device, which is when the person
+        // signs in (or opens the app) on that day: once per reminder, never again for the same one.
+        scope.flatMapLatest { s ->
+            unifiedItemsFor(s).onEach { items ->
+                val prefs = context.getSharedPreferences("territory_work_reminders", android.content.Context.MODE_PRIVATE)
+                val heard = prefs.getStringSet("heard", emptySet()).orEmpty()
+                val fresh = items.filter { it.id.startsWith("td_") && "${s.personId}|${it.id}" !in heard }
+                if (fresh.isNotEmpty()) {
+                    prefs.edit().putStringSet("heard", (heard + fresh.map { "${s.personId}|${it.id}" }).toList().takeLast(200).toSet()).apply()
+                    fresh.forEach { item ->
+                        NotificationHelper.notify(context, id = (item.category.name + item.id).hashCode(), title = item.title, text = item.subtitle, category = item.category)
+                    }
+                }
+            }.map { }
+        }.launchIn(appScope)
+
         // "Your forwarded record was accepted/declined" — the sender's own
         // outgoing half, which the unified balloon above never includes
         // (it only ever lists *pending* requests, not resolved ones). Only

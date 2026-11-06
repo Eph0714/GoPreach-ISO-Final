@@ -63,6 +63,7 @@ class NotificationItemsProvider(
     private val coReportRepository: com.emfitsolutions.gopreach.data.repository.CoFieldServiceReportRepository,
     private val groupRepository: com.emfitsolutions.gopreach.data.repository.GroupRepository,
     private val roleAssignmentRepository: com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository,
+    private val drawingRepository: com.emfitsolutions.gopreach.data.repository.TerritoryDrawingRepository,
 ) {
     private val periodFormat = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
 
@@ -219,6 +220,18 @@ class NotificationItemsProvider(
                 .map { editRequestItem(it, people) }
         }
 
+    /**
+     * Territory Map work reminders: a drawing of the person's own FS Group (or one they drew themselves) that is marked To Do or To Continue, with its date
+     * on TOMORROW or TODAY. They are rebuilt from the data every time, so one shows up each time the person signs in on those two days (and not before or after),
+     * and goes away once the drawing is finished, re-dated or deleted.
+     */
+    private fun territoryWorkReminders(personId: String): Flow<List<NotificationItem>> =
+        combine(drawingRepository.observeAll(), roleAssignmentRepository.observeForPerson(personId)) { drawings, roles ->
+            val active = roles.filter { it.status == com.emfitsolutions.gopreach.data.model.RoleAssignmentStatus.ACTIVE && it.groupId != null }
+            val myGroupId = (active.firstOrNull { it.resolvedRoleTypeOrNull() is com.emfitsolutions.gopreach.data.model.RoleType.Publisher } ?: active.firstOrNull())?.groupId
+            territoryWorkItems(drawings, personId, myGroupId, System.currentTimeMillis())
+        }
+
     fun itemsForPublisher(currentPersonId: String, congregationId: String?): Flow<List<NotificationItem>> =
         combine(
             combine(
@@ -228,13 +241,15 @@ class NotificationItemsProvider(
                 scheduleRepository.observeAll(),
             ) { a, b, c, d -> listOf(a, b, c, d) },
             officerEditRequests(currentPersonId, congregationId),
-        ) { four, officerRequests ->
+            territoryWorkReminders(currentPersonId),
+        ) { four, officerRequests, territoryReminders ->
             @Suppress("UNCHECKED_CAST") val publisherForwards = four[0] as List<com.emfitsolutions.gopreach.data.model.PublisherForwardRequest>
             @Suppress("UNCHECKED_CAST") val assignments = four[1] as List<com.emfitsolutions.gopreach.data.model.HouseholderAssignment>
             @Suppress("UNCHECKED_CAST") val announcements = four[2] as List<com.emfitsolutions.gopreach.data.model.Announcement>
             @Suppress("UNCHECKED_CAST") val schedules = four[3] as List<com.emfitsolutions.gopreach.data.model.Schedule>
             val items = mutableListOf<NotificationItem>()
             items += officerRequests
+            items += territoryReminders
 
             publisherForwards
                 .filter { it.toPublisherPersonId == currentPersonId && it.status == ForwardRequestStatus.PENDING }
@@ -300,3 +315,34 @@ private fun Announcement.notifiable(): Boolean = !isCircuitOverseerStyle || (sta
 
 /** What the notification may show: the original announcements show their text; a Circuit Overseer announcement never puts its content in a preview. */
 private fun Announcement.notificationPreview(): String = if (isCircuitOverseerStyle) "From the Circuit Overseer. Open Announcements to read it." else details
+
+private fun startOfDay(millis: Long, plusDays: Int = 0): Long = java.util.Calendar.getInstance().apply {
+    timeInMillis = millis
+    add(java.util.Calendar.DAY_OF_MONTH, plusDays)
+    set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
+}.timeInMillis
+
+/** The To Do / To Continue drawings of [myGroupId] (or drawn by [personId]) dated today or tomorrow, as notification items. */
+internal fun territoryWorkItems(
+    drawings: List<com.emfitsolutions.gopreach.data.model.TerritoryDrawing>, personId: String, myGroupId: String?, now: Long,
+): List<NotificationItem> {
+    val today = startOfDay(now)
+    val tomorrow = startOfDay(now, 1)
+    val dateFormat = SimpleDateFormat("EEE, MMM d", Locale.getDefault())
+    return drawings
+        .filter { it.status != com.emfitsolutions.gopreach.data.model.DrawingStatus.FINISHED && it.statusDate > 0L }
+        .filter { (myGroupId != null && it.groupId == myGroupId) || it.userId == personId }
+        .mapNotNull { d ->
+            val day = startOfDay(d.statusDate)
+            val when_ = when (day) { today -> "today"; tomorrow -> "tomorrow"; else -> return@mapNotNull null }
+            val what = d.name.takeIf { it.isNotBlank() } ?: d.territoryName.takeIf { it.isNotBlank() } ?: "a territory"
+            NotificationItem(
+                id = "td_" + d.id + "_" + when_ + "_" + day,
+                category = NotificationCategory.CALENDAR_SCHEDULE,
+                title = "Territory work " + when_ + ": " + d.status.label + " - " + what,
+                subtitle = listOf(d.territoryName.takeIf { it.isNotBlank() && it != what }, d.status.dateLabel + ": " + dateFormat.format(Date(day))).filterNotNull().joinToString(" · "),
+                timestamp = today,
+                route = Destinations.MANAGE_TERRITORIES_BASE,
+            )
+        }
+}
