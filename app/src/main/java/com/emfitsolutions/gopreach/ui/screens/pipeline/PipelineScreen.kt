@@ -795,7 +795,7 @@ internal fun PipelinePersonDialog(
     /** "Use Existing Record" of the duplicate warning: opens the existing person instead of creating another. Null hides that button (View Details is always offered). */
     onUseExisting: ((InterestedPerson) -> Unit)? = null,
 ) {
-    var name by remember { mutableStateOf(existingPerson?.name ?: initialName.orEmpty()) }
+    var name by remember { mutableStateOf(existingPerson?.name ?: initialName.orEmpty().uppercase()) }
     var spouse by remember { mutableStateOf(existingPerson?.spouse.orEmpty()) }
     // "Place of Origin" — still stored in [InterestedPerson.address]; see that
     // field's doc comment. An older record whose only value lives in the

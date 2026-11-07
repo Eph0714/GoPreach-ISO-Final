@@ -144,7 +144,7 @@ fun CoordinateImageCapture(onPicked: (CoordinateCandidate, String?) -> Unit, mod
     }
 
     reading?.let { r ->
-        var readName by remember(r) { mutableStateOf(r.name.orEmpty()) }
+        var readName by remember(r) { mutableStateOf(r.name.orEmpty().uppercase()) }
         AlertDialog(
             onDismissRequest = { reading = null },
             title = { Text(if (r.candidates.isEmpty()) "No coordinates found" else "Possible locations") },
