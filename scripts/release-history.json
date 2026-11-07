@@ -642,6 +642,14 @@
     "date": "2026-11-07",
     "notes": "Capture Coordinate: a saved location that a Searching, Return Visit or Bible Study record now uses leaves the Saved Locations list (it stays under Already used by a record for viewing) and returns when its last record is deleted. The name in a captured picture is now read by the same text reader as the coordinates, with the AI reader preferred when available. Bug fixes and improvements.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.48",
+    "versionCode": 281,
+    "date": "2026-11-07",
+    "notes": "Names are now always upper case: in the Capture Coordinate picture dialog and on new records. Bug fixes and improvements.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
