@@ -59,6 +59,7 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.emfitsolutions.gopreach.domain.map.NameParser
 import kotlinx.serialization.json.put
 import java.io.File
 
@@ -161,7 +162,7 @@ fun CoordinateImageCapture(onPicked: (CoordinateCandidate, String?) -> Unit, mod
                     r.aiNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
                     androidx.compose.material3.OutlinedTextField(
                         value = readName, onValueChange = { readName = it.uppercase() }, singleLine = true,
-                        label = { Text(if (r.name == null) "Name (none found, optional)" else "Name read by the AI reader") },
+                        label = { Text(if (r.name == null) "Name (none found, optional)" else "Name read from the picture") },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     r.candidates.forEach { c ->
@@ -210,7 +211,7 @@ private fun readImage(context: Context, uri: Uri): ImageReading {
     val ratio = minOf(1f, 1280f / maxOf(bitmap.width, bitmap.height))
     val small = Bitmap.createScaledBitmap(bitmap, (bitmap.width * ratio).toInt().coerceAtLeast(1), (bitmap.height * ratio).toInt().coerceAtLeast(1), true)
     val jpeg = java.io.ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
-    return ImageReading(listOfNotNull(gps) + fromText, text, jpeg = jpeg)
+    return ImageReading(listOfNotNull(gps) + fromText, text, name = NameParser.find(text), jpeg = jpeg)
 }
 
 /** Sends the picture to the server's AI reader. Failure never loses the text reader's result: the name is simply left for the person to type. */
@@ -218,14 +219,14 @@ private suspend fun askAiReader(r: ImageReading, api: com.emfitsolutions.gopreac
     val bytes = r.jpeg ?: return r
     return try {
         val reply = api.postJson("/v1/vision/read-place", kotlinx.serialization.json.buildJsonObject { put("imageBase64", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)) })
-        if (reply.status != 200) return r.copy(jpeg = null, aiNote = "The AI reader is not available right now, so the name was not read. You can type it.")
+        if (reply.status != 200) return r.copy(jpeg = null)
         fun prim(k: String) = (reply.body?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
         val la = prim("lat")?.toDoubleOrNull(); val lo = prim("lng")?.toDoubleOrNull()
         val ai = if (la != null && lo != null && r.candidates.none { kotlin.math.abs(it.lat - la) < 0.0001 && kotlin.math.abs(it.lng - lo) < 0.0001 })
             CoordinateCandidate(la, lo, CoordinateFormat.DECIMAL, CoordinateSource.VISIBLE_TEXT, "read by the AI reader") else null
-        r.copy(candidates = r.candidates + listOfNotNull(ai), name = prim("name")?.trim()?.takeIf { it.isNotEmpty() }, jpeg = null)
+        r.copy(candidates = r.candidates + listOfNotNull(ai), name = prim("name")?.trim()?.takeIf { it.isNotEmpty() } ?: r.name, jpeg = null)
     } catch (e: kotlin.coroutines.cancellation.CancellationException) { throw e
-    } catch (e: Exception) { r.copy(jpeg = null, aiNote = "The AI reader could not be reached (check the connection), so the name was not read. You can type it.") }
+    } catch (e: Exception) { r.copy(jpeg = null) }
 }
 
 private fun decodeScaled(context: Context, uri: Uri, maxDimension: Int): Bitmap? {
