@@ -49,6 +49,20 @@ class FindLocationViewModel(
     fun savedLocationsFor(publisherPersonId: String): Flow<List<SavedLocation>> =
         savedLocationRepository.observeForPublisher(publisherPersonId)
 
+    /** Saved locations split by use. A saved location is USED while at least one ACTIVE Searching / Return Visit / Bible Study record
+     * (of [congregationId]; every record for the Super Admin, who passes null) sits at it within [MATCH_METERS]. It is worked out from the
+     * records themselves, so a delete, a restore from the Recycle Bin or a sync from another device changes it at once, and several records
+     * at one spot keep it used until the last is gone. Nothing is stored, so there is nothing to get out of step. */
+    fun savedLocationAvailability(publisherPersonId: String, congregationId: String?): Flow<SavedLocationAvailability> =
+        kotlinx.coroutines.flow.combine(savedLocationRepository.observeForPublisher(publisherPersonId), interestedPersonRepository.observeAll()) { saved, people ->
+            val spots = people.filter { p ->
+                p.status == RecordStatus.ACTIVE && p.gpsLat != null && p.gpsLng != null &&
+                    (congregationId.isNullOrBlank() || p.congregationId == congregationId)
+            }.map { it.gpsLat!! to it.gpsLng!! }
+            val (used, available) = saved.partition { s -> spots.any { (la, lo) -> metersBetween(s.lat, s.lng, la, lo) <= MATCH_METERS } }
+            SavedLocationAvailability(available, used)
+        }
+
     fun saveLocation(publisherPersonId: String, lat: Double, lng: Double, remarks: String) {
         viewModelScope.launch {
             savedLocationRepository.save(
@@ -127,3 +141,6 @@ class FindLocationViewModel(
         }
     }
 }
+
+/** The publisher's saved locations that can take a new record, and those a record already uses (see [FindLocationViewModel.savedLocationAvailability]). */
+data class SavedLocationAvailability(val available: List<SavedLocation>, val used: List<SavedLocation>)

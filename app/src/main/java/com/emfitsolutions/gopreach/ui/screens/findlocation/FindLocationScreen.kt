@@ -158,8 +158,12 @@ fun FindLocationScreen(
     var showAssignDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<SavedLocation?>(null) }
 
-    val savedLocationsFlow = remember(currentPersonId) { viewModel.savedLocationsFor(currentPersonId) }
-    val savedLocations by savedLocationsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val availabilityFlow = remember(currentPersonId, enrollmentAccess.congregationId, enrollmentAccess.isSuperAdmin) {
+        viewModel.savedLocationAvailability(currentPersonId, enrollmentAccess.congregationId.takeUnless { enrollmentAccess.isSuperAdmin })
+    }
+    val availability by availabilityFlow.collectAsStateWithLifecycle(initialValue = SavedLocationAvailability(emptyList(), emptyList()))
+    val savedLocations = availability.available
+    var showUsedSaved by remember { mutableStateOf(false) }
 
     fun submit() {
         val query = coordinatesText.trim()
@@ -356,7 +360,7 @@ fun FindLocationScreen(
                 )
             }
 
-            if (savedLocations.isNotEmpty()) {
+            if (savedLocations.isNotEmpty() || availability.used.isNotEmpty()) {
                 HorizontalDivider()
                 Text("Saved Locations", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                 savedLocations.forEach { saved ->
@@ -377,6 +381,31 @@ fun FindLocationScreen(
                                     errorText = null
                                 }) { Text("Use") }
                                 ActionIconButton(ActionKind.Delete, onClick = { pendingDelete = saved }, contentDescription = "Delete saved location")
+                            }
+                        }
+                    }
+                }
+                if (savedLocations.isEmpty()) {
+                    Text("Every saved location is already used by a record. Capture a new coordinate to save another.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                // A saved location a record now uses leaves the list above; it can still be looked at here, never offered for a new record.
+                if (availability.used.isNotEmpty()) {
+                    TextButton(onClick = { showUsedSaved = !showUsedSaved }) {
+                        Text(if (showUsedSaved) "Hide used locations" else "Already used by a record (${availability.used.size})")
+                    }
+                    if (showUsedSaved) availability.used.forEach { saved ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(saved.remarks.ifBlank { "Saved Location" }, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Text(formatCoordinatesDms(saved.lat, saved.lng), style = MaterialTheme.typography.bodySmall)
+                                    Text("Used", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                TextButton(onClick = {
+                                    coordinatesText = "${saved.lat}, ${saved.lng}"
+                                    destination = saved.lat to saved.lng
+                                    errorText = null
+                                }) { Text("View") }
                             }
                         }
                     }
