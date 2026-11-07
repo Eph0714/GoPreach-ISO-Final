@@ -7,6 +7,7 @@ import { loadActor, authorizeWrite, canReadRow, loadGrant } from './policy/index
 import { rateLimit } from './rateLimit.js';
 import { mountFiles } from './files.js';
 import { mountVoice } from './voice.js';
+import { mountVision } from './vision.js';
 import { mountAnnouncementFiles } from './announcementFiles.js';
 import { mountPresence } from './presence.js';
 import { mountLandmarks } from './landmarks.js';
@@ -140,6 +141,7 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
 
   mountFiles(app, store, auth);
   mountVoice(app, store, auth, voiceOptions);
+  mountVision(app, store, auth, voiceOptions.vision ?? {});
   mountAnnouncementFiles(app, store, auth);
   mountPresence(app, store, auth);
   mountLandmarks(app, auth, landmarkService);
