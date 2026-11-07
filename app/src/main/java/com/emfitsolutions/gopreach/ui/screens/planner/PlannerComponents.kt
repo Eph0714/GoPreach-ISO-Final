@@ -18,6 +18,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -801,7 +802,6 @@ internal fun StepperRow(
     // pushed to the far edge of the screen by [Arrangement.SpaceBetween].
     labelColumnWidth: Dp? = null,
 ) {
-    var showEditDialog by remember { mutableStateOf(false) }
     val editable = onValueEntered != null && currentValue != null
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -827,58 +827,50 @@ internal fun StepperRow(
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             CircleStepButton(Icons.Rounded.Remove, "Decrease $label", onDecrement)
-            Text(
-                value,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = valueColor ?: Color.Unspecified,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .width(44.dp)
-                    .then(
-                        if (editable) {
-                            Modifier.clip(RoundedCornerShape(6.dp)).clickable(role = Role.Button, onClickLabel = "Enter $label manually") { showEditDialog = true }
-                        } else {
-                            Modifier
-                        },
-                    ),
-            )
+            if (editable) {
+                // A real text field, so a number can be typed straight in (not only +/-). It is saved when the keyboard's Done is pressed or the field loses focus;
+                // an empty or unreadable entry goes back to the current value. While it is not being edited it follows the current value.
+                var text by remember(currentValue) { mutableStateOf(currentValue!!.toString()) }
+                var focused by remember { mutableStateOf(false) }
+                val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+                fun commit() {
+                    val n = text.toIntOrNull()
+                    if (n != null && n != currentValue) onValueEntered!!(n) else text = currentValue!!.toString()
+                }
+                androidx.compose.foundation.text.BasicTextField(
+                    value = text,
+                    onValueChange = { text = it.filter(Char::isDigit).take(5) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { commit(); focusManager.clearFocus() }),
+                    textStyle = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = valueColor ?: MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center),
+                    cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier
+                        .width(56.dp)
+                        .onFocusChanged { st -> if (focused && !st.isFocused) commit(); focused = st.isFocused },
+                    decorationBox = { inner ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 4.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center,
+                        ) { inner() }
+                    },
+                )
+            } else {
+                Text(
+                    value,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = valueColor ?: Color.Unspecified,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.width(44.dp),
+                )
+            }
             CircleStepButton(Icons.Rounded.Add, "Increase $label", onIncrement)
         }
     }
-    if (showEditDialog && editable) {
-        NumberEntryDialog(
-            label = label,
-            initial = currentValue!!,
-            onDismiss = { showEditDialog = false },
-            onSave = { onValueEntered!!(it); showEditDialog = false },
-        )
-    }
-}
-
-/** The small "type it directly" dialog [StepperRow] opens when its number is
- * tapped — one numeric field, pre-filled with the current value. */
-@Composable
-private fun NumberEntryDialog(label: String, initial: Int, onDismiss: () -> Unit, onSave: (Int) -> Unit) {
-    var text by remember { mutableStateOf(initial.toString()) }
-    AlertDialog(
-        scrollBody = true,
-        onDismissRequest = onDismiss,
-        title = { Text("Enter $label") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it.filter(Char::isDigit).take(5) },
-                label = { Text(label) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                visualTransformation = VisualTransformation.None,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
-        confirmButton = { ActionButton(ActionKind.Save, onClick = { onSave(text.toIntOrNull()?.coerceAtLeast(0) ?: initial) }, label = "Save") },
-        dismissButton = { ActionButton(ActionKind.Cancel, onClick = onDismiss, label = "Cancel") },
-    )
 }
 
 /** Compact goal line: stepper plus a one-line Remaining/Surplus caption. */
