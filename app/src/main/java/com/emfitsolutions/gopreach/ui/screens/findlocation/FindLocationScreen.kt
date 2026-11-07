@@ -126,7 +126,7 @@ data class FindLocationEnrollmentAccess(
  * on screen at that moment (so editing the search box afterwards can't shift
  * it), and — for Super-Admin — the congregation, filled in after their pick.
  * Purely form state: nothing is stored until the enrollment form is saved. */
-private data class EnrollRequest(val stage: PipelineStage, val lat: Double, val lng: Double, val congregationId: String?)
+private data class EnrollRequest(val stage: PipelineStage, val lat: Double, val lng: Double, val congregationId: String?, val name: String? = null)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -143,6 +143,7 @@ fun FindLocationScreen(
     val showToast = rememberActionToast()
     val coroutineScope = rememberCoroutineScope()
     var enrollRequest by remember { mutableStateOf<EnrollRequest?>(null) }
+    var capturedName by remember { mutableStateOf<String?>(null) }
     // Super-Admin only: the stage they tapped, waiting on a congregation pick.
     var pendingSuperAdminStage by remember { mutableStateOf<PipelineStage?>(null) }
     LaunchedEffect(Unit) { pipelineViewModel.errorEvents.collect { showToast(it) } }
@@ -233,7 +234,8 @@ fun FindLocationScreen(
             }
             // A picture of the place: coordinates printed in it (or its GPS tags) fill the box above, which then shows the spot on the map.
             // Nothing is saved until the person chooses to; recognition never invents a coordinate.
-            CoordinateImageCapture(onPicked = { c ->
+            CoordinateImageCapture(onPicked = { c, readName ->
+                capturedName = readName
                 coordinatesText = "%.6f, %.6f".format(c.lat, c.lng)
                 errorText = null
                 destination = c.lat to c.lng
@@ -307,7 +309,7 @@ fun FindLocationScreen(
                                         if (enrollmentAccess.isSuperAdmin) {
                                             pendingSuperAdminStage = stage
                                         } else {
-                                            enrollRequest = EnrollRequest(stage, lat, lng, enrollmentAccess.congregationId)
+                                            enrollRequest = EnrollRequest(stage, lat, lng, enrollmentAccess.congregationId, capturedName)
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
@@ -419,7 +421,7 @@ fun FindLocationScreen(
         SelectCongregationDialog(
             congregations = congregations.filter { it.status == RecordStatus.ACTIVE }.sortedBy { it.name },
             onSelected = { congregation ->
-                enrollRequest = EnrollRequest(superAdminStage, destinationForSave.first, destinationForSave.second, congregation.id)
+                enrollRequest = EnrollRequest(superAdminStage, destinationForSave.first, destinationForSave.second, congregation.id, capturedName)
                 pendingSuperAdminStage = null
             },
             onDismiss = { pendingSuperAdminStage = null },
@@ -453,6 +455,7 @@ fun FindLocationScreen(
             onDismiss = { enrollRequest = null },
             viewModel = pipelineViewModel,
             initialCoordinates = CoordinatesValue(request.lat, request.lng),
+            initialName = request.name,
             onUseExisting = { existing -> onOpenRecord(existing.pipelineStage, existing.id) },
             assignablePublishers = if (enrollmentAccess.isPublisher) null else publishers,
         )

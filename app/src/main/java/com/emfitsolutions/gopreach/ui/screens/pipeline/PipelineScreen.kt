@@ -786,6 +786,8 @@ internal fun PipelinePersonDialog(
      * the user saves — so opening this form never creates a record by
      * itself. Ignored when editing ([existingPerson] non-null). */
     initialCoordinates: CoordinatesValue? = null,
+    /** Name read from a Find Location picture; prefills a brand-new record only (the duplicate check runs on it like any typed name). */
+    initialName: String? = null,
     /** Non-null shows the "ASSIGN PUBLISHER" picker (an authorized non-
      * Publisher creating a record); null means the record is simply owned by
      * [publisherPersonId] as before, with no assignment step. */
@@ -793,7 +795,7 @@ internal fun PipelinePersonDialog(
     /** "Use Existing Record" of the duplicate warning: opens the existing person instead of creating another. Null hides that button (View Details is always offered). */
     onUseExisting: ((InterestedPerson) -> Unit)? = null,
 ) {
-    var name by remember { mutableStateOf(existingPerson?.name.orEmpty()) }
+    var name by remember { mutableStateOf(existingPerson?.name ?: initialName.orEmpty()) }
     var spouse by remember { mutableStateOf(existingPerson?.spouse.orEmpty()) }
     // "Place of Origin" — still stored in [InterestedPerson.address]; see that
     // field's doc comment. An older record whose only value lives in the
@@ -1039,7 +1041,7 @@ internal fun PipelinePersonDialog(
                 OutlinedTextField(value = language, onValueChange = { language = it.uppercase() }, label = { Text("Language (optional)") }, singleLine = true, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = literaturePlace, onValueChange = { literaturePlace = it.uppercase() }, label = { Text("Literature Place (optional)") }, singleLine = true, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = remarks, onValueChange = { remarks = it }, label = { Text("Remarks (optional)") }, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Notes (optional)") }, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
+                NotesDropdown(notes) { notes = it }
                 OutlinedTextField(value = contact, onValueChange = { contact = it }, label = { Text("Contact (optional)") }, singleLine = true, visualTransformation = VisualTransformation.None, modifier = Modifier.fillMaxWidth())
 
                 // Hidden entirely while the Super Admin's "Allow Capture Image" is off; an image already saved on the record stays untouched.
@@ -2373,6 +2375,34 @@ private fun MinistryToolTile(
         Column(modifier = Modifier.padding(vertical = 8.dp, horizontal = 2.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Icon(icon, contentDescription = null, tint = if (enabled) (iconTint ?: content) else content, modifier = Modifier.size(22.dp))
             Text(label, color = content, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+    }
+}
+
+/** The fixed choices for a record's Notes; "None" clears it. A value saved before this list existed stays selectable so editing never drops it. */
+private val NOTE_CHOICES = listOf(
+    "CA - Call again", "NH - Not at Home", "RV - Return Visit", "B - Busy", "C - Child",
+    "MO - Move out", "LP - Literature Place", "NT - Next Topic", "BS - Bible Study",
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NotesDropdown(selected: String, onSelected: (String) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val choices = if (selected.isNotBlank() && selected !in NOTE_CHOICES) listOf(selected) + NOTE_CHOICES else NOTE_CHOICES
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = selected,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Notes (optional)") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            visualTransformation = VisualTransformation.None,
+            modifier = Modifier.fillMaxWidth().menuAnchor(),
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(text = { Text("None") }, onClick = { onSelected(""); expanded = false })
+            choices.forEach { c -> DropdownMenuItem(text = { Text(c) }, onClick = { onSelected(c); expanded = false }) }
         }
     }
 }

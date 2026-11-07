@@ -59,23 +59,25 @@ import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.put
 import java.io.File
 
 private const val TAG = "CoordinateImageCapture"
 
 /** What reading one picture produced. [text] is everything the recognizer saw, shown only so the person can check it. */
-private data class ImageReading(val candidates: List<CoordinateCandidate>, val readText: String)
+private data class ImageReading(val candidates: List<CoordinateCandidate>, val readText: String, val name: String? = null, val aiNote: String? = null, val jpeg: ByteArray? = null)
 
 /**
- * "Capture Location Image" / "Choose Image" for Find Location. The picture is read on the phone (nothing is uploaded), the
+ * "Capture Coordinate" / "Choose Image" for Find Location. The picture is read on the phone (nothing is uploaded), the
  * coordinates found in the visible text and the GPS tags the camera stored in the photo are listed as SEPARATE kinds of
  * candidate, and the person picks one: it is only put into the search box (shown on the map, editable, saved or cancelled
  * there) and is never saved here. A picture with nothing usable says so; no coordinate is ever invented.
  */
 @Composable
-fun CoordinateImageCapture(onPicked: (CoordinateCandidate) -> Unit, modifier: Modifier = Modifier) {
+fun CoordinateImageCapture(onPicked: (CoordinateCandidate, String?) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val api = org.koin.compose.koinInject<com.emfitsolutions.gopreach.data.remote.SyncApi>()
     var pendingUri by remember { mutableStateOf<Uri?>(null) }
     var busy by remember { mutableStateOf(false) }
     var permissionDenied by remember { mutableStateOf(false) }
@@ -86,8 +88,11 @@ fun CoordinateImageCapture(onPicked: (CoordinateCandidate) -> Unit, modifier: Mo
         busy = true; failure = null
         scope.launch {
             val result = withContext(Dispatchers.Default) { runCatching { readImage(context, uri) } }
+            // The AI reader (server side) gives the name and any coordinates written in the picture; the text reader above still gives coordinates if it is unavailable.
+            val done = result.getOrNull()?.let { askAiReader(it, api) }
             busy = false
-            result.onSuccess { reading = it }.onFailure { Log.e(TAG, "Could not read the picture", it); failure = "The picture could not be read. Try another one, or type the coordinates." }
+            done?.let { reading = it }
+            result.onFailure { Log.e(TAG, "Could not read the picture", it); failure = "The picture could not be read. Try another one, or type the coordinates." }
         }
     }
 
@@ -119,7 +124,7 @@ fun CoordinateImageCapture(onPicked: (CoordinateCandidate) -> Unit, modifier: Mo
                 },
             ) {
                 Icon(Icons.Rounded.CameraAlt, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
-                Text("Capture Location Image")
+                Text("Capture Coordinate")
             }
             OutlinedButton(enabled = !busy, modifier = Modifier.weight(1f), onClick = { pickImage.launch("image/*") }) {
                 Icon(Icons.Rounded.PhotoLibrary, contentDescription = null, modifier = Modifier.padding(end = 6.dp))
@@ -128,7 +133,7 @@ fun CoordinateImageCapture(onPicked: (CoordinateCandidate) -> Unit, modifier: Mo
         }
         if (busy) Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            Text("  Reading the picture…", style = MaterialTheme.typography.bodySmall)
+            Text("  Reading the picture with the AI reader…", style = MaterialTheme.typography.bodySmall)
         }
         if (permissionDenied) Text(
             "Camera permission was not given. Choose an existing picture instead, or type the coordinates.",
@@ -138,6 +143,7 @@ fun CoordinateImageCapture(onPicked: (CoordinateCandidate) -> Unit, modifier: Mo
     }
 
     reading?.let { r ->
+        var readName by remember(r) { mutableStateOf(r.name.orEmpty()) }
         AlertDialog(
             onDismissRequest = { reading = null },
             title = { Text(if (r.candidates.isEmpty()) "No coordinates found" else "Possible locations") },
@@ -151,6 +157,13 @@ fun CoordinateImageCapture(onPicked: (CoordinateCandidate) -> Unit, modifier: Mo
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
+                    // The name found in the picture (never invented): kept only if the person uses a location, and editable here first.
+                    r.aiNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                    androidx.compose.material3.OutlinedTextField(
+                        value = readName, onValueChange = { readName = it.uppercase() }, singleLine = true,
+                        label = { Text(if (r.name == null) "Name (none found, optional)" else "Name read by the AI reader") },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     r.candidates.forEach { c ->
                         Card(modifier = Modifier.fillMaxWidth()) {
                             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -161,7 +174,7 @@ fun CoordinateImageCapture(onPicked: (CoordinateCandidate) -> Unit, modifier: Mo
                                 Text("%.6f, %.6f".format(c.lat, c.lng), style = MaterialTheme.typography.titleMedium)
                                 if (c.source == CoordinateSource.VISIBLE_TEXT) Text("Read as: ${c.matchedText}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Button(onClick = { reading = null; onPicked(c) }) { Text("Use this") }
+                                    Button(onClick = { reading = null; onPicked(c, readName.trim().ifBlank { null }) }) { Text("Use this") }
                                     TextButton(onClick = {
                                         (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                                             .setPrimaryClip(ClipData.newPlainText("Coordinates", "%.6f, %.6f".format(c.lat, c.lng)))
@@ -194,7 +207,25 @@ private fun readImage(context: Context, uri: Uri): ImageReading {
         if (lat == 0.0 && lng == 0.0) null
         else CoordinateCandidate(lat, lng, CoordinateFormat.PHOTO_GPS, CoordinateSource.PHOTO_GPS_METADATA, "GPS tags in the photo file")
     }
-    return ImageReading(listOfNotNull(gps) + fromText, text)
+    val ratio = minOf(1f, 1280f / maxOf(bitmap.width, bitmap.height))
+    val small = Bitmap.createScaledBitmap(bitmap, (bitmap.width * ratio).toInt().coerceAtLeast(1), (bitmap.height * ratio).toInt().coerceAtLeast(1), true)
+    val jpeg = java.io.ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
+    return ImageReading(listOfNotNull(gps) + fromText, text, jpeg = jpeg)
+}
+
+/** Sends the picture to the server's AI reader. Failure never loses the text reader's result: the name is simply left for the person to type. */
+private suspend fun askAiReader(r: ImageReading, api: com.emfitsolutions.gopreach.data.remote.SyncApi): ImageReading {
+    val bytes = r.jpeg ?: return r
+    return try {
+        val reply = api.postJson("/v1/vision/read-place", kotlinx.serialization.json.buildJsonObject { put("imageBase64", android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)) })
+        if (reply.status != 200) return r.copy(jpeg = null, aiNote = "The AI reader is not available right now, so the name was not read. You can type it.")
+        fun prim(k: String) = (reply.body?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
+        val la = prim("lat")?.toDoubleOrNull(); val lo = prim("lng")?.toDoubleOrNull()
+        val ai = if (la != null && lo != null && r.candidates.none { kotlin.math.abs(it.lat - la) < 0.0001 && kotlin.math.abs(it.lng - lo) < 0.0001 })
+            CoordinateCandidate(la, lo, CoordinateFormat.DECIMAL, CoordinateSource.VISIBLE_TEXT, "read by the AI reader") else null
+        r.copy(candidates = r.candidates + listOfNotNull(ai), name = prim("name")?.trim()?.takeIf { it.isNotEmpty() }, jpeg = null)
+    } catch (e: kotlin.coroutines.cancellation.CancellationException) { throw e
+    } catch (e: Exception) { r.copy(jpeg = null, aiNote = "The AI reader could not be reached (check the connection), so the name was not read. You can type it.") }
 }
 
 private fun decodeScaled(context: Context, uri: Uri, maxDimension: Int): Bitmap? {
