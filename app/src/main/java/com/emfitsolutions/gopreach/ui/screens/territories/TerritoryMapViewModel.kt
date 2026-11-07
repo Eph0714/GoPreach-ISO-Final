@@ -122,10 +122,15 @@ class TerritoryMapViewModel(
 
     /** The FS Group [personId] currently belongs to (Publisher or Regular
      * Elder assignment), or null if none. */
+    /**
+     * The person's own FS Group: the one their active role names (a Publisher role first) or, when no role names one, the group whose Overseer, Servant or Assistant slot they hold
+     * (an officer's group lives in the group's own slots, not always on a role record). Without this an officer opened the map on "no group" and saw no territory at all.
+     */
     fun myGroupId(personId: String): Flow<String?> =
-        roleAssignmentRepository.observeForPerson(personId).map { list ->
+        kotlinx.coroutines.flow.combine(roleAssignmentRepository.observeForPerson(personId), groupRepository.observeAll()) { list, groups ->
             val active = list.filter { it.status == RoleAssignmentStatus.ACTIVE && it.groupId != null }
             (active.firstOrNull { it.resolvedRoleTypeOrNull() is RoleType.Publisher } ?: active.firstOrNull())?.groupId
+                ?: com.emfitsolutions.gopreach.ui.screens.groupmodules.officerSlotOf(personId, null, groups)?.group?.id
         }
 
     /** The territories (claimed barangays) assigned to [groupId] - or, when [groupId] is null
