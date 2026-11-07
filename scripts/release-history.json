@@ -626,6 +626,14 @@
     "date": "2026-11-07",
     "notes": "Territory Map fix: if your FS Group was not found from your role (for example a Group Overseer, Servant or Assistant), the map now finds it from the group itself and shows your territory. Bug fixes and improvements.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.46",
+    "versionCode": 279,
+    "date": "2026-11-07",
+    "notes": "Capture Coordinate now reads the picture with the AI reader: it fills in the name and any written coordinates, then Enroll opens with the name, coordinate, Province, Municipality and Barangay filled and the duplicate check on. Notes on Searching, Return Visit and Bible Study records is now a list (CA, NH, RV, B, C, MO, LP, NT, BS). Bug fixes and improvements.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
