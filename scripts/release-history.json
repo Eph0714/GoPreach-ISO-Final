@@ -618,6 +618,14 @@
     "date": "2026-11-06",
     "notes": "New: Territory Map work reminders. When a To Do or To Continue drawing of your FS Group is dated tomorrow or today, you get a notification (with a sound) when you sign in. Bug fixes and improvements.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.45",
+    "versionCode": 278,
+    "date": "2026-11-07",
+    "notes": "Territory Map fix: if your FS Group was not found from your role (for example a Group Overseer, Servant or Assistant), the map now finds it from the group itself and shows your territory. Bug fixes and improvements.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
