@@ -698,6 +698,14 @@
     "date": "2026-11-10",
     "notes": "Publishers (Super Admin and Admin) now look like the website: a search box that is always there, the Field Service Group and Filter choices, List View / Table View / Full Screen / Excel buttons, a teal print button, larger rounded cards with Details, edit and more-actions, a chip showing each publisher's temporary-password step, and a green Add Publisher button.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.55",
+    "versionCode": 288,
+    "date": "2026-11-10",
+    "notes": "Full Screen on record lists (Publishers, Account Management and the other modules that have it) is now a true full screen: the status and navigation bars hide too, and an Exit Full Screen button stays on screen so you can always come back.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
