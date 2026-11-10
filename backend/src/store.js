@@ -9,6 +9,20 @@
  */
 import { config } from './config.js';
 
+/**
+ * Which of [candidates] ({ id, data }) a typed username means. An exact match wins; otherwise the match ignores capital letters and surrounding spaces
+ * (phone keyboards capitalize the first letter), but only when exactly one account fits, so two usernames that differ only by case never get mixed up.
+ */
+export function pickUsername(candidates, typed) {
+  const want = String(typed ?? '').trim();
+  if (!want) return null;
+  const of = (c) => (typeof c.data?.username === 'string' ? c.data.username : null);
+  const exact = candidates.find((c) => of(c) === want) ?? candidates.find((c) => of(c)?.trim() === want);
+  if (exact) return exact;
+  const loose = candidates.filter((c) => of(c)?.trim().toLowerCase() === want.toLowerCase());
+  return loose.length === 1 ? loose[0] : null;
+}
+
 /** The congregation a record belongs to, for read filtering. Mirrors how the Firestore rules read each collection. */
 export function congregationOf(collection, data) {
   if (!data) return null;

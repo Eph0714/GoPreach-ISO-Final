@@ -1,4 +1,4 @@
-import { congregationOf } from './store.js';
+import { congregationOf, pickUsername } from './store.js';
 import { MemoryCoData, attachCo } from './coStore.js';
 
 /** In-memory store with the same contract as MysqlStore — for tests and for running the API with no database. */
@@ -24,12 +24,11 @@ export class MemoryStore {
       .map((d) => ({ id: d.id, data: structuredClone(d.data), version: d.version, seq: d.seq }));
   }
 
-  /** The people document whose username is exactly [username] (case-sensitive, like the Firestore query it replaces). */
+  /** The people document for [username] (exact match first, else ignoring case and surrounding spaces; see pickUsername). */
   async findPersonByUsername(username) {
-    for (const d of this.docs.values()) {
-      if (d.collection === 'people' && !d.deleted && d.data.username === username) return { id: d.id, data: structuredClone(d.data) };
-    }
-    return null;
+    const people = [...this.docs.values()].filter((d) => d.collection === 'people' && !d.deleted).map((d) => ({ id: d.id, data: d.data }));
+    const hit = pickUsername(people, username);
+    return hit ? { id: hit.id, data: structuredClone(hit.data) } : null;
   }
 
   /** Writers run one at a time (like the MySQL counter row lock). */

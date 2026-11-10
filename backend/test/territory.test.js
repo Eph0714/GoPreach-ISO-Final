@@ -153,7 +153,7 @@ test('username lookup needs no login, returns the person with their id, and says
   assert.equal(found.status, 200);
   assert.equal(found.body.person.id, 'maria');
   assert.equal(found.body.person.firstName, 'Maria');
-  assert.equal((await post('/v1/public/lookup-username', { username: 'Maria.Santos' })).body.person, null, 'case-sensitive, like before');
+  assert.equal((await post('/v1/public/lookup-username', { username: ' Maria.Santos ' })).body.person.id, 'maria', 'capital letters and spaces do not matter');
   assert.equal((await post('/v1/public/lookup-username', { username: 'nobody' })).body.person, null);
   assert.equal((await post('/v1/public/lookup-username', {})).status, 400);
 });

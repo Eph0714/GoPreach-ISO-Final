@@ -1,5 +1,5 @@
 import mysql from 'mysql2/promise';
-import { congregationOf } from './store.js';
+import { congregationOf, pickUsername } from './store.js';
 import { MysqlCoData, attachCo } from './coStore.js';
 
 /** MySQL implementation of the store contract (see store.js). */
@@ -75,13 +75,13 @@ export class MysqlStore {
     return rows.map((r) => ({ id: r.doc_id, ...MysqlStore.row({ ...r, deleted: 0 }) }));
   }
 
-  /** The people document whose username is exactly [username]. The SQL narrows it; the strict compare keeps it case-sensitive. */
+  /** The people document for [username] (exact match first, else ignoring case and surrounding spaces; see pickUsername). */
   async findPersonByUsername(username) {
     const [rows] = await this.pool.query(
-      "SELECT doc_id, data, version, seq FROM documents WHERE collection = 'people' AND deleted = 0 AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.username')) = ? LIMIT 20",
-      [username],
+      "SELECT doc_id, data, version, seq FROM documents WHERE collection = 'people' AND deleted = 0 AND LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(data, '$.username')))) = LOWER(?) LIMIT 20",
+      [String(username).trim()],
     );
-    const hit = rows.map((r) => ({ id: r.doc_id, ...MysqlStore.row({ ...r, deleted: 0 }) })).find((r) => r.data?.username === username);
+    const hit = pickUsername(rows.map((r) => ({ id: r.doc_id, ...MysqlStore.row({ ...r, deleted: 0 }) })), username);
     return hit ? { id: hit.id, data: hit.data } : null;
   }
 

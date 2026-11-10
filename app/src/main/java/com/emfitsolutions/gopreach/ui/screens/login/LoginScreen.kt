@@ -190,7 +190,7 @@ fun LoginScreen(
                         leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
                         // Plain text, never masked. Not a Password keyboard (that makes the keyboard show its key icon / saved logins); a space typed after a period is closed up so "user.test" stays "user.test".
                         visualTransformation = VisualTransformation.None,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrectEnabled = false),
+                        keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, keyboardType = KeyboardType.Text, autoCorrectEnabled = false),
                         modifier = Modifier.fillMaxWidth(),
                     )
 
@@ -205,7 +205,7 @@ fun LoginScreen(
                         leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
                         visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                         // Masked by the dots below, but an ordinary text keyboard: a Password keyboard type shows the keyboard's key icon with the saved username and password.
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, autoCorrectEnabled = false),
+                        keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.None, keyboardType = KeyboardType.Text, autoCorrectEnabled = false),
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }, enabled = !busy) {
                                 Icon(
