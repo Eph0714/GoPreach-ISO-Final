@@ -658,6 +658,14 @@
     "date": "2026-11-07",
     "notes": "Planner: Hours, Minutes and the Hours Goal can now be typed directly in the field, not only with the plus and minus buttons. Bug fixes and improvements.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.50",
+    "versionCode": 283,
+    "date": "2026-11-10",
+    "notes": "Sign-in fix: your username no longer has to match capital letters exactly (a phone keyboard that capitalizes the first letter no longer causes 'Invalid username or password'), and the username and password boxes no longer auto-capitalize.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
