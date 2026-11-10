@@ -80,7 +80,25 @@ class AccountManagementViewModel(
     private val userAccessGrantRepository: com.emfitsolutions.gopreach.data.repository.UserAccessGrantRepository,
     private val groupRepository: com.emfitsolutions.gopreach.data.repository.GroupRepository,
     private val accountStatusRepository: com.emfitsolutions.gopreach.data.repository.AccountStatusRepository,
+    private val passwordResetRequestRepository: com.emfitsolutions.gopreach.data.repository.PasswordResetRequestRepository,
 ) : ViewModel() {
+
+    /** A pending "I forgot my password" request, with the requester's name when the username matched a person. */
+    data class ResetRequestRow(val request: com.emfitsolutions.gopreach.data.model.PasswordResetRequest, val personName: String)
+
+    /** The pending requests this person handles: the Super Admin all of them, anyone else the ones addressed to them (they enrolled the requester). Newest first. */
+    fun pendingResetRequests(actingRole: AdminRole?, currentPersonId: String): kotlinx.coroutines.flow.Flow<List<ResetRequestRow>> =
+        kotlinx.coroutines.flow.combine(passwordResetRequestRepository.observeAll(), personRepository.observeAll()) { requests, people ->
+            val names = people.associate { it.id to it.fullName }
+            requests
+                .filter { it.status == com.emfitsolutions.gopreach.data.model.PasswordResetRequestStatus.PENDING && (actingRole == AdminRole.SUPER_ADMIN || it.targetPersonId == currentPersonId) }
+                .sortedByDescending { it.requestedAt }
+                .map { ResetRequestRow(it, it.personId?.let { id -> names[id] }.orEmpty()) }
+        }
+
+    fun resolveResetRequest(request: com.emfitsolutions.gopreach.data.model.PasswordResetRequest) {
+        viewModelScope.launch { passwordResetRequestRepository.resolve(request) }
+    }
 
     /** Where each account stands with its temporary password, from the server (only the accounts this person may manage). */
     val passwordStatuses = accountStatusRepository.statuses

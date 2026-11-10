@@ -113,6 +113,9 @@ fun AccountManagementScreen(
     var statusFilter by remember { mutableStateOf<AccountStatus?>(null) }
     var showAudit by remember { mutableStateOf(false) }
     var passwordFilter by remember { mutableStateOf<com.emfitsolutions.gopreach.data.repository.PasswordStatus?>(null) }
+    // The Super Admin can narrow by role, like the website (it matches the role text of each account).
+    var roleFilter by remember { mutableStateOf<String?>(null) }
+    val resetRequests by remember(actingRole, currentPersonId) { viewModel.pendingResetRequests(actingRole, currentPersonId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     // Asked of the server on opening and every half minute while this screen is open: a first sign-in or a changed password appears by itself.
     val passwordStatuses by viewModel.passwordStatuses.collectAsStateWithLifecycle()
     androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { viewModel.refreshPasswordStatuses(); kotlinx.coroutines.delay(30_000) } }
@@ -132,7 +135,7 @@ fun AccountManagementScreen(
         else -> null
     }
     val allRows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
-    val rows = allRows.filter { passwordFilter == null || passwordStatuses[it.person.id]?.status == passwordFilter }
+    val rows = allRows.filter { (passwordFilter == null || passwordStatuses[it.person.id]?.status == passwordFilter) && (roleFilter == null || it.roles.contains(roleFilter!!, ignoreCase = true)) }
 
     var pendingUsernameChange by remember { mutableStateOf<AccountRow?>(null) }
     var pendingResetPasswordInfo by remember { mutableStateOf<AccountRow?>(null) }
@@ -189,6 +192,29 @@ fun AccountManagementScreen(
                 )
             }
 
+            // "N requests for new sign-in details": people who tapped Forgot Password. Set them a new temporary password, then mark the request as done.
+            if (resetRequests.isNotEmpty()) {
+                androidx.compose.material3.Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                ) {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            "${resetRequests.size} request" + (if (resetRequests.size == 1) "" else "s") + " for new sign-in details",
+                            style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                        resetRequests.forEach { r ->
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(r.request.requestedUsername + (if (r.personName.isNotBlank()) " · ${r.personName}" else ""), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                    Text(java.text.SimpleDateFormat("MMM d, yyyy h:mm a", java.util.Locale.getDefault()).format(java.util.Date(r.request.requestedAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                }
+                                androidx.compose.material3.OutlinedButton(onClick = { viewModel.resolveResetRequest(r.request) }) { Text("Mark as done") }
+                            }
+                        }
+                    }
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -218,6 +244,17 @@ fun AccountManagementScreen(
                 FilterChip(selected = passwordFilter == null, onClick = { passwordFilter = null }, label = { Text("Any password") })
                 com.emfitsolutions.gopreach.data.repository.PasswordStatus.entries.forEach { ps ->
                     FilterChip(selected = passwordFilter == ps, onClick = { passwordFilter = ps }, label = { Text(ps.label, maxLines = 1, softWrap = false) })
+                }
+            }
+            if (isSuperAdmin) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(selected = roleFilter == null, onClick = { roleFilter = null }, label = { Text("Any role") })
+                    listOf("Super Admin", "Admin", "Coordinator Elder", "Service Overseer", "Secretary", "Regular Elder", "Ministerial Servant", "Circuit Overseer", "Publisher").forEach { rl ->
+                        FilterChip(selected = roleFilter == rl, onClick = { roleFilter = rl }, label = { Text(rl, maxLines = 1, softWrap = false) })
+                    }
                 }
             }
 
