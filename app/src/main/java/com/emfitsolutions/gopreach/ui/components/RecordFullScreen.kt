@@ -3,6 +3,7 @@ package com.emfitsolutions.gopreach.ui.components
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +36,18 @@ fun HideInFullScreen(hideWhileTyping: Boolean = false, content: @Composable () -
     if (!RecordFullScreen.active && !(hideWhileTyping && keyboard)) content()
 }
 
+/** The way out of full screen, always on screen (the Full Screen button in the list scrolls away with it). */
+@Composable
+fun ExitFullScreenButton() {
+    androidx.compose.material3.SmallFloatingActionButton(
+        onClick = { RecordFullScreen.active = false },
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) {
+        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.FullscreenExit, contentDescription = "Exit full screen")
+    }
+}
+
 /**
  * Drop-in replacement for Material 3's Scaffold on record screens: identical, except the [topBar] is not shown in full screen.
  */
@@ -55,12 +68,15 @@ fun Scaffold(
     contentWindowInsets: WindowInsets = ScaffoldDefaults.contentWindowInsets,
     content: @Composable (androidx.compose.foundation.layout.PaddingValues) -> Unit,
 ) {
+    // A real full screen: the status and navigation bars go too (a swipe from the edge shows them for a moment).
+    com.emfitsolutions.gopreach.ui.components.map.HideSystemBarsEffect(RecordFullScreen.active)
     androidx.compose.material3.Scaffold(
         modifier = modifier,
         topBar = { if (!RecordFullScreen.active) androidx.compose.foundation.layout.Column { topBar(); if (adminTab != null) AdminMainTabs(adminTab); if (circuitTab != null) CircuitMainTabs(circuitTab) } },
         bottomBar = bottomBar,
         snackbarHost = snackbarHost,
-        floatingActionButton = floatingActionButton,
+        // In full screen the screen's own button gives way to one that always brings the app bar back.
+        floatingActionButton = { if (RecordFullScreen.active) ExitFullScreenButton() else floatingActionButton() },
         floatingActionButtonPosition = floatingActionButtonPosition,
         containerColor = containerColor,
         contentColor = contentColor,
