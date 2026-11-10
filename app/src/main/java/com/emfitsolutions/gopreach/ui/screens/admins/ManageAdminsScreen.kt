@@ -168,7 +168,8 @@ fun ManageAdminsScreen(
                         detail = listOf(row.congregationName, row.person.contact).filter { it.isNotBlank() }.joinToString(" · "),
                         active = row.isActive,
                         readOnly = false,
-                        hasTemporarySignIn = row.person.isTemporaryCredential,
+                        // the server sends the temporary password only to the Super Admin and that congregation's Admin: nobody else is offered "View temporary sign-in"
+                        hasTemporarySignIn = row.person.isTemporaryCredential && !row.person.temporaryPassword.isNullOrBlank(),
                         onEdit = { pendingEdit = row },
                         onDelete = { pendingDeactivate = row },
                         onRestore = { viewModel.setActive(row.assignment, true, currentPersonId) },

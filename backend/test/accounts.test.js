@@ -252,3 +252,14 @@ test('temporary password status: unused, used (change due), changed, reset again
   const pub = (await (await login('plain1', 'PlainPass1')).json()).accessToken;
   assert.equal((await get(pub)).newpub, undefined, 'an ordinary publisher is told nothing about another account');
 });
+
+test('when the person chooses their own password the stored temporary password is cleared on the server', async () => {
+  const put = (c, id, data) => store.transaction((tx) => tx.put(c, id, data, 'seed'));
+  await put('people', 'tp1', person(null, { firstName: 'Tem', lastName: 'Po', isTemporaryCredential: true, temporaryPassword: 'Temp-stored-1' }));
+  await store.createAccount('tp1', await hashPassword('Temp-stored-1'));
+  const t = await (await login('tp1', 'Temp-stored-1')).json();
+  assert.equal((await store.get('people', 'tp1')).data.temporaryPassword, 'Temp-stored-1', 'still there until they change it');
+  assert.equal((await post('/v1/auth/password', { newPassword: 'Chosen-own-77' }, t.accessToken)).status, 200);
+  assert.equal((await store.get('people', 'tp1')).data.temporaryPassword, null, 'gone once they have their own');
+  assert.equal((await store.get('people', 'tp1')).data.firstName, 'Tem', 'nothing else on the record changed');
+});

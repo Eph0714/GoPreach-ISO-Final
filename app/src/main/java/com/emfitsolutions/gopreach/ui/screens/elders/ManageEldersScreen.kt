@@ -245,7 +245,8 @@ private fun ManageEldersContent(
                             detail = listOf(row.congregationName, row.person.contact).filter { it.isNotBlank() }.joinToString(" · "),
                             active = row.isActive,
                             readOnly = readOnly,
-                            hasTemporarySignIn = row.person.isTemporaryCredential,
+                            // the server sends the temporary password only to the Super Admin and that congregation's Admin: nobody else is offered "View temporary sign-in"
+                        hasTemporarySignIn = row.person.isTemporaryCredential && !row.person.temporaryPassword.isNullOrBlank(),
                             chips = row.adminRoles.map { it.displayLabel() } +
                                 listOfNotNull(row.regularElderRole?.regularElderRoleDisplayLabel(), row.publisherCategory?.displayName),
                             onEdit = { pendingEdit = row },

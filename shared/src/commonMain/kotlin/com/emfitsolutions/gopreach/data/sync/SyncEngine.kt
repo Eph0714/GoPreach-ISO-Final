@@ -216,6 +216,7 @@ class SyncEngine(
         const val CURSOR_DOC = "cursor"
         const val EPOCH_DOC = "cursorEpoch"
         const val OWNER_DOC = "cacheOwner"
-        const val CURSOR_EPOCH = "3"
+        /** 4: temporary passwords are no longer sent to most accounts; every device downloads once more so an older copy that still holds one is replaced. */
+        const val CURSOR_EPOCH = "4"
     }
 }

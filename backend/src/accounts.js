@@ -216,6 +216,11 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       if (!(await store.getAccount(req.personId))) return res.status(404).json({ error: 'invalid-user' });
       await store.setPassword(req.personId, await hashPassword(newPassword));
       await store.notePasswordChanged(req.personId);
+      // The person chose their own password: the stored temporary one is of no use any more and must not stay readable.
+      await store.transaction(async (tx) => {
+        const me = await tx.get('people', req.personId);
+        if (me && !me.deleted && me.data?.temporaryPassword != null) await tx.put('people', req.personId, { ...me.data, temporaryPassword: null }, req.personId);
+      });
       await store.deleteRefreshTokens(req.personId); // every other signed-in phone must sign in again
       await quick.revokeAll(req.personId); // a PIN / pattern never outlives the password it was set up with
       await sec.onPasswordChanged(req.personId, req.sessionId); // their sessions end now, trusted devices are no longer trusted

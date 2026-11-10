@@ -172,6 +172,16 @@ export async function canManageCredentials(actor, grant, targetId, get) {
   return (await h.canManageCredentialsFor(targetId)) || (await h.canManageGroupMemberAccount(targetId));
 }
 
+/**
+ * A temporary password is shown ONLY to the Super Admin and to the congregation Admin (the Admin role in use) of the person's own congregation: never to the person, to the other
+ * congregation roles, to FS Group officers or to a Circuit Overseer. Everybody else is sent the person record without it.
+ */
+export async function mayViewTemporaryPassword(actor, grant, targetId, get) {
+  if (!actor?.known || grant?.has) return false;
+  if (actor.isSuperAdmin) return true;
+  return actor.adminRole === 'ADMIN_PER_CONGREGATION' && (await canManageCredentialsStrict(actor, grant, targetId, get));
+}
+
 /** The congregation roles' reach over sign-ins only (whether an account may be used is theirs, not an FS Group officer's). */
 export async function canManageCredentialsStrict(actor, grant, targetId, get) {
   return helpers(actor, grant, get).canManageCredentialsFor(targetId);

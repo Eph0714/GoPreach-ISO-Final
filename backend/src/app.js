@@ -5,6 +5,7 @@ import { authenticate } from './auth.js';
 import { randomBytes } from 'node:crypto';
 import { loadActor, authorizeWrite, canReadRow, loadGrant } from './policy/index.js';
 import { rateLimit } from './rateLimit.js';
+import { mayViewTemporaryPassword } from './policy/rules.js';
 import { mountFiles } from './files.js';
 import { mountVoice } from './voice.js';
 import { mountVision } from './vision.js';
@@ -176,7 +177,13 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
         const result = await store.transaction(async (tx) => {
           const actor = await loadActor(req.personId, tx.get, tx.list);
           const existing = await tx.get(collection, id);
-          const verdict = await authorizeWrite(actor, op.op, collection, id, op.data, existing, tx.get);
+          // Someone who is never sent a person's temporary password saves the person without it: that must not erase it for the Admin, nor look like a change they are not allowed to make.
+          // (It is cleared on the server when the person changes their own password; an Admin writing the record decides it themselves.)
+          let data = op.data;
+          if (op.op === 'set' && collection === 'people' && existing && !existing.deleted && existing.data?.temporaryPassword != null && !('temporaryPassword' in data) && !(await mayViewTemporaryPassword(actor, await loadGrant(req.personId, tx.get), id, tx.get))) {
+            data = { ...data, temporaryPassword: existing.data.temporaryPassword };
+          }
+          const verdict = await authorizeWrite(actor, op.op, collection, id, data, existing, tx.get);
           if (!verdict.ok) return { status: 'denied', reason: verdict.reason };
           // A device that says which version it last saw never overwrites a newer one, and never brings back a document that was deleted since.
           if (Number.isInteger(op.baseVersion) && existing && existing.version > op.baseVersion) {
@@ -190,8 +197,8 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
             await recordMinistryEvents(tx, { collection, id, op: 'delete', before: existing.data, after: null, version: removed.version, actorId: req.personId });
             return { status: 'ok', ...removed };
           }
-          const written = await tx.put(collection, id, op.data, req.personId);
-          await recordMinistryEvents(tx, { collection, id, op: 'set', before: existing && !existing.deleted ? existing.data : null, after: op.data, version: written.version, actorId: req.personId });
+          const written = await tx.put(collection, id, data, req.personId);
+          await recordMinistryEvents(tx, { collection, id, op: 'set', before: existing && !existing.deleted ? existing.data : null, after: data, version: written.version, actorId: req.personId });
           return { status: 'ok', ...written };
         });
         results.push({ collection, id, ...result });
@@ -224,9 +231,17 @@ export function createApp(store, { devAuth = false, health = () => ({}), publicL
       const hasMore = rows.length > limit;
       const page = hasMore ? rows.slice(0, limit) : rows;
       const readable = await Promise.all(page.map((r) => canReadRow(actor, grant, r, get)));
-      const changes = page
+      // A person's temporary password goes only to the Super Admin and that congregation's Admin; everyone else gets the record without it.
+      const changes = await Promise.all(page
         .filter((_, i) => readable[i])
-        .map((r) => ({ collection: r.collection, id: r.id, data: r.deleted ? null : r.data, deleted: r.deleted, version: r.version, seq: r.seq }));
+        .map(async (r) => {
+          let data = r.deleted ? null : r.data;
+          if (data && r.collection === 'people' && data.temporaryPassword != null && !(await mayViewTemporaryPassword(actor, grant, r.id, get))) {
+            const { temporaryPassword, ...rest } = data;
+            data = rest;
+          }
+          return { collection: r.collection, id: r.id, data, deleted: r.deleted, version: r.version, seq: r.seq };
+        }));
       const cursor = page.length ? page[page.length - 1].seq : since;
       res.json({ changes, cursor, hasMore });
     } catch (e) {

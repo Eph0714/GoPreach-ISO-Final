@@ -199,7 +199,8 @@ fun ElderListScreen(
                         detail = listOfNotNull(row.regularElderRole?.let { "Role: ${it.displayLabel()}" }, row.scopeName, row.person.contact.takeIf { it.isNotBlank() }).joinToString(" · "),
                         active = row.isActive,
                         readOnly = readOnly,
-                        hasTemporarySignIn = row.person.isTemporaryCredential,
+                        // the server sends the temporary password only to the Super Admin and that congregation's Admin: nobody else is offered "View temporary sign-in"
+                        hasTemporarySignIn = row.person.isTemporaryCredential && !row.person.temporaryPassword.isNullOrBlank(),
                         onEdit = { pendingEdit = row },
                         onDelete = { pendingDeactivate = row },
                         onRestore = { onSetActive(row, true); showToast("\"${row.person.fullName}\" reactivated.") },
