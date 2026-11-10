@@ -682,6 +682,14 @@
     "date": "2026-11-10",
     "notes": "Account Management now shows each account's password step (temporary password not used yet, used with the change due, changed, or disabled) with a filter and a Password column; the View temporary sign-in option appears only for the Super Admin and the congregation Admin.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.53",
+    "versionCode": 286,
+    "date": "2026-11-10",
+    "notes": "Account Management now shows 'requests for new sign-in details' (people who tapped Forgot Password) with a Mark as done button, and the Super Admin can filter accounts by role, like the website.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
