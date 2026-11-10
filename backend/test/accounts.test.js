@@ -202,3 +202,8 @@ test('renewing keeps the same session, and wrong-password attempts are still lim
     assert.equal((await signIn({})).status, 429, 'brute force protection is intact');
   } finally { srv.close(); }
 });
+
+test('a space the keyboard added before or after the password does not stop the sign-in', async () => {
+  for (const typed of ['SuperPass1 ', ' SuperPass1', ' SuperPass1  ']) assert.equal((await login('sa', typed)).status, 200, JSON.stringify(typed));
+  assert.equal((await login('sa', 'SuperPass2 ')).status, 401, 'a wrong password is still wrong');
+});

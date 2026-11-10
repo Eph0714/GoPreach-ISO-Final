@@ -126,7 +126,9 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
     if (!personId || typeof password !== 'string' || password.length === 0 || password.length > 200) return res.status(401).json({ error: 'invalid-credentials' });
     try {
       if (await tooMany(personId)) return res.status(429).json({ error: 'too-many-requests' });
-      const { ok, account } = await checkPassword(personId, password);
+      // A phone keyboard often adds a space after the last character; a password that fails as typed is tried once more without surrounding spaces.
+      let { ok, account } = await checkPassword(personId, password);
+      if (!ok && account && password.trim() !== password && password.trim().length > 0) ({ ok } = await checkPassword(personId, password.trim()));
       if (!ok) {
         noteFail(personId);
         if (account) await sec.event(personId, 'LOGIN_FAILED', { result: 'failure', meta: { device: sec.deviceInfo(device).name } }); // an unknown account is never named in the log
