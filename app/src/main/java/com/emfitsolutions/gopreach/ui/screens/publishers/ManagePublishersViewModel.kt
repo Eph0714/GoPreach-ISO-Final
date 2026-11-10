@@ -62,11 +62,17 @@ class ManagePublishersViewModel(
     private val locationTracker: com.emfitsolutions.gopreach.data.location.LocationTracker,
     private val philippineLocationRepository: com.emfitsolutions.gopreach.data.repository.PhilippineLocationRepository,
     private val publisherEditRepository: com.emfitsolutions.gopreach.data.repository.PublisherEditRepository,
+    private val accountStatusRepository: com.emfitsolutions.gopreach.data.repository.AccountStatusRepository,
     groupRepository: GroupRepository,
     congregationRepository: CongregationRepository,
 ) : ViewModel() {
 
     private val groups: Flow<List<Group>> = groupRepository.observeAll()
+
+    /** Each account's temporary-password status, from the server (only the accounts this person may manage). */
+    val passwordStatuses = accountStatusRepository.statuses
+
+    fun refreshPasswordStatuses() { viewModelScope.launch { accountStatusRepository.refresh() } }
 
     /** The congregation a Super-Admin is working in inside this module (shared with Add Publisher). */
     val selectedCongregationId = publisherCongregationContext.selectedCongregationId

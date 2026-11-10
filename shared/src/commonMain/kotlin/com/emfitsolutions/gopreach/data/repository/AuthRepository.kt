@@ -62,6 +62,7 @@ class AuthRepository(
     private val offlineAuthStore: OfflineAuthStore,
     private val offlineSessionMarker: OfflineSessionMarker,
     private val syncEngine: com.emfitsolutions.gopreach.data.sync.SyncEngine,
+    private val accountStatuses: AccountStatusRepository,
 ) {
     private companion object {
         /** "ADD LOGIN DEBUGGING... DO NOT LOG: Passwords, Tokens, Password
@@ -227,6 +228,7 @@ class AuthRepository(
         // .syncActiveRoleContext's own write of activeCongregationId/
         // activeAdminRole for this same session.
         // A different person than the one this device last synced for: the previous account's downloaded copy goes and the download restarts (see SyncEngine.claimCacheFor). Never blocks sign-in.
+        accountStatuses.clear() // the previous account's password-status list never shows to the next one
         runCatching { syncEngine.claimCacheFor(person.id) }.onFailure { Log.e(TAG, "Account switch bookkeeping failed: ${it::class.simpleName}") }
         personRepository.cacheFromServer(person)
         // "Offline Login" spec §1-§2: securely cache a hashed verifier for this

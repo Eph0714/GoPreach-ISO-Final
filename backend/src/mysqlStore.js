@@ -21,6 +21,10 @@ export class MysqlStore {
       person_id VARCHAR(190) NOT NULL PRIMARY KEY, pw_hash VARCHAR(400) NOT NULL, disabled TINYINT(1) NOT NULL DEFAULT 0,
       created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL, last_login BIGINT NULL
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`);
+    // Temporary-password tracking: when the account first accepted its password (the temporary one, until it is changed) and when the person set their own. A new column is
+    // filled once from last_login, so accounts that signed in before this existed read "temporary password used", not "never used".
+    try { await pool.query('ALTER TABLE accounts ADD COLUMN first_login_at BIGINT NULL'); await pool.query('UPDATE accounts SET first_login_at = last_login WHERE last_login IS NOT NULL'); } catch (e) { if (e?.code !== 'ER_DUP_FIELDNAME') throw e; }
+    try { await pool.query('ALTER TABLE accounts ADD COLUMN password_changed_at BIGINT NULL'); } catch (e) { if (e?.code !== 'ER_DUP_FIELDNAME') throw e; }
     // Passkeys: only the PUBLIC key is stored. credential_id is WebAuthn's base64url id.
     await pool.query(`CREATE TABLE IF NOT EXISTS passkeys (
       credential_id VARCHAR(512) NOT NULL PRIMARY KEY,
@@ -223,7 +227,20 @@ export class MysqlStore {
     return res.affectedRows === 1;
   }
 
-  async touchLogin(personId) { await this.pool.query('UPDATE accounts SET last_login = ? WHERE person_id = ?', [Date.now(), personId]); }
+  async touchLogin(personId) { const now = Date.now(); await this.pool.query('UPDATE accounts SET last_login = ?, first_login_at = COALESCE(first_login_at, ?) WHERE person_id = ?', [now, now, personId]); }
+
+  /** The person set their own password. */
+  async notePasswordChanged(personId) { await this.pool.query('UPDATE accounts SET password_changed_at = ? WHERE person_id = ?', [Date.now(), personId]); }
+
+  /** An administrator set a new temporary password: it has not been used yet. */
+  async noteTemporaryPassword(personId) { await this.pool.query('UPDATE accounts SET first_login_at = NULL, password_changed_at = NULL WHERE person_id = ?', [personId]); }
+
+  /** personId -> { disabled, firstLoginAt, lastLoginAt, passwordChangedAt } for every account (never a hash). */
+  async accountUsage() {
+    const [rows] = await this.pool.query('SELECT person_id, disabled, first_login_at, last_login, password_changed_at FROM accounts');
+    const n = (v) => (v == null ? null : Number(v));
+    return new Map(rows.map((r) => [r.person_id, { disabled: !!r.disabled, firstLoginAt: n(r.first_login_at), lastLoginAt: n(r.last_login), passwordChangedAt: n(r.password_changed_at) }]));
+  }
 
   async addRefreshToken({ tokenHash, personId, authTime, expiresAt, sessionId = null }) {
     await this.pool.query('INSERT INTO refresh_tokens (token_hash, person_id, auth_time, expires_at, session_id) VALUES (?, ?, ?, ?, ?)', [tokenHash, personId, authTime, expiresAt, sessionId]);

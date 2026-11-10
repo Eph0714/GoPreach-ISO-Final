@@ -129,6 +129,10 @@ class MinistryRecycleBinViewModel(
                 if (d.module != MINISTRY_MODULE || d.recordType !in MINISTRY_TYPES || d.congregationId != congregationId) continue
                 val items = recycleBin.itemsOf(d)
                 val rec = items.firstOrNull { it.collectionPath == "interestedPeople" }?.let { runCatching { DocJson.decodeFromString(InterestedPerson.serializer(), it.json) }.getOrNull() }
+                // Their own only: a deleted record shows to its owner or the person who deleted it; the congregation roles and FS Group officers ([canHandleOthers]) see the rest.
+                // The server already refuses to send anyone else's; this keeps a copy left on the device by an earlier account from ever showing.
+                val ownerId = rec?.publisherPersonId?.takeIf { it.isNotBlank() } ?: d.ownerPersonId
+                if (!canHandleOthers && ownerId != currentPersonId && d.deletedByPersonId != currentPersonId) continue
                 deletedById[d.id] = d
                 out += entryOf("deleted", d.id, rec, d.label, d.deletedAt, d.deletedByName, names[rec?.publisherPersonId ?: d.ownerPersonId].orEmpty(), (items.size - 1).coerceAtLeast(0))
             }

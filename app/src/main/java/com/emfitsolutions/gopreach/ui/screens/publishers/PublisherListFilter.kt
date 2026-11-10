@@ -2,9 +2,11 @@ package com.emfitsolutions.gopreach.ui.screens.publishers
 
 import com.emfitsolutions.gopreach.domain.NameSearch
 import com.emfitsolutions.gopreach.data.model.AccountStatus
+import com.emfitsolutions.gopreach.data.repository.AccountStatusInfo
+import com.emfitsolutions.gopreach.data.repository.PasswordStatus
 
 enum class PublisherFilterMode(val label: String) {
-    ALL("All"), NAME("By Name"), GROUP("By Group"), STATUS("By Status")
+    ALL("All"), NAME("By Name"), GROUP("By Group"), STATUS("By Status"), PASSWORD("By Password")
 }
 
 /** [PublisherListFilter.groupId] value for publishers who are not in any FS Group. */
@@ -19,20 +21,23 @@ const val NO_GROUP_FILTER = "__none__"
  *  - **By Name**: [query] matches first name, middle initial, last name, extension or full name.
  *  - **By Group**: only publishers in [groupId] ([NO_GROUP_FILTER] = no group).
  *  - **By Status**: only publishers whose status is [status] (Active / Inactive / Suspended).
+ *  - **By Password**: only publishers whose temporary-password status (from the server) is [password].
  */
 data class PublisherListFilter(
     val mode: PublisherFilterMode = PublisherFilterMode.ALL,
     val query: String = "",
     val groupId: String? = null,
     val status: AccountStatus? = null,
+    val password: PasswordStatus? = null,
 ) {
-    fun apply(rows: List<PublisherRow>): List<PublisherRow> {
+    fun apply(rows: List<PublisherRow>, passwords: Map<String, AccountStatusInfo> = emptyMap()): List<PublisherRow> {
         val q = query.trim().lowercase()
         return rows.filter { row ->
             when (mode) {
                 PublisherFilterMode.ALL ->
                     q.isEmpty() || nameParts(row).any { it.contains(q) } || NameSearch.matches(q, *nameParts(row).toTypedArray()) ||
-                        row.groupName.lowercase().contains(q) || statusText(row).contains(q)
+                        row.groupName.lowercase().contains(q) || statusText(row).contains(q) || row.person.username.lowercase().contains(q) ||
+                        (passwords[row.person.id]?.status?.label?.lowercase()?.contains(q) ?: false)
                 PublisherFilterMode.NAME -> q.isEmpty() || nameParts(row).any { it.contains(q) } || NameSearch.matches(q, *nameParts(row).toTypedArray())
                 PublisherFilterMode.GROUP -> when (groupId) {
                     null -> true
@@ -40,6 +45,7 @@ data class PublisherListFilter(
                     else -> row.assignment.groupId == groupId
                 }
                 PublisherFilterMode.STATUS -> status == null || row.person.accountStatus == status
+                PublisherFilterMode.PASSWORD -> password == null || passwords[row.person.id]?.status == password
             }
         }
     }
@@ -49,6 +55,7 @@ data class PublisherListFilter(
     fun countLabel(count: Int, groupName: String? = null): String = when {
         mode == PublisherFilterMode.GROUP && groupId != null -> "${groupName ?: "Group"} Publishers: $count"
         mode == PublisherFilterMode.STATUS && status != null -> "${statusLabel(status)} Publishers: $count"
+        mode == PublisherFilterMode.PASSWORD && password != null -> "${password.label}: $count"
         query.isNotBlank() && (mode == PublisherFilterMode.ALL || mode == PublisherFilterMode.NAME) -> "Matching Publishers: $count"
         else -> "Total Publishers: $count"
     }

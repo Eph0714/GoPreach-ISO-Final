@@ -37,6 +37,16 @@ const cleanDevice = (d) => (typeof d === 'string' ? d.replace(/[\u0000-\u001f]/g
 const PERSON_ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 
+/**
+ * What an administrator sees about an enrolled account, from the sign-in itself (never from whether a session exists): the Person's temporary-credential flag, whether the account has
+ * ever accepted its password, and whether it is disabled. Never the password. TEMP_UNUSED: temporary password not used yet. TEMP_USED: signed in with it, the change is still due.
+ */
+export function accountStatusOf(person, usage) {
+  const disabled = usage.disabled || (person?.accountStatus != null && person.accountStatus !== 'ACTIVE');
+  const status = disabled ? 'DISABLED' : person?.isTemporaryCredential === true ? (usage.firstLoginAt ? 'TEMP_USED' : 'TEMP_UNUSED') : 'PASSWORD_CHANGED';
+  return { status, firstLoginAt: usage.firstLoginAt ?? null, lastLoginAt: usage.lastLoginAt ?? null, passwordChangedAt: usage.passwordChangedAt ?? person?.setupCompletedAt ?? null };
+}
+
 export function mountAccounts(app, store, auth, { secret = config.authSecret, firebaseHash = config.firebaseHash, limits = {}, mailer = null, loginRequestMs } = {}) {
   const enabled = (req, res, next) => (secret ? next() : res.status(503).json({ error: 'Sign-in is not configured on the server (AUTH_SECRET).' }));
   // The website signs everybody in from one server address, so the limit follows the address AND the account tried, and a session renewal has a limit of its own:
@@ -205,6 +215,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
     try {
       if (!(await store.getAccount(req.personId))) return res.status(404).json({ error: 'invalid-user' });
       await store.setPassword(req.personId, await hashPassword(newPassword));
+      await store.notePasswordChanged(req.personId);
       await store.deleteRefreshTokens(req.personId); // every other signed-in phone must sign in again
       await quick.revokeAll(req.personId); // a PIN / pattern never outlives the password it was set up with
       await sec.onPasswordChanged(req.personId, req.sessionId); // their sessions end now, trusted devices are no longer trusted
@@ -230,6 +241,27 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
     }
   });
 
+  // The account status of every person the caller may manage sign-ins for (Super Admin: all; an admin role: their congregation; an FS Group officer: their group's publishers).
+  app.get('/v1/auth/account-status', enabled, auth, async (req, res) => {
+    try {
+      const get = (c, i) => store.get(c, i);
+      const actor = await loadActor(req.personId, get, (c, cong) => store.list(c, cong));
+      if (!actor.known) return res.status(403).json({ error: 'Not allowed' });
+      const grant = await loadGrant(req.personId, get);
+      const statuses = {};
+      for (const [personId, usage] of await store.accountUsage()) {
+        if (!(await canManageCredentials(actor, grant, personId, get))) continue;
+        const p = await store.get('people', personId);
+        if (!p || p.deleted) continue;
+        statuses[personId] = accountStatusOf(p.data, usage);
+      }
+      res.json({ statuses });
+    } catch (e) {
+      console.error('account status failed', e);
+      res.status(500).json({ error: 'Server error' });
+    }
+  });
+
   app.post('/v1/auth/accounts/:personId/password', enabled, auth, async (req, res) => {
     const { personId } = req.params;
     const { password } = req.body ?? {};
@@ -241,6 +273,7 @@ export function mountAccounts(app, store, auth, { secret = config.authSecret, fi
       if (!actor.known || !(await canManageCredentials(actor, await loadGrant(req.personId, get), personId, get))) return res.status(403).json({ error: 'Not allowed' });
       if (!(await store.getAccount(personId))) return res.status(404).json({ error: 'invalid-user' });
       await store.setPassword(personId, await hashPassword(password));
+      await store.noteTemporaryPassword(personId); // a new temporary password: not used yet
       await store.deleteRefreshTokens(personId); // sessions made with the old password end
       await store.endSession(personId);
       await sec.onPasswordReset(personId, req.personId);

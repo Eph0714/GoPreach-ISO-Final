@@ -119,7 +119,15 @@ export class MemoryStore {
 
   async setPassword(personId, pwHash) { const a = (this.accounts ??= new Map()).get(personId); if (a) a.pwHash = pwHash; }
 
-  async touchLogin() {}
+  async touchLogin(personId) { const a = (this.accounts ??= new Map()).get(personId); if (a) { const now = Date.now(); a.lastLoginAt = now; a.firstLoginAt ??= now; } }
+
+  async notePasswordChanged(personId) { const a = (this.accounts ??= new Map()).get(personId); if (a) a.passwordChangedAt = Date.now(); }
+
+  async noteTemporaryPassword(personId) { const a = (this.accounts ??= new Map()).get(personId); if (a) { a.firstLoginAt = null; a.passwordChangedAt = null; } }
+
+  async accountUsage() {
+    return new Map([...(this.accounts ??= new Map())].map(([id, a]) => [id, { disabled: !!a.disabled, firstLoginAt: a.firstLoginAt ?? null, lastLoginAt: a.lastLoginAt ?? null, passwordChangedAt: a.passwordChangedAt ?? null }]));
+  }
 
   // ---- passkeys (WebAuthn public keys; the private key never leaves the phone) ----
   async addPasskey(p) { (this.passkeys ??= new Map()).set(p.credentialId, { ...p, lastUsedAt: null }); }

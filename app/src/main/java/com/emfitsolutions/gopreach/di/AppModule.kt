@@ -90,6 +90,7 @@ import com.emfitsolutions.gopreach.data.repository.PublisherTerritoryAssignmentR
 import com.emfitsolutions.gopreach.data.repository.PublisherVisibilitySettingsRepository
 import com.emfitsolutions.gopreach.data.repository.QuickLoginStore
 import com.emfitsolutions.gopreach.data.repository.RecycleBinRepository
+import com.emfitsolutions.gopreach.data.repository.AccountStatusRepository
 import com.emfitsolutions.gopreach.data.repository.RemoteBarangayBoundaryRepository
 import com.emfitsolutions.gopreach.data.repository.RoleAssignmentRepository
 import com.emfitsolutions.gopreach.data.repository.PublisherCategoryHistoryRepository
@@ -399,6 +400,7 @@ val appModule = module {
     singleOf(::PublisherVisibilitySettingsRepository)
     singleOf(::QuickLoginStore)
     singleOf(::RecycleBinRepository)
+    singleOf(::AccountStatusRepository)
     singleOf(::RemoteBarangayBoundaryRepository)
     singleOf(::PublisherCategoryHistoryRepository)
     single { com.emfitsolutions.gopreach.data.remote.ServerClock(get()) }

@@ -545,7 +545,7 @@ fun PublisherHomeScreen(
                         com.emfitsolutions.gopreach.ui.screens.ministry.MinistryRecycleBinScreen(
                             congregationId = ownPublisherAssignment?.congregationId.orEmpty(),
                             currentPersonId = currentPersonId,
-                            canHandleOthers = caps.canViewDeletedRecords,
+                            canHandleOthers = caps.canViewDeletedRecords || caps.isGroupOfficer, // the server decides which others (an officer: their own FS Group's)
                             onBack = { ministryShowInactive = false },
                         )
                     } else if (ministryStage == 3) {

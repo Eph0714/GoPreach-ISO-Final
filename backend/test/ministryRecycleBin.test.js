@@ -52,3 +52,24 @@ test('who may remove one for good, and a deleted record is never edited', async 
   assert.equal((await push('pub1', [{ collection: 'deletedRecords', id: 'd2', op: 'delete' }]))[0].status, 'ok', 'the owner');
   assert.deepEqual(await pull('adm'), []);
 });
+
+// Searching ('Interested Person'), Return Visit and Bible Study: the same rule for each type, enforced on the server, never by the screen.
+for (const recordType of ['Interested Person', 'Return Visit', 'Bible Study']) {
+  test(`${recordType}: only its owner (or deleter) sees, restores or removes it for good; another publisher cannot`, async () => {
+    const mine = `own_${recordType.replace(/\W/g, '')}_1`;
+    const theirs = `own_${recordType.replace(/\W/g, '')}_2`;
+    await put('deletedRecords', mine, entry({ recordType, ownerPersonId: 'pub1', deletedByPersonId: 'pub1', itemsJson: JSON.stringify([{ collectionPath: 'interestedPeople', documentId: `ip_${mine}`, json: JSON.stringify({ publisherPersonId: 'pub1', congregationId: 'congA', name: 'A' }) }]) }));
+    await put('deletedRecords', theirs, entry({ recordType, ownerPersonId: 'pub2', deletedByPersonId: 'pub2', label: 'OTHER' }));
+    const mineOnly = (ids) => ids.filter((i) => i === mine || i === theirs).sort();
+    assert.deepEqual(mineOnly(await pull('pub1')), [mine], 'publisher A sees only their own');
+    assert.deepEqual(mineOnly(await pull('pub2')), [theirs], 'publisher B sees only their own');
+    assert.deepEqual(mineOnly(await pull('pubB')), [], 'another congregation sees none');
+    // restoring and removing for good both end by deleting the Deleted Records entry: another publisher is refused, so it cannot be restored or purged
+    assert.equal((await push('pub2', [{ collection: 'deletedRecords', id: mine, op: 'delete' }]))[0].status, 'denied');
+    assert.equal((await push('pub1', [{ collection: 'deletedRecords', id: theirs, op: 'delete' }]))[0].status, 'denied');
+    assert.deepEqual(mineOnly(await pull('pub1')), [mine], 'nothing was removed by the refused attempts');
+    // the entry keeps its owner: it cannot be edited to point at someone else
+    assert.equal((await push('pub2', [{ collection: 'deletedRecords', id: mine, op: 'set', data: entry({ recordType, ownerPersonId: 'pub2', deletedByPersonId: 'pub2' }) }]))[0].status, 'denied');
+    assert.equal((await push('pub1', [{ collection: 'deletedRecords', id: mine, op: 'delete' }]))[0].status, 'ok', 'the owner removes it');
+  });
+}

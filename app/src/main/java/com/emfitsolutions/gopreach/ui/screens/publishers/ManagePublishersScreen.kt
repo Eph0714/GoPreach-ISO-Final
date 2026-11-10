@@ -140,6 +140,12 @@ fun ManagePublishersScreen(
     var searchQuery by remember(effectiveCongregationId) { mutableStateOf("") }
     var groupFilterId by remember(effectiveCongregationId) { mutableStateOf<String?>(null) }
     var statusFilter by remember(effectiveCongregationId) { mutableStateOf<AccountStatus?>(null) }
+    var passwordFilter by remember(effectiveCongregationId) { mutableStateOf<com.emfitsolutions.gopreach.data.repository.PasswordStatus?>(null) }
+    // Where each account stands with its temporary password: asked of the server on opening, and again every half minute while this list is open, so a first sign-in or a changed password shows up by itself.
+    val passwordStatuses by viewModel.passwordStatuses.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(effectiveCongregationId) {
+        while (true) { viewModel.refreshPasswordStatuses(); kotlinx.coroutines.delay(30_000) }
+    }
     val groupChoices by remember(effectiveCongregationId) { viewModel.groupsFor(effectiveCongregationId) }.collectAsStateWithLifecycle(initialValue = emptyList())
     val rowsFlow = remember(effectiveCongregationId) { viewModel.rowsFor(effectiveCongregationId) }
     val allRows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -152,12 +158,12 @@ fun ManagePublishersScreen(
         .filter { categoryFilter == null || it.category == categoryFilter }
         .filter { !groupScoped || it.assignment.groupId == ownGroupId }
     // The same filtered rows drive the list AND the count above it. They are already limited to this congregation.
-    val filter = PublisherListFilter(filterMode, searchQuery, groupFilterId, statusFilter)
-    val rows = filter.apply(shown)
+    val filter = PublisherListFilter(filterMode, searchQuery, groupFilterId, statusFilter, passwordFilter)
+    val rows = filter.apply(shown, passwordStatuses)
     val countText = filter.countLabel(rows.size, groupChoices.firstOrNull { it.id == groupFilterId }?.name ?: if (groupFilterId == NO_GROUP_FILTER) "Unassigned" else null)
     // By Group + "All groups" lists the publishers group by group; plain "All" stays one flat list.
     val groupedByFsGroup = filterMode == PublisherFilterMode.GROUP && groupFilterId == null
-    val filtering = filter.query.isNotBlank() || (filterMode == PublisherFilterMode.GROUP && groupFilterId != null) || (filterMode == PublisherFilterMode.STATUS && statusFilter != null)
+    val filtering = filter.query.isNotBlank() || (filterMode == PublisherFilterMode.GROUP && groupFilterId != null) || (filterMode == PublisherFilterMode.STATUS && statusFilter != null) || (filterMode == PublisherFilterMode.PASSWORD && passwordFilter != null)
     var lookupTarget by remember { mutableStateOf<Person?>(null) }
     val accountViewModel: com.emfitsolutions.gopreach.ui.screens.accountmanagement.AccountManagementViewModel = koinViewModel()
     var detailsOf by remember { mutableStateOf<PublisherRow?>(null) }
@@ -241,6 +247,12 @@ fun ManagePublishersScreen(
                             options = listOf<Pair<AccountStatus?, String>>(null to "All statuses") + AccountStatus.entries.map { it to PublisherListFilter.statusLabel(it) },
                             onSelected = { statusFilter = it },
                         )
+                        PublisherFilterMode.PASSWORD -> FilterChoiceDropdown(
+                            label = "Password",
+                            selectedText = passwordFilter?.label ?: "Any password status",
+                            options = listOf<Pair<com.emfitsolutions.gopreach.data.repository.PasswordStatus?, String>>(null to "Any password status") + com.emfitsolutions.gopreach.data.repository.PasswordStatus.entries.map { it to it.label },
+                            onSelected = { passwordFilter = it },
+                        )
                         else -> StandardSearchField(value = searchQuery, onValueChange = { searchQuery = it }, placeholder = "Search Publisher...", modifier = Modifier.fillMaxWidth())
                     }
                 }
@@ -252,7 +264,7 @@ fun ManagePublishersScreen(
                         onSelected = {
                             filterMode = it
                             // Each mode starts clean so a leftover search/choice from another mode never hides rows.
-                            searchQuery = ""; groupFilterId = null; statusFilter = null
+                            searchQuery = ""; groupFilterId = null; statusFilter = null; passwordFilter = null
                         },
                     )
                 }
@@ -311,6 +323,7 @@ fun ManagePublishersScreen(
                     searchQuery.takeIf { it.isNotBlank() }?.let { "Search: $it" },
                     if (filterMode == PublisherFilterMode.GROUP && groupFilterId != null) "Group: " + (groupChoices.firstOrNull { it.id == groupFilterId }?.name ?: "Unassigned") else null,
                     if (filterMode == PublisherFilterMode.STATUS && statusFilter != null) "Status: " + PublisherListFilter.statusLabel(statusFilter!!) else null,
+                    if (filterMode == PublisherFilterMode.PASSWORD && passwordFilter != null) "Password: " + passwordFilter!!.label else null,
                     categoryFilter?.let { "Category: " + it.displayName },
                 ).joinToString("; ")
                 PublisherExportDialog(
@@ -363,7 +376,7 @@ fun ManagePublishersScreen(
                         active = row.category != PublisherCategory.REMOVED_PUBLISHER,
                         readOnly = readOnly,
                         hasTemporarySignIn = false,
-                        chips = listOf(row.category.displayName),
+                        chips = listOfNotNull(row.category.displayName, passwordStatuses[row.person.id]?.status?.label),
                         // A heads-up only; nothing merges or deletes automatically - the admin reviews both records.
                         note = row.possibleDuplicateOf?.let { "Possible duplicate of \"$it\" - review both records." },
                         onEdit = { pendingEdit = row },

@@ -207,3 +207,48 @@ test('a space the keyboard added before or after the password does not stop the 
   for (const typed of ['SuperPass1 ', ' SuperPass1', ' SuperPass1  ']) assert.equal((await login('sa', typed)).status, 200, JSON.stringify(typed));
   assert.equal((await login('sa', 'SuperPass2 ')).status, 401, 'a wrong password is still wrong');
 });
+
+// The account status an administrator sees: from the sign-in itself (first time the password was accepted, the person's own change), never from a session or the password.
+test('temporary password status: unused, used (change due), changed, reset again, disabled - and who may see it', async () => {
+  const put = (c, id, data) => store.transaction((tx) => tx.put(c, id, data, 'seed'));
+  await put('people', 'newpub', person(null, { firstName: 'New', lastName: 'Pub', isTemporaryCredential: true, temporaryPassword: 'Temp-secret-1' }));
+  await put('roleAssignments', 'ra_newpub', { personId: 'newpub', roleType: 'PUBLISHER:REGULAR_PUBLISHER', congregationId: 'congA', status: 'ACTIVE' });
+  assert.equal((await post('/v1/auth/accounts', { personId: 'newpub', password: 'Temp-secret-1' }, (await (await login('sa', 'SuperPass1')).json()).accessToken)).status, 201);
+  const sa = (await (await login('sa', 'SuperPass1')).json()).accessToken;
+  await put('people', 'admin2', person('ADMIN_PER_CONGREGATION'));
+  await put('roleAssignments', 'ra_admin2', { personId: 'admin2', roleType: 'ADMIN:ADMIN_PER_CONGREGATION', congregationId: 'congA', status: 'ACTIVE' });
+  await store.createAccount('admin2', await hashPassword('AdminPass2'));
+  const admin = (await (await login('admin2', 'AdminPass2')).json()).accessToken;
+  const get = async (token) => { const r = await fetch(`${base}/v1/auth/account-status`, { headers: { authorization: `Bearer ${token}` } }); const j = await r.json(); assert.equal(r.status, 200, JSON.stringify(j)); return j.statuses; };
+
+  let s = await get(sa);
+  assert.equal(s.newpub.status, 'TEMP_UNUSED', 'enrolled, never signed in');
+  assert.equal(s.newpub.firstLoginAt, null);
+  assert.equal((await get(admin)).newpub.status, 'TEMP_UNUSED', 'the congregation admin sees the same');
+  assert.ok(!JSON.stringify(s).includes('Temp-secret-1'), 'the password is never in the answer');
+
+  const t = await (await login('newpub', 'Temp-secret-1')).json();
+  s = await get(sa);
+  assert.equal(s.newpub.status, 'TEMP_USED', 'signed in with the temporary password, the change is still due');
+  assert.ok(s.newpub.firstLoginAt > 0);
+
+  assert.equal((await post('/v1/auth/password', { newPassword: 'MyOwnPass789' }, t.accessToken)).status, 200);
+  await put('people', 'newpub', person(null, { firstName: 'New', lastName: 'Pub', isTemporaryCredential: false, temporaryPassword: null })); // what the app/web write when the person finishes
+  s = await get(admin);
+  assert.equal(s.newpub.status, 'PASSWORD_CHANGED');
+  assert.ok(s.newpub.passwordChangedAt > 0);
+
+  assert.equal((await post('/v1/auth/accounts/newpub/password', { password: 'Temp-again-22' }, sa)).status, 200);
+  await put('people', 'newpub', person(null, { firstName: 'New', lastName: 'Pub', isTemporaryCredential: true }));
+  s = await get(sa);
+  assert.equal(s.newpub.status, 'TEMP_UNUSED', 'a reset makes a new temporary password that has not been used');
+  assert.equal(s.newpub.passwordChangedAt, null);
+
+  await put('people', 'newpub', person(null, { firstName: 'New', lastName: 'Pub', isTemporaryCredential: true, accountStatus: 'SUSPENDED' }));
+  assert.equal((await get(sa)).newpub.status, 'DISABLED');
+
+  await put('people', 'plain1', person(null, { firstName: 'Plain' }));
+  await store.createAccount('plain1', await hashPassword('PlainPass1'));
+  const pub = (await (await login('plain1', 'PlainPass1')).json()).accessToken;
+  assert.equal((await get(pub)).newpub, undefined, 'an ordinary publisher is told nothing about another account');
+});

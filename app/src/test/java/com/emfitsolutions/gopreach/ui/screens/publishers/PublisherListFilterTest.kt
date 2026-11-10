@@ -4,6 +4,8 @@ import com.emfitsolutions.gopreach.data.model.AccountStatus
 import com.emfitsolutions.gopreach.data.model.Person
 import com.emfitsolutions.gopreach.data.model.PublisherCategory
 import com.emfitsolutions.gopreach.data.model.RoleAssignment
+import com.emfitsolutions.gopreach.data.repository.AccountStatusInfo
+import com.emfitsolutions.gopreach.data.repository.PasswordStatus
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -52,5 +54,34 @@ class PublisherListFilterTest {
         assertEquals("Matching Publishers: 2", PublisherListFilter(PublisherFilterMode.NAME, "fernandez").countLabel(2))
         assertEquals("Active Publishers: 2", PublisherListFilter(PublisherFilterMode.STATUS, status = AccountStatus.ACTIVE).countLabel(2))
         assertEquals("Group 1 Publishers: 2", PublisherListFilter(PublisherFilterMode.GROUP, groupId = "1").countLabel(2, "Group 1"))
+    }
+
+    private fun info(s: PasswordStatus) = AccountStatusInfo(s, null, null, null)
+
+    // Where each account stands with its temporary password comes from the server; By Password filters on it, a search finds it, and a row the server told nothing about never matches a status.
+    private val passwords = mapOf(
+        "EPHRAIMFERNANDEZ" to info(PasswordStatus.PASSWORD_CHANGED),
+        "JUANDELA CRUZ" to info(PasswordStatus.TEMP_UNUSED),
+        "MARIASANTOS" to info(PasswordStatus.TEMP_USED),
+    )
+
+    @Test
+    fun byPasswordShowsOnlyAccountsAtThatStep() {
+        assertEquals(listOf("JUAN"), PublisherListFilter(PublisherFilterMode.PASSWORD, password = PasswordStatus.TEMP_UNUSED).apply(rows, passwords).map { it.person.firstName })
+        assertEquals(listOf("MARIA"), PublisherListFilter(PublisherFilterMode.PASSWORD, password = PasswordStatus.TEMP_USED).apply(rows, passwords).map { it.person.firstName })
+        assertEquals(listOf("EPHRAIM"), PublisherListFilter(PublisherFilterMode.PASSWORD, password = PasswordStatus.PASSWORD_CHANGED).apply(rows, passwords).map { it.person.firstName })
+        assertEquals(0, PublisherListFilter(PublisherFilterMode.PASSWORD, password = PasswordStatus.DISABLED).apply(rows, passwords).size)
+        assertEquals("no choice shows everyone", 4, PublisherListFilter(PublisherFilterMode.PASSWORD, password = null).apply(rows, passwords).size)
+        assertEquals("nothing from the server: nobody matches", 0, PublisherListFilter(PublisherFilterMode.PASSWORD, password = PasswordStatus.TEMP_UNUSED).apply(rows).size)
+    }
+
+    @Test
+    fun searchAlsoFindsThePasswordStatusAndStillCombinesWithTheOtherFilters() {
+        assertEquals(2, PublisherListFilter(PublisherFilterMode.ALL, "temporary password").apply(rows, passwords).size)
+        assertEquals(listOf("MARIA"), PublisherListFilter(PublisherFilterMode.ALL, "change due").apply(rows, passwords).map { it.person.firstName })
+        // a group is picked first, then the password filter narrows within the same rows
+        val group1 = PublisherListFilter(PublisherFilterMode.GROUP, groupId = "1").apply(rows)
+        assertEquals(listOf("MARIA"), PublisherListFilter(PublisherFilterMode.PASSWORD, password = PasswordStatus.TEMP_USED).apply(group1, passwords).map { it.person.firstName })
+        assertEquals("Temporary password - not used yet: 1", PublisherListFilter(PublisherFilterMode.PASSWORD, password = PasswordStatus.TEMP_UNUSED).countLabel(1))
     }
 }
