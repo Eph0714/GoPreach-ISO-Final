@@ -674,6 +674,14 @@
     "date": "2026-11-10",
     "notes": "Fixes and additions: a Super Admin who signs in on a phone another account used now sees every congregation's publishers (Central Congregation Solano showed 0); signing in as a different person clears the previous account's data on the phone; the Ministry Recycle Bin shows only your own deleted Searching, Return Visit and Bible Study records; admins see whether each publisher's temporary password is unused, used (change due), changed or disabled, and can filter publishers by it; a temporary password is now visible only to the Super Admin and the congregation Admin.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.52",
+    "versionCode": 285,
+    "date": "2026-11-10",
+    "notes": "Account Management now shows each account's password step (temporary password not used yet, used with the change due, changed, or disabled) with a filter and a Password column; the View temporary sign-in option appears only for the Super Admin and the congregation Admin.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
