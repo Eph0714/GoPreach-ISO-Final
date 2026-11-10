@@ -690,6 +690,14 @@
     "date": "2026-11-10",
     "notes": "Account Management now shows 'requests for new sign-in details' (people who tapped Forgot Password) with a Mark as done button, and the Super Admin can filter accounts by role, like the website.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.54",
+    "versionCode": 287,
+    "date": "2026-11-10",
+    "notes": "Publishers (Super Admin and Admin) now look like the website: a search box that is always there, the Field Service Group and Filter choices, List View / Table View / Full Screen / Excel buttons, a teal print button, larger rounded cards with Details, edit and more-actions, a chip showing each publisher's temporary-password step, and a green Add Publisher button.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]
