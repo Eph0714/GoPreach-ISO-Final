@@ -51,6 +51,10 @@ interface CacheDao {
     @Query("DELETE FROM cached_documents WHERE documentId = ''")
     suspend fun deleteBlankIds()
 
+    /** Everything that came FROM the server (never an unsent local edit, never the sync bookkeeping rows): the copy a previous account left on this device. */
+    @Query("DELETE FROM cached_documents WHERE syncState = 'SYNCED' AND collectionPath != '_sync'")
+    suspend fun deleteSyncedData()
+
     @Delete
     suspend fun deleteEntity(entity: CachedDocumentEntity)
 }

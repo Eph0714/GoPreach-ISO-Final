@@ -38,6 +38,7 @@ class FakeCacheDao : CacheDao {
         rows[collectionPath to documentId]?.let { rows[collectionPath to documentId] = it.copy(syncState = syncState) }
     }
     override suspend fun deleteBlankIds() { rows.keys.removeAll { it.second.isEmpty() } }
+    override suspend fun deleteSyncedData() { rows.entries.removeAll { it.value.syncState == SyncState.SYNCED.name && it.key.first != "_sync" } }
     override suspend fun deleteEntity(entity: CachedDocumentEntity) { rows.remove(entity.collectionPath to entity.documentId) }
 }
 
@@ -174,6 +175,40 @@ class SyncEngineTest {
         assertTrue(queue.getAllPending().isEmpty(), "and it is never uploaded again")
         engine.syncOnce()
         assertTrue(api.pushed.isEmpty(), "so nothing can recreate the deleted record")
+    }
+
+    // ---- one account's copy and download position per device ----
+
+    @Test fun theFirstSignInOnlyRecordsTheOwnerAndRemovesNothing() = runTest {
+        cache.upsert(CachedDocumentEntity("people", "juan", """{"id":"juan"}""", SyncState.SYNCED.name, 1))
+        assertEquals(false, engine.claimCacheFor("sa"))
+        assertTrue(cache.get("people", "juan") != null, "an update must never wipe what the device already holds")
+        assertEquals(false, engine.claimCacheFor("sa"), "signing in again as the same person changes nothing")
+    }
+
+    @Test fun anotherAccountSigningInGetsAFreshCopyAndAFullDownload() = runTest {
+        engine.claimCacheFor("publisher1")
+        api.pages += PullPage(listOf(PullChange("people", "juan", buildJsonObject { put("firstName", "Juan") }, seq = 5)), cursor = 5)
+        engine.pull()
+        assertEquals(true, engine.claimCacheFor("sa"), "a different person than the last one")
+        assertNull(cache.get("people", "juan"), "the previous account's downloaded copy is gone")
+        api.pages += PullPage(cursor = 5)
+        engine.pull()
+        assertEquals(0L, api.pullSince.last(), "the download restarts from the beginning, so rows the first account could not read arrive")
+    }
+
+    @Test fun theOldAccountsUnsentChangesAreKeptButNeverSentAsTheNewAccount() = runTest {
+        engine.claimCacheFor("publisher1")
+        queueSet("deletedRecords", "r1", """{"id":"r1"}""")
+        engine.claimCacheFor("sa")
+        assertTrue(cache.get("deletedRecords", "r1") != null, "the unsent record itself stays")
+        val kept = queue.ops.single()
+        assertTrue(kept.isPermanentFailure && kept.lastError!!.startsWith("other-account"), "flagged for attention, visible under Sync Error")
+        engine.syncOnce()
+        assertTrue(api.pushed.isEmpty(), "nothing is uploaded with the new account's identity")
+        queue.retryPermanentFailure(kept.id)
+        engine.flushOutbox()
+        assertEquals(1, api.pushed.size, "the person can still choose Retry")
     }
 
     @Test fun waitingForTheChangeFeedSaysWhetherToPull() = runTest {

@@ -169,14 +169,34 @@ class SyncEngine(
     suspend fun resetCursor() = writeCursor(0L)
 
     /**
+     * Called at every sign-in. The local copy and the download position belong to ONE account: when a DIFFERENT person signs in on this device,
+     *  - what the previous account downloaded is removed (the next account must never see it, and the server still has it),
+     *  - the download starts from the beginning (a wider account, e.g. the Super Admin, would otherwise never receive the rows the previous
+     *    account could not read - a whole congregation's publishers stayed missing),
+     *  - the previous account's UNSENT changes are kept (flagged, visible under Sync Error with Retry / Discard) but are NOT uploaded under the new account's identity.
+     * The first sign-in after an update only records the owner (nothing is removed). Returns true when a different account was detected.
+     */
+    suspend fun claimCacheFor(personId: String): Boolean {
+        val owner = cacheDao.get(META_COLLECTION, OWNER_DOC)?.payloadJson
+        if (owner == personId) return false
+        if (owner != null) {
+            queueDao.getAllPending().forEach { queueDao.markPermanentFailure(it.id, "other-account: This change was made while another account was signed in, so it was not sent. Retry only if it is yours.") }
+            cacheDao.deleteSyncedData()
+            writeCursor(0L)
+        }
+        cacheDao.upsert(CachedDocumentEntity(META_COLLECTION, OWNER_DOC, personId, SyncState.SYNCED.name, nowMillis()))
+        return owner != null
+    }
+
+    /**
      * Once per person per install: pulls everything again from the start. The very first download after a fresh sign-in can run before the server knows this
      * person's active congregation, so it skips that congregation's FS Groups and territories - and the cursor then moves past them for good (the Territory Map
      * showed one group and no boundaries). The marker lives in the cache, so a new install or a cleared app repeats the catch-up once and nothing more.
      */
     suspend fun repullOnceFor(personId: String, congregationId: String?) {
-        // A person with no active congregation yet has nothing to catch up on; the marker is per congregation so a later role/congregation change repeats it once.
-        if (congregationId == null) return
-        val marker = "repull:$personId:$congregationId"
+        // A Super Admin (or Circuit Overseer) has no active congregation but reads EVERY congregation: if another account signed in on this device before, the cursor already
+        // moved past rows that account could not read (e.g. a congregation's publishers), so they too catch up once. The marker is per congregation, so a later change repeats it once.
+        val marker = "repull:$personId:${congregationId ?: "ALL"}"
         if (cacheDao.get(META_COLLECTION, marker) != null) return
         writeCursor(0L)
         cacheDao.upsert(CachedDocumentEntity(META_COLLECTION, marker, "1", SyncState.SYNCED.name, nowMillis()))
@@ -195,6 +215,7 @@ class SyncEngine(
         const val META_COLLECTION = "_sync"
         const val CURSOR_DOC = "cursor"
         const val EPOCH_DOC = "cursorEpoch"
+        const val OWNER_DOC = "cacheOwner"
         const val CURSOR_EPOCH = "3"
     }
 }
