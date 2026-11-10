@@ -198,8 +198,9 @@ fun ManagePublishersScreen(
                     onClick = onAddNew,
                     icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
                     text = { Text("ADD PUBLISHER") },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    containerColor = com.emfitsolutions.gopreach.ui.components.ActionKind.Add.color,
+                    contentColor = androidx.compose.ui.graphics.Color.White,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(50),
                     elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp, pressedElevation = 8.dp),
                 )
             }
@@ -228,19 +229,9 @@ fun ManagePublishersScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // The input follows the filter: text for All / By Name, the group list for By Group, the status list for By Status.
-                Box(modifier = Modifier.weight(1f)) {
+                // As on the website: the Field Service Group (or the Status / Password choice) on the left, the Filter mode on the right, the search box below.
+                Box(modifier = Modifier.weight(3f)) {
                     when (filterMode) {
-                        PublisherFilterMode.GROUP -> FilterChoiceDropdown(
-                            label = "Field Service Group",
-                            selectedText = when (groupFilterId) {
-                                null -> "All groups"
-                                NO_GROUP_FILTER -> "Unassigned"
-                                else -> groupChoices.firstOrNull { it.id == groupFilterId }?.name.orEmpty()
-                            },
-                            options = listOf<Pair<String?, String>>(null to "All groups") + groupChoices.map { it.id to it.name } + (NO_GROUP_FILTER to "Unassigned"),
-                            onSelected = { groupFilterId = it },
-                        )
                         PublisherFilterMode.STATUS -> FilterChoiceDropdown(
                             label = "Status",
                             selectedText = statusFilter?.let { PublisherListFilter.statusLabel(it) } ?: "All statuses",
@@ -253,22 +244,32 @@ fun ManagePublishersScreen(
                             options = listOf<Pair<com.emfitsolutions.gopreach.data.repository.PasswordStatus?, String>>(null to "Any password status") + com.emfitsolutions.gopreach.data.repository.PasswordStatus.entries.map { it to it.label },
                             onSelected = { passwordFilter = it },
                         )
-                        else -> StandardSearchField(value = searchQuery, onValueChange = { searchQuery = it }, placeholder = "Search Publisher...", modifier = Modifier.fillMaxWidth())
+                        else -> FilterChoiceDropdown(
+                            label = "Field Service Group",
+                            selectedText = when (groupFilterId) {
+                                null -> "All groups"
+                                NO_GROUP_FILTER -> "Unassigned"
+                                else -> groupChoices.firstOrNull { it.id == groupFilterId }?.name.orEmpty()
+                            },
+                            options = listOf<Pair<String?, String>>(null to "All groups") + groupChoices.map { it.id to it.name } + (NO_GROUP_FILTER to "Unassigned"),
+                            onSelected = { groupFilterId = it },
+                        )
                     }
                 }
-                Box(modifier = Modifier.width(132.dp)) {
+                Box(modifier = Modifier.weight(2f)) {
                     FilterChoiceDropdown(
                         label = "Filter",
                         selectedText = filterMode.label,
                         options = PublisherFilterMode.entries.map { it to it.label },
                         onSelected = {
                             filterMode = it
-                            // Each mode starts clean so a leftover search/choice from another mode never hides rows.
+                            // Each mode starts clean so a leftover choice from another mode never hides rows.
                             searchQuery = ""; groupFilterId = null; statusFilter = null; passwordFilter = null
                         },
                     )
                 }
             }
+            StandardSearchField(value = searchQuery, onValueChange = { searchQuery = it }, placeholder = "Search name, group or status", modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp))
             categoryFilter?.let { category ->
                 androidx.compose.material3.InputChip(
                     selected = true,
@@ -290,19 +291,26 @@ fun ManagePublishersScreen(
             ) {
                 Text(
                     "${rows.size} " + if (rows.size == 1) "publisher" else "publishers",
-                    style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f),
                 )
-                androidx.compose.material3.FilterChip(
-                    selected = showInactive,
+                androidx.compose.material3.OutlinedButton(
                     onClick = { showInactive = !showInactive },
-                    label = { Text("Include removed") },
-                )
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (showInactive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                        contentColor = if (showInactive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (showInactive) androidx.compose.ui.graphics.Color.Transparent else MaterialTheme.colorScheme.outlineVariant),
+                ) { Text("Include removed", maxLines = 1, softWrap = false) }
                 Box {
-                    androidx.compose.material3.FilledTonalIconButton(
+                    com.emfitsolutions.gopreach.ui.components.ActionIconButton(
+                        com.emfitsolutions.gopreach.ui.components.ActionKind.Print,
                         onClick = { exportMenu = true },
                         enabled = rows.isNotEmpty() || allRows.isNotEmpty(),
-                    ) { Icon(Icons.Rounded.Print, contentDescription = "Print or export") }
+                        modifier = Modifier.size(52.dp),
+                        contentDescription = "Print or export",
+                    )
                     androidx.compose.material3.DropdownMenu(expanded = exportMenu, onDismissRequest = { exportMenu = false }) {
                         listOf(
                             Triple("Print", Icons.Rounded.Print, "print"),
@@ -364,28 +372,24 @@ fun ManagePublishersScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { RecordViewToggle(viewMode) }
+                item { com.emfitsolutions.gopreach.ui.components.WebViewBar(viewMode, onExcel = { exportKind = "excel" }) }
                 // Every field of a publisher is a column; Print / PDF / Excel use this same list, so they match the table exactly.
                 val pubColumns = PublisherColumns.all.map { c -> UniversalColumn<PublisherRow>(c.title, c.width.dp) { c.value(it) } }
                 val card: @Composable (PublisherRow) -> Unit = { row ->
-                    com.emfitsolutions.gopreach.ui.screens.elders.PersonRecordCard(
+                    // The website's card: name in capitals, the password-step chip under it, Details / edit pencil / more actions on the right.
+                    PublisherWebCard(
                         name = row.person.fullName,
-                        // The simple list shows the name; everything else opens from "View details".
-                        detail = "",
-                        onViewDetails = { detailsOf = row },
-                        active = row.category != PublisherCategory.REMOVED_PUBLISHER,
+                        passwordStatus = passwordStatuses[row.person.id]?.status,
+                        removed = row.category == PublisherCategory.REMOVED_PUBLISHER,
+                        duplicateOf = row.possibleDuplicateOf,
                         readOnly = readOnly,
-                        hasTemporarySignIn = false,
-                        chips = listOfNotNull(row.category.displayName, passwordStatuses[row.person.id]?.status?.label),
-                        // A heads-up only; nothing merges or deletes automatically - the admin reviews both records.
-                        note = row.possibleDuplicateOf?.let { "Possible duplicate of \"$it\" - review both records." },
+                        onDetails = { detailsOf = row },
                         onEdit = { pendingEdit = row },
                         onDelete = { pendingDelete = row },
                         onRestore = {
                             viewModel.changeCategory(row, PublisherCategory.REGULAR_PUBLISHER, currentPersonId)
                             showToast("\"${row.person.fullName}\" reactivated.")
                         },
-                        onShowSignIn = {},
                     )
                 }
                 if (groupedByFsGroup) {

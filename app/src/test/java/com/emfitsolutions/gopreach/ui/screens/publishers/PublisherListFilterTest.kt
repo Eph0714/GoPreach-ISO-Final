@@ -84,4 +84,15 @@ class PublisherListFilterTest {
         assertEquals(listOf("MARIA"), PublisherListFilter(PublisherFilterMode.PASSWORD, password = PasswordStatus.TEMP_USED).apply(group1, passwords).map { it.person.firstName })
         assertEquals("Temporary password - not used yet: 1", PublisherListFilter(PublisherFilterMode.PASSWORD, password = PasswordStatus.TEMP_UNUSED).countLabel(1))
     }
+
+    // The website's page: the search box is always there and the group / status / password choices narrow the list together with it, whichever Filter mode shows.
+    @Test
+    fun searchAndTheGroupChoiceWorkTogetherInEveryMode() {
+        assertEquals(listOf("EPHRAIM"), PublisherListFilter(PublisherFilterMode.GROUP, query = "fernandez", groupId = "1").apply(rows).map { it.person.firstName })
+        assertEquals(listOf("PEDRO"), PublisherListFilter(PublisherFilterMode.GROUP, query = "fernandez", groupId = NO_GROUP_FILTER).apply(rows).map { it.person.firstName })
+        assertEquals(2, PublisherListFilter(PublisherFilterMode.ALL, groupId = "1").apply(rows).size, "the group dropdown works in All mode too")
+        assertEquals(0, PublisherListFilter(PublisherFilterMode.NAME, query = "santos", groupId = "2").apply(rows).size)
+        assertEquals(listOf("MARIA"), PublisherListFilter(PublisherFilterMode.STATUS, query = "santos", status = AccountStatus.INACTIVE).apply(rows).map { it.person.firstName })
+        assertEquals(0, PublisherListFilter(PublisherFilterMode.STATUS, query = "santos", status = AccountStatus.ACTIVE).apply(rows).size)
+    }
 }

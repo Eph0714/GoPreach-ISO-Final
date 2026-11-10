@@ -33,20 +33,22 @@ data class PublisherListFilter(
     fun apply(rows: List<PublisherRow>, passwords: Map<String, AccountStatusInfo> = emptyMap()): List<PublisherRow> {
         val q = query.trim().lowercase()
         return rows.filter { row ->
-            when (mode) {
-                PublisherFilterMode.ALL ->
-                    q.isEmpty() || nameParts(row).any { it.contains(q) } || NameSearch.matches(q, *nameParts(row).toTypedArray()) ||
-                        row.groupName.lowercase().contains(q) || statusText(row).contains(q) || row.person.username.lowercase().contains(q) ||
-                        (passwords[row.person.id]?.status?.label?.lowercase()?.contains(q) ?: false)
-                PublisherFilterMode.NAME -> q.isEmpty() || nameParts(row).any { it.contains(q) } || NameSearch.matches(q, *nameParts(row).toTypedArray())
-                PublisherFilterMode.GROUP -> when (groupId) {
-                    null -> true
-                    NO_GROUP_FILTER -> row.assignment.groupId == null
-                    else -> row.assignment.groupId == groupId
-                }
-                PublisherFilterMode.STATUS -> status == null || row.person.accountStatus == status
-                PublisherFilterMode.PASSWORD -> password == null || passwords[row.person.id]?.status == password
+            // The search box is always there: By Name searches the name alone, every other mode the name, FS Group, status, username and password step.
+            val queryOk = q.isEmpty() || when (mode) {
+                PublisherFilterMode.NAME -> nameParts(row).any { it.contains(q) } || NameSearch.matches(q, *nameParts(row).toTypedArray())
+                else -> nameParts(row).any { it.contains(q) } || NameSearch.matches(q, *nameParts(row).toTypedArray()) ||
+                    row.groupName.lowercase().contains(q) || statusText(row).contains(q) || row.person.username.lowercase().contains(q) ||
+                    (passwords[row.person.id]?.status?.label?.lowercase()?.contains(q) ?: false)
             }
+            // The group, status and password choices narrow the list too, whichever mode is showing.
+            val groupOk = when (groupId) {
+                null -> true
+                NO_GROUP_FILTER -> row.assignment.groupId == null
+                else -> row.assignment.groupId == groupId
+            }
+            queryOk && groupOk &&
+                (status == null || row.person.accountStatus == status) &&
+                (password == null || passwords[row.person.id]?.status == password)
         }
     }
 

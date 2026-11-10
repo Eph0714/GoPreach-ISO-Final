@@ -84,6 +84,39 @@ fun RecordViewToggle(mode: RecordViewMode, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * The website's row of view buttons: "List View" (tinted when chosen), "Table View", "Full Screen", and, when [onExcel] is given, the teal "Excel" export button.
+ * Same choices as [RecordViewToggle], drawn as the labelled pills of the web page.
+ */
+@Composable
+fun WebViewBar(mode: RecordViewMode, onExcel: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+    val primary = MaterialTheme.colorScheme.primary
+    @Composable
+    fun Pill(selected: Boolean, label: String, onClick: () -> Unit) {
+        androidx.compose.material3.OutlinedButton(
+            onClick = onClick,
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                containerColor = if (selected) primary.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ),
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) Color.Transparent else MaterialTheme.colorScheme.outlineVariant),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        ) { Text(label, maxLines = 1, softWrap = false) }
+    }
+    @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+    androidx.compose.foundation.layout.FlowRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Pill(!mode.table, "List View") { mode.set(false) }
+        Pill(mode.table, "Table View") { mode.set(true) }
+        Pill(RecordFullScreen.active, if (RecordFullScreen.active) "Exit Full Screen" else "Full Screen") { RecordFullScreen.active = !RecordFullScreen.active }
+        onExcel?.let { ActionButton(ActionKind.Export, it, label = "Excel") }
+    }
+}
+
 /** Adds [items] to a lazy list in the chosen view. [card] is the screen's existing List View item. */
 @OptIn(ExperimentalFoundationApi::class)
 fun <T> LazyListScope.recordItems(
