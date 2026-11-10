@@ -90,7 +90,7 @@ class PublisherListFilterTest {
     fun searchAndTheGroupChoiceWorkTogetherInEveryMode() {
         assertEquals(listOf("EPHRAIM"), PublisherListFilter(PublisherFilterMode.GROUP, query = "fernandez", groupId = "1").apply(rows).map { it.person.firstName })
         assertEquals(listOf("PEDRO"), PublisherListFilter(PublisherFilterMode.GROUP, query = "fernandez", groupId = NO_GROUP_FILTER).apply(rows).map { it.person.firstName })
-        assertEquals(2, PublisherListFilter(PublisherFilterMode.ALL, groupId = "1").apply(rows).size, "the group dropdown works in All mode too")
+        assertEquals("the group dropdown works in All mode too", 2, PublisherListFilter(PublisherFilterMode.ALL, groupId = "1").apply(rows).size)
         assertEquals(0, PublisherListFilter(PublisherFilterMode.NAME, query = "santos", groupId = "2").apply(rows).size)
         assertEquals(listOf("MARIA"), PublisherListFilter(PublisherFilterMode.STATUS, query = "santos", status = AccountStatus.INACTIVE).apply(rows).map { it.person.firstName })
         assertEquals(0, PublisherListFilter(PublisherFilterMode.STATUS, query = "santos", status = AccountStatus.ACTIVE).apply(rows).size)
