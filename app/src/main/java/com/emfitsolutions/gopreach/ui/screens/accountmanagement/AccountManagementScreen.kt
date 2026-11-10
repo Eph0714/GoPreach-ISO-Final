@@ -112,6 +112,10 @@ fun AccountManagementScreen(
     var searchQuery by remember { mutableStateOf("") }
     var statusFilter by remember { mutableStateOf<AccountStatus?>(null) }
     var showAudit by remember { mutableStateOf(false) }
+    var passwordFilter by remember { mutableStateOf<com.emfitsolutions.gopreach.data.repository.PasswordStatus?>(null) }
+    // Asked of the server on opening and every half minute while this screen is open: a first sign-in or a changed password appears by itself.
+    val passwordStatuses by viewModel.passwordStatuses.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { viewModel.refreshPasswordStatuses(); kotlinx.coroutines.delay(30_000) } }
     val congregations by viewModel.congregations.collectAsStateWithLifecycle()
 
     val type = selectedType
@@ -127,7 +131,8 @@ fun AccountManagementScreen(
         AccountType.ADMIN -> Destinations.ENROLL_ADMIN
         else -> null
     }
-    val rows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val allRows by rowsFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+    val rows = allRows.filter { passwordFilter == null || passwordStatuses[it.person.id]?.status == passwordFilter }
 
     var pendingUsernameChange by remember { mutableStateOf<AccountRow?>(null) }
     var pendingResetPasswordInfo by remember { mutableStateOf<AccountRow?>(null) }
@@ -205,6 +210,16 @@ fun AccountManagementScreen(
                     FilterChip(selected = statusFilter == st, onClick = { statusFilter = st }, label = { Text(st.name.lowercase().replaceFirstChar { it.uppercase() }) })
                 }
             }
+            // The password step each account is at (decided by the server from the sign-in itself, never the password).
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilterChip(selected = passwordFilter == null, onClick = { passwordFilter = null }, label = { Text("Any password") })
+                com.emfitsolutions.gopreach.data.repository.PasswordStatus.entries.forEach { ps ->
+                    FilterChip(selected = passwordFilter == ps, onClick = { passwordFilter = ps }, label = { Text(ps.label, maxLines = 1, softWrap = false) })
+                }
+            }
 
             }
             HideInFullScreen(false) {
@@ -246,14 +261,16 @@ fun AccountManagementScreen(
                                 UniversalColumn("Role / circuit", 200.dp) { (it.roles.ifBlank { it.accountType.label }) + (it.circuitCode?.let { c -> " · $c" } ?: "") },
                                 UniversalColumn("Congregation", 180.dp) { it.congregationName },
                                 UniversalColumn("Status", 110.dp) { it.person.accountStatus.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+                                UniversalColumn("Password", 230.dp) { passwordStatuses[it.person.id]?.status?.label ?: "" },
                         ),
                     ) { row ->
                         AccountRowCard(
                             row = row,
+                            passwordStatus = passwordStatuses[row.person.id]?.status,
                             onChangeUsername = { pendingUsernameChange = row },
                             onResetPassword = { pendingResetPasswordInfo = row },
                             onSetStatus = if (officerOnly) null else { status -> viewModel.setAccountStatus(row, status, currentPersonId) },
-                            onViewTemporarySignIn = if (officerOnly) null else { { viewModel.logTemporarySignInViewed(row, currentPersonId); lookupTarget = row.person } },
+                            onViewTemporarySignIn = if (officerOnly || row.person.temporaryPassword.isNullOrBlank()) null else { { viewModel.logTemporarySignInViewed(row, currentPersonId); lookupTarget = row.person } },
                         )
                     }
                 }
@@ -273,6 +290,7 @@ fun AccountManagementScreen(
 @Composable
 private fun AccountRowCard(
     row: AccountRow,
+    passwordStatus: com.emfitsolutions.gopreach.data.repository.PasswordStatus? = null,
     onChangeUsername: () -> Unit,
     onResetPassword: () -> Unit,
     /** Null for an FS Group officer: whether an account may be used, and a readable temporary sign-in, are the congregation roles' (the server refuses them too). */
@@ -303,7 +321,7 @@ private fun AccountRowCard(
                 Text(row.person.fullName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Text("@${row.person.username}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text((row.roles.ifBlank { row.accountType.label }) + (row.circuitCode?.let { " · Circuit $it" } ?: "") + " · ${row.congregationName}" + (row.group?.let { " · $it" } ?: ""), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                Text("Password: ••••••••", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(passwordStatus?.let { "Password: ${it.label}" } ?: "Password: ••••••••", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
                     status.name.lowercase().replaceFirstChar { it.uppercase() },
                     style = MaterialTheme.typography.labelSmall,

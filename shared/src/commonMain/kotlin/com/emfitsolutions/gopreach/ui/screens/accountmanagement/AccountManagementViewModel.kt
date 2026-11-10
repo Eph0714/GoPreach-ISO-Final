@@ -79,7 +79,13 @@ class AccountManagementViewModel(
     private val auditLogRepository: AuditLogRepository,
     private val userAccessGrantRepository: com.emfitsolutions.gopreach.data.repository.UserAccessGrantRepository,
     private val groupRepository: com.emfitsolutions.gopreach.data.repository.GroupRepository,
+    private val accountStatusRepository: com.emfitsolutions.gopreach.data.repository.AccountStatusRepository,
 ) : ViewModel() {
+
+    /** Where each account stands with its temporary password, from the server (only the accounts this person may manage). */
+    val passwordStatuses = accountStatusRepository.statuses
+
+    fun refreshPasswordStatuses() { viewModelScope.launch { accountStatusRepository.refresh() } }
 
     /** Super-Admin's own Congregation Selector (spec §1) — the dropdown's
      * data source, same pattern as [com.emfitsolutions.gopreach.ui.screens.admins.ManageAdminsViewModel.congregations]. */
