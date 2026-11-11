@@ -706,6 +706,14 @@
     "date": "2026-11-10",
     "notes": "Full Screen on record lists (Publishers, Account Management and the other modules that have it) is now a true full screen: the status and navigation bars hide too, and an Exit Full Screen button stays on screen so you can always come back.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.56",
+    "versionCode": 289,
+    "date": "2026-11-11",
+    "notes": "Territory Map: if your FS Group's territories are missing on the phone but show on the website, the app now downloads them again automatically the first time you open the map, so your territory appears.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]

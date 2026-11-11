@@ -640,6 +640,10 @@ fun TerritoryMapScreen(
     val viewMode = ViewMode.MAP
     // Super-Admin / Circuit Overseer: every congregation opens on Show FS Group.
     androidx.compose.runtime.LaunchedEffect(congregationId) { if (fixedCongregationId == null && focusLat == null) scope = GroupScope.ALL }
+    // The web shows the territory but this phone has none of the congregation's claims: download everything once more (a claim missed earlier never returns by itself).
+    androidx.compose.runtime.LaunchedEffect(congregationId) {
+        if (congregationId != null) { kotlinx.coroutines.delay(3000); viewModel.healMissingTerritories(congregationId) }
+    }
     // Full-screen Map View: hides the app bar, the controls above the map and
     // the system bars so the map fills the display; Back exits it first.
     // The Territory Map opens in full screen (the controls come back with Exit); the user can leave it at any time.

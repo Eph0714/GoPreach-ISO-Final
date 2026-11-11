@@ -107,7 +107,20 @@ class TerritoryMapViewModel(
     private val locationTracker: LocationTracker,
     private val mapPinRepository: MapPinRepository,
     private val personRepository: PersonRepository,
+    private val syncEngine: com.emfitsolutions.gopreach.data.sync.SyncEngine,
 ) : ViewModel() {
+
+    /**
+     * Self-heal for "the web shows my territory but the phone does not": the phone keeps its own copy of the congregation's territory claims, and the download
+     * position only moves forward, so a claim that was missing at an earlier download never comes back by itself. When the congregation has NO claim on this
+     * device, download everything again from the start - once per congregation per app run, so an empty congregation never causes a loop.
+     */
+    suspend fun healMissingTerritories(congregationId: String) {
+        if (!healedCongregations.add(congregationId)) return
+        val have = territoryAssignmentRepository.observeBarangayClaims().first().any { it.congregationId == congregationId }
+        if (have) return
+        runCatching { syncEngine.resetCursor(); syncEngine.syncOnce() }
+    }
 
     /** Super-Admin's Congregation choice. */
     fun congregations(): Flow<List<Congregation>> =
@@ -266,3 +279,6 @@ private object TerritoryAssignmentAreaFactory {
         barangayId = claim.barangayId,
     )
 }
+
+/** Congregations whose territory claims were already re-downloaded in this app run (see [TerritoryMapViewModel.healMissingTerritories]). */
+private val healedCongregations: MutableSet<String> = java.util.Collections.synchronizedSet(mutableSetOf())
