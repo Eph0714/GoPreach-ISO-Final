@@ -714,6 +714,14 @@
     "date": "2026-11-11",
     "notes": "Territory Map: if your FS Group's territories are missing on the phone but show on the website, the app now downloads them again automatically the first time you open the map, so your territory appears.",
     "channel": "direct (production key)",
+    "status": "Previous"
+  },
+  {
+    "version": "1.169.57",
+    "versionCode": 290,
+    "date": "2026-11-11",
+    "notes": "Territory Map: the category buttons (All, Searching, Return Visit, Bible Study) now show their full text, wrapping onto two lines instead of cutting letters off.",
+    "channel": "direct (production key)",
     "status": "Current"
   }
 ]

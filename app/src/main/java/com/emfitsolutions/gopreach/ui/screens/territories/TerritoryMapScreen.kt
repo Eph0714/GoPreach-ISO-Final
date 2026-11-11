@@ -1060,7 +1060,7 @@ fun TerritoryMapScreen(
                                 onClick = { typeFilter = if (typeFilter == f) TypeFilter.ALL else f; recordScope = 0 },
                                 shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(index = index, count = cats.size),
                                 icon = {},
-                            ) { Text(f.label, style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false) }
+                            ) { Text(f.label, style = MaterialTheme.typography.labelSmall, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center, lineHeight = 13.sp) }
                         }
                     }
                     if (typeFilter != TypeFilter.ALL) {
